@@ -28,6 +28,7 @@ module.exports = {
     content: [
         "./src/**/*.js",
         "./node_modules/@trops/dash-react/dist/**/*.js",
+        "./node_modules/@trops/dash-core/dist/**/*.js",
         // './src/tailwind_extra.js',
         // './src/safelist.js'
     ],

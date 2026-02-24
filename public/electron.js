@@ -45,6 +45,15 @@ const {
     listProviders,
     getProvider,
     deleteProvider,
+    // Template controllers (now in dash-core)
+    listIndices,
+    partialUpdateObjectsFromDirectory,
+    createBatchesFromFile,
+    browseObjectsToFile,
+    describeImage,
+    saveMenuItemForApplication,
+    listMenuItemsForApplication,
+    pluginInstall,
     // Namespaced controllers
     mcpController,
     registryController,
@@ -54,21 +63,7 @@ const {
     widgetRegistry,
 } = dashCore;
 
-// Template-specific controllers
-const {
-    listIndices,
-    partialUpdateObjectsFromDirectory,
-    createBatchesFromFile,
-    browseObjectsToFile,
-} = require("./lib/controller/algoliaController");
-const { describeImage } = require("./lib/controller/openaiController");
-const {
-    saveMenuItemForApplication,
-    listMenuItemsForApplication,
-} = require("./lib/controller/menuItemsController");
-const { install } = require("./lib/controller/pluginController");
-
-// Core event constants
+// Event constants (all from dash-core)
 const {
     SECURE_STORE_ENCRYPTION_CHECK,
     WORKSPACE_LIST,
@@ -112,21 +107,14 @@ const {
     REGISTRY_SEARCH,
     REGISTRY_GET_PACKAGE,
     REGISTRY_CHECK_UPDATES,
-} = coreEvents;
-
-// Template-specific event constants
-const algoliaEvents = require("./lib/events/algoliaEvents");
-const openaiEvents = require("./lib/events/openaiEvents");
-const menuItemEvents = require("./lib/events/menuItemEvents");
-
-const {
     ALGOLIA_LIST_INDICES,
     ALGOLIA_PARTIAL_UPDATE_OBJECTS,
     ALGOLIA_CREATE_BATCH,
     ALGOLIA_BROWSE_OBJECTS,
-} = algoliaEvents;
-const { OPENAI_DESCRIBE_IMAGE } = openaiEvents;
-const { MENU_ITEMS_LIST, MENU_ITEMS_SAVE } = menuItemEvents;
+    OPENAI_DESCRIBE_IMAGE,
+    MENU_ITEMS_LIST,
+    MENU_ITEMS_SAVE,
+} = coreEvents;
 
 // Widget System
 const { setupWidgetRegistryHandlers } = widgetRegistry;
@@ -250,9 +238,9 @@ function createWindow() {
             );
         });
 
-        // --- Plugins (template-specific) ---
+        // --- Plugins ---
         ipcMain.handle("plugin-install", (e, message) =>
-            install(mainWindow, message.packageName, message.filepath)
+            pluginInstall(mainWindow, message.packageName, message.filepath)
         );
 
         // --- Workspaces ---
