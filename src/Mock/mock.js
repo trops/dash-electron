@@ -193,9 +193,4 @@ const MockDashboard = ({
     );
 };
 
-export {
-    MockLayout,
-    MockWrapper,
-    MockWorkspace,
-    MockDashboard,
-};
+export { MockLayout, MockWrapper, MockWorkspace, MockDashboard };

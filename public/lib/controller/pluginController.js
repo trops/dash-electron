@@ -36,7 +36,6 @@ const pluginController = {
             //   });
             //   // pluginManager.require(packageName);
             // });
-
         } catch (e) {
             win.webContents.send("plugin-install-error", { error: e.message });
         }

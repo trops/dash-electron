@@ -1,5 +1,5 @@
 {
-    "name": "@trops/dash",
+    "name": "@trops/dash-electron",
     "productName": "Dash",
     "version": "0.0.58",
     "description": "A Dashboard Generator",
@@ -11,6 +11,7 @@
     "license": "ISC",
     "typescript": "^2.6.2",
     "dependencies": {
+        "@trops/dash-core": "^0.1.0",
         "@headlessui/react": "1.4",
         "@heroicons/react": "^2.0.16",
         "@modelcontextprotocol/sdk": "^1.26.0",

@@ -1,37 +1,25 @@
 import React from "react";
 import { Routes, Route } from "react-router-dom";
 
-// Dash - now using local components
-import { DashboardStage } from "./Components/Dashboard";
-import { ComponentManager } from "./ComponentManager";
-import { ElectronDashboardApi } from "./Api";
-
-// Error catcher
-import ErrorBoundary from "./ErrorBoundary";
-
-// Local Widgets that integrate with Dash
-import * as myWidgets from "./Widgets";
-import { ExternalWidget } from "./Widget/ExternalWidget";
+// Core framework from @trops/dash-core
 import {
+    DashboardStage,
+    ComponentManager,
+    ElectronDashboardApi,
+    ErrorBoundary,
+    ExternalWidget,
     loadWidgetBundle,
     evaluateBundle,
     extractWidgetConfigs,
-} from "./utils/widgetBundleLoader";
+} from "@trops/dash-core";
+
+// Local Widgets that integrate with Dash
+import * as myWidgets from "./Widgets";
 
 console.log("[Dash.js] Imported widgets:", myWidgets);
 
-// Icons are registered by dash-react
-
-// import "@trops/dash-react/dist/tailwind.css";
-
-// Development Loader
-// Load in libraries to test against the current Dash template
-// if (process.env.NODE_ENV === "development") {
-//     require("@trops/dash-react/Utils/loader");
-// }
-
 // the mainApi from electron bridge
-// you can overwrite this API with an abstration for React
+// you can overwrite this API with an abstraction for React
 // if you are not using Electron
 const mainApi = window.mainApi;
 
@@ -80,7 +68,7 @@ if (mainApi && mainApi.setAppId) {
     console.log("[Dash.js] App ID set");
 }
 
-// instantiate the ElectronApi from the @trops/dash-react library
+// instantiate the ElectronApi
 let electronApi = null;
 if (mainApi) {
     electronApi = new ElectronDashboardApi(
