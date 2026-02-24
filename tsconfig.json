@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "sourceMap": true
+    },
+    "baseUrl": "./src",
+    "include": ["src/**/*.ts"],
+    "exclude": [
+        "./node_modules",
+        "./build",
+        "./public",
+        "./dist",
+        "./electron",
+        "./forge.config.js",
+        "./scripts",
+        "./docs",
+        "./test"
+    ]
+}

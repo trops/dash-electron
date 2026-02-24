@@ -1,0 +1,13 @@
+{
+    "name": "weather-alerts",
+    "version": "1.0.0",
+    "description": "Displays active severe weather alerts for your area.",
+    "author": "John Giatropoulos",
+    "main": "widgets/WeatherAlerts.js",
+    "keywords": [
+        "dash",
+        "widget",
+        "weather",
+        "test-fixture"
+    ]
+}

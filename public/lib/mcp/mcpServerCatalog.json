@@ -1,0 +1,319 @@
+{
+    "version": "1.0.0",
+    "servers": [
+        {
+            "id": "github",
+            "name": "GitHub",
+            "description": "Access GitHub repositories, issues, pull requests, and more via the GitHub API.",
+            "icon": "github",
+            "tags": ["developer", "git", "code"],
+            "mcpConfig": {
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-github"],
+                "envMapping": {
+                    "GITHUB_PERSONAL_ACCESS_TOKEN": "token"
+                }
+            },
+            "credentialSchema": {
+                "token": {
+                    "type": "text",
+                    "displayName": "Personal Access Token",
+                    "required": true,
+                    "secret": true,
+                    "instructions": "Generate a Personal Access Token at github.com/settings/tokens with the required scopes."
+                }
+            }
+        },
+        {
+            "id": "slack",
+            "name": "Slack",
+            "description": "Send messages, read channels, and manage Slack workspaces.",
+            "icon": "slack",
+            "tags": ["communication", "messaging", "team"],
+            "mcpConfig": {
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-slack"],
+                "envMapping": {
+                    "SLACK_BOT_TOKEN": "botToken",
+                    "SLACK_TEAM_ID": "teamId"
+                }
+            },
+            "credentialSchema": {
+                "botToken": {
+                    "type": "text",
+                    "displayName": "Bot Token",
+                    "required": true,
+                    "secret": true,
+                    "instructions": "Create a Slack app and install it to your workspace to get a Bot Token (xoxb-...)."
+                },
+                "teamId": {
+                    "type": "text",
+                    "displayName": "Team ID",
+                    "required": true,
+                    "secret": false,
+                    "instructions": "Find your Team ID in Slack workspace settings."
+                }
+            }
+        },
+        {
+            "id": "notion",
+            "name": "Notion",
+            "description": "Read and search Notion pages, databases, and comments.",
+            "icon": "book",
+            "tags": ["productivity", "notes", "wiki"],
+            "mcpConfig": {
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@notionhq/notion-mcp-server"],
+                "envMapping": {
+                    "OPENAPI_MCP_HEADERS": "authHeader"
+                }
+            },
+            "credentialSchema": {
+                "authHeader": {
+                    "type": "text",
+                    "displayName": "API Key (as Authorization header JSON)",
+                    "required": true,
+                    "secret": true,
+                    "instructions": "Create an integration at notion.so/my-integrations. Provide as JSON: {\"Authorization\": \"Bearer ntn_...\", \"Notion-Version\": \"2022-06-28\"}"
+                }
+            }
+        },
+        {
+            "id": "brave-search",
+            "name": "Brave Search",
+            "description": "Search the web using the Brave Search API.",
+            "icon": "search",
+            "tags": ["search", "web", "research"],
+            "mcpConfig": {
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+                "envMapping": {
+                    "BRAVE_API_KEY": "apiKey"
+                }
+            },
+            "credentialSchema": {
+                "apiKey": {
+                    "type": "text",
+                    "displayName": "API Key",
+                    "required": true,
+                    "secret": true,
+                    "instructions": "Get an API key from brave.com/search/api."
+                }
+            }
+        },
+        {
+            "id": "filesystem",
+            "name": "Filesystem",
+            "description": "Read, write, and manage files on your local filesystem.",
+            "icon": "folder",
+            "tags": ["files", "local", "storage"],
+            "mcpConfig": {
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+                "envMapping": {}
+            },
+            "credentialSchema": {
+                "allowedPaths": {
+                    "type": "text",
+                    "displayName": "Allowed Paths",
+                    "required": true,
+                    "secret": false,
+                    "instructions": "Comma-separated list of directory paths the server can access (e.g., /Users/you/Documents,/tmp)."
+                }
+            }
+        },
+        {
+            "id": "postgres",
+            "name": "PostgreSQL",
+            "description": "Query and manage PostgreSQL databases.",
+            "icon": "database",
+            "tags": ["database", "sql", "data"],
+            "mcpConfig": {
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-postgres"],
+                "envMapping": {
+                    "POSTGRES_CONNECTION_STRING": "connectionString"
+                }
+            },
+            "credentialSchema": {
+                "connectionString": {
+                    "type": "text",
+                    "displayName": "Connection String",
+                    "required": true,
+                    "secret": true,
+                    "instructions": "PostgreSQL connection string (e.g., postgresql://user:password@localhost:5432/dbname)."
+                }
+            }
+        },
+        {
+            "id": "linear",
+            "name": "Linear",
+            "description": "Manage Linear issues, projects, and teams.",
+            "icon": "clipboard-list",
+            "tags": ["project-management", "issues", "team"],
+            "mcpConfig": {
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "mcp-linear"],
+                "envMapping": {
+                    "LINEAR_API_KEY": "apiKey"
+                }
+            },
+            "credentialSchema": {
+                "apiKey": {
+                    "type": "text",
+                    "displayName": "API Key",
+                    "required": true,
+                    "secret": true,
+                    "instructions": "Generate a Personal API Key in Linear Settings > API."
+                }
+            }
+        },
+        {
+            "id": "memory",
+            "name": "Memory",
+            "description": "Persistent key-value memory storage using a knowledge graph.",
+            "icon": "brain",
+            "tags": ["storage", "memory", "knowledge"],
+            "mcpConfig": {
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-memory"],
+                "envMapping": {}
+            },
+            "credentialSchema": {}
+        },
+        {
+            "id": "google-drive",
+            "name": "Google Drive",
+            "description": "List, read, and search files in Google Drive with automatic format conversion for Docs, Sheets, and Slides.",
+            "icon": "google-drive",
+            "tags": ["google", "files", "cloud-storage"],
+            "mcpConfig": {
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-gdrive"],
+                "envMapping": {
+                    "GDRIVE_CREDENTIALS_PATH": "credentialsPath",
+                    "GDRIVE_TOKEN_PATH": "tokenPath"
+                }
+            },
+            "credentialSchema": {
+                "credentialsPath": {
+                    "type": "text",
+                    "displayName": "OAuth Credentials File Path",
+                    "required": true,
+                    "secret": false,
+                    "instructions": "Path to your Google OAuth credentials.json file. Create one at console.cloud.google.com > APIs & Services > Credentials > OAuth 2.0 Client IDs."
+                },
+                "tokenPath": {
+                    "type": "text",
+                    "displayName": "Token File Path",
+                    "required": false,
+                    "secret": false,
+                    "instructions": "Path where the OAuth token will be stored (e.g., ~/.config/gdrive-mcp/token.json). Created automatically on first auth."
+                }
+            }
+        },
+        {
+            "id": "gmail",
+            "name": "Gmail",
+            "description": "Search, read, send, and manage Gmail messages and threads.",
+            "icon": "envelope",
+            "tags": ["google", "email", "communication"],
+            "mcpConfig": {
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
+                "envMapping": {
+                    "GMAIL_CREDENTIALS_PATH": "credentialsPath",
+                    "GMAIL_TOKEN_PATH": "tokenPath"
+                }
+            },
+            "credentialSchema": {
+                "credentialsPath": {
+                    "type": "text",
+                    "displayName": "OAuth Credentials File Path",
+                    "required": true,
+                    "secret": false,
+                    "instructions": "Path to your Google OAuth credentials.json file. Enable the Gmail API at console.cloud.google.com, then create OAuth 2.0 credentials."
+                },
+                "tokenPath": {
+                    "type": "text",
+                    "displayName": "Token File Path",
+                    "required": false,
+                    "secret": false,
+                    "instructions": "Path where the OAuth token will be stored (e.g., ~/.config/gmail-mcp/token.json). Created automatically on first auth."
+                }
+            }
+        },
+        {
+            "id": "google-calendar",
+            "name": "Google Calendar",
+            "description": "List calendars, create, read, update, and delete events in Google Calendar.",
+            "icon": "calendar-alt",
+            "tags": ["google", "calendar", "scheduling"],
+            "mcpConfig": {
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@cocal/google-calendar-mcp"],
+                "envMapping": {
+                    "GOOGLE_CREDENTIALS_PATH": "credentialsPath",
+                    "GOOGLE_TOKEN_PATH": "tokenPath"
+                }
+            },
+            "credentialSchema": {
+                "credentialsPath": {
+                    "type": "text",
+                    "displayName": "OAuth Credentials File Path",
+                    "required": true,
+                    "secret": false,
+                    "instructions": "Path to your Google OAuth credentials.json file. Enable the Google Calendar API at console.cloud.google.com, then create OAuth 2.0 credentials."
+                },
+                "tokenPath": {
+                    "type": "text",
+                    "displayName": "Token File Path",
+                    "required": false,
+                    "secret": false,
+                    "instructions": "Path where the OAuth token will be stored (e.g., ~/.config/gcal-mcp/token.json). Created automatically on first auth."
+                }
+            }
+        },
+        {
+            "id": "algolia",
+            "name": "Algolia",
+            "description": "Search, browse, and manage Algolia indices via Algolia's hosted MCP endpoint. No local process needed.",
+            "icon": "search-plus",
+            "tags": ["search", "data", "analytics"],
+            "mcpConfig": {
+                "transport": "streamable_http",
+                "url": "{{url}}",
+                "headerTemplate": {
+                    "Authorization": "Bearer {{apiKey}}"
+                }
+            },
+            "credentialSchema": {
+                "url": {
+                    "type": "text",
+                    "displayName": "MCP Server URL",
+                    "required": true,
+                    "secret": false,
+                    "instructions": "Your Algolia MCP endpoint URL from the Algolia dashboard (e.g., https://mcp.us.algolia.com/1/abc123/mcp)."
+                },
+                "apiKey": {
+                    "type": "text",
+                    "displayName": "API Key",
+                    "required": true,
+                    "secret": true,
+                    "instructions": "Your Algolia Search API Key, found in the Algolia dashboard under API Keys."
+                }
+            }
+        }
+    ]
+}

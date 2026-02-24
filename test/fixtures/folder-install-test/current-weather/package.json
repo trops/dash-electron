@@ -1,0 +1,13 @@
+{
+    "name": "current-weather",
+    "version": "1.0.0",
+    "description": "Shows current weather conditions including temperature, humidity, and wind speed.",
+    "author": "John Giatropoulos",
+    "main": "widgets/CurrentWeather.js",
+    "keywords": [
+        "dash",
+        "widget",
+        "weather",
+        "test-fixture"
+    ]
+}

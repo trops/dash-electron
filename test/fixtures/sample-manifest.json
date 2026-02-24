@@ -1,0 +1,35 @@
+{
+    "name": "weather-widgets",
+    "displayName": "Weather Widgets",
+    "author": "John Giatropoulos",
+    "description": "A collection of weather and forecast widgets for your dashboard. Displays current conditions, weekly forecasts, and severe weather alerts.",
+    "version": "1.2.0",
+    "category": "utilities",
+    "tags": ["weather", "forecast", "outdoor", "api"],
+    "downloadUrl": "https://github.com/trops/weather-widgets/releases/download/v{version}/weather-widgets-v{version}.zip",
+    "repository": "https://github.com/trops/weather-widgets",
+    "publishedAt": "2026-02-15T10:00:00Z",
+    "widgets": [
+        {
+            "name": "CurrentWeather",
+            "displayName": "Current Weather",
+            "description": "Shows current weather conditions including temperature, humidity, and wind speed.",
+            "icon": "sun",
+            "providers": [{ "type": "openweather", "required": true }]
+        },
+        {
+            "name": "WeeklyForecast",
+            "displayName": "7-Day Forecast",
+            "description": "Weekly weather forecast with daily high/low temperatures and conditions.",
+            "icon": "calendar",
+            "providers": [{ "type": "openweather", "required": true }]
+        },
+        {
+            "name": "WeatherAlerts",
+            "displayName": "Weather Alerts",
+            "description": "Displays active severe weather alerts for your area.",
+            "icon": "alert-triangle",
+            "providers": [{ "type": "openweather", "required": true }]
+        }
+    ]
+}

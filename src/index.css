@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+li {
+    list-style: none;
+}
+
+ul.algolia-element > li {
+    display: flex;
+    flex-direction: column;
+    height: inherit;
+    width: "300px";
+}
+
+ul.algolia-element > li > img {
+    object-fit: contain;
+}
+
+ul.algolia-element-detail > li > img {
+    object-fit: contain;
+    width: 100px;
+}
+
+li.algolia-carousel-item > div {
+    display: flex;
+    flex-direction: column;
+    height: inherit;
+    flex-grow: inherit;
+    max-height: inherit;
+    overflow: hidden;
+}
+
+div.algolia-element > div {
+    display: flex;
+    height: inherit;
+}
+
+div.algolia-ui-element > div {
+    /* background-color: brown;
+    padding: 10px;
+    margin: 2px; */
+    /* display: relative;
+    flex-direction: column;
+    height: inherit; */
+}
+
+/* Global thin scrollbar for Firefox */
+* {
+    scrollbar-width: thin;
+}

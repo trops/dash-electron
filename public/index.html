@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#000000" />
+        <meta name="description" content="Dash" />
+        <!--
+      manifest.json provides metadata used when your web app is installed on a
+      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
+    -->
+        <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+        <title>Dash</title>
+        <script>
+            window.global = window;
+        </script>
+    </head>
+    <body>
+        <noscript>You need to enable JavaScript to run this app.</noscript>
+        <div id="root"></div>
+        <script>
+            console.log("===== HTML LOADED =====");
+            console.log(
+                "Root element exists:",
+                !!document.getElementById("root")
+            );
+
+            // Check if bundle script is loaded
+            window.addEventListener("DOMContentLoaded", () => {
+                const scripts = document.getElementsByTagName("script");
+                console.log("Total scripts found:", scripts.length);
+                for (let script of scripts) {
+                    console.log("Script src:", script.src || "inline");
+                }
+            });
+
+            window.addEventListener(
+                "error",
+                function (e) {
+                    console.error("Global error:", e.error || e.message);
+                    document.body.innerHTML +=
+                        '<div style="color: red; padding: 20px; font-size: 18px;">ERROR: ' +
+                        (e.message || e.error) +
+                        "</div>";
+                },
+                true
+            );
+        </script>
+    </body>
+</html>

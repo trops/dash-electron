@@ -1,0 +1,14 @@
+# webpack.local.config.js
+# webpack.production.config.js
+# .eslintrc
+# .gitignore
+# node_modules
+
+# # babel.config.js
+# # webpack.config.js
+# # tailwind.config.js
+
+# # src/
+# tests/
+# .babelrc
+# # package/

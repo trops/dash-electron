@@ -1,0 +1,13 @@
+{
+    "name": "weekly-forecast",
+    "version": "1.0.0",
+    "description": "Weekly weather forecast with daily high/low temperatures and conditions.",
+    "author": "John Giatropoulos",
+    "main": "widgets/WeeklyForecast.js",
+    "keywords": [
+        "dash",
+        "widget",
+        "weather",
+        "test-fixture"
+    ]
+}
