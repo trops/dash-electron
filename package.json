@@ -1,12 +1,16 @@
 {
     "name": "@trops/dash-electron",
     "productName": "Dash",
-    "version": "0.0.59",
+    "version": "0.0.60",
     "description": "A Dashboard Generator",
     "author": "John P. Giatropoulos",
     "publishConfig": {
         "@trops:registry": "https://npm.pkg.github.com",
         "access": "public"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/trops/dash-electron"
     },
     "license": "ISC",
     "typescript": "^2.6.2",
