@@ -64,6 +64,7 @@ function validateManifestSchema(manifest) {
 
     // --- Required string fields ---
     const requiredStrings = [
+        "scope",
         "name",
         "displayName",
         "author",
@@ -80,6 +81,17 @@ function validateManifestSchema(manifest) {
                 `"${field}" is required and must be a non-empty string`
             );
         }
+    }
+
+    // --- scope format ---
+    if (
+        typeof manifest.scope === "string" &&
+        manifest.scope.trim() &&
+        !KEBAB_CASE_RE.test(manifest.scope)
+    ) {
+        errors.push(
+            `"scope" must be kebab-case (got "${manifest.scope}"). Example: "my-username"`
+        );
     }
 
     // --- name format ---
