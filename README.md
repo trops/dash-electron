@@ -105,22 +105,19 @@ For comprehensive guides, see [docs/INDEX.md](./docs/INDEX.md):
 **Getting Started:**
 
 -   [Quick Start](./docs/QUICK_START.md) - Commands, workflows, and troubleshooting
--   [Widget System](./docs/WIDGET_SYSTEM.md) - Architecture and how Dash works
+-   [Development Workflow](./docs/DEVELOPMENT_WORKFLOW.md) - Development workflow and best practices
 
-**Widget Development:**
+**Core Framework (widget system, providers, MCP):**
 
--   [Widget Development Guide](./docs/WIDGET_DEVELOPMENT.md) - Create and test widgets
--   [Widget Registry](./docs/WIDGET_REGISTRY.md) - Package and distribute widgets
+For complete widget system, provider architecture, and widget API documentation, see [@trops/dash-core](https://github.com/trops/dash-core):
 
-**Architecture & Reference:**
-
--   [Provider API Setup](./docs/PROVIDER_API_SETUP.md) - Provider system architecture
--   [Implementation Summary](./docs/IMPLEMENTATION_SUMMARY.md) - Complete system details
+-   [Widget System](https://github.com/trops/dash-core/blob/master/docs/WIDGET_SYSTEM.md) - Architecture and how Dash works
+-   [Widget Development](https://github.com/trops/dash-core/blob/master/docs/WIDGET_DEVELOPMENT.md) - Create and test widgets
+-   [Provider Architecture](https://github.com/trops/dash-core/blob/master/docs/PROVIDER_ARCHITECTURE.md) - Provider system architecture
 
 **UI Library:**
 
 -   [dash-react README](../dash-react/README.md) - Component library documentation
--   [dash-react Docs](../dash-react/docs/) - Provider architecture and widget integration patterns
 
 ## Package Scripts
 

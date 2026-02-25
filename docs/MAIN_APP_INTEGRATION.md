@@ -1,6 +1,6 @@
-# Main App (dash/dash) Integration Checklist
+# Main App Integration Checklist
 
-This document outlines what the main Electron app needs to implement to work with the provider system in dash-react library.
+This document outlines what the Electron app (dash-electron) needs to implement to work with the provider system from `@trops/dash-core` and `@trops/dash-react`.
 
 ## 1. Provider Storage APIs
 
@@ -167,9 +167,9 @@ module.exports = { registerProviderHandlers };
 
 ## 3. Frontend API Integration
 
-### 3.1 Create Provider API in dash/dash main app
+### 3.1 Create Provider API in Electron main process
 
-**Location:** `dash/public/lib/api/providerApi.js`
+**Location:** `electron/api/providerApi.js` (in @trops/dash-core)
 
 ```javascript
 export const providerApi = {

@@ -1,17 +1,22 @@
-# Dash - Electron Dashboard Framework
+# Dash-Electron — Electron App Template
 
 ## Project Overview
 
-Dash is an Electron-based dashboard application framework built with React. It provides a widget-based architecture with dependency injection, theming, and a provider system for managing external service integrations.
+Dash-electron is a thin Electron application template built on two core packages:
 
-**Key Features:**
+-   **[@trops/dash-core](https://github.com/trops/dash-core)** — Core framework: contexts, hooks, models, controllers, APIs, widget system, provider architecture
+-   **[@trops/dash-react](https://github.com/trops/dash-react)** — UI component library: Panel, Button, Widget, Workspace, ThemeContext, etc.
 
--   Widget-based dashboard architecture
--   Hot reload support during development
--   Theme system with light/dark variants
--   Provider system for external API integrations
--   Widget distribution via npm packages
--   Secure credential management through Electron
+This template provides the application shell, template-specific widgets, and Electron main process wiring. All framework logic lives in `@trops/dash-core`.
+
+**What this template adds:**
+
+-   Electron main process (`electron.js`) with IPC handler registration
+-   Preload bridge (`preload.js`) using `defaultMainApi` from dash-core
+-   App entry point (`Dash.js`) with widget registration and external widget loading
+-   Template-specific widgets (`src/Widgets/DashSamples/`)
+-   Template-specific API extensions (algolia, openai, menuItems, plugins)
+-   Build/packaging scripts for Electron .dmg distribution
 
 ## Product Requirements Documentation
 
@@ -45,42 +50,15 @@ ls docs/requirements/prd/
 **4. Testing PRD acceptance criteria:**
 
 ```bash
-# View all acceptance criteria for a PRD
 npm run test:prd layout-builder-hybrid
-
-# Generate manual verification checklist
 npm run test:prd layout-builder-hybrid --checklist
-
-# Check test coverage
 npm run prd:coverage layout-builder-hybrid
 ```
-
-### Documentation Hierarchy
-
-```
-PRDs (requirements) → Architecture Docs (design) → Implementation Guides (code)
-```
-
-**PRDs answer:**
-
--   **Why** are we building this? (Problem Statement, Context)
--   **Who** is it for? (User Personas)
--   **What** defines success? (Acceptance Criteria, Success Metrics)
--   **When** should it be done? (Implementation Phases: P0/P1/P2)
-
-**Technical docs answer:**
-
--   **How** is it built? (Architecture, design patterns)
--   **Where** is the code? (File locations, code structure)
--   **What** are the APIs? (Function signatures, parameters)
 
 ### Creating New PRDs
 
 ```bash
-# Create new PRD from template
 npm run prdize "Feature Name"
-
-# Dry run (preview without creating)
 npm run prdize "Feature Name" --dry-run
 ```
 
@@ -88,61 +66,48 @@ npm run prdize "Feature Name" --dry-run
 
 ## Architecture
 
-### Core Concepts
+Dash-electron is a thin scaffold. The core architecture (widgets, workspaces, providers, contexts, MCP, widget API) is defined in `@trops/dash-core`.
 
-1. **Widgets** - Reusable React components that display data or functionality
-2. **Workspaces** - Container components that host related widgets
-3. **Providers** - Manage external service credentials and API clients
-4. **Contexts** - React Context-based dependency injection
-5. **Widget API** - Event publishing, data storage, and widget communication
-6. **MCP Providers** - Model Context Protocol servers that expose tools to widgets via stdio transport
+**Technology Stack:**
 
-### Technology Stack
-
--   **Runtime**: Electron 18 + Node.js v18/v20/v22
--   **UI Framework**: React 18
--   **UI Library**: [@trops/dash-react](https://github.com/trops/dash-react) (internal component library)
+-   **Runtime**: Electron 39 + Node.js v18/v20/v22
+-   **Core Framework**: @trops/dash-core (contexts, hooks, models, controllers)
+-   **UI Library**: @trops/dash-react (components, ThemeContext)
 -   **Styling**: TailwindCSS 3
 -   **Build**: Create React App (craco) + Rollup (widgets)
 -   **Packaging**: Electron Forge
 
+**For complete architecture docs, see:** [@trops/dash-core documentation](https://github.com/trops/dash-core)
+
 ## Directory Structure
+
+Only template-specific files live here. Everything else comes from `@trops/dash-core`.
 
 ```
 ./
 ├── src/
-│   ├── Api/                    # Electron IPC API clients
-│   ├── ComponentManager.js     # Widget registration system
-│   ├── Components/             # Reusable app components
-│   ├── Context/                # React Context providers
-│   │   ├── ThemeWrapper.js     # Theme provider (uses @trops/dash-react ThemeContext)
-│   │   ├── AppContext.js       # Application state
-│   │   ├── DashboardContext.js # Dashboard configuration
-│   │   └── ProviderContext.js  # External service credentials
-│   ├── Dash.js                 # Main app component
+│   ├── Dash.js                 # Main app: widget registration, external widget loading
+│   ├── index.js                # React entry point (HashRouter + Dash)
+│   ├── index.css               # Tailwind CSS input
 │   ├── Mock/                   # Mock data for development
-│   ├── Models/                 # Data models and utilities
-│   ├── Widget/                 # Core widget components
-│   ├── Widgets/                # Your custom widgets go here
-│   ├── hooks/                  # Custom React hooks
-│   │   ├── useMcpProvider.js   # MCP server connection and tool calling
-│   │   ├── useDashboard.js     # Dashboard context access
-│   │   └── useWidgetProviders.js # Widget provider resolution
-│   ├── utils/                  # Utility functions
-│   └── index.js                # App entry point
+│   └── Widgets/                # Template-specific widgets
+│       ├── DashSamples/        # Sample widgets
+│       │   ├── widgets/        # Widget components + .dash.js configs
+│       │   ├── workspaces/     # Workspace container
+│       │   └── contexts/       # Widget-local contexts
+│       └── index.js            # Widget barrel export
 ├── public/
-│   ├── electron.js             # Electron main process
-│   └── lib/
-│       ├── controller/
-│       │   ├── mcpController.js    # MCP server lifecycle (spawn, connect, call)
-│       │   └── providerController.js # Provider CRUD and encryption
-│       ├── mcp/
-│       │   └── mcpServerCatalog.json # MCP server definitions (transport, args, env)
-│       └── api/
-│           ├── mcpApi.js           # MCP IPC handlers
-│           └── providerApi.js      # Provider IPC handlers
-├── scripts/                    # Build and utility scripts
+│   ├── electron.js             # Electron main process (IPC handler registration)
+│   ├── preload.js              # Context bridge (defaultMainApi from dash-core)
+│   ├── index.html              # HTML shell
+│   └── tailwind.css            # Built CSS output
+├── scripts/                    # Build, validation, and utility scripts
+│   ├── widgetize.js            # Generate new widget scaffold
+│   ├── validate.sh             # Automated validation
+│   ├── prdize.js               # Generate PRD from template
+│   └── setup.sh                # Environment setup
 ├── docs/                       # Documentation
+├── e2e/                        # Playwright end-to-end tests
 ├── package.json
 ├── craco.config.js             # React build configuration
 ├── rollup.config.mjs           # Widget bundling config
@@ -162,12 +127,8 @@ npm run prdize "Feature Name" --dry-run
 **Initial Setup:**
 
 ```bash
-# 1. Create .env file
 cp .env.default .env
-
-# 2. Edit .env and set any needed environment variables (e.g., Apple signing credentials)
-
-# 3. Install dependencies
+# Edit .env as needed
 npm run setup
 ```
 
@@ -200,140 +161,157 @@ npm run bump
 
 When you run `npm run dev`:
 
-1. React dev server starts at http://localhost:3000
-2. Electron app launches and connects to dev server
-3. File changes automatically reload without restart
-4. DevTools are available for debugging
+1. Tailwind CSS watcher starts (rebuilds on class changes)
+2. React dev server starts at http://localhost:3000
+3. Electron app launches and connects to dev server
+4. File changes automatically reload without restart
+5. DevTools are available for debugging
 
 ## Key Files and Locations
 
-### Theme System
+### Dash.js — Main App Component
 
-**Critical Fix Applied:** ThemeWrapper imports ThemeContext from `@trops/dash-react`, NOT local context
+**File:** [src/Dash.js](src/Dash.js)
 
--   **Why**: Prevents dual context instances between dash and dash-react
--   **File**: [src/Context/ThemeWrapper.js](src/Context/ThemeWrapper.js:3)
--   **Import**: `import { ThemeContext } from "@trops/dash-react";`
+-   Imports all local widgets from `src/Widgets/` and registers them with `ComponentManager`
+-   Creates `ElectronDashboardApi` instance from `@trops/dash-core`
+-   Loads installed external widgets via two-phase loading (CJS bundles first, config fallback second)
+-   Renders `DashboardStage` from `@trops/dash-core` with the API and credentials
+-   Listens for widget install/load events for hot reload
 
-**Theme Files:**
+### index.js — Entry Point
 
--   [src/Context/ThemeWrapper.js](src/Context/ThemeWrapper.js) - Theme provider and theme loading logic
--   [src/Models/ThemeModel.js](src/Models/ThemeModel.js) - Theme data model and generation
--   Theme data stored in Electron app directory: `~/Library/Application Support/{appId}/themes/`
+**File:** [src/index.js](src/index.js)
 
-**Using Themes in Components:**
+Renders the React app with `HashRouter` wrapping the `Dash` component.
+
+### electron.js — Main Process
+
+**File:** [public/electron.js](public/electron.js)
+
+Creates the Electron `BrowserWindow` and registers all IPC handlers. Imports controllers and events from `@trops/dash-core/electron`, then wires them to `ipcMain.handle()` calls. Includes both core handlers (workspaces, themes, providers, MCP, registry) and template-specific handlers (algolia, openai, menuItems, plugins).
+
+### preload.js — Context Bridge
+
+**File:** [public/preload.js](public/preload.js)
+
+Exposes the main API to the renderer process:
 
 ```javascript
-import { useContext } from "react";
+const { defaultMainApi } = require("@trops/dash-core/electron");
+contextBridge.exposeInMainWorld("mainApi", defaultMainApi);
+```
+
+### Widgets/ — Template-Specific Widgets
+
+**Location:** [src/Widgets/](src/Widgets/)
+
+Contains `DashSamples` with sample widgets: SampleThemeViewerWidget, SampleNotepadWidget, SampleEventSenderWidget, SampleEventReceiverWidget, SampleSlackWidget, SampleGitHubWidget, SampleGmailWidget, SampleReaderWidget.
+
+## Template-Specific Extensions
+
+The `electron.js` main process registers template-specific IPC handlers beyond what `@trops/dash-core` provides:
+
+**Algolia** — Search index management:
+```javascript
+ipcMain.handle(ALGOLIA_LIST_INDICES, (e, app) => listIndices(mainWindow, app));
+ipcMain.handle(ALGOLIA_BROWSE_OBJECTS, (e, msg) => browseObjectsToFile(...));
+```
+
+**OpenAI** — Image description:
+```javascript
+ipcMain.handle(OPENAI_DESCRIBE_IMAGE, (e, msg) => describeImage(...));
+```
+
+**Menu Items** — Custom menu persistence:
+```javascript
+ipcMain.handle(MENU_ITEMS_LIST, (e, msg) => listMenuItemsForApplication(...));
+ipcMain.handle(MENU_ITEMS_SAVE, (e, msg) => saveMenuItemForApplication(...));
+```
+
+**Plugins** — pluggable-electron plugin installation:
+```javascript
+ipcMain.handle("plugin-install", (e, msg) => pluginInstall(...));
+```
+
+## Widget System
+
+Widgets are React components registered with `ComponentManager` from `@trops/dash-core`. Each widget has a `.dash.js` config file defining its component, type, workspace, and user-configurable properties.
+
+**Creating a new widget:**
+
+```bash
+node ./scripts/widgetize MyAwesomeWidget
+# Creates: src/Widgets/MyAwesomeWidget/{widgets/, workspaces/, index.js}
+```
+
+**For complete widget system docs, see:** [dash-core Widget System](https://github.com/trops/dash-core/blob/master/docs/WIDGET_SYSTEM.md)
+
+## Provider System
+
+Two provider classes: `"credential"` (encrypted API keys) and `"mcp"` (MCP server connections).
+
+**Critical:** Providers are read from `AppContext.providers`, NOT `DashboardContext.providers`. DashboardContext.providers is structurally empty due to component tree ordering.
+
+**For complete provider docs, see:** [dash-core Provider Architecture](https://github.com/trops/dash-core/blob/master/docs/PROVIDER_ARCHITECTURE.md)
+
+## MCP Provider System
+
+MCP (Model Context Protocol) providers spawn stdio child processes exposing tools to widgets. The lifecycle is managed by `useMcpProvider` hook and `mcpController` from `@trops/dash-core`.
+
+**For complete MCP docs, see:** [dash-core Provider Architecture](https://github.com/trops/dash-core/blob/master/docs/PROVIDER_ARCHITECTURE.md)
+
+## Important Patterns
+
+### Import Rules
+
+**ThemeContext** must come from `@trops/dash-react` to avoid dual context instances:
+
+```javascript
+// CORRECT
 import { ThemeContext } from "@trops/dash-react";
 
-function MyComponent() {
-    const { currentTheme, themeVariant, changeThemeVariant } =
-        useContext(ThemeContext);
-    // currentTheme contains CSS class mappings like 'bg-primary-dark'
-}
+// WRONG - creates dual context
+import { ThemeContext } from "./Context/ThemeContext";
 ```
 
-### Widget Registration
-
-**ComponentManager** ([src/ComponentManager.js](src/ComponentManager.js))
-
--   Registers widgets and workspaces
--   Resolves widget configurations
--   Manages widget lifecycle
-
-**Widget Definition Pattern:**
+**FontAwesomeIcon** must come from `@trops/dash-react`:
 
 ```javascript
-// MyWidget.dash.js
-import { MyWidget } from "./MyWidget";
+// CORRECT
+import { FontAwesomeIcon } from "@trops/dash-react";
 
-export default {
-    component: MyWidget,
-    canHaveChildren: false,
-    workspace: "my-workspace-name",
-    type: "widget",
-    userConfig: {
-        title: {
-            type: "text",
-            defaultValue: "My Widget",
-            displayName: "Title",
-            required: true,
-        },
-    },
-};
+// WRONG - duplicates the dependency
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 ```
 
-**MCP Widget Definition Pattern:**
+### Using dash-react Components
 
 ```javascript
-// McpTestWidget.dash.js
-import { McpTestWidget } from "./McpTestWidget";
-
-export default {
-    component: McpTestWidget,
-    canHaveChildren: false,
-    workspace: "McpTestWorkspace-workspace",
-    type: "widget",
-    providers: [
-        {
-            type: "slack",
-            providerClass: "mcp", // MCP provider (not credential)
-            required: true,
-            // Optional: restrict which tools the widget can call
-            // allowedTools: ["send_message", "list_channels"],
-        },
-    ],
-    userConfig: {
-        title: {
-            type: "text",
-            defaultValue: "MCP Test",
-            displayName: "Title",
-            required: false,
-        },
-    },
-};
+import {
+    Panel, Panel2, Panel3,
+    Heading, SubHeading,
+    Button, ButtonIcon,
+    Widget, Workspace,
+    Modal, Notification,
+    LayoutContainer, ErrorBoundary,
+    FontAwesomeIcon,
+} from "@trops/dash-react";
 ```
 
-### API Integration
-
-**Electron IPC API** ([src/Api/](src/Api/))
-
--   `DashApi.js` - Main dashboard API
--   `ElectronDashboardApi.ts` - Typed API with MCP methods (`mcpStartServer`, `mcpStopServer`, `mcpCallTool`, `mcpReadResource`)
--   Communication between React renderer and Electron main process
--   Available via `window.dashApi`
-
-**Widget API** (injected into widgets via props)
-
-```javascript
-// Available in widget components
-api.storeData(data); // Save widget data
-api.readData({ callbackComplete, callbackError });
-api.publishEvent(eventName, payload);
-api.registerListeners(events, handlers);
-```
+**For more patterns (context providers, widget communication, data persistence), see:** [dash-core Widget Development](https://github.com/trops/dash-core/blob/master/docs/WIDGET_DEVELOPMENT.md)
 
 ## Build and Deploy
 
 ### Widget Distribution
 
-**Package widgets as npm package:**
-
 ```bash
-# 1. Bundle widgets
-npm run package-widgets
-
-# 2. Version bump
-npm version patch
-
-# 3. Push to GitHub (triggers auto-publish)
-git push origin master
+npm run package-widgets   # Bundle widgets with Rollup
+npm version patch         # Version bump
+git push origin master    # Triggers auto-publish
 ```
 
 ### Electron App Distribution
-
-**Create Mac .dmg:**
 
 ```bash
 # 1. Set up Apple Developer credentials in .env
@@ -347,351 +325,6 @@ npm run apple-staple
 
 **Output:** `/out/make/YourApp.dmg`
 
-## Common Tasks
-
-### Creating a New Widget
-
-```bash
-# Generate scaffold
-node ./scripts/widgetize MyAwesomeWidget
-
-# This creates:
-# src/Widgets/MyAwesomeWidget/
-# ├── widgets/
-# │   ├── MyAwesomeWidget.js
-# │   └── MyAwesomeWidget.dash.js
-# ├── workspaces/
-# │   ├── MyAwesomeWidgetWorkspace.js
-# │   └── MyAwesomeWidgetWorkspace.dash.js
-# └── index.js
-```
-
-### Using dash-react Components
-
-```javascript
-import {
-    Panel,
-    Panel2,
-    Panel3, // Card containers
-    Heading,
-    SubHeading, // Typography
-    Button,
-    ButtonIcon, // Buttons
-    Menu,
-    MenuItem, // Menus
-    Modal,
-    Notification, // Overlays
-    Widget,
-    Workspace, // Widget containers
-    LayoutContainer, // Layout utilities
-    ErrorBoundary, // Error handling
-    FontAwesomeIcon, // Icons (see rule below)
-} from "@trops/dash-react";
-```
-
-### Icons
-
-**Rule: Always import `FontAwesomeIcon` from `@trops/dash-react` — never directly from `@fortawesome/*`.**
-
-`@trops/dash-react` re-exports `FontAwesomeIcon` and the full FontAwesome Free icon set (solid + brand). Importing directly from `@fortawesome` packages would duplicate the icon library and risk version mismatches.
-
-```javascript
-// CORRECT — single source of truth via dash-react
-import { FontAwesomeIcon } from "@trops/dash-react";
-
-// WRONG — bypasses dash-react, duplicates the dependency
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-```
-
-**Usage pattern:**
-
-```javascript
-<FontAwesomeIcon icon="compass" className="h-3.5 w-3.5" />
-```
-
-### Updating dash-react Dependency
-
-```bash
-# 1. Update version in package.json
-# "dependencies": {
-#   "@trops/dash-react": "^0.1.XXX"
-# }
-
-# 2. Install
-npm install
-
-# 3. Rebuild native modules
-npm run rebuild
-```
-
-## Important Patterns
-
-### Context Provider Pattern
-
-**Workspace provides context, widgets consume:**
-
-```javascript
-// MyWorkspace.js
-import { MyContext } from "./MyContext";
-import { useMyApi } from "./hooks/useMyApi";
-
-export const MyWorkspace = ({ children }) => {
-    const myApi = useMyApi();
-
-    return (
-        <MyContext.Provider value={{ myApi }}>{children}</MyContext.Provider>
-    );
-};
-
-// MyWidget.js
-import { useContext } from "react";
-import { MyContext } from "../MyContext";
-
-export const MyWidget = (props) => {
-    const { myApi } = useContext(MyContext);
-    return <div>{/* Use myApi */}</div>;
-};
-```
-
-### Widget Communication
-
-**Publish/Subscribe Pattern:**
-
-```javascript
-// Widget A - Publishes event
-api.publishEvent("user-action", { data: "value" });
-
-// Widget B - Listens for event
-useEffect(() => {
-    api.registerListeners(["user-action"], {
-        "user-action": (payload) => {
-            console.log("Received:", payload.data);
-        },
-    });
-}, []);
-```
-
-### Data Persistence
-
-**Widget data auto-saves to Electron:**
-
-```javascript
-// Save
-api.storeData({ myData: "value" });
-
-// Load
-api.readData({
-    callbackComplete: (data) => setState(data),
-    callbackError: (err) => console.error(err),
-});
-```
-
-### MCP Provider System
-
-The MCP (Model Context Protocol) provider system enables widgets to connect to external tools via MCP servers.
-
-**Two Provider Classes:**
-
--   `"credential"` (default) - Traditional API key/token providers stored encrypted in providers.json
--   `"mcp"` - MCP server providers that spawn stdio child processes exposing tools
-
-**Key Files:**
-
--   [src/hooks/useMcpProvider.js](src/hooks/useMcpProvider.js) - Hook for connecting to MCP servers and calling tools
--   [public/lib/controller/mcpController.js](public/lib/controller/mcpController.js) - Main process: spawns MCP server child processes
--   [public/lib/mcp/mcpServerCatalog.json](public/lib/mcp/mcpServerCatalog.json) - Defines available MCP servers (transport, command, args, env mapping)
--   [src/Components/Provider/McpServerPicker.js](src/Components/Provider/McpServerPicker.js) - UI for selecting MCP servers during provider creation
--   [src/Api/ElectronDashboardApi.ts](src/Api/ElectronDashboardApi.ts) - MCP API methods (mcpStartServer, mcpStopServer, mcpCallTool)
-
-**Critical:** Providers are read from `AppContext.providers`, NOT `DashboardContext.providers`. DashboardContext.providers is structurally empty due to component tree ordering (DashboardWrapper renders before providers are loaded).
-
-**MCP Lifecycle:**
-
-1. Widget mounts → `useMcpProvider("slack")` hook runs
-2. Hook reads provider from `AppContext.providers` (with `mcpConfig` and credentials)
-3. Calls `dashApi.mcpStartServer()` → IPC → `mcpController` spawns stdio child process
-4. Server returns available tools → hook filters by `allowedTools` if specified
-5. Widget calls `callTool("send_message", args)` → 30-second timeout per call
-6. On unmount, hook calls `mcpStopServer()` to clean up child process
-
-**Tool Scoping:** Enforced at both the hook level (client-side filter) and main process level (mcpController validates allowedTools).
-
-**Reference Widget:** `src/Widgets/McpTest/` - End-to-end MCP test widget connecting to Slack via MCP.
-
-### Custom Hooks
-
--   [src/hooks/useMcpProvider.js](src/hooks/useMcpProvider.js) - MCP server connection, tool listing, tool calling
--   [src/hooks/useDashboard.js](src/hooks/useDashboard.js) - Access DashboardContext values
--   [src/hooks/useWidgetProviders.js](src/hooks/useWidgetProviders.js) - Resolve widget provider requirements
-
-## Troubleshooting
-
-### Theme Issues
-
-**Problem:** Components showing NULL theme or transparent backgrounds
-
-**Solution:** Ensure ThemeContext is imported from `@trops/dash-react`:
-
-```javascript
-// ✅ CORRECT
-import { ThemeContext } from "@trops/dash-react";
-
-// ❌ WRONG - creates dual context
-import { ThemeContext } from "./Context/ThemeContext";
-```
-
-### Build Issues
-
-**Problem:** `electron-rebuild` fails
-
-**Solution:**
-
--   Ensure Python 3 is installed
--   Ensure XCode Command Line Tools installed
--   Check Node.js version (must be v18/v20/v22)
-
-**Problem:** Can't install @trops/dash-react
-
-**Solution:**
-
--   Ensure `.npmrc` has the registry line: `@trops:registry=https://npm.pkg.github.com`
--   Run `npm run setup` to regenerate `.npmrc`
-
-### Hot Reload Not Working
-
-**Problem:** Changes don't reflect in Electron app
-
-**Solution:**
-
--   Check React dev server is running (http://localhost:3000)
--   Restart `npm run dev`
--   Clear Electron cache: `rm -rf ~/Library/Application Support/{appId}`
-
-## Related Projects
-
-### dash-react
-
-**Location:** `../dash-react/dash-react` (sibling directory)
-**Purpose:** UI component library used by Dash
-**Package:** `@trops/dash-react`
-
-**Key points:**
-
--   Provides all UI components (Panel, Button, etc.)
--   Exports ThemeContext (MUST be used by dash)
--   Built with Rollup
--   Published to GitHub Packages
-
-**Documentation:**
-
--   [dash-react README](../dash-react/README.md)
--   [Component Overview](../dash-react/docs/)
-
-### Development Sync
-
-When working on both projects:
-
-```bash
-# Terminal 1 - dash-react (rebuild on changes)
-cd ../dash-react/dash-react
-npm run build
-
-# Terminal 2 - dash (reinstall updated package)
-npm install
-npm run dev
-```
-
-## Code Style and Conventions
-
-### File Naming
-
--   React components: PascalCase (e.g., `MyWidget.js`)
--   Widget configs: `{ComponentName}.dash.js`
--   Utilities: camelCase (e.g., `layout.js`)
--   Contexts: PascalCase with suffix (e.g., `ThemeContext.js`)
-
-### Component Structure
-
-```javascript
-// Imports
-import React, { useContext, useState } from "react";
-import { Panel, Heading } from "@trops/dash-react";
-import { ThemeContext } from "@trops/dash-react";
-
-// Component
-export const MyWidget = ({
-    // User config props (from .dash.js)
-    title = "Default",
-    subtitle = "",
-    // Injected props
-    api,
-    ...props
-}) => {
-    // Context
-    const { currentTheme } = useContext(ThemeContext);
-
-    // State
-    const [data, setData] = useState(null);
-
-    // Effects
-    useEffect(() => {
-        // Setup
-    }, []);
-
-    // Handlers
-    const handleClick = () => {};
-
-    // Render
-    return (
-        <Widget {...props}>
-            <Panel>
-                <Heading title={title} />
-            </Panel>
-        </Widget>
-    );
-};
-```
-
-### Formatting
-
--   Use Prettier (configured in `.prettierrc`)
--   Run `npm run prettify` before committing
--   4-space indentation
--   No semicolons enforced (but used throughout)
-
-## Environment Variables
-
-**Optional:**
-
--   `REACT_APP_IDENTIFIER` - App identifier (defaults to package name)
--   `REACT_APP_APPLE_*` - Apple signing credentials for packaging
--   `REACT_APP_GOOGLE_*` - Google API credentials
-
-**Files:**
-
--   `.env` - Your local environment (not committed)
--   `.env.default` - Template with all variables
-
-## Version Management
-
-**Current Versions:**
-
--   Dash: 0.0.58
--   dash-react: ^0.1.187
--   Node.js: v18/v20/v22
--   Electron: ^18.1.0
--   React: ^18.2.0
-
-**Bumping Versions:**
-
-```bash
-# Patch (0.0.X)
-npm run bump
-
-# With git tag
-npm run bump-tag
-```
-
 ## Validation and Testing
 
 ### When to Validate
@@ -701,262 +334,156 @@ npm run bump-tag
 -   Modifying source code in `src/`
 -   Changing build configuration (rollup, craco, tailwind)
 -   Updating dependencies
--   Making theme system changes
 -   Adding or modifying widgets
 
-### Pre-Commit Validation Checklist
-
-Before committing changes, run these checks:
+### Pre-Commit Validation
 
 ```bash
-# 1. Format code
 npm run prettify
-
-# 2. Build CSS
 npm run build:css
-
-# 3. Check for syntax errors (via build)
-# This will fail fast if there are import errors or syntax issues
 npm run build 2>&1 | head -50
 ```
 
-**Expected:** No errors, build completes successfully
-
-### Build Validation
-
-**Quick build check:**
-
-```bash
-# Start dev server (doesn't open Electron, just checks React build)
-BROWSER=none npm start
-```
-
-**What to check:**
-
--   ✅ Webpack compiles without errors
--   ✅ No module resolution errors
--   ✅ Server starts at http://localhost:3000
--   ✅ No red error messages in terminal
-
-**Stop with:** `Ctrl+C`
-
-### Runtime Validation
-
-**Full application check:**
-
-```bash
-npm run dev
-```
-
-**What happens:**
-
-1. React dev server starts (http://localhost:3000)
-2. Electron window opens automatically
-3. Application loads in Electron
-
-**Health Check Indicators:**
-
-**In Terminal:**
-
--   ✅ `Compiled successfully!` message appears
--   ✅ No red error messages
--   ✅ Electron process starts without errors
-
-**In Electron Window:**
-
--   ✅ Application window opens (not blank screen)
--   ✅ Dashboard renders with visible components
--   ✅ No visible error messages or blank panels
-
-**In Browser DevTools (Electron → View → Toggle Developer Tools):**
-
-```javascript
-// Console should show theme loading
-[ThemeWrapper] Loading X saved themes...
-[ThemeWrapper] Loaded theme: theme-1
-[ThemeWrapper] Setting loaded theme as active: theme-1
-
-// Should NOT show:
-❌ NULL theme errors
-❌ Module not found errors
-❌ React errors (red error overlay)
-❌ Uncaught exceptions
-```
-
-**Theme System Validation:**
-Open DevTools Console and run:
-
-```javascript
-// Should return theme object with ~150 keys
-Object.keys(window.__REACT_DEVTOOLS_GLOBAL_HOOK__).length;
-```
-
-**Stop validation:** `Ctrl+C` in terminal, close Electron window
-
 ### Quick Validation Script
 
-**Automated validation script available:**
-
 ```bash
-# Run validation script
 ./scripts/validate.sh
 ```
 
-**What it does:**
-
-1. ✅ Runs Prettier to format code
-2. ✅ Builds Tailwind CSS
-3. ✅ Checks React build (30 second test)
-4. ✅ Reports success/failure with colored output
-
-**Sample output:**
-
-```
-🔍 Validating Dash Application...
-
-📝 Step 1/4: Running Prettier...
-✅ Code formatted successfully
-
-🎨 Step 2/4: Building Tailwind CSS...
-✅ Tailwind CSS built successfully
-
-🏗️  Step 3/4: Checking React build...
-   (This will take ~30 seconds)
-✅ Build successful - no errors detected
-
-📋 Step 4/4: Validation Summary
-✅ Code formatting: PASSED
-✅ CSS build: PASSED
-✅ React build: PASSED
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ All validations passed!
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-**Quick validation (without script):**
+Or manually:
 
 ```bash
 npm run prettify && npm run build:css && timeout 30 bash -c 'BROWSER=none npm start'
 ```
 
-### Component-Specific Validation
-
-**After modifying theme system:**
-
-1. Run `npm run dev`
-2. Open DevTools Console
-3. Check for theme loading messages
-4. Verify components have colored backgrounds (not transparent)
-5. Toggle theme variant (if UI available) - should update colors
-
-**After adding/modifying widgets:**
-
-1. Run `npm run dev`
-2. Navigate to dashboard with the widget
-3. Check widget renders correctly
-4. Check widget data loads
-5. Test widget interactions
-
-**After modifying Electron integration:**
-
-1. Run `npm run dev`
-2. Test IPC communication (if modified)
-3. Check file system operations work
-4. Verify credentials/providers load
-
-### Integration Testing with dash-react
-
-**After updating @trops/dash-react dependency:**
+### Runtime Validation
 
 ```bash
-# 1. Install new version
-npm install
-
-# 2. Rebuild native modules
-npm run rebuild
-
-# 3. Clear cache (if needed)
-rm -rf node_modules/.cache
-
-# 4. Validate build
 npm run dev
 ```
 
-**Check in DevTools Console:**
+**In Terminal:** "Compiled successfully!" appears, no red errors, Electron process starts.
 
-```javascript
-// Verify dash-react version
-// Look for package version in console logs or check:
-require("@trops/dash-react/package.json").version;
-```
+**In Electron Window:** Application window opens, dashboard renders, no blank panels.
 
-### Common Validation Errors
-
-**Error:** `Module not found: Error: Can't resolve '@trops/dash-react'`
-
-```bash
-# Fix: Reinstall dash-react
-npm install
-npm run rebuild
-```
-
-**Error:** `Compiled with warnings` - CSS order warnings
-
-```bash
-# Usually safe to ignore, but can fix by:
-npm run build:css
-```
-
-**Error:** Blank Electron window
-
-```bash
-# Fix: Check console for errors, usually:
-# 1. Clear cache: rm -rf node_modules/.cache
-# 2. Rebuild: npm run dev
-```
-
-**Error:** Theme not loading / NULL theme
-
-```bash
-# Fix: Verify ThemeWrapper imports from @trops/dash-react
-# Check src/Context/ThemeWrapper.js line 3
-```
+**In DevTools Console:** Theme loading messages appear, no NULL theme or module resolution errors.
 
 ### Automated Validation (Claude Code)
 
-**When Claude makes changes, validate with:**
-
 ```bash
-# Quick validation (30 seconds)
+# Quick (30 seconds)
 npm run prettify && npm run build:css
 
-# Full validation (60 seconds - includes dev server check)
+# Full (60 seconds)
 npm run prettify && npm run build:css && timeout 30 bash -c 'BROWSER=none npm start'
 ```
 
-**Success criteria:**
+**Success criteria:** No errors, "Compiled successfully!" message, process completes without crashing.
 
--   No errors in terminal output
--   "Compiled successfully!" message appears
--   Process completes without crashing
+## Code Style and Conventions
 
-**If validation fails:**
+Same conventions as `@trops/dash-core`:
 
--   Read error messages carefully
--   Check file paths and imports
--   Verify syntax is correct
--   Ensure all dependencies are installed
+-   **React components:** PascalCase (e.g., `MyWidget.js`)
+-   **Widget configs:** `{ComponentName}.dash.js`
+-   **Utilities:** camelCase (e.g., `layout.js`)
+-   **Formatting:** Prettier (`.prettierrc`), 4-space indentation
+-   **Run `npm run prettify` before committing**
+
+## Environment Variables
+
+**Optional:**
+
+-   `REACT_APP_IDENTIFIER` — App identifier (defaults to package name)
+-   `REACT_APP_APPLE_*` — Apple signing credentials for packaging
+-   `REACT_APP_GOOGLE_*` — Google API credentials
+
+**Files:**
+
+-   `.env` — Your local environment (not committed)
+-   `.env.default` — Template with all variables
+
+## Version Management
+
+**Current Versions:**
+
+-   dash-electron: 0.0.58
+-   @trops/dash-core: ^0.1.3
+-   @trops/dash-react: latest
+-   Node.js: v18/v20/v22
+-   Electron: ^39.0.0
+-   React: ^18.2.0
+
+**Bumping Versions:**
+
+```bash
+npm run bump       # Patch (0.0.X)
+npm run bump-tag   # With git tag
+```
+
+## Related Projects
+
+### @trops/dash-core
+
+**Location:** `~/Development/dash-core/dash-core/`
+**Package:** `@trops/dash-core`
+**Purpose:** Core framework — contexts, hooks, models, controllers, APIs, widget system, provider architecture
+
+-   Two export paths: `@trops/dash-core` (renderer, ESM+CJS) and `@trops/dash-core/electron` (CJS only)
+-   [Documentation](https://github.com/trops/dash-core)
+
+### @trops/dash-react
+
+**Location:** `~/Development/dash-react/dash-react/`
+**Package:** `@trops/dash-react`
+**Purpose:** UI component library (Panel, Button, Widget, Workspace, ThemeContext, FontAwesomeIcon, etc.)
+
+### dash (original monolith)
+
+**Location:** `~/Development/dash/dash/`
+**Purpose:** Original monolithic app, preserved as safety net. Not actively developed.
+
+### Development Sync
+
+When working across projects:
+
+```bash
+# Terminal 1 - rebuild dash-core
+cd ~/Development/dash-core/dash-core && npm run build
+
+# Terminal 2 - rebuild dash-react
+cd ~/Development/dash-react/dash-react && npm run build
+
+# Terminal 3 - reinstall and run dash-electron
+cd ~/Development/dash-electron/dash-electron && npm install && npm run dev
+```
+
+## Troubleshooting
+
+**Theme not loading / NULL theme:** Verify ThemeContext is imported from `@trops/dash-react`, not a local file.
+
+**`electron-rebuild` fails:** Ensure Python 3, XCode Command Line Tools, and Node.js v18/v20/v22 are installed.
+
+**Can't install @trops packages:** Ensure `.npmrc` has `@trops:registry=https://npm.pkg.github.com`. Run `npm run setup` to regenerate.
+
+**Hot reload not working:** Check React dev server is running at http://localhost:3000. Restart `npm run dev`. Clear cache: `rm -rf ~/Library/Application Support/{appId}`.
+
+**Blank Electron window:** Clear cache `rm -rf node_modules/.cache` and restart `npm run dev`.
 
 ## Resources
 
-**Documentation:**
+**Local Documentation:**
 
+-   [Documentation Index](./docs/INDEX.md)
 -   [Quick Start Guide](./docs/QUICK_START.md)
--   [Widget Development](./docs/WIDGET_DEVELOPMENT.md)
--   [Widget Registry](./docs/WIDGET_REGISTRY.md)
--   [Provider API Setup](./docs/PROVIDER_API_SETUP.md)
--   [Full Index](./docs/INDEX.md)
+-   [Development Workflow](./docs/DEVELOPMENT_WORKFLOW.md)
+-   [Main App Integration](./docs/MAIN_APP_INTEGRATION.md)
 
-**Contact:**
-[GitHub Issues](https://github.com/trops/dash/issues)
+**Core Framework Documentation (dash-core):**
+
+-   [Widget System](https://github.com/trops/dash-core/blob/master/docs/WIDGET_SYSTEM.md)
+-   [Widget API](https://github.com/trops/dash-core/blob/master/docs/WIDGET_API.md)
+-   [Widget Development](https://github.com/trops/dash-core/blob/master/docs/WIDGET_DEVELOPMENT.md)
+-   [Widget Registry](https://github.com/trops/dash-core/blob/master/docs/WIDGET_REGISTRY.md)
+-   [Provider Architecture](https://github.com/trops/dash-core/blob/master/docs/PROVIDER_ARCHITECTURE.md)
+-   [Testing Guide](https://github.com/trops/dash-core/blob/master/docs/TESTING.md)

@@ -1,6 +1,6 @@
-# Dash Documentation Index
+# Dash-Electron Documentation Index
 
-Complete documentation for the Dash application - an Electron dashboard framework with widget system and provider architecture.
+Documentation for the dash-electron application template — an Electron dashboard app built on `@trops/dash-core` and `@trops/dash-react`.
 
 ## Getting Started
 
@@ -20,53 +20,27 @@ Product Requirements Documents (PRDs) define the "why" and "what" of features:
 
 **PRDs answer:** Why are we building this? Who is it for? What defines success?
 
-**See architecture docs below for:** How is it built? Where is the code?
+## Template-Specific Documentation
 
-## Architecture & Design
+-   **[MAIN_APP_INTEGRATION.md](./MAIN_APP_INTEGRATION.md)** - Application integration patterns and checklist
 
--   **[WIDGET_SYSTEM.md](./WIDGET_SYSTEM.md)** - Core widget system architecture
--   **[WIDGET_MANAGEMENT_ARCHITECTURE.md](./WIDGET_MANAGEMENT_ARCHITECTURE.md)** - Widget management and lifecycle
--   **[PROVIDER_API_SETUP.md](./PROVIDER_API_SETUP.md)** - Provider system architecture and setup
--   **[IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)** - Complete provider system implementation
--   **[MAIN_APP_INTEGRATION.md](./MAIN_APP_INTEGRATION.md)** - Application integration patterns
+## Core Framework Documentation
 
-## Widget Development
+The widget system, provider architecture, and widget API are documented in `@trops/dash-core`:
 
--   **[WIDGETS_README.md](./WIDGETS_README.md)** - Widget development guide
--   **[WIDGET_DEVELOPMENT.md](./WIDGET_DEVELOPMENT.md)** - Widget development detailed guide
--   **[WIDGET_API.md](./WIDGET_API.md)** - Widget API reference
--   **[WIDGET_API_QUICK_REF.md](./WIDGET_API_QUICK_REF.md)** - Quick reference for Widget API
--   **[WIDGET_REGISTRY.md](./WIDGET_REGISTRY.md)** - Widget registry and management
--   **[WIDGET_MANAGEMENT_SUMMARY.md](./WIDGET_MANAGEMENT_SUMMARY.md)** - Widget management summary
--   **[WIDGET_HOT_RELOAD.md](./WIDGET_HOT_RELOAD.md)** - Hot reload development workflow
+**Widget System:**
+-   [Widget System](https://github.com/trops/dash-core/blob/master/docs/WIDGET_SYSTEM.md) - Architecture, auto-registration, hot reload
+-   [Widget API](https://github.com/trops/dash-core/blob/master/docs/WIDGET_API.md) - Management API reference
+-   [Widget API Quick Reference](https://github.com/trops/dash-core/blob/master/docs/WIDGET_API_QUICK_REF.md) - Condensed method reference
+-   [Widget Development](https://github.com/trops/dash-core/blob/master/docs/WIDGET_DEVELOPMENT.md) - Create and test widgets
+-   [Widget Registry](https://github.com/trops/dash-core/blob/master/docs/WIDGET_REGISTRY.md) - Packaging and distribution
 
-## Provider System
+**Provider System:**
+-   [Provider Architecture](https://github.com/trops/dash-core/blob/master/docs/PROVIDER_ARCHITECTURE.md) - Three-tier storage model, encryption, MCP
+-   [Widget Provider Configuration](https://github.com/trops/dash-core/blob/master/docs/WIDGET_PROVIDER_CONFIGURATION.md) - Provider config in .dash.js
 
-Core provider system documentation:
-
--   **[PROVIDER_ARCHITECTURE.md](./PROVIDER_ARCHITECTURE.md)** - Three-tier storage model (workspace config, encrypted credentials, runtime context)
--   **[PROVIDER_CONTEXT_INTEGRATION.md](./PROVIDER_CONTEXT_INTEGRATION.md)** - Setting up provider context and initialization
--   **[WIDGET_PROVIDER_ACCESS.md](./WIDGET_PROVIDER_ACCESS.md)** - How widgets access and use providers
--   **[PROVIDER_INTEGRATION_GUIDE.md](./PROVIDER_INTEGRATION_GUIDE.md)** - Step-by-step integration guide for widget developers
--   **[PROVIDER_DETECTION_SUMMARY.md](./PROVIDER_DETECTION_SUMMARY.md)** - Error boundary and missing provider UI detection
-
-MCP provider system:
-
--   **[requirements/prd/mcp-providers.md](./requirements/prd/mcp-providers.md)** - MCP Provider System PRD (requirements and design)
--   **[WIDGET_PROVIDER_CONFIGURATION.md](./WIDGET_PROVIDER_CONFIGURATION.md)** - Widget provider configuration (includes MCP examples)
-
-Provider system testing and reference:
-
--   **[PROVIDER_API_SETUP.md](./PROVIDER_API_SETUP.md)** - Provider API setup and configuration
--   **[PROVIDER_TESTING_GUIDE.md](./PROVIDER_TESTING_GUIDE.md)** - Testing provider system
--   **[TESTING_PROVIDERS.md](./TESTING_PROVIDERS.md)** - Provider testing procedures
--   **[MANUAL_TESTING_PROVIDERS.md](./MANUAL_TESTING_PROVIDERS.md)** - Manual provider testing
-
-## Project Status
-
--   **[IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md)** - Current implementation status
--   **[COMPLETION_SUMMARY.md](./COMPLETION_SUMMARY.md)** - Project completion summary
--   **[VERIFICATION_REPORT.md](./VERIFICATION_REPORT.md)** - Verification and testing report
+**Testing:**
+-   [Testing Guide](https://github.com/trops/dash-core/blob/master/docs/TESTING.md) - Provider and widget testing
 
 ## Images & Diagrams
 
@@ -76,5 +50,5 @@ Additional resources and diagrams are available in the `images/` subdirectory.
 
 **Related Documentation:**
 
--   [dash-react Library](../dash-react/) - React UI component library
--   [dash-react Library Docs](../dash-react/docs/) - Library API and architecture documentation
+-   [@trops/dash-core](https://github.com/trops/dash-core) — Core framework documentation
+-   [@trops/dash-react](https://github.com/trops/dash-react) — React UI component library
