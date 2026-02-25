@@ -42,9 +42,7 @@ dash-widgets.tgz
 tailwind.css
 tailwind-compiled.css
 
-src/Widgets
-
-# Google Credentials 
+# Google Credentials
 google-api-credentials.json
 google-api-token.json
 credentials.json
