@@ -183,7 +183,7 @@ async function downloadAndInstallWidget() {
     // 1. Downloaded to userData/widgets/
     // 2. Registered in registry.json
     // 3. Automatically registered with ComponentManager
-    // 4. Ready to be placed in workspaces/dashboards
+    // 4. Ready to be placed in dashboards
     
   } catch (error) {
     console.error('Installation failed:', error);

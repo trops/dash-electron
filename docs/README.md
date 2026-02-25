@@ -103,10 +103,6 @@ docs/
 
 Self-contained UI components with configuration and context
 
-### Workspaces
-
-Containers that provide data/dependencies to child widgets via Context
-
 ### ComponentManager
 
 Built-in registry that makes widgets available in the dashboard
