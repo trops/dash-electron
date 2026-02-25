@@ -57,6 +57,20 @@ function parseDashConfig(filePath) {
         return null;
     };
 
+    const extractTopLevel = (key) => {
+        // Remove userConfig block to avoid matching nested displayName fields
+        const stripped = content.replace(/userConfig\s*:\s*\{[\s\S]*?\n    \},?/m, "");
+        const patterns = [
+            new RegExp(`${key}\\s*:\\s*"([^"]*)"`, "m"),
+            new RegExp(`${key}\\s*:\\s*'([^']*)'`, "m"),
+        ];
+        for (const pattern of patterns) {
+            const match = stripped.match(pattern);
+            if (match) return match[1];
+        }
+        return null;
+    };
+
     // Extract the component name from the filename
     const fileName = path.basename(filePath, ".dash.js");
 
@@ -88,7 +102,7 @@ function parseDashConfig(filePath) {
 
     return {
         name: fileName,
-        displayName: extract("displayName") || extract("name") || fileName,
+        displayName: extractTopLevel("displayName") || fileName,
         description: extract("description") || "",
         icon: extract("icon") || null,
         type,
