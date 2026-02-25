@@ -24,10 +24,8 @@ npm run widgetize MyWidgetName
 #   ├── widgets/
 #   │   ├── MyWidgetName.js              (React component)
 #   │   └── MyWidgetName.dash.js         (Configuration)
-#   ├── contexts/
-#   │   └── MyWidgetNameContext.js       (Context provider)
-#   └── workspaces/
-#       └── MyWidgetName.js               (Workspace component)
+#   └── contexts/
+#       └── MyWidgetNameContext.js       (Context provider)
 ```
 
 ## Installing Widgets (Runtime)
@@ -120,7 +118,7 @@ export default {
     name: "WidgetName", // Must match component name
     component: WidgetComponent, // React component
     canHaveChildren: false, // Can contain other widgets
-    workspace: "WidgetNameWorkspace", // Associated workspace
+    workspace: "WidgetNameWorkspace", // Widget group identifier
     type: "widget", // Type identifier
     styles: {
         // Tailwind classes
