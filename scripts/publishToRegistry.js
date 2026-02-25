@@ -82,6 +82,20 @@ function parseDashConfig(filePath) {
         return null;
     };
 
+    const extractTopLevel = (key) => {
+        // Remove userConfig block to avoid matching nested displayName fields
+        const stripped = content.replace(/userConfig\s*:\s*\{[\s\S]*?\n    \},?/m, "");
+        const patterns = [
+            new RegExp(`${key}\\s*:\\s*"([^"]*)"`, "m"),
+            new RegExp(`${key}\\s*:\\s*'([^']*)'`, "m"),
+        ];
+        for (const pattern of patterns) {
+            const match = stripped.match(pattern);
+            if (match) return match[1];
+        }
+        return null;
+    };
+
     const typeMatch = content.match(/type\s*:\s*["'](\w+)["']/);
     const type = typeMatch ? typeMatch[1] : "widget";
 
@@ -107,7 +121,7 @@ function parseDashConfig(filePath) {
 
     return {
         name: fileName,
-        displayName: extract("displayName") || extract("name") || fileName,
+        displayName: extractTopLevel("displayName") || fileName,
         description: extract("description") || "",
         icon: extract("icon") || null,
         type,

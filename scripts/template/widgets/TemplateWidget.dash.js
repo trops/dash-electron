@@ -54,6 +54,7 @@ import { TemplateWidget } from "./TemplateWidget";
  */
 export default {
     name: "TemplateWidget",
+    displayName: "TemplateWidget",
     component: TemplateWidget,
     canHaveChildren: false,
     workspace: "TemplateWorkspace-workspace",
