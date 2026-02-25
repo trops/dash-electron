@@ -1,13 +1,13 @@
 # Dash - Electron Dashboard Framework
 
-Dash is an Electron-based dashboard application framework built with React. It provides a **Workspace** and **Widget** system with dependency injection, theming, and a provider system for managing external service integrations.
+Dash is an Electron-based dashboard application framework built with React. It provides a **Widget** system with dependency injection, theming, and a provider system for managing external service integrations.
 
 ## About Dash
 
 Dash enables you to:
 
 -   Build customizable dashboards with a widget-based architecture
--   Create reusable widgets and workspaces with hot reload support during development
+-   Create reusable widgets with hot reload support during development
 -   Manage external service credentials securely through the provider system
 -   Use dependency injection to pass context and functionality through component hierarchy
 -   Distribute widgets as npm packages to other Dash projects
@@ -138,8 +138,7 @@ Widgets are the core building blocks of Dash dashboards. Each widget consists of
 
 1. **Widget Component** - React component that renders the widget UI
 2. **Widget Configuration** - `.dash.js` file describing the widget metadata
-3. **Workspace** - Container that hosts related widgets
-4. **Contexts** (optional) - Shared state and functionality for widgets
+3. **Contexts** (optional) - Shared state and functionality for sub-components
 
 ### Creating a New Widget
 
@@ -158,9 +157,8 @@ src/Widgets/MyWidget/
 ├── widgets/
 │   ├── MyWidget.js          # Widget component
 │   └── MyWidget.dash.js     # Widget configuration
-├── workspaces/
-│   ├── MyWidgetWorkspace.js # Workspace component
-│   └── MyWidgetWorkspace.dash.js
+├── contexts/                  # Optional context for DI
+│   └── MyWidgetContext.js
 └── index.js                  # Exports
 ```
 
@@ -191,22 +189,6 @@ export default {
             displayName: "Subtitle",
         },
     },
-};
-```
-
-### Workspace Configuration
-
-Workspaces are containers for widgets:
-
-```javascript
-// MyWidgetWorkspace.dash.js
-import { MyWidgetWorkspace } from "./MyWidgetWorkspace";
-
-export default {
-    component: MyWidgetWorkspace,
-    canHaveChildren: true,
-    workspace: "my-cool-workspace-name",
-    type: "workspace",
 };
 ```
 
@@ -292,35 +274,41 @@ api.readData({
 
 ### Using Contexts for Dependency Injection
 
-Share functionality across widgets using React Context:
+Use React Context inside a widget to share functionality between its sub-components:
 
 ```javascript
 // MyWidgetContext.js
-import React from "react";
+import { createContext } from "react";
+export const MyWidgetContext = createContext({});
 
-export const MyWidgetContext = React.createContext();
-
-// MyWidgetWorkspace.js - Provider
-import { useGoogleMaps } from "./hooks/useGoogleMaps";
+// MyWidget.js — Context wraps sub-components inside the widget
+import { Widget, Panel } from "@trops/dash-react";
 import { MyWidgetContext } from "./MyWidgetContext";
+import { useGoogleMaps } from "./hooks/useGoogleMaps";
+import { MapView } from "./components/MapView";
+import { SearchPanel } from "./components/SearchPanel";
 
-export const MyWidgetWorkspace = ({ children }) => {
-    const googleMaps = useGoogleMaps(); // Initialize API client
+export const MyWidget = ({ ...props }) => {
+    const googleMaps = useGoogleMaps();
 
     return (
         <MyWidgetContext.Provider value={{ googleMaps }}>
-            {children}
+            <Widget {...props}>
+                <Panel>
+                    <SearchPanel />
+                    <MapView />
+                </Panel>
+            </Widget>
         </MyWidgetContext.Provider>
     );
 };
 
-// MyWidget.js - Consumer
+// components/MapView.js — Sub-component consumes context
 import { useContext } from "react";
 import { MyWidgetContext } from "../MyWidgetContext";
 
-export const MyMapWidget = (props) => {
+export const MapView = () => {
     const { googleMaps } = useContext(MyWidgetContext);
-
     return <div>{/* Use googleMaps client */}</div>;
 };
 ```
@@ -335,7 +323,7 @@ The [dash-react](../dash-react/) library provides UI components:
 -   `Container`, `LayoutContainer` - Layout helpers
 -   `Header`, `SubHeader`, `Footer`
 -   `MainLayout`, `MainSection`, `MainContent`
--   `Workspace`, `Widget` - Widget containers
+-   `Widget` - Widget container
 
 **Interactive Components:**
 

@@ -2,16 +2,12 @@
  * Template Widget
  *
  * I'm a Widget.
- * I can be placed into a Workspace that allows children (canHaveChildren = true)
- * I can also access the context for the workspace as seen in the example below
- * - Context is a great place to pass in libraries, apis, data, etc that need to be accessible in the Widget.
+ * I can be placed directly into the layout.
  * - my props are very interesting! If you configure userConfig, the keys will be the prop names and you can access them.
  *
  * @package Template
  */
-import { useContext } from "react";
 import { Widget, Heading2, SubHeading3, Panel } from "@trops/dash-react";
-import { TemplateContext } from "../contexts";
 
 export const TemplateWidget = ({
     id,
@@ -21,10 +17,6 @@ export const TemplateWidget = ({
     uuid,
     ...props
 }) => {
-    // Sample using the TemplateContext to show how to access the sampleClient
-    // that was set in the TemplateWorkspace
-    const { sampleClient } = useContext(TemplateContext);
-
     /*
   // WidgetApi
   // Required to publish events, among other things
@@ -80,7 +72,6 @@ export const TemplateWidget = ({
             <Panel>
                 <Heading2 title={title} />
                 <SubHeading3 title={subtitle} />
-                {sampleClient.foo()}
             </Panel>
         </Widget>
     );
