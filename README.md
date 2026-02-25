@@ -216,7 +216,7 @@ A simple widget that uses user configuration and the widget API:
 
 ```javascript
 // MyWidget.js
-import { Widget, Panel, Heading, SubHeading } from "@dash/Common";
+import { Widget, Panel, Heading, SubHeading } from "@trops/dash-react";
 
 export const MyWidget = ({
     title = "Hello",
