@@ -164,7 +164,15 @@ src/Widgets/MyWidget/
 
 ### Building Widgets with Claude Code
 
-This project includes a built-in [Claude Code](https://claude.ai/claude-code) skill that guides you through widget development. To use it, open Claude Code in the project directory and describe what you want to build:
+The fastest way to build a Dash widget is with [Claude Code](https://claude.ai/claude-code). This project includes a built-in skill that guides you through the entire widget development process.
+
+#### Getting Started
+
+1. **Create a new repo** — On GitHub, click **Use this template → Create a new repository** from [trops/dash-electron](https://github.com/trops/dash-electron)
+2. **Clone your repo** — `git clone https://github.com/your-org/your-dashboard.git && cd your-dashboard`
+3. **Run setup** — `npm run setup`
+4. **Install Claude Code** — If you don't have it yet, install from [claude.ai/claude-code](https://claude.ai/claude-code)
+5. **Open Claude Code** in your project directory and describe what you want to build:
 
 ```
 > I want to build a widget for Slack
@@ -180,7 +188,7 @@ The skill automatically activates and walks you through a 5-phase workflow:
 4. **Test** — Run `npm run dev` and verify the widget works end-to-end
 5. **Package & Distribute** — Bundle, publish to npm, and submit to the Dash Registry
 
-The skill references are located in `.claude/skills/dash-widget-builder/`.
+The skill includes reference docs for dash-react components, widget patterns, and MCP integration — located in `.claude/skills/dash-widget-builder/`.
 
 ### Widget Configuration (.dash.js)
 
