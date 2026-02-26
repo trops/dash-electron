@@ -33,6 +33,7 @@ Product Requirements Documents (PRDs) define the "why" and "what" of features:
 The widget system, provider architecture, and widget API are documented in `@trops/dash-core`:
 
 **Widget System:**
+
 -   [Widget System](https://github.com/trops/dash-core/blob/master/docs/WIDGET_SYSTEM.md) - Architecture, auto-registration, hot reload
 -   [Widget API](https://github.com/trops/dash-core/blob/master/docs/WIDGET_API.md) - Management API reference
 -   [Widget API Quick Reference](https://github.com/trops/dash-core/blob/master/docs/WIDGET_API_QUICK_REF.md) - Condensed method reference
@@ -40,10 +41,12 @@ The widget system, provider architecture, and widget API are documented in `@tro
 -   [Widget Registry](https://github.com/trops/dash-core/blob/master/docs/WIDGET_REGISTRY.md) - Packaging and distribution
 
 **Provider System:**
+
 -   [Provider Architecture](https://github.com/trops/dash-core/blob/master/docs/PROVIDER_ARCHITECTURE.md) - Three-tier storage model, encryption, MCP
 -   [Widget Provider Configuration](https://github.com/trops/dash-core/blob/master/docs/WIDGET_PROVIDER_CONFIGURATION.md) - Provider config in .dash.js
 
 **Testing:**
+
 -   [Testing Guide](https://github.com/trops/dash-core/blob/master/docs/TESTING.md) - Provider and widget testing
 
 ## Images & Diagrams

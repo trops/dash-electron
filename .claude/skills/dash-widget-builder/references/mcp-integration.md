@@ -1,6 +1,7 @@
 # MCP Integration
 
 ## Table of Contents
+
 1. Why MCP is Central to Dash Widgets
 2. MCP Research Strategy
 3. The MCP Architecture in Dash
@@ -19,10 +20,11 @@ make direct API calls easily. Instead, they communicate through **MCP (Model Con
 Protocol)** servers, which the Electron main process brokers.
 
 This architecture provides:
-- **Runtime extensibility** — install new widgets without rebuilding
-- **Credential isolation** — the main process holds secrets, widgets never see raw keys
-- **Uniform interface** — every external service looks the same to widget code
-- **Offline capability** — MCP servers can cache and queue requests
+
+-   **Runtime extensibility** — install new widgets without rebuilding
+-   **Credential isolation** — the main process holds secrets, widgets never see raw keys
+-   **Uniform interface** — every external service looks the same to widget code
+-   **Offline capability** — MCP servers can cache and queue requests
 
 **Bottom line**: Before writing any widget code, you need to know which MCP server
 provides the data and what tools it exposes. This research phase is not optional.
@@ -34,6 +36,7 @@ provides the data and what tools it exposes. This research phase is not optional
 When the user says "I want a widget for [Service X]", follow this process:
 
 ### Step 1: Search for existing MCP servers
+
 Search in this order of preference:
 
 1. **Official MCP servers** — Check https://github.com/modelcontextprotocol/servers
@@ -43,14 +46,17 @@ Search in this order of preference:
    pre-configured server definitions
 
 ### Step 2: Evaluate the MCP server
+
 For each candidate MCP server, determine:
-- What **tools** does it expose? (These become widget actions)
-- What **resources** does it expose? (These become widget data sources)
-- What **credentials** does it need? (API keys, OAuth tokens, etc.)
-- Is it an **SSE (HTTP)** or **stdio** transport?
-- Is it actively maintained?
+
+-   What **tools** does it expose? (These become widget actions)
+-   What **resources** does it expose? (These become widget data sources)
+-   What **credentials** does it need? (API keys, OAuth tokens, etc.)
+-   Is it an **SSE (HTTP)** or **stdio** transport?
+-   Is it actively maintained?
 
 ### Step 3: Map tools to widget features
+
 Create a mapping table before writing code:
 
 ```
@@ -63,6 +69,7 @@ MCP Server: @modelcontextprotocol/server-slack
 ```
 
 ### Step 4: Document the provider requirements
+
 List what credentials/config the MCP server needs. These will be configured through
 Dash's provider system (see Section 5).
 
@@ -82,14 +89,14 @@ Widget (renderer)          Main Process              External Service
 
 **Key components from dash-core:**
 
-| Component | Layer | Import Path | Role |
-|-----------|-------|-------------|------|
-| `mcpController` | Electron (main) | `@trops/dash-core/electron` | Manages MCP server lifecycle, routes IPC calls |
-| `useMcpProvider` | Renderer (React) | `@trops/dash-core` | Hook that gives widgets access to MCP tools |
-| `useWidgetProviders` | Renderer (React) | `@trops/dash-core` | Hook for accessing provider credentials directly |
-| `useDashboard` | Renderer (React) | `@trops/dash-core` | Hook for dashboard-level state and utilities |
-| `providerController` | Electron (main) | `@trops/dash-core/electron` | Manages provider credentials securely |
-| `ProviderContext` | Renderer (React) | `@trops/dash-core` | React context for provider data |
+| Component            | Layer            | Import Path                 | Role                                             |
+| -------------------- | ---------------- | --------------------------- | ------------------------------------------------ |
+| `mcpController`      | Electron (main)  | `@trops/dash-core/electron` | Manages MCP server lifecycle, routes IPC calls   |
+| `useMcpProvider`     | Renderer (React) | `@trops/dash-core`          | Hook that gives widgets access to MCP tools      |
+| `useWidgetProviders` | Renderer (React) | `@trops/dash-core`          | Hook for accessing provider credentials directly |
+| `useDashboard`       | Renderer (React) | `@trops/dash-core`          | Hook for dashboard-level state and utilities     |
+| `providerController` | Electron (main)  | `@trops/dash-core/electron` | Manages provider credentials securely            |
+| `ProviderContext`    | Renderer (React) | `@trops/dash-core`          | React context for provider data                  |
 
 ---
 
@@ -124,10 +131,11 @@ export const MyWidget = ({ api, ...props }) => {
 ```
 
 The hook handles:
-- Connection lifecycle (connect/disconnect with the MCP server)
-- Request routing through the main process IPC bridge
-- Error handling and reconnection
-- Credential injection (the widget never sees raw API keys)
+
+-   Connection lifecycle (connect/disconnect with the MCP server)
+-   Request routing through the main process IPC bridge
+-   Error handling and reconnection
+-   Credential injection (the widget never sees raw API keys)
 
 ---
 
@@ -165,9 +173,9 @@ but each widget independently declares what it needs.
 
 ### What the widget does NOT do
 
-- Does not handle credential storage or injection
-- Does not manage MCP server lifecycle
-- Does not see raw API keys or tokens
+-   Does not handle credential storage or injection
+-   Does not manage MCP server lifecycle
+-   Does not see raw API keys or tokens
 
 **Important**: Providers are read from `AppContext.providers`, NOT `DashboardContext.providers`.
 This is due to component tree ordering — DashboardWrapper renders before providers load.
@@ -183,16 +191,16 @@ https://github.com/trops/dash-core/blob/master/docs/WIDGET_PROVIDER_CONFIGURATIO
 This is the creative part — deciding which dash-react components best represent the
 data from each MCP tool. Here are common patterns:
 
-| MCP Tool Type | Widget UI Pattern | dash-react Components |
-|---------------|-------------------|----------------------|
-| `search` / `query` | Search bar + results list | `Panel`, `InputText`, list rendering |
-| `list` / `get_all` | Scrollable list or table | `Panel`, `Menu`, `MenuItem` |
-| `get` / `read` | Detail view / card | `Panel`, `Heading`, `SubHeading`, `Text` |
-| `create` / `write` | Input + submit | `InputText`, `CodeEditor`, `Button` |
-| `update` / `edit` | Inline edit or modal | `Modal`, `InputText`, `Button` |
-| `delete` / `remove` | Confirmation dialog | `Modal`, `Button` |
-| `subscribe` / `watch` | Live-updating feed | `Panel` with polling or event listeners |
-| `auth` / `connect` | Settings/config panel | Provider system (not widget UI) |
+| MCP Tool Type         | Widget UI Pattern         | dash-react Components                    |
+| --------------------- | ------------------------- | ---------------------------------------- |
+| `search` / `query`    | Search bar + results list | `Panel`, `InputText`, list rendering     |
+| `list` / `get_all`    | Scrollable list or table  | `Panel`, `Menu`, `MenuItem`              |
+| `get` / `read`        | Detail view / card        | `Panel`, `Heading`, `SubHeading`, `Text` |
+| `create` / `write`    | Input + submit            | `InputText`, `CodeEditor`, `Button`      |
+| `update` / `edit`     | Inline edit or modal      | `Modal`, `InputText`, `Button`           |
+| `delete` / `remove`   | Confirmation dialog       | `Modal`, `Button`                        |
+| `subscribe` / `watch` | Live-updating feed        | `Panel` with polling or event listeners  |
+| `auth` / `connect`    | Settings/config panel     | Provider system (not widget UI)          |
 
 ### Example: Mapping a Google Drive MCP server
 
@@ -222,11 +230,12 @@ The dash-react library provides these categories:
 **All imported from `@trops/dash-react`** — never from `@dash/Common` or local paths.
 
 When in doubt:
-- **Data display** → `Panel` + `Heading` + `Text`
-- **Lists** → `Menu` + `MenuItem` (for nav-like lists) or custom list in `Panel`
-- **Actions** → `Button` or `ButtonIcon`
-- **Rich content** → `CodeEditor` / `CodeRenderer`
-- **Overlays** → `Modal` or `SlidePanelOverlay`
+
+-   **Data display** → `Panel` + `Heading` + `Text`
+-   **Lists** → `Menu` + `MenuItem` (for nav-like lists) or custom list in `Panel`
+-   **Actions** → `Button` or `ButtonIcon`
+-   **Rich content** → `CodeEditor` / `CodeRenderer`
+-   **Overlays** → `Modal` or `SlidePanelOverlay`
 
 ---
 
@@ -236,15 +245,15 @@ When researching MCP servers, these are common ones that Dash widgets integrate 
 Always verify current availability — MCP servers are actively developed and new ones
 appear frequently.
 
-| Service | MCP Server (typical) | Key Tools |
-|---------|---------------------|-----------|
-| Algolia | `@modelcontextprotocol/server-algolia` | `search`, `browse_index`, `get_object` |
-| Slack | `@modelcontextprotocol/server-slack` | `search_messages`, `send_message`, `list_channels` |
-| Google Drive | `@modelcontextprotocol/server-google-drive` | `list_files`, `get_file`, `search_files` |
-| GitHub | `@modelcontextprotocol/server-github` | `search_repos`, `get_file_contents`, `create_issue` |
-| Contentful | Community servers | `get_entries`, `get_content_types`, `search` |
-| Gmail | Community / Google workspace | `search_emails`, `get_email`, `send_email` |
-| OpenAI / ChatGPT | Various community servers | `chat_completion`, `create_embedding` |
+| Service          | MCP Server (typical)                        | Key Tools                                           |
+| ---------------- | ------------------------------------------- | --------------------------------------------------- |
+| Algolia          | `@modelcontextprotocol/server-algolia`      | `search`, `browse_index`, `get_object`              |
+| Slack            | `@modelcontextprotocol/server-slack`        | `search_messages`, `send_message`, `list_channels`  |
+| Google Drive     | `@modelcontextprotocol/server-google-drive` | `list_files`, `get_file`, `search_files`            |
+| GitHub           | `@modelcontextprotocol/server-github`       | `search_repos`, `get_file_contents`, `create_issue` |
+| Contentful       | Community servers                           | `get_entries`, `get_content_types`, `search`        |
+| Gmail            | Community / Google workspace                | `search_emails`, `get_email`, `send_email`          |
+| OpenAI / ChatGPT | Various community servers                   | `chat_completion`, `create_embedding`               |
 
 **Research is essential.** Don't assume these exact package names or tool names — always
 search npm and GitHub to find the current, actively-maintained MCP server for the target

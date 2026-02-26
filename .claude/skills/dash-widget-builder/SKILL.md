@@ -1,15 +1,15 @@
 ---
 name: dash-widget-builder
 description: >
-  Build widgets for this Dash Electron dashboard project.
-  Use this skill whenever the user wants to create a new widget, build a dashboard
-  integration (Algolia, Slack, Google Drive, Gmail, Contentful, etc.), connect a
-  widget to an MCP server, choose dash-react UI components for a widget layout,
-  package widgets for npm distribution, or submit a widget to the Dash Registry.
-  Also trigger when the user mentions "widget", "dash widget", "provider",
-  "widgetize", ".dash.js", "dash-react", "dash-core", "MCP", or asks to build a
-  dashboard panel/tile/card that integrates with an external service.
-  Even if the user just says "I want to build a widget for [service]" — use this skill.
+    Build widgets for this Dash Electron dashboard project.
+    Use this skill whenever the user wants to create a new widget, build a dashboard
+    integration (Algolia, Slack, Google Drive, Gmail, Contentful, etc.), connect a
+    widget to an MCP server, choose dash-react UI components for a widget layout,
+    package widgets for npm distribution, or submit a widget to the Dash Registry.
+    Also trigger when the user mentions "widget", "dash widget", "provider",
+    "widgetize", ".dash.js", "dash-react", "dash-core", "MCP", or asks to build a
+    dashboard panel/tile/card that integrates with an external service.
+    Even if the user just says "I want to build a widget for [service]" — use this skill.
 ---
 
 # Dash Widget Builder
@@ -24,12 +24,12 @@ Build, test, and distribute widgets for this
 
 Dash is a **four-repo ecosystem**:
 
-| Repo | Purpose | Key Exports |
-|------|---------|-------------|
-| [dash-electron](https://github.com/trops/dash-electron) | Electron app template — this project | Scaffold, dev server, packaging |
-| [dash-core](https://github.com/trops/dash-core) | Framework internals — widget system, MCP, providers | `useMcpProvider`, `useWidgetProviders`, `useDashboard`, `ComponentManager`, `mcpController` |
-| [dash-react](https://github.com/trops/dash-react) | UI component library | `Widget`, `Panel`, `Heading`, `Button`, `Menu`, `ThemeContext`, `FontAwesomeIcon`, etc. |
-| [dash-registry](https://github.com/trops/dash-registry) | Widget marketplace & project scaffolding | Manifest validation, registry index |
+| Repo                                                    | Purpose                                             | Key Exports                                                                                 |
+| ------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [dash-electron](https://github.com/trops/dash-electron) | Electron app template — this project                | Scaffold, dev server, packaging                                                             |
+| [dash-core](https://github.com/trops/dash-core)         | Framework internals — widget system, MCP, providers | `useMcpProvider`, `useWidgetProviders`, `useDashboard`, `ComponentManager`, `mcpController` |
+| [dash-react](https://github.com/trops/dash-react)       | UI component library                                | `Widget`, `Panel`, `Heading`, `Button`, `Menu`, `ThemeContext`, `FontAwesomeIcon`, etc.     |
+| [dash-registry](https://github.com/trops/dash-registry) | Widget marketplace & project scaffolding            | Manifest validation, registry index                                                         |
 
 ## How Widgets Work — The Big Picture
 
@@ -66,13 +66,14 @@ services. The architecture is:
 ```
 
 **Key insights**:
-- Widgets are loaded at runtime without recompiling Electron
-- **Providers are app-level** — the user configures MCP connections (URL, auth tokens)
-  once in the Electron app's Providers settings. Any widget that specifies it needs
-  that provider gets the shared connection automatically.
-- **Every widget declares its own `providers` array** in its `.dash.js` file. The
-  Electron app handles deduplication and credential sharing at runtime.
-- **Widgets just call `mcp.callTool()`** — no wrapper components or context setup needed.
+
+-   Widgets are loaded at runtime without recompiling Electron
+-   **Providers are app-level** — the user configures MCP connections (URL, auth tokens)
+    once in the Electron app's Providers settings. Any widget that specifies it needs
+    that provider gets the shared connection automatically.
+-   **Every widget declares its own `providers` array** in its `.dash.js` file. The
+    Electron app handles deduplication and credential sharing at runtime.
+-   **Widgets just call `mcp.callTool()`** — no wrapper components or context setup needed.
 
 ---
 
@@ -105,14 +106,17 @@ When the user asks to build a widget, follow these phases in order. Each phase h
 dedicated reference document — read it before starting that phase.
 
 ### Phase 1: Scaffold
+
 **Read:** `references/widget-development.md` (Sections 1-2)
 
 Run the scaffold generator:
+
 ```bash
 node ./scripts/widgetize <WidgetName>
 ```
 
 This creates:
+
 ```
 src/Widgets/<WidgetName>/
 ├── contexts/
@@ -129,9 +133,11 @@ scaffold once, then manually add additional widget files in the same `widgets/`
 directory. Give them the same `workspace` key in their `.dash.js` files.
 
 ### Phase 2: MCP Research
+
 **Read:** `references/mcp-integration.md`
 
 **This is the most important phase.** Before writing any widget code:
+
 1. Identify what external service the widget needs (Algolia, Slack, Google Drive, etc.)
 2. Research available MCP servers — check npmjs.com, the MCP Registry, GitHub
 3. Understand what tools the MCP server exposes
@@ -142,9 +148,11 @@ directory. Give them the same `workspace` key in their `.dash.js` files.
 widget can do and which dash-react components are the right fit.
 
 ### Phase 3: Build the Widget
+
 **Read:** `references/widget-development.md` (Sections 4-10)
 
 Write the widget code using the scaffold from Phase 1 and the MCP mapping from Phase 2:
+
 1. Configure the `.dash.js` file — `workspace` grouping key, `userConfig`, `providers` array
 2. Write the widget component — use `@trops/dash-react` components to present MCP data,
    wire up `useMcpProvider` to call MCP tools
@@ -153,6 +161,7 @@ Write the widget code using the scaffold from Phase 1 and the MCP mapping from P
 5. Use `api.storeData` / `api.readData` for persisting widget state
 
 ### Phase 4: Test
+
 **Read:** `references/widget-development.md` (Section 11)
 
 ```bash
@@ -160,14 +169,16 @@ npm run dev
 ```
 
 Verify:
-- MCP connection establishes correctly
-- Data flows from MCP server → widget UI
-- User interactions trigger the right MCP tool calls
-- Widget state persists across reloads via `api.storeData`
-- Error states handled gracefully (MCP server down, auth failures, etc.)
-- Themed components inherit the user's chosen colors
+
+-   MCP connection establishes correctly
+-   Data flows from MCP server → widget UI
+-   User interactions trigger the right MCP tool calls
+-   Widget state persists across reloads via `api.storeData`
+-   Error states handled gracefully (MCP server down, auth failures, etc.)
+-   Themed components inherit the user's chosen colors
 
 ### Phase 5: Package & Distribute
+
 **Read:** `references/packaging.md`
 
 1. Run `npm run package-widgets` to bundle
@@ -179,10 +190,16 @@ Verify:
 ## Quick Reference — Common Patterns
 
 ### Minimal Widget
+
 ```javascript
 import { Widget, Panel, Heading, SubHeading } from "@trops/dash-react";
 
-export const MyWidget = ({ title = "Hello", subtitle = "I'm a widget", api, ...props }) => {
+export const MyWidget = ({
+    title = "Hello",
+    subtitle = "I'm a widget",
+    api,
+    ...props
+}) => {
     return (
         <Widget {...props}>
             <Panel>
@@ -195,6 +212,7 @@ export const MyWidget = ({ title = "Hello", subtitle = "I'm a widget", api, ...p
 ```
 
 ### Widget with MCP Data
+
 ```javascript
 import { useState } from "react";
 import { Widget, Panel, Heading, Menu, MenuItem } from "@trops/dash-react";
@@ -214,7 +232,7 @@ export const SearchWidget = ({ api, ...props }) => {
             <Panel>
                 <Heading text="Search" />
                 <Menu>
-                    {results.map(item => (
+                    {results.map((item) => (
                         <MenuItem key={item.id}>{item.title}</MenuItem>
                     ))}
                 </Menu>
@@ -225,6 +243,7 @@ export const SearchWidget = ({ api, ...props }) => {
 ```
 
 ### Widget .dash.js Configuration
+
 ```javascript
 import { MyWidget } from "./MyWidget";
 
@@ -265,11 +284,11 @@ export default {
 
 Read these as needed during each phase:
 
-| File | When to Read |
-|------|-------------|
-| `references/mcp-integration.md` | Phase 2 — MCP research, `useMcpProvider`, IPC patterns, provider config |
+| File                               | When to Read                                                                      |
+| ---------------------------------- | --------------------------------------------------------------------------------- |
+| `references/mcp-integration.md`    | Phase 2 — MCP research, `useMcpProvider`, IPC patterns, provider config           |
 | `references/widget-development.md` | Phases 1 & 3 — dash-react components, `.dash.js`, widget API, contexts, debugging |
-| `references/packaging.md` | Phase 5 — `package-widgets`, npm publishing, registry manifest |
+| `references/packaging.md`          | Phase 5 — `package-widgets`, npm publishing, registry manifest                    |
 
 **Always read `references/mcp-integration.md` before writing widget code.**
 The MCP server's available tools determine the widget's features and UI layout.

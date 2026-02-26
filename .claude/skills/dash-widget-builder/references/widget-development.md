@@ -1,6 +1,7 @@
 # Widget Development
 
 ## Table of Contents
+
 1. Widget Anatomy
 2. The `.dash.js` Configuration File
 3. Widget Grouping with the `workspace` Key
@@ -36,13 +37,14 @@ src/Widgets/MyWidget/
 ```
 
 For most widgets, you work on these files:
-- **MyWidget.js** — The React component. This is where you build the UI, call
-  `useMcpProvider`, and present data with dash-react components.
-- **MyWidget.dash.js** — Metadata: what component to render, which `workspace` group
-  it belongs to, provider requirements, and user-configurable options.
-- **MyWidgetContext.js** — A React context for sharing state between the widget
-  component and its own sub-components (e.g., an API client, custom hooks, or
-  local state). See Section 8 for usage patterns.
+
+-   **MyWidget.js** — The React component. This is where you build the UI, call
+    `useMcpProvider`, and present data with dash-react components.
+-   **MyWidget.dash.js** — Metadata: what component to render, which `workspace` group
+    it belongs to, provider requirements, and user-configurable options.
+-   **MyWidgetContext.js** — A React context for sharing state between the widget
+    component and its own sub-components (e.g., an API client, custom hooks, or
+    local state). See Section 8 for usage patterns.
 
 **Multi-widget groups**: If you need multiple widgets that coordinate (e.g., a
 channel list + message viewer), run `widgetize` once for the first widget, then
@@ -85,24 +87,24 @@ export default {
 
 ### userConfig Field Types
 
-| Type | Description | Extra Properties |
-|------|-------------|------------------|
-| `"text"` | Text input | — |
-| `"number"` | Numeric input | `min`, `max` |
-| `"boolean"` | Toggle switch | — |
-| `"select"` | Dropdown select | `options: [{ label, value }]` |
-| `"color"` | Color picker | — |
-| `"password"` | Masked input | — |
+| Type         | Description     | Extra Properties              |
+| ------------ | --------------- | ----------------------------- |
+| `"text"`     | Text input      | —                             |
+| `"number"`   | Numeric input   | `min`, `max`                  |
+| `"boolean"`  | Toggle switch   | —                             |
+| `"select"`   | Dropdown select | `options: [{ label, value }]` |
+| `"color"`    | Color picker    | —                             |
+| `"password"` | Masked input    | —                             |
 
 ### Field Properties
 
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `type` | string | Yes | Field type (see above) |
-| `defaultValue` | any | No | Default value |
-| `displayName` | string | No | Label shown in config UI |
-| `instructions` | string | No | Help text shown below field |
-| `required` | boolean | No | Whether field is required |
+| Property       | Type    | Required | Description                 |
+| -------------- | ------- | -------- | --------------------------- |
+| `type`         | string  | Yes      | Field type (see above)      |
+| `defaultValue` | any     | No       | Default value               |
+| `displayName`  | string  | No       | Label shown in config UI    |
+| `instructions` | string  | No       | Help text shown below field |
+| `required`     | boolean | No       | Whether field is required   |
 
 Values from `userConfig` are passed as props to the widget component — so if you
 define `title` in userConfig, it arrives as `props.title` in the widget.
@@ -150,9 +152,9 @@ can communicate via pub/sub events (see Section 6).
 
 ### What the workspace key does NOT do
 
-- Does not create a React context or wrapper component
-- Does not establish MCP connections (that's the app-level provider system)
-- Does not share state between widgets (use pub/sub events or `api.storeData` for that)
+-   Does not create a React context or wrapper component
+-   Does not establish MCP connections (that's the app-level provider system)
+-   Does not share state between widgets (use pub/sub events or `api.storeData` for that)
 
 ---
 
@@ -245,6 +247,7 @@ import {
 ### Common Layout Patterns
 
 **Simple data display:**
+
 ```javascript
 <Widget {...props}>
     <Panel>
@@ -256,12 +259,13 @@ import {
 ```
 
 **List with actions:**
+
 ```javascript
 <Widget {...props}>
     <Panel>
         <Heading text="Items" />
         <Menu>
-            {items.map(item => (
+            {items.map((item) => (
                 <MenuItem key={item.id} onClick={() => handleSelect(item)}>
                     {item.name}
                 </MenuItem>
@@ -272,6 +276,7 @@ import {
 ```
 
 **Search interface:**
+
 ```javascript
 <Widget {...props}>
     <Panel>
@@ -281,7 +286,7 @@ import {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search..."
         />
-        {results.map(result => (
+        {results.map((result) => (
             <DashPanel key={result.id}>
                 <Heading text={result.title} />
                 <Text>{result.description}</Text>
@@ -292,6 +297,7 @@ import {
 ```
 
 **Detail view with actions:**
+
 ```javascript
 <Widget {...props}>
     <Panel>
@@ -317,6 +323,7 @@ import {
 Every widget receives an `api` prop from the framework. This provides:
 
 ### Data Persistence
+
 ```javascript
 // Save data (auto-persisted to Electron storage)
 api.storeData({ key: "value", items: [1, 2, 3] });
@@ -329,23 +336,22 @@ api.readData({
 ```
 
 ### Event Publishing (see Section 6)
+
 ```javascript
 api.publishEvent("search-completed", { query: "test", results: 42 });
 ```
 
 ### Event Listening (see Section 6)
+
 ```javascript
-api.registerListeners(
-    ["search-completed", "item-selected"],
-    {
-        "search-completed": (payload) => {
-            console.log("Search:", payload.query);
-        },
-        "item-selected": (payload) => {
-            console.log("Selected:", payload.id);
-        },
-    }
-);
+api.registerListeners(["search-completed", "item-selected"], {
+    "search-completed": (payload) => {
+        console.log("Search:", payload.query);
+    },
+    "item-selected": (payload) => {
+        console.log("Selected:", payload.id);
+    },
+});
 ```
 
 ---
@@ -357,6 +363,7 @@ multiple widgets need to coordinate — e.g., a channel list widget publishes a
 selection that a messages widget listens to.
 
 **Publishing:**
+
 ```javascript
 // In SlackChannels widget
 const handleSelect = (channel) => {
@@ -368,18 +375,16 @@ const handleSelect = (channel) => {
 ```
 
 **Listening:**
+
 ```javascript
 // In SlackMessages widget
 useEffect(() => {
-    api.registerListeners(
-        ["slack-channel-selected"],
-        {
-            "slack-channel-selected": (payload) => {
-                setChannelId(payload.channelId);
-                setChannelName(payload.channelName);
-            },
-        }
-    );
+    api.registerListeners(["slack-channel-selected"], {
+        "slack-channel-selected": (payload) => {
+            setChannelId(payload.channelId);
+            setChannelName(payload.channelName);
+        },
+    });
 }, []);
 ```
 
@@ -402,7 +407,9 @@ export default {
     canHaveChildren: false,
     workspace: "slack",
     type: "widget",
-    userConfig: { /* ... */ },
+    userConfig: {
+        /* ... */
+    },
     providers: [
         {
             type: "slack",
@@ -438,11 +445,11 @@ export const SlackWidget = (props) => {
 
 There are two ways widgets talk to external services:
 
-- **`useMcpProvider`** — For MCP-based services. The widget calls MCP tools and never
-  sees raw credentials. This is the preferred approach for most integrations.
-- **`useWidgetProviders`** — For direct credential access. The widget gets the raw
-  token/key and makes API calls itself. Use this when no MCP server exists for the
-  service, or when you need direct API access.
+-   **`useMcpProvider`** — For MCP-based services. The widget calls MCP tools and never
+    sees raw credentials. This is the preferred approach for most integrations.
+-   **`useWidgetProviders`** — For direct credential access. The widget gets the raw
+    token/key and makes API calls itself. Use this when no MCP server exists for the
+    service, or when you need direct API access.
 
 Both approaches use the same app-level provider system — credentials are configured
 once in the Electron app's Settings → Providers.
@@ -451,8 +458,9 @@ once in the Electron app's Settings → Providers.
 This is due to component tree ordering — DashboardWrapper renders before providers load.
 
 For full provider architecture details, see:
-- [WIDGET_PROVIDER_CONFIGURATION.md](https://github.com/trops/dash-core/blob/master/docs/WIDGET_PROVIDER_CONFIGURATION.md)
-- [PROVIDER_ARCHITECTURE.md](https://github.com/trops/dash-core/blob/master/docs/PROVIDER_ARCHITECTURE.md)
+
+-   [WIDGET_PROVIDER_CONFIGURATION.md](https://github.com/trops/dash-core/blob/master/docs/WIDGET_PROVIDER_CONFIGURATION.md)
+-   [PROVIDER_ARCHITECTURE.md](https://github.com/trops/dash-core/blob/master/docs/PROVIDER_ARCHITECTURE.md)
 
 ---
 
@@ -502,15 +510,15 @@ const MyWidgetContent = () => {
 
 ### When to use context
 
-- Sharing an API client or custom hook across multiple sub-components within a widget
-- Local widget state that multiple child components need to read
-- Injecting dependencies into deeply nested sub-components
+-   Sharing an API client or custom hook across multiple sub-components within a widget
+-   Local widget state that multiple child components need to read
+-   Injecting dependencies into deeply nested sub-components
 
 ### When NOT to use context
 
-- **Cross-widget communication** — use pub/sub events (Section 6)
-- **MCP access** — just call `useMcpProvider()` directly in any component
-- **Persisted state** — use `api.storeData` / `api.readData`
+-   **Cross-widget communication** — use pub/sub events (Section 6)
+-   **MCP access** — just call `useMcpProvider()` directly in any component
+-   **Persisted state** — use `api.storeData` / `api.readData`
 
 ---
 
@@ -524,10 +532,13 @@ underlying connection automatically.
 For coordinating between widgets, use these approaches in order of preference:
 
 ### Option 1: Pub/Sub Events (recommended)
+
 Best for "widget A tells widget B something happened" — see Section 6.
 
 ### Option 2: Persisted State via `api.storeData`
+
 Best for data that should survive reloads:
+
 ```javascript
 // Widget A saves
 api.storeData({ selectedChannelId: "C123" });
@@ -541,6 +552,7 @@ api.readData({
 ```
 
 ### Option 3: Custom Layout Container with Context (rare)
+
 Only needed for tightly-coupled, transient shared state. Create a layout container
 with `canHaveChildren: true` that wraps child widgets in a React context:
 
@@ -561,7 +573,7 @@ export const SlackLayout = ({ children }) => {
 // SlackLayout.dash.js
 export default {
     component: SlackLayout,
-    canHaveChildren: true,     // Layout container that wraps child widgets
+    canHaveChildren: true, // Layout container that wraps child widgets
     workspace: "slack",
     type: "widget",
 };
@@ -583,16 +595,21 @@ import { ThemeContext } from "@trops/dash-react";
 import { FontAwesomeIcon } from "@trops/dash-react";
 
 // Core hooks and utilities — ALWAYS from @trops/dash-core
-import { useWidgetProviders, useMcpProvider, useDashboard } from "@trops/dash-core";
+import {
+    useWidgetProviders,
+    useMcpProvider,
+    useDashboard,
+} from "@trops/dash-core";
 ```
 
 **Rules:**
-- **Never** import `FontAwesomeIcon` directly from `@fortawesome/*` — always use
-  the `@trops/dash-react` re-export.
-- **Never** import `ThemeContext` from a local path — always from `@trops/dash-react`
-  to avoid dual context instances.
-- **Never** import `useWidgetProviders` or `useMcpProvider` from a local path —
-  always from `@trops/dash-core`.
+
+-   **Never** import `FontAwesomeIcon` directly from `@fortawesome/*` — always use
+    the `@trops/dash-react` re-export.
+-   **Never** import `ThemeContext` from a local path — always from `@trops/dash-react`
+    to avoid dual context instances.
+-   **Never** import `useWidgetProviders` or `useMcpProvider` from a local path —
+    always from `@trops/dash-core`.
 
 ---
 
@@ -625,14 +642,14 @@ hierarchy, props, and context.
 
 ### Testing Checklist
 
-- [ ] Widget renders correctly in dashboard
-- [ ] User config fields appear in edit modal
-- [ ] Default values applied correctly
-- [ ] Data persistence works (save → reload → data present)
-- [ ] Events publish and listeners receive
-- [ ] Provider credentials accessible (if applicable)
-- [ ] MCP tools callable and data renders
-- [ ] Error boundary catches widget errors gracefully
+-   [ ] Widget renders correctly in dashboard
+-   [ ] User config fields appear in edit modal
+-   [ ] Default values applied correctly
+-   [ ] Data persistence works (save → reload → data present)
+-   [ ] Events publish and listeners receive
+-   [ ] Provider credentials accessible (if applicable)
+-   [ ] MCP tools callable and data renders
+-   [ ] Error boundary catches widget errors gracefully
 
 ### Hot Module Reloading
 
@@ -661,10 +678,11 @@ Verify using `AppContext.providers` (not `DashboardContext.providers`).
 
 The `src/Widgets/` directory in dash-electron contains reference implementations.
 When building a new widget, review these for patterns around:
-- How `.dash.js` files are configured
-- How widgets consume the `api` prop
-- How MCP data flows into dash-react components
-- How provider credentials are accessed
+
+-   How `.dash.js` files are configured
+-   How widgets consume the `api` prop
+-   How MCP data flows into dash-react components
+-   How provider credentials are accessed
 
 The `packages/trops/dash-samples/` directory in dash-registry also contains
 sample widget manifests showing the expected metadata format.
