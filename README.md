@@ -162,6 +162,26 @@ src/Widgets/MyWidget/
 └── index.js                  # Exports
 ```
 
+### Building Widgets with Claude Code
+
+This project includes a built-in [Claude Code](https://claude.ai/claude-code) skill that guides you through widget development. To use it, open Claude Code in the project directory and describe what you want to build:
+
+```
+> I want to build a widget for Slack
+> Build me an Algolia search widget
+> Create a widget that shows Google Drive files
+```
+
+The skill automatically activates and walks you through a 5-phase workflow:
+
+1. **Scaffold** — Generate the widget file structure
+2. **MCP Research** — Identify MCP servers and map their tools to widget features
+3. **Build** — Write the widget code with dash-react components and MCP integration
+4. **Test** — Run `npm run dev` and verify the widget works end-to-end
+5. **Package & Distribute** — Bundle, publish to npm, and submit to the Dash Registry
+
+The skill references are located in `.claude/skills/dash-widget-builder/`.
+
 ### Widget Configuration (.dash.js)
 
 Define widget metadata and user-configurable options:
