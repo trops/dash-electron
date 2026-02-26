@@ -1,7 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # Claude Code (user-specific)
-.claude/
+.claude/settings.local.json
+.claude/.DS_Store
 
 # dependencies
 /node_modules
