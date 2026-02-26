@@ -213,23 +213,27 @@ Contains `DashSamples` with sample widgets: SampleThemeViewerWidget, SampleNotep
 The `electron.js` main process registers template-specific IPC handlers beyond what `@trops/dash-core` provides:
 
 **Algolia** — Search index management:
+
 ```javascript
 ipcMain.handle(ALGOLIA_LIST_INDICES, (e, app) => listIndices(mainWindow, app));
 ipcMain.handle(ALGOLIA_BROWSE_OBJECTS, (e, msg) => browseObjectsToFile(...));
 ```
 
 **OpenAI** — Image description:
+
 ```javascript
 ipcMain.handle(OPENAI_DESCRIBE_IMAGE, (e, msg) => describeImage(...));
 ```
 
 **Menu Items** — Custom menu persistence:
+
 ```javascript
 ipcMain.handle(MENU_ITEMS_LIST, (e, msg) => listMenuItemsForApplication(...));
 ipcMain.handle(MENU_ITEMS_SAVE, (e, msg) => saveMenuItemForApplication(...));
 ```
 
 **Plugins** — pluggable-electron plugin installation:
+
 ```javascript
 ipcMain.handle("plugin-install", (e, msg) => pluginInstall(...));
 ```
@@ -289,12 +293,19 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 ```javascript
 import {
-    Panel, Panel2, Panel3,
-    Heading, SubHeading,
-    Button, ButtonIcon,
-    Widget, Workspace,
-    Modal, Notification,
-    LayoutContainer, ErrorBoundary,
+    Panel,
+    Panel2,
+    Panel3,
+    Heading,
+    SubHeading,
+    Button,
+    ButtonIcon,
+    Widget,
+    Workspace,
+    Modal,
+    Notification,
+    LayoutContainer,
+    ErrorBoundary,
     FontAwesomeIcon,
 } from "@trops/dash-react";
 ```

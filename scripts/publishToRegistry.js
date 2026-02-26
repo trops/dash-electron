@@ -84,7 +84,10 @@ function parseDashConfig(filePath) {
 
     const extractTopLevel = (key) => {
         // Remove userConfig block to avoid matching nested displayName fields
-        const stripped = content.replace(/userConfig\s*:\s*\{[\s\S]*?\n    \},?/m, "");
+        const stripped = content.replace(
+            /userConfig\s*:\s*\{[\s\S]*?\n    \},?/m,
+            ""
+        );
         const patterns = [
             new RegExp(`${key}\\s*:\\s*"([^"]*)"`, "m"),
             new RegExp(`${key}\\s*:\\s*'([^']*)'`, "m"),
@@ -243,30 +246,40 @@ function main() {
 
     // ── Resolve registryName / registryDisplayName ──────────────────
 
-    let registryName = projectName;                            // Priority 4: package.json
+    let registryName = projectName; // Priority 4: package.json
     let registryDisplayName = pkg.productName || projectName;
 
     // Priority 3: Folder name under src/Widgets/
-    const widgetDirs = fs.readdirSync(WIDGETS_DIR, { withFileTypes: true })
-        .filter((e) => e.isDirectory()).map((e) => e.name);
+    const widgetDirs = fs
+        .readdirSync(WIDGETS_DIR, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name);
     if (widgetDirs.length === 1) {
         registryName = toKebabCase(widgetDirs[0]);
         registryDisplayName = toTitleCase(registryName);
     }
 
     // Priority 2: .dash.js package field
-    const packageNames = [...new Set(widgets.map((w) => w.package).filter(Boolean))];
+    const packageNames = [
+        ...new Set(widgets.map((w) => w.package).filter(Boolean)),
+    ];
     if (packageNames.length === 1) {
         registryDisplayName = packageNames[0];
         registryName = toKebabCase(packageNames[0]);
     } else if (packageNames.length > 1) {
-        console.warn(`Warning: Multiple package names in configs: ${packageNames.join(", ")}`);
+        console.warn(
+            `Warning: Multiple package names in configs: ${packageNames.join(
+                ", "
+            )}`
+        );
     }
 
     // Priority 1: --name flag (always wins)
     if (customName) {
         if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(customName)) {
-            console.error(`Error: --name must be kebab-case (got "${customName}").`);
+            console.error(
+                `Error: --name must be kebab-case (got "${customName}").`
+            );
             process.exit(1);
         }
         registryName = customName;

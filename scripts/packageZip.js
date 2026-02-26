@@ -59,7 +59,10 @@ function parseDashConfig(filePath) {
 
     const extractTopLevel = (key) => {
         // Remove userConfig block to avoid matching nested displayName fields
-        const stripped = content.replace(/userConfig\s*:\s*\{[\s\S]*?\n    \},?/m, "");
+        const stripped = content.replace(
+            /userConfig\s*:\s*\{[\s\S]*?\n    \},?/m,
+            ""
+        );
         const patterns = [
             new RegExp(`${key}\\s*:\\s*"([^"]*)"`, "m"),
             new RegExp(`${key}\\s*:\\s*'([^']*)'`, "m"),
