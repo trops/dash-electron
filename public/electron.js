@@ -249,6 +249,10 @@ function createWindow() {
                     const startDate = query?.startDate;
                     const endDate = query?.endDate;
 
+                    console.log(
+                        `[Algolia Analytics] ${endpoint} for index "${indexName}"`
+                    );
+
                     const url = new URL(
                         `https://analytics.algolia.com/2/${endpoint}`
                     );
@@ -264,6 +268,9 @@ function createWindow() {
                     });
                     if (!resp.ok) {
                         const text = await resp.text();
+                        console.error(
+                            `[Algolia Analytics] ${resp.status}: ${text}`
+                        );
                         return {
                             error: true,
                             status: resp.status,
@@ -272,6 +279,9 @@ function createWindow() {
                     }
                     return await resp.json();
                 } catch (err) {
+                    console.error(
+                        `[Algolia Analytics] Error: ${err.message || err}`
+                    );
                     return {
                         error: true,
                         message: err.message || String(err),
