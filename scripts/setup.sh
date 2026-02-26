@@ -49,13 +49,11 @@ if [[ -e "./.npmrc" ]]; then
     echo ".npmrc exists; proceeding to next step"
     rm -rf ./.npmrc
     touch ./.npmrc
-    echo "legacy-peer-deps=true
-@trops:registry=https://npm.pkg.github.com" >> ./.npmrc
+    echo "legacy-peer-deps=true" >> ./.npmrc
    else
     echo "Creating .npmrc file"
     touch ./.npmrc
-    echo "legacy-peer-deps=true
-@trops:registry=https://npm.pkg.github.com" >> ./.npmrc
+    echo "legacy-peer-deps=true" >> ./.npmrc
 fi
 
 # lets check and make sure there is a ./Widgets directory
