@@ -111,6 +111,7 @@ const {
     ALGOLIA_PARTIAL_UPDATE_OBJECTS,
     ALGOLIA_CREATE_BATCH,
     ALGOLIA_BROWSE_OBJECTS,
+    ALGOLIA_ANALYTICS_FOR_QUERY,
     OPENAI_DESCRIBE_IMAGE,
     MENU_ITEMS_LIST,
     MENU_ITEMS_SAVE,
@@ -237,6 +238,47 @@ function createWindow() {
                 query
             );
         });
+        ipcMain.handle(
+            ALGOLIA_ANALYTICS_FOR_QUERY,
+            async (e, { application, indexName, query }) => {
+                try {
+                    const appId = application.appId;
+                    const apiKey = application.key;
+                    const endpoint =
+                        typeof query === "string" ? query : query.endpoint;
+                    const startDate = query?.startDate;
+                    const endDate = query?.endDate;
+
+                    const url = new URL(
+                        `https://analytics.algolia.com/2/${endpoint}`
+                    );
+                    url.searchParams.set("index", indexName);
+                    if (startDate) url.searchParams.set("startDate", startDate);
+                    if (endDate) url.searchParams.set("endDate", endDate);
+
+                    const resp = await fetch(url.toString(), {
+                        headers: {
+                            "X-Algolia-Application-Id": appId,
+                            "X-Algolia-API-Key": apiKey,
+                        },
+                    });
+                    if (!resp.ok) {
+                        const text = await resp.text();
+                        return {
+                            error: true,
+                            status: resp.status,
+                            message: text,
+                        };
+                    }
+                    return await resp.json();
+                } catch (err) {
+                    return {
+                        error: true,
+                        message: err.message || String(err),
+                    };
+                }
+            }
+        );
 
         // --- Plugins ---
         ipcMain.handle("plugin-install", (e, message) =>
