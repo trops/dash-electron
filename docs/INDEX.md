@@ -8,6 +8,10 @@ Documentation for the dash-electron application template — an Electron dashboa
 -   **[README.md](./README.md)** - Overview and setup instructions
 -   **[DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md)** - Development workflow and best practices
 
+## Building Widgets with Claude Code
+
+-   **[.claude/skills/dash-widget-builder/SKILL.md](../.claude/skills/dash-widget-builder/SKILL.md)** - Claude Code skill for guided widget development (scaffold → MCP research → build → test → distribute)
+
 ## Requirements & Product Design
 
 Product Requirements Documents (PRDs) define the "why" and "what" of features:
