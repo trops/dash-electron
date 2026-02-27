@@ -65,6 +65,8 @@ const {
     events: coreEvents,
     // Widget system
     widgetRegistry,
+    // Setup helpers
+    setupCacheHandlers,
 } = dashCore;
 
 // Event constants (all from dash-core)
@@ -124,15 +126,6 @@ const {
 
 // Widget System
 const { setupWidgetRegistryHandlers } = widgetRegistry;
-
-// --- Client Cache: Register provider factories ---
-clientCache.registerFactory("algolia", (credentials) => {
-    const algoliasearch = require("algoliasearch");
-    return algoliasearch(
-        credentials.appId,
-        credentials.apiKey || credentials.key
-    );
-});
 
 /**
  * Create the main window of the application
@@ -432,30 +425,6 @@ function createWindow() {
             )
         );
 
-        // --- Client Cache Invalidation ---
-        ipcMain.handle(
-            "client-cache-invalidate",
-            async (e, { appId, providerName }) => {
-                clientCache.invalidate(appId, providerName);
-                responseCache.clear(); // credential change = all responses stale
-                return { success: true };
-            }
-        );
-        ipcMain.handle("client-cache-invalidate-all", async () => {
-            clientCache.invalidateAll();
-            responseCache.clear();
-            return { success: true };
-        });
-
-        // --- Response Cache Management ---
-        ipcMain.handle("response-cache-clear", async () => {
-            responseCache.clear();
-            return { success: true };
-        });
-        ipcMain.handle("response-cache-stats", async () =>
-            responseCache.stats()
-        );
-
         // --- Plugins ---
         ipcMain.handle("plugin-install", (e, message) =>
             pluginInstall(mainWindow, message.packageName, message.filepath)
@@ -697,6 +666,9 @@ function createWindow() {
 
         // --- Widget System ---
         setupWidgetRegistryHandlers();
+
+        // --- Cache Management ---
+        setupCacheHandlers();
     } // end ipcHandlersRegistered guard
 
     windows.add(mainWindow);
