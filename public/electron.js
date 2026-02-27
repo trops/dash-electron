@@ -50,6 +50,7 @@ const {
     partialUpdateObjectsFromDirectory,
     createBatchesFromFile,
     browseObjectsToFile,
+    searchIndex,
     describeImage,
     saveMenuItemForApplication,
     listMenuItemsForApplication,
@@ -57,6 +58,9 @@ const {
     // Namespaced controllers
     mcpController,
     registryController,
+    // Utils
+    clientCache,
+    responseCache,
     // Events
     events: coreEvents,
     // Widget system
@@ -111,6 +115,7 @@ const {
     ALGOLIA_PARTIAL_UPDATE_OBJECTS,
     ALGOLIA_CREATE_BATCH,
     ALGOLIA_BROWSE_OBJECTS,
+    ALGOLIA_SEARCH,
     ALGOLIA_ANALYTICS_FOR_QUERY,
     OPENAI_DESCRIBE_IMAGE,
     MENU_ITEMS_LIST,
@@ -119,6 +124,15 @@ const {
 
 // Widget System
 const { setupWidgetRegistryHandlers } = widgetRegistry;
+
+// --- Client Cache: Register provider factories ---
+clientCache.registerFactory("algolia", (credentials) => {
+    const algoliasearch = require("algoliasearch");
+    return algoliasearch(
+        credentials.appId,
+        credentials.apiKey || credentials.key
+    );
+});
 
 /**
  * Create the main window of the application
@@ -203,21 +217,63 @@ function createWindow() {
         );
 
         // --- Algolia (template-specific) ---
-        ipcMain.handle(ALGOLIA_LIST_INDICES, (e, application) =>
-            listIndices(mainWindow, application)
+        // All handlers accept { providerHash, dashboardAppId, providerName }
+        // and resolve credentials on the main process side.
+        ipcMain.handle(
+            ALGOLIA_LIST_INDICES,
+            responseCache.cachedHandler(
+                "algolia-list-indices",
+                async (e, { providerHash, dashboardAppId, providerName }) => {
+                    try {
+                        const client = await clientCache.getClient(
+                            providerHash,
+                            dashboardAppId,
+                            providerName
+                        );
+                        const { items } = await client.listIndices();
+                        const filtered = items.filter(
+                            (item) => item.name.substring(0, 7) !== "sitehub"
+                        );
+                        mainWindow?.webContents?.send(
+                            "algolia-list-indices-complete",
+                            filtered
+                        );
+                        return filtered;
+                    } catch (err) {
+                        mainWindow?.webContents?.send(
+                            "algolia-list-indices-error",
+                            { error: err.message }
+                        );
+                        throw err;
+                    }
+                }
+            )
         );
-        ipcMain.handle(ALGOLIA_PARTIAL_UPDATE_OBJECTS, (e, message) => {
-            const { appId, apiKey, indexName, dir, createIfNotExists } =
-                message;
-            partialUpdateObjectsFromDirectory(
-                mainWindow,
-                appId,
-                apiKey,
-                indexName,
-                dir,
-                createIfNotExists
-            );
-        });
+        ipcMain.handle(
+            ALGOLIA_PARTIAL_UPDATE_OBJECTS,
+            async (
+                e,
+                {
+                    dashboardAppId,
+                    providerName,
+                    indexName,
+                    dir,
+                    createIfNotExists,
+                }
+            ) => {
+                const result = getProvider(null, dashboardAppId, providerName);
+                if (result.error) throw new Error(result.message);
+                const { appId, apiKey, key } = result.provider.credentials;
+                partialUpdateObjectsFromDirectory(
+                    mainWindow,
+                    appId,
+                    apiKey || key,
+                    indexName,
+                    dir,
+                    createIfNotExists
+                );
+            }
+        );
         ipcMain.handle(ALGOLIA_CREATE_BATCH, (e, message) => {
             const { filepath, batchFilepath, batchSize } = message;
             createBatchesFromFile(
@@ -227,67 +283,177 @@ function createWindow() {
                 batchSize
             );
         });
-        ipcMain.handle(ALGOLIA_BROWSE_OBJECTS, (e, message) => {
-            const { appId, apiKey, indexName, toFilename, query } = message;
-            browseObjectsToFile(
-                mainWindow,
-                appId,
-                apiKey,
-                indexName,
-                toFilename,
-                query
-            );
-        });
+        ipcMain.handle(
+            ALGOLIA_BROWSE_OBJECTS,
+            async (
+                e,
+                { dashboardAppId, providerName, indexName, toFilename, query }
+            ) => {
+                const result = getProvider(null, dashboardAppId, providerName);
+                if (result.error) throw new Error(result.message);
+                const { appId, apiKey, key } = result.provider.credentials;
+                browseObjectsToFile(
+                    mainWindow,
+                    appId,
+                    apiKey || key,
+                    indexName,
+                    toFilename,
+                    query
+                );
+            }
+        );
+        ipcMain.handle(
+            ALGOLIA_SEARCH,
+            async (
+                e,
+                { dashboardAppId, providerName, indexName, query, options }
+            ) => {
+                const result = getProvider(null, dashboardAppId, providerName);
+                if (result.error) throw new Error(result.message);
+                const { appId, apiKey, key } = result.provider.credentials;
+                return searchIndex(
+                    mainWindow,
+                    appId,
+                    apiKey || key,
+                    indexName,
+                    query,
+                    options
+                );
+            }
+        );
+
+        // --- Algolia Settings (use clientCache for cached client) ---
+        ipcMain.handle(
+            "algolia-get-settings",
+            responseCache.cachedHandler(
+                "algolia-get-settings",
+                async (
+                    e,
+                    { providerHash, dashboardAppId, providerName, indexName }
+                ) => {
+                    const client = await clientCache.getClient(
+                        providerHash,
+                        dashboardAppId,
+                        providerName
+                    );
+                    const index = client.initIndex(indexName);
+                    return await index.getSettings();
+                }
+            )
+        );
+
+        ipcMain.handle(
+            "algolia-set-settings",
+            async (
+                e,
+                {
+                    providerHash,
+                    dashboardAppId,
+                    providerName,
+                    indexName,
+                    settings,
+                }
+            ) => {
+                const client = await clientCache.getClient(
+                    providerHash,
+                    dashboardAppId,
+                    providerName
+                );
+                const index = client.initIndex(indexName);
+                const result = await index.setSettings(settings);
+                responseCache.invalidatePrefix("algolia-get-settings:");
+                return result;
+            }
+        );
+
         ipcMain.handle(
             ALGOLIA_ANALYTICS_FOR_QUERY,
-            async (e, { application, indexName, query }) => {
-                try {
-                    const appId = application.appId;
-                    const apiKey = application.key;
-                    const endpoint =
-                        typeof query === "string" ? query : query.endpoint;
-                    const startDate = query?.startDate;
-                    const endDate = query?.endDate;
+            responseCache.cachedHandler(
+                "algolia-analytics",
+                async (
+                    e,
+                    { dashboardAppId, providerName, indexName, query }
+                ) => {
+                    try {
+                        const result = getProvider(
+                            null,
+                            dashboardAppId,
+                            providerName
+                        );
+                        if (result.error) throw new Error(result.message);
+                        const { appId, apiKey, key } =
+                            result.provider.credentials;
+                        const resolvedApiKey = apiKey || key;
+                        const endpoint =
+                            typeof query === "string" ? query : query.endpoint;
+                        const startDate = query?.startDate;
+                        const endDate = query?.endDate;
 
-                    console.log(
-                        `[Algolia Analytics] ${endpoint} for index "${indexName}"`
-                    );
+                        console.log(
+                            `[Algolia Analytics] ${endpoint} for index "${indexName}"`
+                        );
 
-                    const url = new URL(
-                        `https://analytics.algolia.com/2/${endpoint}`
-                    );
-                    url.searchParams.set("index", indexName);
-                    if (startDate) url.searchParams.set("startDate", startDate);
-                    if (endDate) url.searchParams.set("endDate", endDate);
+                        const url = new URL(
+                            `https://analytics.algolia.com/2/${endpoint}`
+                        );
+                        url.searchParams.set("index", indexName);
+                        if (startDate)
+                            url.searchParams.set("startDate", startDate);
+                        if (endDate) url.searchParams.set("endDate", endDate);
 
-                    const resp = await fetch(url.toString(), {
-                        headers: {
-                            "X-Algolia-Application-Id": appId,
-                            "X-Algolia-API-Key": apiKey,
-                        },
-                    });
-                    if (!resp.ok) {
-                        const text = await resp.text();
+                        const resp = await fetch(url.toString(), {
+                            headers: {
+                                "X-Algolia-Application-Id": appId,
+                                "X-Algolia-API-Key": resolvedApiKey,
+                            },
+                        });
+                        if (!resp.ok) {
+                            const text = await resp.text();
+                            console.error(
+                                `[Algolia Analytics] ${resp.status}: ${text}`
+                            );
+                            return {
+                                error: true,
+                                status: resp.status,
+                                message: text,
+                            };
+                        }
+                        return await resp.json();
+                    } catch (err) {
                         console.error(
-                            `[Algolia Analytics] ${resp.status}: ${text}`
+                            `[Algolia Analytics] Error: ${err.message || err}`
                         );
                         return {
                             error: true,
-                            status: resp.status,
-                            message: text,
+                            message: err.message || String(err),
                         };
                     }
-                    return await resp.json();
-                } catch (err) {
-                    console.error(
-                        `[Algolia Analytics] Error: ${err.message || err}`
-                    );
-                    return {
-                        error: true,
-                        message: err.message || String(err),
-                    };
                 }
+            )
+        );
+
+        // --- Client Cache Invalidation ---
+        ipcMain.handle(
+            "client-cache-invalidate",
+            async (e, { appId, providerName }) => {
+                clientCache.invalidate(appId, providerName);
+                responseCache.clear(); // credential change = all responses stale
+                return { success: true };
             }
+        );
+        ipcMain.handle("client-cache-invalidate-all", async () => {
+            clientCache.invalidateAll();
+            responseCache.clear();
+            return { success: true };
+        });
+
+        // --- Response Cache Management ---
+        ipcMain.handle("response-cache-clear", async () => {
+            responseCache.clear();
+            return { success: true };
+        });
+        ipcMain.handle("response-cache-stats", async () =>
+            responseCache.stats()
         );
 
         // --- Plugins ---
@@ -564,6 +730,8 @@ app.on("window-all-closed", () => {
     mcpController.stopAllServers().catch((err) => {
         console.error("[electron] Error stopping MCP servers:", err);
     });
+    clientCache.clear();
+    responseCache.clear();
 
     if (process.platform !== "darwin") {
         windows.delete(mainWindow);
