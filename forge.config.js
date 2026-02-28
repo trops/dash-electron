@@ -1,9 +1,10 @@
 /**
- * Forge
- * Some configuration options have been commented out due to the scripts not working.
- * Specifically the osxNotarize configuration will work, but sporadically due to the file not
- * being uploaded to Apple successfully and will 9/10 times error out. I have included incstructions
- * in the README for packaging and notarizing the .dmg file that is generated from the npm run package script.
+ * Forge Configuration
+ *
+ * Code signing (osxSign) and notarization (osxNotarize) are conditional:
+ * - Set REACT_APP_APPLE_CERT_ID in .env to enable signing
+ * - Set REACT_APP_APPLE_ID, REACT_APP_APPLE_PASSWORD, REACT_APP_APPLE_TEAM_ID to enable notarization
+ * - When credentials are absent, builds remain unsigned (local dev)
  *
  * For Windows compilation there is another process entirely that requires a Windows machine or some other tooling such as
  * a Docker container, etc to setup a VM for compilation. (TBD)
@@ -14,19 +15,27 @@ require("dotenv").config();
 module.exports = {
     packagerConfig: {
         name: process.env.REACT_APP_PACKAGE_NAME,
-        osxSign: {
-            identity: process.env.REACT_APP_APPLE_CERT_ID,
-            optionsForFile: () => ({
-                entitlements: "entitlements.plist",
-                signatureFlags: "library",
-            }),
-        },
-        // osxNotarize: {
-        //     tool: "notarytool",
-        //     appleId: process.env.REACT_APP_APPLE_ID,
-        //     appleIdPassword: process.env.REACT_APP_APPLE_PASSWORD,
-        //     teamId: process.env.REACT_APP_APPLE_TEAM_ID,
-        // },
+        ...(process.env.REACT_APP_APPLE_CERT_ID
+            ? {
+                  osxSign: {
+                      identity: process.env.REACT_APP_APPLE_CERT_ID,
+                      optionsForFile: () => ({
+                          entitlements: "entitlements.plist",
+                          signatureFlags: "library",
+                      }),
+                  },
+              }
+            : {}),
+        ...(process.env.REACT_APP_APPLE_ID
+            ? {
+                  osxNotarize: {
+                      tool: "notarytool",
+                      appleId: process.env.REACT_APP_APPLE_ID,
+                      appleIdPassword: process.env.REACT_APP_APPLE_PASSWORD,
+                      teamId: process.env.REACT_APP_APPLE_TEAM_ID,
+                  },
+              }
+            : {}),
     },
     makers: [
         // Windows
