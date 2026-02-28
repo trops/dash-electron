@@ -12,6 +12,14 @@ const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const isDev = process.defaultApp || process.env.NODE_ENV === "development";
 const pe = require("pluggable-electron/main");
 
+const { updateElectronApp } = require("update-electron-app");
+
+// Auto-update: checks update.electronjs.org every 10 minutes
+// Only runs in production (packaged app), no-ops in development
+if (!isDev) {
+    updateElectronApp();
+}
+
 // Core controllers and events from dash-core
 const dashCore = require("@trops/dash-core/electron");
 
@@ -164,8 +172,8 @@ function createWindow() {
                     ...details.responseHeaders,
                     "Content-Security-Policy": [
                         isDev
-                            ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https: http://localhost:3000 ws://localhost:3000"
-                            : "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https:",
+                            ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https: http://localhost:3000 ws://localhost:3000"
+                            : "default-src 'self'; script-src 'self' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self' data: https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https:",
                     ],
                 },
             });
@@ -379,8 +387,8 @@ function createWindow() {
                         const resolvedApiKey = apiKey || key;
                         const endpoint =
                             typeof query === "string" ? query : query.endpoint;
-                        const startDate = query?.startDate;
-                        const endDate = query?.endDate;
+                        const { endpoint: _, ...params } =
+                            typeof query === "object" ? query : {};
 
                         console.log(
                             `[Algolia Analytics] ${endpoint} for index "${indexName}"`
@@ -390,9 +398,10 @@ function createWindow() {
                             `https://analytics.algolia.com/2/${endpoint}`
                         );
                         url.searchParams.set("index", indexName);
-                        if (startDate)
-                            url.searchParams.set("startDate", startDate);
-                        if (endDate) url.searchParams.set("endDate", endDate);
+                        Object.entries(params).forEach(([key, value]) => {
+                            if (value != null)
+                                url.searchParams.set(key, String(value));
+                        });
 
                         const resp = await fetch(url.toString(), {
                             headers: {

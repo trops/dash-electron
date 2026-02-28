@@ -60,8 +60,8 @@ module.exports = {
                     name: process.env.REACT_APP_GITHUB_REPO, // name of your github repo
                 },
                 authToken: process.env.REACT_APP_GITHUB_TOKEN, // github auth token created
-                prerelease: true,
-                draft: true,
+                prerelease: false,
+                draft: false,
             },
         },
     ],
