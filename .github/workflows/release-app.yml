@@ -1,0 +1,70 @@
+name: Release App
+
+on:
+    push:
+        tags:
+            - "v*"
+    workflow_dispatch:
+
+permissions:
+    contents: write
+    packages: read
+
+jobs:
+    build:
+        runs-on: macos-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+                  registry-url: "https://npm.pkg.github.com"
+
+            - name: Install dependencies
+              run: npm ci --legacy-peer-deps
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN || secrets.GITHUB_TOKEN }}
+
+            - name: Set app name
+              run: |
+                  APP_NAME=$(node -p "require('./package.json').productName || 'Dash'")
+                  echo "REACT_APP_PACKAGE_NAME=$APP_NAME" >> $GITHUB_ENV
+                  echo "REACT_APP_APP_NAME=$APP_NAME" >> $GITHUB_ENV
+
+            - name: Prepare environment
+              run: cp .env.default .env
+
+            - name: Build React app
+              run: npx craco build
+              env:
+                  REACT_APP_APPLE_CERT_ID: ${{ secrets.APPLE_CERT_ID }}
+                  REACT_APP_APPLE_ID: ${{ secrets.APPLE_ID }}
+                  REACT_APP_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+                  REACT_APP_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+            - name: Build Electron app
+              run: npx electron-forge make
+              env:
+                  REACT_APP_APPLE_CERT_ID: ${{ secrets.APPLE_CERT_ID }}
+                  REACT_APP_APPLE_ID: ${{ secrets.APPLE_ID }}
+                  REACT_APP_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+                  REACT_APP_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+            - name: Upload to GitHub Release
+              if: startsWith(github.ref, 'refs/tags/')
+              uses: softprops/action-gh-release@v2
+              with:
+                  files: |
+                      out/make/**/*.dmg
+                      out/make/**/*.zip
+                  generate_release_notes: true
+
+            - name: Upload as artifact (workflow_dispatch)
+              if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+              uses: actions/upload-artifact@v4
+              with:
+                  name: electron-app
+                  path: |
+                      out/make/**/*.dmg
+                      out/make/**/*.zip
