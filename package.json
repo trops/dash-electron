@@ -91,7 +91,7 @@
         "prod": "NODE_ENV=prod npm run prettify && npm run bump-tag && npm run build",
         "electron": "electron .",
         "package": "craco build && electron-forge package",
-        "make": "craco build && electron-forge make --skip-package --inspect",
+        "make": "craco build && electron-forge make",
         "bump": "npm version --no-git-tag-version patch",
         "bump-tag": "npm version -m patch",
         "prettify": "npx prettier --write . ",
