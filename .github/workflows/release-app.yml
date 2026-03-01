@@ -11,7 +11,7 @@ permissions:
     packages: read
 
 jobs:
-    build:
+    build-macos:
         runs-on: macos-latest
         steps:
             - uses: actions/checkout@v4
@@ -116,7 +116,7 @@ jobs:
               if: ${{ !startsWith(github.ref, 'refs/tags/') }}
               uses: actions/upload-artifact@v4
               with:
-                  name: electron-app
+                  name: electron-app-macos
                   path: |
                       out/make/**/*.dmg
                       out/make/**/*.zip
@@ -124,3 +124,54 @@ jobs:
             - name: Clean up keychain
               if: always()
               run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db
+
+    build-windows:
+        runs-on: windows-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+                  registry-url: "https://npm.pkg.github.com"
+
+            - name: Install dependencies
+              run: npm ci --legacy-peer-deps
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN || secrets.GITHUB_TOKEN }}
+
+            - name: Set app name
+              shell: pwsh
+              run: |
+                  $APP_NAME = node -p "require('./package.json').productName || 'Dash'"
+                  echo "REACT_APP_PACKAGE_NAME=$APP_NAME" >> $env:GITHUB_ENV
+                  echo "REACT_APP_APP_NAME=$APP_NAME" >> $env:GITHUB_ENV
+
+            - name: Prepare environment
+              shell: pwsh
+              run: Copy-Item .env.default .env
+
+            - name: Build Tailwind CSS
+              run: npm run build:css
+
+            - name: Build React app
+              run: npx craco build
+
+            - name: Build Electron app
+              run: npx electron-forge make --arch=x64
+
+            - name: Upload to GitHub Release
+              if: startsWith(github.ref, 'refs/tags/')
+              uses: softprops/action-gh-release@v2
+              with:
+                  files: |
+                      out/make/squirrel.windows/x64/*.exe
+                  generate_release_notes: true
+
+            - name: Upload as artifact (workflow_dispatch)
+              if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+              uses: actions/upload-artifact@v4
+              with:
+                  name: electron-app-windows
+                  path: |
+                      out/make/squirrel.windows/x64/*.exe
