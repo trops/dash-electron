@@ -65,7 +65,9 @@ jobs:
                   REACT_APP_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
             - name: Build Electron app
-              run: npx electron-forge make
+              run: |
+                  ulimit -n 10240
+                  npx electron-forge make
               env:
                   REACT_APP_APPLE_CERT_ID: ${{ secrets.APPLE_CERT_ID }}
                   REACT_APP_APPLE_ID: ${{ secrets.APPLE_ID }}
