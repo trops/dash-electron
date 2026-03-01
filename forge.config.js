@@ -5,9 +5,6 @@
  * - Set REACT_APP_APPLE_CERT_ID in .env to enable signing
  * - Set REACT_APP_APPLE_ID, REACT_APP_APPLE_PASSWORD, REACT_APP_APPLE_TEAM_ID to enable notarization
  * - When credentials are absent, builds remain unsigned (local dev)
- *
- * For Windows compilation there is another process entirely that requires a Windows machine or some other tooling such as
- * a Docker container, etc to setup a VM for compilation. (TBD)
  */
 const packageJson = require("./package.json");
 require("dotenv").config();
@@ -38,13 +35,13 @@ module.exports = {
             : {}),
     },
     makers: [
-        // Windows
-        // {
-        //     name: "@electron-forge/maker-squirrel",
-        //     config: {
-        //         name: process.env.REACT_APP_APP_NAME,
-        //     },
-        // },
+        {
+            name: "@electron-forge/maker-squirrel",
+            platforms: ["win32"],
+            config: {
+                name: process.env.REACT_APP_APP_NAME,
+            },
+        },
         {
             name: "@electron-forge/maker-dmg",
             platforms: ["darwin"],
@@ -62,7 +59,7 @@ module.exports = {
     publishers: [
         {
             name: "@electron-forge/publisher-github",
-            platforms: ["darwin"],
+            platforms: ["darwin", "win32"],
             config: {
                 repository: {
                     owner: process.env.REACT_APP_GITHUB_USER, // github username
