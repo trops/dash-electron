@@ -12,7 +12,7 @@ permissions:
 
 jobs:
     build:
-        runs-on: macos-13
+        runs-on: macos-latest
         steps:
             - uses: actions/checkout@v4
 
@@ -69,7 +69,7 @@ jobs:
                   sudo sysctl -w kern.maxfiles=524288
                   sudo sysctl -w kern.maxfilesperproc=524288
                   ulimit -n 524288
-                  npx electron-forge make
+                  npx electron-forge make --arch=x64
               env:
                   REACT_APP_APPLE_CERT_ID: ${{ secrets.APPLE_CERT_ID }}
                   REACT_APP_APPLE_ID: ${{ secrets.APPLE_ID }}
