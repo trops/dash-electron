@@ -41,7 +41,6 @@ module.exports = {
             platforms: ["win32"],
             config: {
                 name: process.env.REACT_APP_APP_NAME,
-                windowsSign: null,
             },
         },
         {
