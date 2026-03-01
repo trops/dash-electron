@@ -16,7 +16,8 @@ const { updateElectronApp } = require("update-electron-app");
 
 // Auto-update: checks update.electronjs.org every 10 minutes
 // Only runs in production (packaged app), no-ops in development
-if (!isDev && process.env.REACT_APP_GITHUB_USER && process.env.REACT_APP_GITHUB_REPO) {
+// Repo is auto-detected from package.json "repository" field
+if (!isDev) {
     updateElectronApp();
 }
 
