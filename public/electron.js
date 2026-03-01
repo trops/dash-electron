@@ -7,6 +7,7 @@
  */
 
 const path = require("path");
+const { pathToFileURL } = require("url");
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 
 // Handle Squirrel install/uninstall/update events on Windows
@@ -188,7 +189,7 @@ function createWindow() {
     mainWindow.loadURL(
         isDev
             ? "http://localhost:3000"
-            : `file://${path.join(__dirname, "../build/index.html")}`
+            : pathToFileURL(path.join(__dirname, "../build/index.html")).href
     );
 
     if (isDev && process.env.DASH_DEVTOOLS === "true") {
