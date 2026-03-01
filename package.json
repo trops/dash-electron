@@ -1,7 +1,7 @@
 {
     "name": "@trops/dash-electron",
     "productName": "Dash",
-    "version": "0.0.83",
+    "version": "0.0.84",
     "description": "A Dashboard Generator",
     "author": "John P. Giatropoulos",
     "publishConfig": {
@@ -33,6 +33,7 @@
         "deep-equal": "^2.2.0",
         "dot-object": "^2.1.4",
         "dotenv": "^16.0.0",
+        "electron-squirrel-startup": "^1.0.1",
         "electron-store": "^8.0.1",
         "esbuild": "^0.25.12",
         "extract-colors": "^4.0.6",

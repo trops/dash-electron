@@ -11,6 +11,7 @@ require("dotenv").config();
 
 module.exports = {
     packagerConfig: {
+        asar: true,
         name: process.env.REACT_APP_PACKAGE_NAME,
         ...(process.env.REACT_APP_APPLE_CERT_ID
             ? {
@@ -40,6 +41,7 @@ module.exports = {
             platforms: ["win32"],
             config: {
                 name: process.env.REACT_APP_APP_NAME,
+                windowsSign: null,
             },
         },
         {

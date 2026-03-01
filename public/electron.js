@@ -8,6 +8,10 @@
 
 const path = require("path");
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+
+// Handle Squirrel install/uninstall/update events on Windows
+if (require("electron-squirrel-startup")) app.quit();
+
 // Use process.defaultApp or NODE_ENV check which are available before app is ready
 const isDev = process.defaultApp || process.env.NODE_ENV === "development";
 const pe = require("pluggable-electron/main");
