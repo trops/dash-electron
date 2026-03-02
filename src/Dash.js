@@ -2,6 +2,7 @@ import React from "react";
 import { Routes, Route } from "react-router-dom";
 
 // Core framework from @trops/dash-core
+import * as dashCore from "@trops/dash-core";
 import {
     DashboardStage,
     ComponentManager,
@@ -11,7 +12,13 @@ import {
     loadWidgetBundle,
     evaluateBundle,
     extractWidgetConfigs,
+    setHostModules,
 } from "@trops/dash-core";
+
+// Inject dash-core module reference for the widget require shim.
+// This avoids the self-referential import in widgetBundleLoader.js that
+// breaks under webpack scope hoisting in production builds.
+setHostModules({ "@trops/dash-core": dashCore });
 
 // Local Widgets that integrate with Dash
 import * as myWidgets from "./Widgets";
