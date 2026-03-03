@@ -149,7 +149,9 @@ module.exports = {
                     if (
                         plugin.options &&
                         plugin.options.template &&
-                        plugin.options.template.includes("public/index.html")
+                        plugin.options.template
+                            .replace(/\\/g, "/")
+                            .includes("public/index.html")
                     ) {
                         plugin.options.template = path.resolve(
                             __dirname,
