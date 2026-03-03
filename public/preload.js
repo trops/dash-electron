@@ -3,6 +3,12 @@ const { defaultMainApi } = require("@trops/dash-core/electron");
 
 const extendedApi = {
     ...defaultMainApi,
+    popout: {
+        open: (workspaceId) =>
+            ipcRenderer.invoke("popout-open", { workspaceId }),
+        setTitle: (workspaceId, title) =>
+            ipcRenderer.invoke("popout-set-title", { workspaceId, title }),
+    },
     algolia: {
         ...defaultMainApi.algolia,
         listIndices: (msg) => ipcRenderer.invoke("algolia-list-indices", msg),
