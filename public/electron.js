@@ -8,7 +8,14 @@
 
 const path = require("path");
 const { pathToFileURL } = require("url");
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const {
+    app,
+    BrowserWindow,
+    ipcMain,
+    dialog,
+    Menu,
+    autoUpdater,
+} = require("electron");
 
 // Handle Squirrel install/uninstall/update events on Windows
 if (require("electron-squirrel-startup")) app.quit();
@@ -23,7 +30,152 @@ const { updateElectronApp } = require("update-electron-app");
 // Only runs in production (packaged app), no-ops in development
 // Repo is auto-detected from package.json "repository" field
 if (!isDev) {
-    updateElectronApp();
+    updateElectronApp({ notifyUser: false });
+}
+
+// --- Update state tracking ---
+let updateState = "idle"; // idle | checking | downloaded
+let manualCheckInProgress = false;
+
+// --- macOS Application Menu ---
+function buildMenu() {
+    const appName = app.name || "Dash";
+
+    // Dynamic update menu item based on state
+    let updateMenuItem;
+    if (updateState === "downloaded") {
+        updateMenuItem = {
+            label: "Restart to Update",
+            click: () => autoUpdater.quitAndInstall(),
+        };
+    } else if (updateState === "checking") {
+        updateMenuItem = {
+            label: "Checking for Updates...",
+            enabled: false,
+        };
+    } else {
+        updateMenuItem = {
+            label: "Check for Updates...",
+            click: () => {
+                manualCheckInProgress = true;
+                updateState = "checking";
+                buildMenu();
+                autoUpdater.checkForUpdates();
+            },
+        };
+    }
+
+    const template = [
+        {
+            label: appName,
+            submenu: [
+                { role: "about" },
+                { type: "separator" },
+                updateMenuItem,
+                { type: "separator" },
+                { role: "hide" },
+                { role: "hideOthers" },
+                { role: "unhide" },
+                { type: "separator" },
+                { role: "quit" },
+            ],
+        },
+        {
+            label: "Edit",
+            submenu: [
+                { role: "undo" },
+                { role: "redo" },
+                { type: "separator" },
+                { role: "cut" },
+                { role: "copy" },
+                { role: "paste" },
+                { role: "selectAll" },
+            ],
+        },
+        {
+            label: "View",
+            submenu: [
+                { role: "reload" },
+                { role: "forceReload" },
+                { role: "toggleDevTools" },
+                { type: "separator" },
+                { role: "resetZoom" },
+                { role: "zoomIn" },
+                { role: "zoomOut" },
+                { type: "separator" },
+                { role: "togglefullscreen" },
+            ],
+        },
+        {
+            label: "Window",
+            submenu: [
+                { role: "minimize" },
+                { role: "zoom" },
+                { type: "separator" },
+                { role: "front" },
+            ],
+        },
+    ];
+
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+}
+
+// --- autoUpdater event listeners (work alongside update-electron-app) ---
+if (!isDev) {
+    autoUpdater.on("update-not-available", () => {
+        updateState = "idle";
+        buildMenu();
+        if (manualCheckInProgress) {
+            manualCheckInProgress = false;
+            dialog.showMessageBox({
+                title: "No Updates",
+                message: "You're up to date!",
+                detail: `${
+                    app.name
+                } ${app.getVersion()} is the latest version.`,
+                buttons: ["OK"],
+            });
+        }
+    });
+
+    autoUpdater.on("update-downloaded", (_event, releaseNotes, releaseName) => {
+        updateState = "downloaded";
+        buildMenu();
+        dialog
+            .showMessageBox({
+                title: "Update Ready",
+                message: "A new version has been downloaded.",
+                detail: `${
+                    releaseName || "A new version"
+                } is ready to install. Restart ${
+                    app.name
+                } to apply the update.`,
+                buttons: ["Restart Now", "Later"],
+                defaultId: 0,
+                cancelId: 1,
+            })
+            .then(({ response }) => {
+                if (response === 0) {
+                    autoUpdater.quitAndInstall();
+                }
+            });
+        manualCheckInProgress = false;
+    });
+
+    autoUpdater.on("error", (err) => {
+        updateState = "idle";
+        buildMenu();
+        if (manualCheckInProgress) {
+            manualCheckInProgress = false;
+            dialog.showMessageBox({
+                title: "Update Error",
+                message: "Could not check for updates.",
+                detail: err?.message || "An unknown error occurred.",
+                buttons: ["OK"],
+            });
+        }
+    });
 }
 
 // Core controllers and events from dash-core
@@ -694,6 +846,7 @@ app.whenReady().then(() => {
     });
 
     console.log("plugins path", path.join(app.getPath("userData"), "plugins"));
+    buildMenu();
     createWindow();
 });
 
@@ -713,6 +866,6 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
     if (windows.size === 0) {
-        console.log("activate");
+        createWindow();
     }
 });
