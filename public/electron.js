@@ -299,6 +299,7 @@ const { setupWidgetRegistryHandlers } = widgetRegistry;
 
 let windows = new Set();
 let mainWindow = null;
+let popoutWindows = new Map(); // workspaceId string → BrowserWindow
 
 // Track whether IPC handlers have been registered (they must only be registered once)
 let ipcHandlersRegistered = false;
@@ -585,9 +586,20 @@ function createWindow() {
         ipcMain.handle(WORKSPACE_LIST, (e, message) =>
             listWorkspacesForApplication(mainWindow, message.appId)
         );
-        ipcMain.handle(WORKSPACE_SAVE, (e, message) =>
-            saveWorkspaceForApplication(mainWindow, message.appId, message.data)
-        );
+        ipcMain.handle(WORKSPACE_SAVE, async (e, message) => {
+            const result = await saveWorkspaceForApplication(
+                mainWindow,
+                message.appId,
+                message.data
+            );
+            // Broadcast to all windows so popouts can refresh
+            for (const win of windows) {
+                if (!win.isDestroyed()) {
+                    win.webContents.send("workspace:saved");
+                }
+            }
+            return result;
+        });
         ipcMain.handle(WORKSPACE_DELETE, (e, message) =>
             deleteWorkspaceForApplication(
                 mainWindow,
@@ -820,6 +832,25 @@ function createWindow() {
 
         // --- Cache Management ---
         setupCacheHandlers();
+
+        // --- Popout Windows ---
+        ipcMain.handle("popout-open", (e, message) => {
+            const wsId = String(message.workspaceId);
+            const existing = popoutWindows.get(wsId);
+            if (existing && !existing.isDestroyed()) {
+                existing.focus();
+                return { focused: true };
+            }
+            createPopoutWindow(wsId);
+            return { opened: true };
+        });
+        ipcMain.handle("popout-set-title", (e, message) => {
+            const wsId = String(message.workspaceId);
+            const win = popoutWindows.get(wsId);
+            if (win && !win.isDestroyed()) {
+                win.setTitle(message.title);
+            }
+        });
     } // end ipcHandlersRegistered guard
 
     windows.add(mainWindow);
@@ -828,6 +859,43 @@ function createWindow() {
         windows.delete(mainWindow);
         mainWindow = null;
     });
+}
+
+function createPopoutWindow(workspaceId) {
+    const popoutWin = new BrowserWindow({
+        width: 1280,
+        height: 800,
+        minWidth: 640,
+        minHeight: 480,
+        fullscreen: false,
+        webPreferences: {
+            preload: path.join(__dirname, "preload.js"),
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: false,
+            webSecurity: true,
+        },
+    });
+
+    const hashRoute = `#/popout/${workspaceId}`;
+    popoutWin.loadURL(
+        isDev
+            ? `http://localhost:3000${hashRoute}`
+            : `${
+                  pathToFileURL(path.join(__dirname, "../build/index.html"))
+                      .href
+              }${hashRoute}`
+    );
+
+    windows.add(popoutWin);
+    popoutWindows.set(String(workspaceId), popoutWin);
+
+    popoutWin.on("closed", () => {
+        windows.delete(popoutWin);
+        popoutWindows.delete(String(workspaceId));
+    });
+
+    return popoutWin;
 }
 
 app.whenReady().then(() => {
@@ -856,6 +924,12 @@ app.on("window-all-closed", () => {
     });
     clientCache.clear();
     responseCache.clear();
+
+    // Close all popout windows
+    for (const [, win] of popoutWindows) {
+        if (!win.isDestroyed()) win.close();
+    }
+    popoutWindows.clear();
 
     if (process.platform !== "darwin") {
         windows.delete(mainWindow);

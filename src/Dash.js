@@ -1,5 +1,5 @@
 import React from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useParams } from "react-router-dom";
 
 // Core framework from @trops/dash-core
 import * as dashCore from "@trops/dash-core";
@@ -324,6 +324,24 @@ function registerBundleConfigs(widgetName, source) {
     }
 }
 
+// Popout window: renders a single dashboard in read-only mode
+function PopoutDashboard() {
+    const { workspaceId } = useParams();
+    return (
+        <ErrorBoundary>
+            <DashboardStage
+                dashApi={electronApi}
+                credentials={{ appId: process.env.REACT_APP_IDENTIFIER }}
+                backgroundColor="bg-gray-900"
+                height="h-full"
+                grow={true}
+                popout={true}
+                popoutWorkspaceId={Number(workspaceId)}
+            />
+        </ErrorBoundary>
+    );
+}
+
 // Main App
 class App extends React.Component {
     async componentDidMount() {
@@ -451,6 +469,10 @@ class App extends React.Component {
                             />
                         </ErrorBoundary>
                     }
+                />
+                <Route
+                    path="/popout/:workspaceId"
+                    element={<PopoutDashboard />}
                 />
             </Routes>
         );
