@@ -302,6 +302,14 @@ let mainWindow = null;
 let popoutWindows = new Map(); // workspaceId string → BrowserWindow
 let widgetPopoutWindows = new Map(); // "workspaceId:widgetId" → BrowserWindow
 
+/**
+ * Get the BrowserWindow that sent an IPC event.
+ * Falls back to mainWindow if the sender can't be resolved.
+ */
+function getSenderWindow(e) {
+    return BrowserWindow.fromWebContents(e.sender) || mainWindow;
+}
+
 // Track whether IPC handlers have been registered (they must only be registered once)
 let ipcHandlersRegistered = false;
 
@@ -343,7 +351,7 @@ function createWindow() {
         // --- Dialog ---
         ipcMain.handle(CHOOSE_FILE, async (e, message) => {
             return showDialog(
-                mainWindow,
+                getSenderWindow(e),
                 message,
                 message.allowFile,
                 message.extensions
@@ -353,12 +361,12 @@ function createWindow() {
             console.log("choose file complete ", e, message);
         });
         ipcMain.handle(CHOOSE_FILE_ERROR, (e, message) =>
-            fileChosenError(mainWindow, message)
+            fileChosenError(getSenderWindow(e), message)
         );
 
         // --- Secure Storage ---
         ipcMain.handle(SECURE_STORE_ENCRYPTION_CHECK, (e, message) =>
-            isEncryptionAvailable(mainWindow, message)
+            isEncryptionAvailable(getSenderWindow(e), message)
         );
 
         // --- Algolia (template-specific) ---
@@ -379,13 +387,15 @@ function createWindow() {
                         const filtered = items.filter(
                             (item) => item.name.substring(0, 7) !== "sitehub"
                         );
-                        mainWindow?.webContents?.send(
+                        const senderWin = getSenderWindow(e);
+                        senderWin?.webContents?.send(
                             "algolia-list-indices-complete",
                             filtered
                         );
                         return filtered;
                     } catch (err) {
-                        mainWindow?.webContents?.send(
+                        const senderWin = getSenderWindow(e);
+                        senderWin?.webContents?.send(
                             "algolia-list-indices-error",
                             { error: err.message }
                         );
@@ -410,7 +420,7 @@ function createWindow() {
                 if (result.error) throw new Error(result.message);
                 const { appId, apiKey, key } = result.provider.credentials;
                 partialUpdateObjectsFromDirectory(
-                    mainWindow,
+                    getSenderWindow(e),
                     appId,
                     apiKey || key,
                     indexName,
@@ -422,7 +432,7 @@ function createWindow() {
         ipcMain.handle(ALGOLIA_CREATE_BATCH, (e, message) => {
             const { filepath, batchFilepath, batchSize } = message;
             createBatchesFromFile(
-                mainWindow,
+                getSenderWindow(e),
                 filepath,
                 batchFilepath,
                 batchSize
@@ -438,7 +448,7 @@ function createWindow() {
                 if (result.error) throw new Error(result.message);
                 const { appId, apiKey, key } = result.provider.credentials;
                 browseObjectsToFile(
-                    mainWindow,
+                    getSenderWindow(e),
                     appId,
                     apiKey || key,
                     indexName,
@@ -457,7 +467,7 @@ function createWindow() {
                 if (result.error) throw new Error(result.message);
                 const { appId, apiKey, key } = result.provider.credentials;
                 return searchIndex(
-                    mainWindow,
+                    getSenderWindow(e),
                     appId,
                     apiKey || key,
                     indexName,
@@ -580,16 +590,16 @@ function createWindow() {
 
         // --- Plugins ---
         ipcMain.handle("plugin-install", (e, message) =>
-            pluginInstall(mainWindow, message.packageName, message.filepath)
+            pluginInstall(getSenderWindow(e), message.packageName, message.filepath)
         );
 
         // --- Workspaces ---
         ipcMain.handle(WORKSPACE_LIST, (e, message) =>
-            listWorkspacesForApplication(mainWindow, message.appId)
+            listWorkspacesForApplication(getSenderWindow(e), message.appId)
         );
         ipcMain.handle(WORKSPACE_SAVE, async (e, message) => {
             const result = await saveWorkspaceForApplication(
-                mainWindow,
+                getSenderWindow(e),
                 message.appId,
                 message.data
             );
@@ -603,7 +613,7 @@ function createWindow() {
         });
         ipcMain.handle(WORKSPACE_DELETE, (e, message) =>
             deleteWorkspaceForApplication(
-                mainWindow,
+                getSenderWindow(e),
                 message.appId,
                 message.workspaceId
             )
@@ -611,11 +621,11 @@ function createWindow() {
 
         // --- Menu Items (template-specific) ---
         ipcMain.handle(MENU_ITEMS_LIST, (e, message) =>
-            listMenuItemsForApplication(mainWindow, message.appId)
+            listMenuItemsForApplication(getSenderWindow(e), message.appId)
         );
         ipcMain.handle(MENU_ITEMS_SAVE, (e, message) =>
             saveMenuItemForApplication(
-                mainWindow,
+                getSenderWindow(e),
                 message.appId,
                 message.menuItem
             )
@@ -623,11 +633,11 @@ function createWindow() {
 
         // --- Themes ---
         ipcMain.handle("theme-list", (e, message) => {
-            return listThemesForApplication(mainWindow, message.appId);
+            return listThemesForApplication(getSenderWindow(e), message.appId);
         });
         ipcMain.handle(THEME_SAVE, (e, message) =>
             saveThemeForApplication(
-                mainWindow,
+                getSenderWindow(e),
                 message.appId,
                 message.themeName,
                 message.themeObject
@@ -635,7 +645,7 @@ function createWindow() {
         );
         ipcMain.handle(THEME_DELETE, (e, message) =>
             deleteThemeForApplication(
-                mainWindow,
+                getSenderWindow(e),
                 message.appId,
                 message.themeKey
             )
@@ -643,24 +653,24 @@ function createWindow() {
 
         // --- Layouts ---
         ipcMain.handle(LAYOUT_LIST, (e, message) =>
-            listLayoutsForApplication(mainWindow, message.appId)
+            listLayoutsForApplication(getSenderWindow(e), message.appId)
         );
 
         // --- Data ---
         ipcMain.handle(DATA_JSON_TO_CSV_FILE, (e, message) =>
             convertJsonToCsvFile(
-                mainWindow,
+                getSenderWindow(e),
                 message.appId,
                 message.jsonObject,
                 message.filename
             )
         );
         ipcMain.handle(DATA_JSON_TO_CSV_STRING, (e, message) =>
-            convertJsonToCsvFile(mainWindow, message.appId, message.jsonObject)
+            convertJsonToCsvFile(getSenderWindow(e), message.appId, message.jsonObject)
         );
         ipcMain.handle(PARSE_XML_STREAM, (e, message) => {
             const { filepath, outpath, start } = message;
-            parseXMLStream(mainWindow, filepath, outpath, start);
+            parseXMLStream(getSenderWindow(e), filepath, outpath, start);
         });
         ipcMain.handle(PARSE_CSV_STREAM, (e, message) => {
             const {
@@ -672,7 +682,7 @@ function createWindow() {
                 limit,
             } = message;
             parseCSVStream(
-                mainWindow,
+                getSenderWindow(e),
                 filepath,
                 outpath,
                 delimiter,
@@ -683,17 +693,17 @@ function createWindow() {
         });
         ipcMain.handle(READ_LINES, (e, message) => {
             const { filepath, lineCount } = message;
-            readLinesFromFile(mainWindow, filepath, lineCount);
+            readLinesFromFile(getSenderWindow(e), filepath, lineCount);
         });
         ipcMain.handle(READ_JSON, (e, message) => {
             const { filepath, objectCount } = message;
-            readJSONFromFile(mainWindow, filepath, objectCount);
+            readJSONFromFile(getSenderWindow(e), filepath, objectCount);
         });
         ipcMain.handle(TRANSFORM_FILE, (e, message) => {
             const { filepath, outFilepath, mappingFunctionBody, args } =
                 message;
             transformFile(
-                mainWindow,
+                getSenderWindow(e),
                 filepath,
                 outFilepath,
                 mappingFunctionBody,
@@ -702,11 +712,11 @@ function createWindow() {
         });
         ipcMain.handle(EXTRACT_COLORS_FROM_IMAGE, (e, message) => {
             const { url } = message;
-            extractColorsFromImageURL(mainWindow, url);
+            extractColorsFromImageURL(getSenderWindow(e), url);
         });
         ipcMain.handle(DATA_SAVE_TO_FILE, (e, message) =>
             saveToFile(
-                mainWindow,
+                getSenderWindow(e),
                 message.data,
                 message.filename,
                 message.append,
@@ -714,28 +724,28 @@ function createWindow() {
             )
         );
         ipcMain.handle(DATA_READ_FROM_FILE, (e, message) =>
-            readFromFile(mainWindow, message.filename, message.returnEmpty)
+            readFromFile(getSenderWindow(e), message.filename, message.returnEmpty)
         );
         ipcMain.handle(READ_DATA_URL, (e, message) =>
-            readDataFromURL(mainWindow, message.url, message.toFilepath)
+            readDataFromURL(getSenderWindow(e), message.url, message.toFilepath)
         );
 
         // --- Settings ---
         ipcMain.handle(SETTINGS_GET, (e, message) =>
-            getSettingsForApplication(mainWindow)
+            getSettingsForApplication(getSenderWindow(e))
         );
         ipcMain.handle(SETTINGS_SAVE, (e, message) =>
-            saveSettingsForApplication(mainWindow, message.data)
+            saveSettingsForApplication(getSenderWindow(e), message.data)
         );
         ipcMain.handle(SETTINGS_GET_DATA_DIR, (e, message) =>
-            getDataDirectory(mainWindow)
+            getDataDirectory(getSenderWindow(e))
         );
         ipcMain.handle(SETTINGS_SET_DATA_DIR, (e, message) =>
-            setDataDirectory(mainWindow, message.dataDirectory)
+            setDataDirectory(getSenderWindow(e), message.dataDirectory)
         );
         ipcMain.handle(SETTINGS_MIGRATE_DATA_DIR, (e, message) =>
             migrateDataDirectory(
-                mainWindow,
+                getSenderWindow(e),
                 message.oldDirectory,
                 message.newDirectory
             )
@@ -744,7 +754,7 @@ function createWindow() {
         // --- OpenAI (template-specific) ---
         ipcMain.handle(OPENAI_DESCRIBE_IMAGE, (e, message) => {
             describeImage(
-                mainWindow,
+                getSenderWindow(e),
                 message.imageUrl,
                 message.apiKey,
                 message.prompt
@@ -754,7 +764,7 @@ function createWindow() {
         // --- Providers ---
         ipcMain.handle(PROVIDER_SAVE, (e, message) =>
             saveProvider(
-                mainWindow,
+                getSenderWindow(e),
                 message.appId,
                 message.providerName,
                 message.providerType,
@@ -764,33 +774,33 @@ function createWindow() {
             )
         );
         ipcMain.handle(PROVIDER_LIST, (e, message) =>
-            listProviders(mainWindow, message.appId)
+            listProviders(getSenderWindow(e), message.appId)
         );
         ipcMain.handle(PROVIDER_GET, (e, message) =>
-            getProvider(mainWindow, message.appId, message.providerName)
+            getProvider(getSenderWindow(e), message.appId, message.providerName)
         );
         ipcMain.handle(PROVIDER_DELETE, (e, message) =>
-            deleteProvider(mainWindow, message.appId, message.providerName)
+            deleteProvider(getSenderWindow(e), message.appId, message.providerName)
         );
 
         // --- MCP ---
         ipcMain.handle(MCP_START_SERVER, (e, message) =>
             mcpController.startServer(
-                mainWindow,
+                getSenderWindow(e),
                 message.serverName,
                 message.mcpConfig,
                 message.credentials
             )
         );
         ipcMain.handle(MCP_STOP_SERVER, (e, message) =>
-            mcpController.stopServer(mainWindow, message.serverName)
+            mcpController.stopServer(getSenderWindow(e), message.serverName)
         );
         ipcMain.handle(MCP_LIST_TOOLS, (e, message) =>
-            mcpController.listTools(mainWindow, message.serverName)
+            mcpController.listTools(getSenderWindow(e), message.serverName)
         );
         ipcMain.handle(MCP_CALL_TOOL, (e, message) =>
             mcpController.callTool(
-                mainWindow,
+                getSenderWindow(e),
                 message.serverName,
                 message.toolName,
                 message.args,
@@ -798,20 +808,20 @@ function createWindow() {
             )
         );
         ipcMain.handle(MCP_LIST_RESOURCES, (e, message) =>
-            mcpController.listResources(mainWindow, message.serverName)
+            mcpController.listResources(getSenderWindow(e), message.serverName)
         );
         ipcMain.handle(MCP_READ_RESOURCE, (e, message) =>
             mcpController.readResource(
-                mainWindow,
+                getSenderWindow(e),
                 message.serverName,
                 message.uri
             )
         );
         ipcMain.handle(MCP_SERVER_STATUS, (e, message) =>
-            mcpController.getServerStatus(mainWindow, message.serverName)
+            mcpController.getServerStatus(getSenderWindow(e), message.serverName)
         );
-        ipcMain.handle(MCP_GET_CATALOG, () =>
-            mcpController.getCatalog(mainWindow)
+        ipcMain.handle(MCP_GET_CATALOG, (e) =>
+            mcpController.getCatalog(getSenderWindow(e))
         );
 
         // --- Registry ---
