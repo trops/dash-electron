@@ -79,12 +79,10 @@ const config = OUTPUT_DATA.map(({ file, format }) => ({
     output: {
         dir: "dist",
         sourcemap: !isProduction,
-        //file,
-        //dir: "dist",
         format,
         name: OUTPUT_NAME,
         globals: GLOBALS,
-        // exports: "named"
+        entryFileNames: format === "cjs" ? "[name].cjs.js" : "[name].js",
     },
     plugins: PLUGINS,
     external: ["cjs", "es"].includes(format) ? CJS_AND_ES_EXTERNALS : EXTERNAL,
