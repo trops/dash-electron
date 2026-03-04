@@ -9,6 +9,19 @@ const extendedApi = {
         setTitle: (workspaceId, title) =>
             ipcRenderer.invoke("popout-set-title", { workspaceId, title }),
     },
+    widgetPopout: {
+        open: (workspaceId, widgetId) =>
+            ipcRenderer.invoke("widget-popout-open", {
+                workspaceId,
+                widgetId,
+            }),
+        setTitle: (workspaceId, widgetId, title) =>
+            ipcRenderer.invoke("widget-popout-set-title", {
+                workspaceId,
+                widgetId,
+                title,
+            }),
+    },
     algolia: {
         ...defaultMainApi.algolia,
         listIndices: (msg) => ipcRenderer.invoke("algolia-list-indices", msg),
