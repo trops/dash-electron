@@ -5,6 +5,7 @@ import { Routes, Route, useParams } from "react-router-dom";
 import * as dashCore from "@trops/dash-core";
 import {
     DashboardStage,
+    WidgetPopoutStage,
     ComponentManager,
     ElectronDashboardApi,
     ErrorBoundary,
@@ -342,6 +343,21 @@ function PopoutDashboard() {
     );
 }
 
+// Widget popout window: renders a single widget in its own window
+function WidgetPopoutDashboard() {
+    const { workspaceId, widgetId } = useParams();
+    return (
+        <ErrorBoundary>
+            <WidgetPopoutStage
+                dashApi={electronApi}
+                credentials={{ appId: process.env.REACT_APP_IDENTIFIER }}
+                workspaceId={Number(workspaceId)}
+                widgetId={Number(widgetId)}
+            />
+        </ErrorBoundary>
+    );
+}
+
 // Main App
 class App extends React.Component {
     async componentDidMount() {
@@ -473,6 +489,10 @@ class App extends React.Component {
                 <Route
                     path="/popout/:workspaceId"
                     element={<PopoutDashboard />}
+                />
+                <Route
+                    path="/popout-widget/:workspaceId/:widgetId"
+                    element={<WidgetPopoutDashboard />}
                 />
             </Routes>
         );

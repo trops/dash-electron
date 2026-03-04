@@ -300,6 +300,7 @@ const { setupWidgetRegistryHandlers } = widgetRegistry;
 let windows = new Set();
 let mainWindow = null;
 let popoutWindows = new Map(); // workspaceId string → BrowserWindow
+let widgetPopoutWindows = new Map(); // "workspaceId:widgetId" → BrowserWindow
 
 // Track whether IPC handlers have been registered (they must only be registered once)
 let ipcHandlersRegistered = false;
@@ -851,6 +852,25 @@ function createWindow() {
                 win.setTitle(message.title);
             }
         });
+
+        // --- Widget Popout Windows ---
+        ipcMain.handle("widget-popout-open", (e, message) => {
+            const key = `${message.workspaceId}:${message.widgetId}`;
+            const existing = widgetPopoutWindows.get(key);
+            if (existing && !existing.isDestroyed()) {
+                existing.focus();
+                return { focused: true };
+            }
+            createWidgetPopoutWindow(message.workspaceId, message.widgetId);
+            return { opened: true };
+        });
+        ipcMain.handle("widget-popout-set-title", (e, message) => {
+            const key = `${message.workspaceId}:${message.widgetId}`;
+            const win = widgetPopoutWindows.get(key);
+            if (win && !win.isDestroyed()) {
+                win.setTitle(message.title);
+            }
+        });
     } // end ipcHandlersRegistered guard
 
     windows.add(mainWindow);
@@ -898,6 +918,44 @@ function createPopoutWindow(workspaceId) {
     return popoutWin;
 }
 
+function createWidgetPopoutWindow(workspaceId, widgetId) {
+    const popoutWin = new BrowserWindow({
+        width: 800,
+        height: 600,
+        minWidth: 400,
+        minHeight: 300,
+        fullscreen: false,
+        webPreferences: {
+            preload: path.join(__dirname, "preload.js"),
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: false,
+            webSecurity: true,
+        },
+    });
+
+    const hashRoute = `#/popout-widget/${workspaceId}/${widgetId}`;
+    popoutWin.loadURL(
+        isDev
+            ? `http://localhost:3000${hashRoute}`
+            : `${
+                  pathToFileURL(path.join(__dirname, "../build/index.html"))
+                      .href
+              }${hashRoute}`
+    );
+
+    const key = `${workspaceId}:${widgetId}`;
+    windows.add(popoutWin);
+    widgetPopoutWindows.set(key, popoutWin);
+
+    popoutWin.on("closed", () => {
+        windows.delete(popoutWin);
+        widgetPopoutWindows.delete(key);
+    });
+
+    return popoutWin;
+}
+
 app.whenReady().then(() => {
     pe.init({
         confirmInstall: async (plugins) => {
@@ -930,6 +988,12 @@ app.on("window-all-closed", () => {
         if (!win.isDestroyed()) win.close();
     }
     popoutWindows.clear();
+
+    // Close all widget popout windows
+    for (const [, win] of widgetPopoutWindows) {
+        if (!win.isDestroyed()) win.close();
+    }
+    widgetPopoutWindows.clear();
 
     if (process.platform !== "darwin") {
         windows.delete(mainWindow);
