@@ -871,6 +871,15 @@ function createWindow() {
                 win.setTitle(message.title);
             }
         });
+        // --- Widget Event IPC Bridge ---
+        // Broadcasts widget pub/sub events to all windows except the sender
+        ipcMain.on("widget-event:publish", (e, message) => {
+            for (const win of windows) {
+                if (!win.isDestroyed() && win.webContents !== e.sender) {
+                    win.webContents.send("widget-event:broadcast", message);
+                }
+            }
+        });
     } // end ipcHandlersRegistered guard
 
     windows.add(mainWindow);
