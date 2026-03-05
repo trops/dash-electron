@@ -1,44 +1,28 @@
-import { ChatWidget } from "./ChatWidget";
+import { ChatClaudeCodeWidget } from "./ChatClaudeCodeWidget";
 
 const widgetDefinition = {
-    name: "ChatWidget",
-    displayName: "AI Chat",
-    component: ChatWidget,
+    name: "ChatClaudeCodeWidget",
+    displayName: "AI Chat (Claude Code)",
+    component: ChatClaudeCodeWidget,
     canHaveChildren: false,
     workspace: "Chat-workspace",
     package: "Chat",
     author: "Dash Team",
-    icon: "chat-bubble-left-right",
+    icon: "command-line",
     description:
-        "AI-powered chat assistant using Claude. Supports streaming responses and MCP tool-use for GitHub, Slack, and other connected services.",
+        "AI chat using Claude Code CLI. Uses your Claude Pro/Max subscription — no API key needed. MCP tools pass through automatically.",
     type: "widget",
     events: ["messageSent", "toolUsed"],
     eventHandlers: [],
-    providers: [
-        {
-            type: "anthropic",
-            providerClass: "credential",
-            required: true,
-            credentialSchema: {
-                apiKey: {
-                    type: "text",
-                    displayName: "API Key",
-                    instructions:
-                        "Your Anthropic API key (starts with sk-ant-)",
-                    required: true,
-                    secret: true,
-                },
-            },
-        },
-    ],
+    providers: [],
     styles: {
         backgroundColor: "bg-gray-900",
-        borderColor: "border-indigo-600",
+        borderColor: "border-violet-600",
     },
     userConfig: {
         title: {
             type: "text",
-            defaultValue: "AI Chat",
+            defaultValue: "AI Chat (Claude Code)",
             displayName: "Title",
             required: false,
         },

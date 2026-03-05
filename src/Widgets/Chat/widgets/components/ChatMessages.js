@@ -6,7 +6,11 @@
 import { useEffect, useRef } from "react";
 import { MessageBubble } from "./MessageBubble";
 
-export const ChatMessages = ({ messages, streamingRequestId, streamingText }) => {
+export const ChatMessages = ({
+    messages,
+    streamingRequestId,
+    streamingText,
+}) => {
     const scrollRef = useRef(null);
 
     // Auto-scroll to bottom when messages change or during streaming

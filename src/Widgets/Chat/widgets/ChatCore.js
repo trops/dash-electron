@@ -1,14 +1,15 @@
 /**
- * ChatWidget
+ * ChatCore
  *
- * AI-powered chat assistant using Claude with MCP tool-use support.
- * Streams responses, manages conversation state, and persists via api.storeData().
+ * Shared chat logic for all LLM backends. Backend-agnostic — receives
+ * `backend` prop ("anthropic" | "claude-code") and adjusts readiness
+ * checks, warning banners, and message params accordingly.
  *
  * @package Chat
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
-import { Widget, useWidgetEvents, useWidgetProviders } from "@trops/dash-core";
+import { SubHeading2 } from "@trops/dash-react";
+import { useWidgetEvents, useWidgetProviders } from "@trops/dash-core";
 import { ChatMessages } from "./components/ChatMessages";
 import { ChatInput } from "./components/ChatInput";
 import { ToolSelector } from "./components/ToolSelector";
@@ -21,13 +22,14 @@ function generateRequestId(uuid) {
     return `${uuid || "chat"}-${Date.now()}-${++requestCounter}`;
 }
 
-function ChatWidgetContent({
+export function ChatCore({
     title,
     model,
     systemPrompt,
     maxToolRounds,
     api,
     uuid,
+    backend = "anthropic",
 }) {
     const { publishEvent } = useWidgetEvents();
     const mainApi = window.mainApi;
@@ -39,17 +41,36 @@ function ChatWidgetContent({
     const [streamingText, setStreamingText] = useState("");
     const activeRequestId = useRef(null);
 
-    // MCP tool state
+    // MCP tool state (only used for anthropic backend)
     const [servers, setServers] = useState([]);
     const [enabledTools, setEnabledTools] = useState({});
 
     // Tool calls for current streaming response
     const toolCallsRef = useRef([]);
 
-    // Resolve provider credentials via hook
+    // Backend readiness
+    const isAnthropicBackend = backend === "anthropic";
+    const isCliBackend = backend === "claude-code";
+
+    // Resolve provider credentials via hook (only for anthropic backend)
     const { getProvider } = useWidgetProviders();
-    const anthropicProvider = getProvider("anthropic");
+    const anthropicProvider = isAnthropicBackend
+        ? getProvider("anthropic")
+        : null;
     const apiKey = anthropicProvider?.credentials?.apiKey;
+
+    // CLI availability state
+    const [cliAvailable, setCliAvailable] = useState(null); // null = loading
+
+    useEffect(() => {
+        if (!isCliBackend || !mainApi?.llm?.checkCliAvailable) return;
+        mainApi.llm.checkCliAvailable().then((result) => {
+            setCliAvailable(result?.available || false);
+        });
+    }, [isCliBackend, mainApi]);
+
+    // Determine readiness
+    const isReady = isAnthropicBackend ? !!apiKey : cliAvailable === true;
 
     // Load saved conversation on mount
     useEffect(() => {
@@ -68,19 +89,18 @@ function ChatWidgetContent({
         });
     }, [api, uuid]);
 
-    // Discover connected MCP tools
+    // Discover connected MCP tools (only for anthropic backend)
     const refreshTools = useCallback(() => {
-        if (!mainApi?.llm) return;
+        if (!isAnthropicBackend || !mainApi?.llm) return;
         mainApi.llm.listConnectedTools().then((result) => {
             if (Array.isArray(result)) {
                 setServers(result);
             }
         });
-    }, [mainApi]);
+    }, [mainApi, isAnthropicBackend]);
 
     useEffect(() => {
         refreshTools();
-        // Refresh tools periodically
         const interval = setInterval(refreshTools, 30000);
         return () => clearInterval(interval);
     }, [refreshTools]);
@@ -97,7 +117,7 @@ function ChatWidgetContent({
                 callbackError: () => {},
             });
         },
-        [api, uuid, enabledTools],
+        [api, uuid, enabledTools]
     );
 
     // Set up stream listeners
@@ -118,21 +138,19 @@ function ChatWidgetContent({
                 input: data.input,
                 isLoading: true,
             });
-            // Force re-render by updating messages with tool call info
             setMessages((prev) => [...prev]);
         });
 
         mainApi.llm.onStreamToolResult((data) => {
             if (data.requestId !== activeRequestId.current) return;
             const tc = toolCallsRef.current.find(
-                (t) => t.toolUseId === data.toolUseId,
+                (t) => t.toolUseId === data.toolUseId
             );
             if (tc) {
                 tc.result = data.result;
                 tc.isError = data.isError;
                 tc.isLoading = false;
             }
-            // Reset streaming text for next round of API calls
             setStreamingText("");
             if (publishEvent) {
                 publishEvent("toolUsed", {
@@ -145,7 +163,6 @@ function ChatWidgetContent({
         mainApi.llm.onStreamComplete((data) => {
             if (data.requestId !== activeRequestId.current) return;
 
-            // Build final assistant message
             const assistantMessage = {
                 id: `msg-${Date.now()}`,
                 role: "assistant",
@@ -211,14 +228,16 @@ function ChatWidgetContent({
                 content: msg.content,
             }));
 
-            // Build enabled tools list and server map
+            // Build enabled tools list and server map (anthropic backend only)
             const allTools = [];
             const toolServerMap = {};
-            for (const server of servers) {
-                for (const tool of server.tools || []) {
-                    if (enabledTools[tool.name] !== false) {
-                        allTools.push(tool);
-                        toolServerMap[tool.name] = server.serverName;
+            if (isAnthropicBackend) {
+                for (const server of servers) {
+                    for (const tool of server.tools || []) {
+                        if (enabledTools[tool.name] !== false) {
+                            allTools.push(tool);
+                            toolServerMap[tool.name] = server.serverName;
+                        }
                     }
                 }
             }
@@ -241,13 +260,15 @@ function ChatWidgetContent({
             ]);
 
             mainApi.llm.sendMessage(requestId, {
-                apiKey,
+                backend,
+                apiKey: isAnthropicBackend ? apiKey : undefined,
                 model,
                 messages: apiMessages,
                 tools: allTools,
                 toolServerMap,
                 systemPrompt,
                 maxToolRounds: parseInt(maxToolRounds, 10) || 10,
+                widgetUuid: uuid,
             });
         },
         [
@@ -262,7 +283,9 @@ function ChatWidgetContent({
             maxToolRounds,
             uuid,
             publishEvent,
-        ],
+            backend,
+            isAnthropicBackend,
+        ]
     );
 
     // Stop streaming
@@ -270,7 +293,6 @@ function ChatWidgetContent({
         if (activeRequestId.current && mainApi?.llm) {
             mainApi.llm.abortRequest(activeRequestId.current);
 
-            // Preserve partial text as the final message
             if (streamingText) {
                 setMessages((prev) => {
                     const updated = prev.map((msg) => {
@@ -290,10 +312,9 @@ function ChatWidgetContent({
                     return updated;
                 });
             } else {
-                // Remove the empty streaming placeholder
                 setMessages((prev) => {
                     const updated = prev.filter(
-                        (msg) => msg.id !== "msg-streaming",
+                        (msg) => msg.id !== "msg-streaming"
                     );
                     saveConversation(updated);
                     return updated;
@@ -314,6 +335,11 @@ function ChatWidgetContent({
         setError(null);
         setStreamingText("");
         saveConversation([]);
+
+        // Clear CLI session for conversation reset
+        if (isCliBackend && mainApi?.llm?.clearCliSession) {
+            mainApi.llm.clearCliSession(uuid);
+        }
     };
 
     // Toggle tool
@@ -328,7 +354,8 @@ function ChatWidgetContent({
         });
     };
 
-    const hasTools = servers.some((s) => s.tools?.length > 0);
+    const hasTools =
+        isAnthropicBackend && servers.some((s) => s.tools?.length > 0);
 
     return (
         <div className="flex flex-col h-full">
@@ -356,23 +383,44 @@ function ChatWidgetContent({
                 </div>
             )}
 
-            {/* API key warning */}
-            {!apiKey && (
+            {/* Anthropic API key warning */}
+            {isAnthropicBackend && !apiKey && (
                 <div className="mx-3 mt-2 p-2 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
                     Add an Anthropic provider with your API key in the dashboard
                     settings to start chatting.
                 </div>
             )}
 
-            {/* No tools info */}
-            {!hasTools && apiKey && messages.length === 0 && (
-                <div className="mx-3 mt-2 p-2 bg-gray-800/50 border border-gray-700 rounded text-gray-400 text-xs">
-                    No MCP tools connected. Connect providers (GitHub, Slack,
-                    etc.) to enable tool-use.
+            {/* CLI not available warning */}
+            {isCliBackend && cliAvailable === false && (
+                <div className="mx-3 mt-2 p-2 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
+                    Claude Code CLI not found. Install from{" "}
+                    <span className="font-mono">claude.ai/download</span> and
+                    run <span className="font-mono">claude auth login</span> in
+                    your terminal.
                 </div>
             )}
 
-            {/* Tool selector */}
+            {/* No tools info (anthropic only) */}
+            {isAnthropicBackend &&
+                !hasTools &&
+                apiKey &&
+                messages.length === 0 && (
+                    <div className="mx-3 mt-2 p-2 bg-gray-800/50 border border-gray-700 rounded text-gray-400 text-xs">
+                        No MCP tools connected. Connect providers (GitHub,
+                        Slack, etc.) to enable tool-use.
+                    </div>
+                )}
+
+            {/* CLI tools info */}
+            {isCliBackend && cliAvailable && messages.length === 0 && (
+                <div className="mx-3 mt-2 p-2 bg-gray-800/50 border border-gray-700 rounded text-gray-400 text-xs">
+                    Using Claude Code CLI. Your configured MCP tools pass
+                    through automatically.
+                </div>
+            )}
+
+            {/* Tool selector (anthropic only) */}
             {hasTools && (
                 <div className="px-1 pt-1">
                     <ToolSelector
@@ -395,33 +443,8 @@ function ChatWidgetContent({
                 onSend={handleSend}
                 onStop={handleStop}
                 isLoading={isLoading}
-                disabled={!apiKey}
+                disabled={!isReady}
             />
         </div>
     );
 }
-
-export const ChatWidget = ({
-    title = "AI Chat",
-    model = "claude-sonnet-4-20250514",
-    systemPrompt = "You are a helpful AI assistant integrated into a dashboard application. Be concise and helpful. When using tools, explain what you're doing.",
-    maxToolRounds = "10",
-    api,
-    uuid,
-    ...props
-}) => {
-    return (
-        <Widget {...props} width="w-full" height="h-full">
-            <Panel>
-                <ChatWidgetContent
-                    title={title}
-                    model={model}
-                    systemPrompt={systemPrompt}
-                    maxToolRounds={maxToolRounds}
-                    api={api}
-                    uuid={uuid}
-                />
-            </Panel>
-        </Widget>
-    );
-};

@@ -5,7 +5,14 @@
  */
 import { useState } from "react";
 
-export const ToolCallBlock = ({ toolName, serverName, input, result, isError, isLoading }) => {
+export const ToolCallBlock = ({
+    toolName,
+    serverName,
+    input,
+    result,
+    isError,
+    isLoading,
+}) => {
     const [expanded, setExpanded] = useState(false);
 
     return (
@@ -58,9 +65,7 @@ export const ToolCallBlock = ({ toolName, serverName, input, result, isError, is
                         </div>
                     )}
                     {isLoading && (
-                        <div className="text-yellow-400 italic">
-                            Running...
-                        </div>
+                        <div className="text-yellow-400 italic">Running...</div>
                     )}
                 </div>
             )}
