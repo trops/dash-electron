@@ -23,6 +23,19 @@ const ROOT = path.resolve(__dirname, "..");
 const DIST_DIR = path.join(ROOT, "dist");
 const WIDGETS_DIR = path.join(ROOT, "src", "Widgets");
 
+const args = process.argv.slice(2);
+const widgetIdx = args.indexOf("--widget");
+const singleWidget = widgetIdx !== -1 ? args[widgetIdx + 1] : null;
+
+function toKebabCase(str) {
+    return str
+        .trim()
+        .replace(/([a-z])([A-Z])/g, "$1-$2")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+}
+
 function collectDashConfigs(dir) {
     const configs = [];
 
@@ -135,8 +148,11 @@ function main() {
     const packageName = (pkg.name || "widgets").replace(/^@[^/]+\//, "");
     const version = pkg.version || "0.0.0";
 
-    // Collect .dash.js configs
-    const dashConfigPaths = collectDashConfigs(WIDGETS_DIR);
+    // Collect .dash.js configs (scoped to single widget if --widget flag provided)
+    const effectiveWidgetsDir = singleWidget
+        ? path.join(WIDGETS_DIR, singleWidget)
+        : WIDGETS_DIR;
+    const dashConfigPaths = collectDashConfigs(effectiveWidgetsDir);
     const widgets = [];
     const workspaces = [];
 
@@ -204,7 +220,7 @@ function main() {
 
     // Add .dash.js config files
     for (const configPath of dashConfigPaths) {
-        const relativePath = path.relative(WIDGETS_DIR, configPath);
+        const relativePath = path.relative(effectiveWidgetsDir, configPath);
         zip.addFile(`configs/${relativePath}`, fs.readFileSync(configPath));
     }
 
@@ -212,7 +228,8 @@ function main() {
     zip.addFile("dash.json", Buffer.from(JSON.stringify(dashJson, null, 2)));
 
     // Write ZIP
-    const zipFileName = `${packageName}-v${version}.zip`;
+    const zipBaseName = singleWidget ? toKebabCase(singleWidget) : packageName;
+    const zipFileName = `${zipBaseName}-v${version}.zip`;
     const zipPath = path.join(ROOT, zipFileName);
     zip.writeZip(zipPath);
 

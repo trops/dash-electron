@@ -33,6 +33,8 @@ const args = process.argv.slice(2);
 const isDryRun = args.includes("--dry-run");
 const nameIdx = args.indexOf("--name");
 const customName = nameIdx !== -1 ? args[nameIdx + 1] : null;
+const widgetIdx = args.indexOf("--widget");
+const singleWidget = widgetIdx !== -1 ? args[widgetIdx + 1] : null;
 
 function toKebabCase(str) {
     return str
@@ -159,12 +161,25 @@ function checkGhCli() {
 
 function buildAndRelease(packageName, version) {
     const tag = `v${version}`;
-    const zipName = `${packageName}-${tag}.zip`;
+    const zipBaseName = singleWidget ? toKebabCase(singleWidget) : packageName;
+    const zipName = `${zipBaseName}-${tag}.zip`;
 
     // Always build a fresh ZIP
     console.log(`\nBuilding widget package...`);
     try {
-        execSync("npm run package-zip", { cwd: ROOT, stdio: "inherit" });
+        if (singleWidget) {
+            execSync("npm run package-widgets", {
+                cwd: ROOT,
+                stdio: "inherit",
+                env: { ...process.env, ROLLUP_WIDGET: singleWidget },
+            });
+            execSync(`node scripts/packageZip.js --widget ${singleWidget}`, {
+                cwd: ROOT,
+                stdio: "inherit",
+            });
+        } else {
+            execSync("npm run package-zip", { cwd: ROOT, stdio: "inherit" });
+        }
     } catch {
         console.error("Error: Failed to build widget package.");
         process.exit(1);
@@ -221,8 +236,11 @@ function main() {
         checkGhCli(); // will error with helpful message
     }
 
-    // Collect widget configs
-    const dashConfigPaths = collectDashConfigs(WIDGETS_DIR);
+    // Collect widget configs (scoped to single widget if --widget flag provided)
+    const effectiveWidgetsDir = singleWidget
+        ? path.join(WIDGETS_DIR, singleWidget)
+        : WIDGETS_DIR;
+    const dashConfigPaths = collectDashConfigs(effectiveWidgetsDir);
     const widgets = [];
 
     for (const configPath of dashConfigPaths) {
@@ -249,14 +267,19 @@ function main() {
     let registryName = projectName; // Priority 4: package.json
     let registryDisplayName = pkg.productName || projectName;
 
-    // Priority 3: Folder name under src/Widgets/
-    const widgetDirs = fs
-        .readdirSync(WIDGETS_DIR, { withFileTypes: true })
-        .filter((e) => e.isDirectory())
-        .map((e) => e.name);
-    if (widgetDirs.length === 1) {
-        registryName = toKebabCase(widgetDirs[0]);
+    // Priority 3: Folder name under src/Widgets/ (or the --widget name directly)
+    if (singleWidget) {
+        registryName = toKebabCase(singleWidget);
         registryDisplayName = toTitleCase(registryName);
+    } else {
+        const widgetDirs = fs
+            .readdirSync(WIDGETS_DIR, { withFileTypes: true })
+            .filter((e) => e.isDirectory())
+            .map((e) => e.name);
+        if (widgetDirs.length === 1) {
+            registryName = toKebabCase(widgetDirs[0]);
+            registryDisplayName = toTitleCase(registryName);
+        }
     }
 
     // Priority 2: .dash.js package field
@@ -292,10 +315,11 @@ function main() {
     // Infer category from tags or default
     const category = "general";
 
-    // Build download URL template (uses projectName for ZIP filename)
+    // Build download URL template
     const repoUrl = repository.replace(/\.git$/, "");
+    const zipBaseName = singleWidget ? toKebabCase(singleWidget) : projectName;
     const downloadUrl = repoUrl
-        ? `${repoUrl}/releases/download/v{version}/${projectName}-v{version}.zip`
+        ? `${repoUrl}/releases/download/v{version}/${zipBaseName}-v{version}.zip`
         : "";
 
     // Generate manifest
@@ -352,7 +376,10 @@ function main() {
     checkGhCli();
 
     // Build fresh ZIP and ensure release has latest assets
-    buildAndRelease(projectName, version);
+    const releasePackageName = singleWidget
+        ? toKebabCase(singleWidget)
+        : projectName;
+    buildAndRelease(releasePackageName, version);
 
     console.log("\nPublishing to dash-registry...");
 
