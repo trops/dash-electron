@@ -223,6 +223,7 @@ const {
     pluginInstall,
     // Namespaced controllers
     mcpController,
+    llmController,
     registryController,
     // Utils
     clientCache,
@@ -286,6 +287,9 @@ const {
     ALGOLIA_SEARCH,
     ALGOLIA_ANALYTICS_FOR_QUERY,
     OPENAI_DESCRIBE_IMAGE,
+    LLM_SEND_MESSAGE,
+    LLM_ABORT_REQUEST,
+    LLM_LIST_CONNECTED_TOOLS,
     MENU_ITEMS_LIST,
     MENU_ITEMS_SAVE,
 } = coreEvents;
@@ -822,6 +826,17 @@ function createWindow() {
         );
         ipcMain.handle(MCP_GET_CATALOG, (e) =>
             mcpController.getCatalog(getSenderWindow(e))
+        );
+
+        // --- LLM ---
+        ipcMain.handle(LLM_SEND_MESSAGE, (e, msg) =>
+            llmController.sendMessage(getSenderWindow(e), msg.requestId, msg)
+        );
+        ipcMain.handle(LLM_ABORT_REQUEST, (e, msg) =>
+            llmController.abortRequest(getSenderWindow(e), msg.requestId)
+        );
+        ipcMain.handle(LLM_LIST_CONNECTED_TOOLS, () =>
+            mcpController.listConnectedServers()
         );
 
         // --- Registry ---
