@@ -48,6 +48,12 @@ export function ChatCore({
     // Tool calls for current streaming response
     const toolCallsRef = useRef([]);
 
+    // Scoped listener references for cleanup
+    const listenersRef = useRef([]);
+
+    // CLI session state
+    const [sessionActive, setSessionActive] = useState(false);
+
     // Backend readiness
     const isAnthropicBackend = backend === "anthropic";
     const isCliBackend = backend === "claude-code";
@@ -120,16 +126,18 @@ export function ChatCore({
         [api, uuid, enabledTools]
     );
 
-    // Set up stream listeners
+    // Set up stream listeners (scoped — only removes this widget's listeners on cleanup)
     useEffect(() => {
         if (!mainApi?.llm) return;
 
-        mainApi.llm.onStreamDelta((data) => {
+        const channels = mainApi.llm.streamChannels;
+
+        const deltaRef = mainApi.llm.onStreamDelta((data) => {
             if (data.requestId !== activeRequestId.current) return;
             setStreamingText((prev) => prev + data.text);
         });
 
-        mainApi.llm.onStreamToolCall((data) => {
+        const toolCallRef = mainApi.llm.onStreamToolCall((data) => {
             if (data.requestId !== activeRequestId.current) return;
             toolCallsRef.current.push({
                 toolUseId: data.toolUseId,
@@ -141,7 +149,7 @@ export function ChatCore({
             setMessages((prev) => [...prev]);
         });
 
-        mainApi.llm.onStreamToolResult((data) => {
+        const toolResultRef = mainApi.llm.onStreamToolResult((data) => {
             if (data.requestId !== activeRequestId.current) return;
             const tc = toolCallsRef.current.find(
                 (t) => t.toolUseId === data.toolUseId
@@ -160,7 +168,7 @@ export function ChatCore({
             }
         });
 
-        mainApi.llm.onStreamComplete((data) => {
+        const completeRef = mainApi.llm.onStreamComplete((data) => {
             if (data.requestId !== activeRequestId.current) return;
 
             const assistantMessage = {
@@ -178,11 +186,12 @@ export function ChatCore({
             });
             setStreamingText("");
             setIsLoading(false);
+            setSessionActive(true);
             activeRequestId.current = null;
             toolCallsRef.current = [];
         });
 
-        mainApi.llm.onStreamError((data) => {
+        const errorRef = mainApi.llm.onStreamError((data) => {
             if (data.requestId !== activeRequestId.current) return;
 
             let errorMessage = data.error;
@@ -197,8 +206,19 @@ export function ChatCore({
             toolCallsRef.current = [];
         });
 
+        listenersRef.current = [
+            [channels.delta, deltaRef],
+            [channels.toolCall, toolCallRef],
+            [channels.toolResult, toolResultRef],
+            [channels.complete, completeRef],
+            [channels.error, errorRef],
+        ];
+
         return () => {
-            mainApi.llm.removeAllStreamListeners();
+            for (const [channel, ref] of listenersRef.current) {
+                mainApi.llm.removeStreamListener(channel, ref);
+            }
+            listenersRef.current = [];
         };
     }, [mainApi, publishEvent, saveConversation]);
 
@@ -334,12 +354,21 @@ export function ChatCore({
         setMessages([]);
         setError(null);
         setStreamingText("");
+        setSessionActive(false);
         saveConversation([]);
 
         // Clear CLI session for conversation reset
         if (isCliBackend && mainApi?.llm?.clearCliSession) {
             mainApi.llm.clearCliSession(uuid);
         }
+    };
+
+    // End CLI session (kills process + clears session)
+    const handleEndSession = () => {
+        if (!isCliBackend || !mainApi?.llm?.endCliSession) return;
+        if (isLoading) handleStop();
+        mainApi.llm.endCliSession(uuid);
+        setSessionActive(false);
     };
 
     // Toggle tool
@@ -361,13 +390,31 @@ export function ChatCore({
         <div className="flex flex-col h-full">
             {/* Header */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700/50">
-                <SubHeading2 title={title} />
-                <button
-                    onClick={handleNewChat}
-                    className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
-                >
-                    New Chat
-                </button>
+                <div className="flex items-center gap-2">
+                    <SubHeading2 title={title} />
+                    {isCliBackend && sessionActive && (
+                        <span
+                            className="inline-block w-2 h-2 rounded-full bg-green-400"
+                            title="CLI session active"
+                        />
+                    )}
+                </div>
+                <div className="flex items-center gap-1">
+                    {isCliBackend && sessionActive && (
+                        <button
+                            onClick={handleEndSession}
+                            className="px-2 py-1 text-xs rounded bg-red-900/50 hover:bg-red-800/50 text-red-300 transition-colors"
+                        >
+                            End Session
+                        </button>
+                    )}
+                    <button
+                        onClick={handleNewChat}
+                        className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                    >
+                        New Chat
+                    </button>
+                </div>
             </div>
 
             {/* Error banner */}

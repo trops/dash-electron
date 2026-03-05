@@ -293,6 +293,8 @@ const {
     LLM_LIST_CONNECTED_TOOLS,
     LLM_CHECK_CLI_AVAILABLE,
     LLM_CLEAR_CLI_SESSION,
+    LLM_CLI_SESSION_STATUS,
+    LLM_CLI_END_SESSION,
     MENU_ITEMS_LIST,
     MENU_ITEMS_SAVE,
 } = coreEvents;
@@ -865,6 +867,12 @@ function createWindow() {
         );
         ipcMain.handle(LLM_CLEAR_CLI_SESSION, (e, msg) =>
             cliController.clearSession(msg.widgetUuid)
+        );
+        ipcMain.handle(LLM_CLI_SESSION_STATUS, (e, msg) =>
+            cliController.getSessionStatus(msg.widgetUuid)
+        );
+        ipcMain.handle(LLM_CLI_END_SESSION, (e, msg) =>
+            cliController.endSession(msg.widgetUuid)
         );
 
         // --- Registry ---
