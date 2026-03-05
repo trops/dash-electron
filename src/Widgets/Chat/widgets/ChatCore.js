@@ -75,6 +75,15 @@ export function ChatCore({
         });
     }, [isCliBackend, mainApi]);
 
+    // Check Again handler for CLI setup
+    const handleCheckCliAgain = useCallback(() => {
+        if (!mainApi?.llm?.checkCliAvailable) return;
+        setCliAvailable(null);
+        mainApi.llm.checkCliAvailable().then((result) => {
+            setCliAvailable(result?.available || false);
+        });
+    }, [mainApi]);
+
     // Determine readiness
     const isReady = isAnthropicBackend ? !!apiKey : cliAvailable === true;
 
@@ -130,14 +139,12 @@ export function ChatCore({
     useEffect(() => {
         if (!mainApi?.llm) return;
 
-        const channels = mainApi.llm.streamChannels;
-
-        const deltaRef = mainApi.llm.onStreamDelta((data) => {
+        const deltaId = mainApi.llm.onStreamDelta((data) => {
             if (data.requestId !== activeRequestId.current) return;
             setStreamingText((prev) => prev + data.text);
         });
 
-        const toolCallRef = mainApi.llm.onStreamToolCall((data) => {
+        const toolCallId = mainApi.llm.onStreamToolCall((data) => {
             if (data.requestId !== activeRequestId.current) return;
             toolCallsRef.current.push({
                 toolUseId: data.toolUseId,
@@ -149,7 +156,7 @@ export function ChatCore({
             setMessages((prev) => [...prev]);
         });
 
-        const toolResultRef = mainApi.llm.onStreamToolResult((data) => {
+        const toolResultId = mainApi.llm.onStreamToolResult((data) => {
             if (data.requestId !== activeRequestId.current) return;
             const tc = toolCallsRef.current.find(
                 (t) => t.toolUseId === data.toolUseId
@@ -168,7 +175,7 @@ export function ChatCore({
             }
         });
 
-        const completeRef = mainApi.llm.onStreamComplete((data) => {
+        const completeId = mainApi.llm.onStreamComplete((data) => {
             if (data.requestId !== activeRequestId.current) return;
 
             const assistantMessage = {
@@ -191,7 +198,7 @@ export function ChatCore({
             toolCallsRef.current = [];
         });
 
-        const errorRef = mainApi.llm.onStreamError((data) => {
+        const errorId = mainApi.llm.onStreamError((data) => {
             if (data.requestId !== activeRequestId.current) return;
 
             let errorMessage = data.error;
@@ -207,16 +214,16 @@ export function ChatCore({
         });
 
         listenersRef.current = [
-            [channels.delta, deltaRef],
-            [channels.toolCall, toolCallRef],
-            [channels.toolResult, toolResultRef],
-            [channels.complete, completeRef],
-            [channels.error, errorRef],
+            deltaId,
+            toolCallId,
+            toolResultId,
+            completeId,
+            errorId,
         ];
 
         return () => {
-            for (const [channel, ref] of listenersRef.current) {
-                mainApi.llm.removeStreamListener(channel, ref);
+            for (const id of listenersRef.current) {
+                mainApi.llm.removeStreamListener(id);
             }
             listenersRef.current = [];
         };
@@ -438,13 +445,47 @@ export function ChatCore({
                 </div>
             )}
 
-            {/* CLI not available warning */}
+            {/* CLI checking state */}
+            {isCliBackend && cliAvailable === null && (
+                <div className="mx-3 mt-2 p-2 bg-gray-800/50 border border-gray-700 rounded text-gray-400 text-xs">
+                    Checking for Claude Code CLI...
+                </div>
+            )}
+
+            {/* CLI setup panel */}
             {isCliBackend && cliAvailable === false && (
-                <div className="mx-3 mt-2 p-2 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Claude Code CLI not found. Install from{" "}
-                    <span className="font-mono">claude.ai/download</span> and
-                    run <span className="font-mono">claude auth login</span> in
-                    your terminal.
+                <div className="mx-3 mt-2 p-3 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
+                    <p className="font-semibold mb-2">
+                        Claude Code CLI not found
+                    </p>
+                    <ol className="list-decimal list-inside space-y-1 mb-3 text-yellow-300/90">
+                        <li>
+                            Download Claude Code from{" "}
+                            <button
+                                onClick={() =>
+                                    mainApi?.shell?.openExternal?.(
+                                        "https://claude.ai/download"
+                                    )
+                                }
+                                className="underline hover:text-yellow-200 font-mono"
+                            >
+                                claude.ai/download
+                            </button>
+                        </li>
+                        <li>
+                            Open your terminal and run{" "}
+                            <span className="font-mono bg-yellow-900/50 px-1 rounded">
+                                claude auth login
+                            </span>
+                        </li>
+                        <li>Complete authentication in your browser</li>
+                    </ol>
+                    <button
+                        onClick={handleCheckCliAgain}
+                        className="px-3 py-1 text-xs rounded bg-yellow-800/60 hover:bg-yellow-700/60 text-yellow-200 border border-yellow-600/50 transition-colors"
+                    >
+                        Check Again
+                    </button>
                 </div>
             )}
 
