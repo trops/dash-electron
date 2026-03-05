@@ -224,6 +224,7 @@ const {
     // Namespaced controllers
     mcpController,
     llmController,
+    cliController,
     registryController,
     // Utils
     clientCache,
@@ -290,6 +291,8 @@ const {
     LLM_SEND_MESSAGE,
     LLM_ABORT_REQUEST,
     LLM_LIST_CONNECTED_TOOLS,
+    LLM_CHECK_CLI_AVAILABLE,
+    LLM_CLEAR_CLI_SESSION,
     MENU_ITEMS_LIST,
     MENU_ITEMS_SAVE,
 } = coreEvents;
@@ -594,7 +597,11 @@ function createWindow() {
 
         // --- Plugins ---
         ipcMain.handle("plugin-install", (e, message) =>
-            pluginInstall(getSenderWindow(e), message.packageName, message.filepath)
+            pluginInstall(
+                getSenderWindow(e),
+                message.packageName,
+                message.filepath
+            )
         );
 
         // --- Workspaces ---
@@ -670,7 +677,11 @@ function createWindow() {
             )
         );
         ipcMain.handle(DATA_JSON_TO_CSV_STRING, (e, message) =>
-            convertJsonToCsvFile(getSenderWindow(e), message.appId, message.jsonObject)
+            convertJsonToCsvFile(
+                getSenderWindow(e),
+                message.appId,
+                message.jsonObject
+            )
         );
         ipcMain.handle(PARSE_XML_STREAM, (e, message) => {
             const { filepath, outpath, start } = message;
@@ -728,7 +739,11 @@ function createWindow() {
             )
         );
         ipcMain.handle(DATA_READ_FROM_FILE, (e, message) =>
-            readFromFile(getSenderWindow(e), message.filename, message.returnEmpty)
+            readFromFile(
+                getSenderWindow(e),
+                message.filename,
+                message.returnEmpty
+            )
         );
         ipcMain.handle(READ_DATA_URL, (e, message) =>
             readDataFromURL(getSenderWindow(e), message.url, message.toFilepath)
@@ -784,7 +799,11 @@ function createWindow() {
             getProvider(getSenderWindow(e), message.appId, message.providerName)
         );
         ipcMain.handle(PROVIDER_DELETE, (e, message) =>
-            deleteProvider(getSenderWindow(e), message.appId, message.providerName)
+            deleteProvider(
+                getSenderWindow(e),
+                message.appId,
+                message.providerName
+            )
         );
 
         // --- MCP ---
@@ -822,7 +841,10 @@ function createWindow() {
             )
         );
         ipcMain.handle(MCP_SERVER_STATUS, (e, message) =>
-            mcpController.getServerStatus(getSenderWindow(e), message.serverName)
+            mcpController.getServerStatus(
+                getSenderWindow(e),
+                message.serverName
+            )
         );
         ipcMain.handle(MCP_GET_CATALOG, (e) =>
             mcpController.getCatalog(getSenderWindow(e))
@@ -837,6 +859,12 @@ function createWindow() {
         );
         ipcMain.handle(LLM_LIST_CONNECTED_TOOLS, () =>
             mcpController.listConnectedServers()
+        );
+        ipcMain.handle(LLM_CHECK_CLI_AVAILABLE, () =>
+            cliController.isAvailable()
+        );
+        ipcMain.handle(LLM_CLEAR_CLI_SESSION, (e, msg) =>
+            cliController.clearSession(msg.widgetUuid)
         );
 
         // --- Registry ---

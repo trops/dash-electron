@@ -36,7 +36,11 @@ function AssistantTextContent({ text }) {
         );
     }
 
-    return <pre className="whitespace-pre-wrap break-words text-gray-200">{text}</pre>;
+    return (
+        <pre className="whitespace-pre-wrap break-words text-gray-200">
+            {text}
+        </pre>
+    );
 }
 
 export const MessageBubble = ({ message, isStreaming, streamingText }) => {
@@ -75,7 +79,7 @@ export const MessageBubble = ({ message, isStreaming, streamingText }) => {
                 } else if (block.type === "tool_use") {
                     // Find matching tool call info
                     const callInfo = toolCalls?.find(
-                        (tc) => tc.toolUseId === block.id,
+                        (tc) => tc.toolUseId === block.id
                     );
                     toolBlocks.push({
                         ...block,

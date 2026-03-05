@@ -10,7 +10,7 @@ export const ToolSelector = ({ servers, enabledTools, onToggle }) => {
 
     const totalTools = servers.reduce(
         (sum, s) => sum + (s.tools?.length || 0),
-        0,
+        0
     );
     const enabledCount = Object.values(enabledTools).filter(Boolean).length;
 
@@ -57,7 +57,8 @@ export const ToolSelector = ({ servers, enabledTools, onToggle }) => {
                                         <input
                                             type="checkbox"
                                             checked={
-                                                enabledTools[tool.name] !== false
+                                                enabledTools[tool.name] !==
+                                                false
                                             }
                                             onChange={() => onToggle(tool.name)}
                                             className="rounded border-gray-600 bg-gray-700 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 w-3 h-3"
