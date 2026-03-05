@@ -121,11 +121,18 @@ jobs:
                   GH_TOKEN: ${{ github.token }}
               run: |
                   TAG="${{ env.RELEASE_TAG }}"
+                  FILES=$(find out/make -name "*.dmg" -o -name "*.zip" | tr '\n' ' ')
+                  if [ -z "$FILES" ]; then
+                      echo "No .dmg or .zip files found in out/make"
+                      find out/make -type f
+                      exit 1
+                  fi
+                  echo "Found artifacts: $FILES"
                   for i in 1 2 3; do
                       if gh release view "$TAG" &>/dev/null; then
-                          gh release upload "$TAG" out/make/**/*.dmg out/make/**/*.zip --clobber && exit 0
+                          gh release upload "$TAG" $FILES --clobber && exit 0
                       else
-                          gh release create "$TAG" out/make/**/*.dmg out/make/**/*.zip --generate-notes && exit 0
+                          gh release create "$TAG" $FILES --generate-notes && exit 0
                       fi
                       echo "Attempt $i failed, retrying in 30s..."
                       sleep 30
