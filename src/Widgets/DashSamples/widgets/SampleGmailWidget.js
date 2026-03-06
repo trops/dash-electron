@@ -131,8 +131,19 @@ function SampleGmailContent({ title, defaultQuery }) {
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
+                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs space-y-1">
+                    <div className="font-medium">Error</div>
+                    <div>{error}</div>
+                    {/no access|refresh token|api key|oauth|credentials|authentication/i.test(
+                        error
+                    ) && (
+                        <div className="text-gray-400 text-[11px] mt-1">
+                            Check your Gmail OAuth credentials in Settings →
+                            Providers. The Gmail MCP server requires a Google
+                            Cloud OAuth keys file (gcp-oauth.keys.json) with the
+                            Gmail API enabled.
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -219,8 +230,19 @@ function SampleGmailContent({ title, defaultQuery }) {
 
             {/* Error */}
             {result?.type === "error" && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {result.text}
+                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs space-y-1">
+                    <div className="font-medium">Error</div>
+                    <div>{result.text}</div>
+                    {/no access|refresh token|api key|oauth|credentials|authentication/i.test(
+                        result.text
+                    ) && (
+                        <div className="text-gray-400 text-[11px] mt-1">
+                            Check your Gmail OAuth credentials in Settings →
+                            Providers. The Gmail MCP server requires a Google
+                            Cloud OAuth keys file (gcp-oauth.keys.json) with the
+                            Gmail API enabled.
+                        </div>
+                    )}
                 </div>
             )}
         </div>
