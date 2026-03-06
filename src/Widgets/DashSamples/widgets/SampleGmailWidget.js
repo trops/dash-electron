@@ -10,6 +10,25 @@ import { useState } from "react";
 import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 
+function extractMcpText(res) {
+    if (typeof res === "string") return res;
+    if (res?.content && Array.isArray(res.content)) {
+        return res.content
+            .filter((block) => block.type === "text")
+            .map((block) => block.text)
+            .join("\n");
+    }
+    return JSON.stringify(res, null, 2);
+}
+
+function safeParse(text) {
+    try {
+        return JSON.parse(text);
+    } catch {
+        return text;
+    }
+}
+
 function SampleGmailContent({ title, defaultQuery }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("gmail");
@@ -31,7 +50,21 @@ function SampleGmailContent({ title, defaultQuery }) {
             const res = await callTool("search_emails", {
                 query: query.trim(),
             });
-            const parsed = typeof res === "string" ? JSON.parse(res) : res;
+            const text = extractMcpText(res);
+            const parsed = safeParse(text);
+
+            if (
+                res?.isError ||
+                (typeof parsed === "string" &&
+                    parsed.toLowerCase().startsWith("error"))
+            ) {
+                setResult({
+                    type: "error",
+                    text: typeof parsed === "string" ? parsed : text,
+                });
+                return;
+            }
+
             setEmails(
                 Array.isArray(parsed)
                     ? parsed
@@ -53,7 +86,21 @@ function SampleGmailContent({ title, defaultQuery }) {
             const res = await callTool("read_email", {
                 message_id: id,
             });
-            const parsed = typeof res === "string" ? JSON.parse(res) : res;
+            const text = extractMcpText(res);
+            const parsed = safeParse(text);
+
+            if (
+                res?.isError ||
+                (typeof parsed === "string" &&
+                    parsed.toLowerCase().startsWith("error"))
+            ) {
+                setResult({
+                    type: "error",
+                    text: typeof parsed === "string" ? parsed : text,
+                });
+                return;
+            }
+
             setEmailBody(parsed);
         } catch (err) {
             setResult({ type: "error", text: err.message });
