@@ -100,6 +100,7 @@ function GoogleCalendarContent({ title, defaultView }) {
                 }
 
                 const res = await callTool("list-events", {
+                    calendarId: "primary",
                     timeMin,
                     timeMax,
                 });
