@@ -31,16 +31,33 @@ function safeParse(text) {
     }
 }
 
+function toLocalISO(date) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return (
+        date.getFullYear() +
+        "-" +
+        pad(date.getMonth() + 1) +
+        "-" +
+        pad(date.getDate()) +
+        "T" +
+        pad(date.getHours()) +
+        ":" +
+        pad(date.getMinutes()) +
+        ":" +
+        pad(date.getSeconds())
+    );
+}
+
 function startOfDay(date) {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
-    return d.toISOString();
+    return toLocalISO(d);
 }
 
 function endOfDay(date) {
     const d = new Date(date);
-    d.setHours(23, 59, 59, 999);
-    return d.toISOString();
+    d.setHours(23, 59, 59, 0);
+    return toLocalISO(d);
 }
 
 function groupEventsByDay(events) {
@@ -104,8 +121,27 @@ function GoogleCalendarContent({ title, defaultView }) {
                     timeMin,
                     timeMax,
                 });
+                console.log(
+                    "[GoogleCalendar] Raw response:",
+                    JSON.stringify(res, null, 2)
+                );
+
+                // Check for MCP-level errors
+                if (res?.isError) {
+                    const errText = extractMcpText(res);
+                    throw new Error(
+                        errText || "list-events tool returned an error"
+                    );
+                }
+
                 const text = extractMcpText(res);
                 const parsed = safeParse(text);
+
+                // If safeParse returned a string, JSON parsing failed — treat as error
+                if (typeof parsed === "string") {
+                    throw new Error(parsed || "Unexpected response format");
+                }
+
                 const list = Array.isArray(parsed)
                     ? parsed
                     : parsed?.events || parsed?.items || [];
