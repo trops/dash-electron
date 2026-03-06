@@ -277,6 +277,7 @@ const {
     MCP_READ_RESOURCE,
     MCP_SERVER_STATUS,
     MCP_GET_CATALOG,
+    MCP_RUN_AUTH,
     REGISTRY_FETCH_INDEX,
     REGISTRY_SEARCH,
     REGISTRY_GET_PACKAGE,
@@ -850,6 +851,14 @@ function createWindow() {
         );
         ipcMain.handle(MCP_GET_CATALOG, (e) =>
             mcpController.getCatalog(getSenderWindow(e))
+        );
+        ipcMain.handle(MCP_RUN_AUTH, (e, message) =>
+            mcpController.runAuth(
+                getSenderWindow(e),
+                message.mcpConfig,
+                message.credentials,
+                message.authCommand
+            )
         );
 
         // --- LLM ---
