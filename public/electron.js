@@ -792,7 +792,8 @@ function createWindow() {
                 message.providerType,
                 message.credentials,
                 message.providerClass,
-                message.mcpConfig
+                message.mcpConfig,
+                message.allowedTools
             )
         );
         ipcMain.handle(PROVIDER_LIST, (e, message) =>
