@@ -130,6 +130,7 @@ function AlgoliaSearchContent({
                 setLoading(false);
             }
         },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         [selectedIndex, query, hitsPerPage, callTool]
     );
 

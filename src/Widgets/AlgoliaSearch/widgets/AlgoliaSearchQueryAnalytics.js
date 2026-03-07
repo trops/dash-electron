@@ -10,7 +10,7 @@
  *
  * @package Algolia Search
  */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Panel, SubHeading2 } from "@trops/dash-react";
 import {
     Widget,
@@ -18,8 +18,6 @@ import {
     useWidgetProviders,
     useProviderClient,
 } from "@trops/dash-core";
-
-const DEBOUNCE_MS = 500;
 
 function formatRate(rate) {
     if (rate == null) return "\u2014";
@@ -47,8 +45,6 @@ function AnalyticsContent({ title, days = 7 }) {
     const [errorMsg, setErrorMsg] = useState(null);
     const [allSearches, setAllSearches] = useState(null);
 
-    const debounceRef = useRef(null);
-
     // Listen for queryChanged events
     listen(listeners, {
         onQueryChanged: (data) => {
@@ -58,64 +54,70 @@ function AnalyticsContent({ title, days = 7 }) {
     });
 
     // Fetch top searches from Algolia (single endpoint)
-    const fetchTopSearches = useCallback(async () => {
-        if (!pc?.providerHash) return;
+    const fetchTopSearches = useCallback(
+        async () => {
+            if (!pc?.providerHash) return;
 
-        const indexName = provider?.credentials?.indexName;
-        if (!indexName) return;
+            const indexName = provider?.credentials?.indexName;
+            if (!indexName) return;
 
-        setLoading(true);
-        setErrorMsg(null);
+            setLoading(true);
+            setErrorMsg(null);
 
-        const today = new Date();
-        const startDay = new Date();
-        startDay.setDate(startDay.getDate() - days);
+            const today = new Date();
+            const startDay = new Date();
+            startDay.setDate(startDay.getDate() - days);
 
-        const startDate = startDay.toISOString().split("T")[0];
-        const endDate = today.toISOString().split("T")[0];
+            const startDate = startDay.toISOString().split("T")[0];
+            const endDate = today.toISOString().split("T")[0];
 
-        try {
-            const result = await window.mainApi.algolia.getAnalyticsForQuery({
-                ...pc,
-                indexName,
-                query: {
-                    endpoint: "searches",
-                    startDate,
-                    endDate,
-                    clickAnalytics: true,
-                    limit: 1000,
-                },
-                cache: 120000,
-            });
+            try {
+                const result =
+                    await window.mainApi.algolia.getAnalyticsForQuery({
+                        ...pc,
+                        indexName,
+                        query: {
+                            endpoint: "searches",
+                            startDate,
+                            endDate,
+                            clickAnalytics: true,
+                            limit: 1000,
+                        },
+                        cache: 120000,
+                    });
 
-            if (result?.error) {
-                setErrorMsg(result.message || `Error ${result.status}`);
+                if (result?.error) {
+                    setErrorMsg(result.message || `Error ${result.status}`);
+                    setAllSearches([]);
+                } else {
+                    const searches = Array.isArray(result)
+                        ? result
+                        : result?.searches || [];
+                    setAllSearches(searches);
+                }
+            } catch (err) {
+                setErrorMsg(err.message);
                 setAllSearches([]);
-            } else {
-                const searches = Array.isArray(result)
-                    ? result
-                    : result?.searches || [];
-                setAllSearches(searches);
+            } finally {
+                setLoading(false);
             }
-        } catch (err) {
-            setErrorMsg(err.message);
-            setAllSearches([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [
-        pc?.providerHash,
-        pc?.providerName,
-        pc?.dashboardAppId,
-        provider?.credentials?.indexName,
-        days,
-    ]); // eslint-disable-line react-hooks/exhaustive-deps
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [
+            pc?.providerHash,
+            pc?.providerName,
+            pc?.dashboardAppId,
+            provider?.credentials?.indexName,
+            days,
+        ]
+    );
 
     // Fetch top searches on mount and when provider/days change
     useEffect(() => {
         if (pc?.providerHash && provider?.credentials?.indexName) {
             fetchTopSearches();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fetchTopSearches]);
 
     // Filter searches client-side based on query
