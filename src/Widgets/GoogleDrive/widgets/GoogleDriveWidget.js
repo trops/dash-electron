@@ -9,6 +9,7 @@
 import { useState } from "react";
 import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
+import { McpDebugLog } from "../../Google/components/McpDebugLog";
 
 function extractMcpText(res) {
     if (typeof res === "string") return res;
@@ -66,16 +67,29 @@ function GoogleDriveContent({ title }) {
     const [rawText, setRawText] = useState(null);
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState(null);
+    const [debugLog, setDebugLog] = useState([]);
 
     const handleSearch = async () => {
         if (!searchQuery.trim()) return;
         setLoading(true);
         setErrorMsg(null);
         setRawText(null);
+        const entry = {
+            id: Date.now(),
+            timestamp: new Date(),
+            toolName: "search",
+            args: { query: searchQuery.trim() },
+            response: null,
+            error: null,
+            duration: 0,
+        };
+        const start = Date.now();
         try {
             const res = await callTool("search", {
                 query: searchQuery.trim(),
             });
+            entry.response = res;
+            entry.duration = Date.now() - start;
             const text = extractMcpText(res);
             const parsed = safeParse(text);
 
@@ -100,8 +114,11 @@ function GoogleDriveContent({ title }) {
                 setRawText(text);
             }
         } catch (err) {
+            entry.error = err.message;
+            entry.duration = Date.now() - start;
             setErrorMsg(err.message);
         } finally {
+            setDebugLog((prev) => [entry, ...prev]);
             setLoading(false);
         }
     };
@@ -202,6 +219,8 @@ function GoogleDriveContent({ title }) {
                     {errorMsg}
                 </div>
             )}
+
+            <McpDebugLog entries={debugLog} />
         </div>
     );
 }

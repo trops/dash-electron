@@ -9,6 +9,7 @@
 import { useState } from "react";
 import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
+import { McpDebugLog } from "../../Google/components/McpDebugLog";
 
 function extractMcpText(res) {
     if (typeof res === "string") return res;
@@ -86,6 +87,7 @@ function GmailContent({ title, defaultQuery }) {
     const [emailBody, setEmailBody] = useState(null);
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [debugLog, setDebugLog] = useState([]);
 
     const handleSearch = async () => {
         if (!query.trim()) return;
@@ -93,10 +95,22 @@ function GmailContent({ title, defaultQuery }) {
         setResult(null);
         setSelectedEmail(null);
         setEmailBody(null);
+        const entry = {
+            id: Date.now(),
+            timestamp: new Date(),
+            toolName: "search_emails",
+            args: { query: query.trim() },
+            response: null,
+            error: null,
+            duration: 0,
+        };
+        const start = Date.now();
         try {
             const res = await callTool("search_emails", {
                 query: query.trim(),
             });
+            entry.response = res;
+            entry.duration = Date.now() - start;
             const text = extractMcpText(res);
             const parsed = safeParse(text);
 
@@ -123,8 +137,11 @@ function GmailContent({ title, defaultQuery }) {
             }
             setEmails(list || []);
         } catch (err) {
+            entry.error = err.message;
+            entry.duration = Date.now() - start;
             setResult({ type: "error", text: err.message });
         } finally {
+            setDebugLog((prev) => [entry, ...prev]);
             setLoading(false);
         }
     };
@@ -133,11 +150,23 @@ function GmailContent({ title, defaultQuery }) {
         setSelectedEmail(email);
         setEmailBody(null);
         setLoading(true);
+        const id = email.id || email.messageId;
+        const entry = {
+            id: Date.now(),
+            timestamp: new Date(),
+            toolName: "read_email",
+            args: { messageId: id },
+            response: null,
+            error: null,
+            duration: 0,
+        };
+        const start = Date.now();
         try {
-            const id = email.id || email.messageId;
             const res = await callTool("read_email", {
                 messageId: id,
             });
+            entry.response = res;
+            entry.duration = Date.now() - start;
             const text = extractMcpText(res);
             const parsed = safeParse(text);
 
@@ -159,8 +188,11 @@ function GmailContent({ title, defaultQuery }) {
                 setEmailBody(parsed);
             }
         } catch (err) {
+            entry.error = err.message;
+            entry.duration = Date.now() - start;
             setResult({ type: "error", text: err.message });
         } finally {
+            setDebugLog((prev) => [entry, ...prev]);
             setLoading(false);
         }
     };
@@ -279,6 +311,8 @@ function GmailContent({ title, defaultQuery }) {
                     {result.text}
                 </div>
             )}
+
+            <McpDebugLog entries={debugLog} />
         </div>
     );
 }
