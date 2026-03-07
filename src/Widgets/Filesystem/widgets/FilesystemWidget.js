@@ -100,10 +100,17 @@ function FilesystemContent({ title }) {
         try {
             const res = await callTool("list_allowed_directories", {});
             const text = extractMcpText(res);
-            const lines = text
-                .split("\n")
-                .filter((line) => line.trim() && !line.startsWith("Allowed"));
-            setAllowedDirs(lines.map((l) => l.trim()));
+            const lines = text.split("\n").filter((line) => line.trim());
+            // Keep lines that look like absolute paths
+            const dirs = lines
+                .map((l) => l.trim())
+                .filter((l) => l.startsWith("/"));
+            if (dirs.length > 0) {
+                setAllowedDirs(dirs);
+            } else {
+                // No paths parsed — show raw response as error for debugging
+                setErrorMsg("Could not parse allowed directories: " + text);
+            }
         } catch (err) {
             setErrorMsg(err.message);
         }
