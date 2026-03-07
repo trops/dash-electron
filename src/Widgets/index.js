@@ -9,3 +9,4 @@ export * from "./Notion";
 export * from "./GoogleDrive";
 export * from "./Algolia";
 export * from "./AlgoliaSearch";
+export * from "./Filesystem";
