@@ -100,10 +100,6 @@ function FilesystemContent({ title }) {
         try {
             const res = await callTool("list_allowed_directories", {});
             const text = extractMcpText(res);
-            console.log(
-                "[FilesystemWidget] list_allowed_directories response:",
-                text
-            );
             const lines = text.split("\n").filter((line) => line.trim());
             // Keep lines that look like absolute paths
             const dirs = lines
