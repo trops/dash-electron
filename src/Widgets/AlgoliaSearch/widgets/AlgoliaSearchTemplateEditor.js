@@ -11,14 +11,6 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Panel, SubHeading2, CodeEditorVS } from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 
-const INTERNAL_FIELDS = new Set([
-    "_highlightResult",
-    "_snippetResult",
-    "_rankingInfo",
-    "__position",
-    "__queryID",
-]);
-
 /* ─── Transform preview runner ──────────────────────────────────── */
 
 function runTransformPreview(sampleHit, transformCode) {
@@ -29,6 +21,7 @@ function runTransformPreview(sampleHit, transformCode) {
         return { status: "passthrough", output: sampleHit };
     }
     try {
+        // eslint-disable-next-line no-new-func
         const fn = new Function(
             "hit",
             `"use strict";\n${transformCode}\nif (typeof transform === "function") return transform(hit);\nreturn hit;`

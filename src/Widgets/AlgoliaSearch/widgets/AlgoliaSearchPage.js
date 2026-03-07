@@ -193,6 +193,7 @@ function DefaultHitCard({ hit }) {
 function applyTransform(hit, transformCode) {
     if (!transformCode || !transformCode.trim()) return hit;
     try {
+        // eslint-disable-next-line no-new-func
         const fn = new Function(
             "hit",
             `"use strict";\n${transformCode}\nif (typeof transform === "function") return transform(hit);\nreturn hit;`

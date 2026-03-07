@@ -215,8 +215,8 @@ function AlgoliaAnalyticsContent({ id, title, defaultIndex, defaultDays = 7 }) {
             } finally {
                 setLoading(false);
             }
-            // eslint-disable-next-line react-hooks/exhaustive-deps
         },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         [
             pc?.providerHash,
             pc?.providerName,
