@@ -6,9 +6,9 @@
  *
  * @package GoogleDrive
  */
-import { useState } from "react";
+import { useState, useContext } from "react";
 import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
-import { Widget, useMcpProvider } from "@trops/dash-core";
+import { Widget, useMcpProvider, AppContext } from "@trops/dash-core";
 import { McpDebugLog } from "../../Google/components/McpDebugLog";
 
 function extractMcpText(res) {
@@ -58,9 +58,30 @@ function getFileIcon(mimeType) {
     return "file";
 }
 
+function isAuthError(msg) {
+    if (!msg) return false;
+    const patterns = [
+        "invalid_request",
+        "invalid_grant",
+        "Token has been expired",
+        "invalid_client",
+    ];
+    return patterns.some((p) => msg.includes(p));
+}
+
 function GoogleDriveContent({ title }) {
-    const { isConnected, isConnecting, error, tools, callTool, status } =
-        useMcpProvider("google-drive");
+    const app = useContext(AppContext);
+    const {
+        isConnected,
+        isConnecting,
+        error,
+        tools,
+        callTool,
+        status,
+        provider,
+        connect,
+        disconnect,
+    } = useMcpProvider("google-drive");
 
     const [searchQuery, setSearchQuery] = useState("");
     const [files, setFiles] = useState([]);
@@ -68,6 +89,8 @@ function GoogleDriveContent({ title }) {
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState(null);
     const [debugLog, setDebugLog] = useState([]);
+    const [needsReauth, setNeedsReauth] = useState(false);
+    const [reauthing, setReauthing] = useState(false);
 
     const handleSearch = async () => {
         if (!searchQuery.trim()) return;
@@ -94,7 +117,9 @@ function GoogleDriveContent({ title }) {
             const parsed = safeParse(text);
 
             if (res?.isError) {
-                setErrorMsg(typeof parsed === "string" ? parsed : text);
+                const errText = typeof parsed === "string" ? parsed : text;
+                setErrorMsg(errText);
+                if (isAuthError(errText)) setNeedsReauth(true);
                 return;
             }
 
@@ -117,9 +142,55 @@ function GoogleDriveContent({ title }) {
             entry.error = err.message;
             entry.duration = Date.now() - start;
             setErrorMsg(err.message);
+            if (isAuthError(err.message)) setNeedsReauth(true);
         } finally {
             setDebugLog((prev) => [entry, ...prev]);
             setLoading(false);
+        }
+    };
+
+    const handleReauth = async () => {
+        const dashApi = app?.dashApi;
+        if (!dashApi || !provider) return;
+
+        setReauthing(true);
+        try {
+            const catalog = await new Promise((resolve, reject) => {
+                dashApi.mcpGetCatalog(
+                    (event, result) => resolve(result),
+                    (event, err) => reject(err)
+                );
+            });
+
+            const entry = catalog?.servers?.find(
+                (s) => s.id === "google-drive"
+            );
+            const authCommand = entry?.authCommand;
+            if (!authCommand) {
+                setErrorMsg("No auth command found for Google Drive.");
+                setReauthing(false);
+                return;
+            }
+
+            await new Promise((resolve, reject) => {
+                dashApi.mcpRunAuth(
+                    provider.mcpConfig,
+                    provider.credentials,
+                    authCommand,
+                    (event, result) => resolve(result),
+                    (event, err) => reject(err)
+                );
+            });
+
+            // Reconnect with fresh tokens
+            await disconnect();
+            setNeedsReauth(false);
+            setErrorMsg(null);
+            await connect();
+        } catch (err) {
+            setErrorMsg(`Re-authorization failed: ${err.message}`);
+        } finally {
+            setReauthing(false);
         }
     };
 
@@ -210,6 +281,23 @@ function GoogleDriveContent({ title }) {
             {rawText && files.length === 0 && (
                 <div className="p-2 bg-white/5 rounded text-xs text-gray-300 whitespace-pre-wrap">
                     {rawText}
+                </div>
+            )}
+
+            {/* Auth expired banner */}
+            {needsReauth && (
+                <div className="p-2 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs flex items-center justify-between gap-2">
+                    <span>
+                        Google Drive authorization expired. Re-authorize to
+                        continue.
+                    </span>
+                    <button
+                        onClick={handleReauth}
+                        disabled={reauthing}
+                        className="px-3 py-1 text-xs rounded bg-yellow-600 hover:bg-yellow-500 disabled:opacity-40 text-white whitespace-nowrap"
+                    >
+                        {reauthing ? "Authorizing..." : "Re-authorize"}
+                    </button>
                 </div>
             )}
 
