@@ -1,0 +1,33 @@
+import { AlgoliaCustomRankingWidget } from "./AlgoliaCustomRankingWidget";
+
+const widgetDefinition = {
+    name: "AlgoliaCustomRankingWidget",
+    displayName: "Algolia Custom Ranking",
+    component: AlgoliaCustomRankingWidget,
+    canHaveChildren: false,
+    workspace: "algolia",
+    package: "Algolia",
+    author: "Dash Team",
+    icon: "sort",
+    description:
+        "Configure custom ranking — drag-to-reorder business metrics with asc/desc modifiers.",
+    type: "widget",
+    events: [],
+    eventHandlers: [],
+    providers: [
+        { type: "algolia", providerClass: "credential", required: true },
+    ],
+    styles: {
+        backgroundColor: "bg-violet-900",
+        borderColor: "border-violet-700",
+    },
+    userConfig: {
+        title: {
+            type: "text",
+            defaultValue: "Custom Ranking",
+            displayName: "Title",
+            required: false,
+        },
+    },
+};
+export default widgetDefinition;
