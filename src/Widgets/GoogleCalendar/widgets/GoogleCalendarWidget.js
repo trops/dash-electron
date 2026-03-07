@@ -6,11 +6,12 @@
  *
  * @package Google Calendar
  */
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { EventList } from "./components/EventList";
 import { CreateEventForm } from "./components/CreateEventForm";
+import { McpDebugLog } from "../../Google/components/McpDebugLog";
 
 function extractMcpText(res) {
     if (typeof res === "string") return res;
@@ -97,30 +98,41 @@ function GoogleCalendarContent({ title, defaultView }) {
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState(null);
     const [createLoading, setCreateLoading] = useState(false);
+    const [debugLog, setDebugLog] = useState([]);
+    const debugLogRef = useRef([]);
 
     const loadEvents = useCallback(
         async (viewType) => {
             setLoading(true);
             setErrorMsg(null);
+            const now = new Date();
+            let timeMin, timeMax;
+
+            if (viewType === "today") {
+                timeMin = startOfDay(now);
+                timeMax = endOfDay(now);
+            } else {
+                timeMin = startOfDay(now);
+                const weekEnd = new Date(now);
+                weekEnd.setDate(weekEnd.getDate() + 7);
+                timeMax = endOfDay(weekEnd);
+            }
+
+            const args = { calendarId: "primary", timeMin, timeMax };
+            const entry = {
+                id: Date.now(),
+                timestamp: new Date(),
+                toolName: "list-events",
+                args,
+                response: null,
+                error: null,
+                duration: 0,
+            };
+            const start = Date.now();
             try {
-                const now = new Date();
-                let timeMin, timeMax;
-
-                if (viewType === "today") {
-                    timeMin = startOfDay(now);
-                    timeMax = endOfDay(now);
-                } else {
-                    timeMin = startOfDay(now);
-                    const weekEnd = new Date(now);
-                    weekEnd.setDate(weekEnd.getDate() + 7);
-                    timeMax = endOfDay(weekEnd);
-                }
-
-                const res = await callTool("list-events", {
-                    calendarId: "primary",
-                    timeMin,
-                    timeMax,
-                });
+                const res = await callTool("list-events", args);
+                entry.response = res;
+                entry.duration = Date.now() - start;
                 console.log(
                     "[GoogleCalendar] Raw response:",
                     JSON.stringify(res, null, 2)
@@ -147,8 +159,13 @@ function GoogleCalendarContent({ title, defaultView }) {
                     : parsed?.events || parsed?.items || [];
                 setEvents(list);
             } catch (err) {
+                entry.error = err.message;
+                entry.duration = Date.now() - start;
                 setErrorMsg(err.message);
             } finally {
+                const newLog = [entry, ...debugLogRef.current];
+                debugLogRef.current = newLog;
+                setDebugLog(newLog);
                 setLoading(false);
             }
         },
@@ -170,14 +187,34 @@ function GoogleCalendarContent({ title, defaultView }) {
 
     const handleCreateEvent = async (args) => {
         setCreateLoading(true);
+        const entry = {
+            id: Date.now(),
+            timestamp: new Date(),
+            toolName: "create-event",
+            args,
+            response: null,
+            error: null,
+            duration: 0,
+        };
+        const start = Date.now();
         try {
-            await callTool("create-event", args);
+            const res = await callTool("create-event", args);
+            entry.response = res;
+            entry.duration = Date.now() - start;
             setCreateLoading(false);
             return true;
         } catch (err) {
+            entry.error = err.message;
+            entry.duration = Date.now() - start;
             setErrorMsg(err.message);
             setCreateLoading(false);
             return false;
+        } finally {
+            setDebugLog((prev) => {
+                const newLog = [entry, ...prev];
+                debugLogRef.current = newLog;
+                return newLog;
+            });
         }
     };
 
@@ -289,6 +326,8 @@ function GoogleCalendarContent({ title, defaultView }) {
                     {errorMsg}
                 </div>
             )}
+
+            <McpDebugLog entries={debugLog} />
         </div>
     );
 }
