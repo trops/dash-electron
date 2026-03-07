@@ -29,6 +29,20 @@ function safeParse(text) {
     }
 }
 
+function parseTextFileList(text) {
+    const lines = text.split("\n").filter((line) => line.trim());
+    const fileLines = lines.filter((line) => !line.startsWith("Found "));
+    return fileLines
+        .map((line) => {
+            const match = line.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+            if (match) {
+                return { name: match[1].trim(), mimeType: match[2].trim() };
+            }
+            return { name: line.trim(), mimeType: null };
+        })
+        .filter((f) => f.name);
+}
+
 function getFileIcon(mimeType) {
     if (!mimeType) return "file";
     if (mimeType.includes("folder")) return "folder";
@@ -49,8 +63,7 @@ function GoogleDriveContent({ title }) {
 
     const [searchQuery, setSearchQuery] = useState("");
     const [files, setFiles] = useState([]);
-    const [selectedFile, setSelectedFile] = useState(null);
-    const [fileContent, setFileContent] = useState(null);
+    const [rawText, setRawText] = useState(null);
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState(null);
 
@@ -58,8 +71,7 @@ function GoogleDriveContent({ title }) {
         if (!searchQuery.trim()) return;
         setLoading(true);
         setErrorMsg(null);
-        setSelectedFile(null);
-        setFileContent(null);
+        setRawText(null);
         try {
             const res = await callTool("search", {
                 query: searchQuery.trim(),
@@ -72,42 +84,21 @@ function GoogleDriveContent({ title }) {
                 return;
             }
 
-            let list = Array.isArray(parsed)
-                ? parsed
-                : parsed?.files || parsed?.results || parsed?.items || [];
-            setFiles(list);
-        } catch (err) {
-            setErrorMsg(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSelectFile = async (file) => {
-        const fileId = file.id || file.fileId;
-        if (!fileId) return;
-
-        setSelectedFile(file);
-        setFileContent(null);
-        setLoading(true);
-        setErrorMsg(null);
-        try {
-            const res = await callTool("read_file", {
-                file_id: fileId,
-            });
-            const text = extractMcpText(res);
-            const parsed = safeParse(text);
-
-            if (res?.isError) {
-                setErrorMsg(typeof parsed === "string" ? parsed : text);
-                return;
+            let list;
+            if (Array.isArray(parsed)) {
+                list = parsed;
+            } else if (parsed?.files || parsed?.results || parsed?.items) {
+                list = parsed.files || parsed.results || parsed.items;
+            } else if (typeof text === "string" && text.includes("\n")) {
+                list = parseTextFileList(text);
+            } else {
+                list = [];
             }
 
-            setFileContent(
-                typeof parsed === "string"
-                    ? parsed
-                    : JSON.stringify(parsed, null, 2)
-            );
+            setFiles(list);
+            if (list.length === 0 && typeof text === "string" && text.trim()) {
+                setRawText(text);
+            }
         } catch (err) {
             setErrorMsg(err.message);
         } finally {
@@ -165,13 +156,12 @@ function GoogleDriveContent({ title }) {
             </div>
 
             {/* File List */}
-            {files.length > 0 && !fileContent && (
+            {files.length > 0 && (
                 <div className="space-y-1 max-h-48 overflow-y-auto">
                     {files.map((file, i) => (
-                        <button
+                        <div
                             key={file.id || i}
-                            onClick={() => handleSelectFile(file)}
-                            className="w-full text-left px-2 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs transition-colors"
+                            className="w-full text-left px-2 py-1.5 bg-white/5 rounded text-xs"
                         >
                             <div className="flex items-center gap-2">
                                 <span className="text-yellow-400 text-[10px]">
@@ -181,6 +171,11 @@ function GoogleDriveContent({ title }) {
                                     {file.name || file.title || "Untitled"}
                                 </span>
                             </div>
+                            {file.mimeType && (
+                                <div className="text-gray-600 text-[10px] mt-0.5 ml-5">
+                                    {file.mimeType}
+                                </div>
+                            )}
                             {file.modifiedTime && (
                                 <div className="text-gray-600 text-[10px] mt-0.5 ml-5">
                                     Modified:{" "}
@@ -189,35 +184,15 @@ function GoogleDriveContent({ title }) {
                                     ).toLocaleDateString()}
                                 </div>
                             )}
-                        </button>
+                        </div>
                     ))}
                 </div>
             )}
 
-            {/* File Content */}
-            {fileContent && (
-                <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                        <SubHeading3
-                            title={
-                                selectedFile?.name ||
-                                selectedFile?.title ||
-                                "File"
-                            }
-                        />
-                        <button
-                            onClick={() => {
-                                setFileContent(null);
-                                setSelectedFile(null);
-                            }}
-                            className="text-xs text-gray-500 hover:text-gray-300"
-                        >
-                            Back
-                        </button>
-                    </div>
-                    <div className="p-2 bg-white/5 rounded text-xs text-gray-300 overflow-auto max-h-64 whitespace-pre-wrap">
-                        {fileContent}
-                    </div>
+            {/* Raw text fallback when no files could be parsed */}
+            {rawText && files.length === 0 && (
+                <div className="p-2 bg-white/5 rounded text-xs text-gray-300 whitespace-pre-wrap">
+                    {rawText}
                 </div>
             )}
 
