@@ -70,6 +70,8 @@ export function McpReauthBanner({
             await disconnect();
             setNeedsReauth(false);
             onReauthComplete?.();
+            // Allow time for auth subprocess to flush tokens to disk
+            await new Promise((r) => setTimeout(r, 500));
             await connect();
         } catch (err) {
             console.error("[McpReauthBanner] Re-auth failed:", err);
