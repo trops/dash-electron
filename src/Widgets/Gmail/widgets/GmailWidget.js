@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { McpDebugLog } from "../../Google/components/McpDebugLog";
+import { McpReauthBanner } from "../../Google/components/McpReauthBanner";
 
 function extractMcpText(res) {
     if (typeof res === "string") return res;
@@ -78,8 +79,17 @@ function parseEmailBody(text) {
 }
 
 function GmailContent({ title, defaultQuery }) {
-    const { isConnected, isConnecting, error, tools, callTool, status } =
-        useMcpProvider("gmail");
+    const {
+        isConnected,
+        isConnecting,
+        error,
+        tools,
+        callTool,
+        status,
+        provider,
+        connect,
+        disconnect,
+    } = useMcpProvider("gmail");
 
     const [query, setQuery] = useState(defaultQuery || "is:unread");
     const [emails, setEmails] = useState([]);
@@ -304,6 +314,15 @@ function GmailContent({ title, defaultQuery }) {
                     </div>
                 </div>
             )}
+
+            <McpReauthBanner
+                error={result?.type === "error" ? result.text : null}
+                provider={provider}
+                catalogId="gmail"
+                connect={connect}
+                disconnect={disconnect}
+                onReauthComplete={() => setResult(null)}
+            />
 
             {/* Error */}
             {result?.type === "error" && (

@@ -12,6 +12,7 @@ import { Widget, useMcpProvider } from "@trops/dash-core";
 import { EventList } from "./components/EventList";
 import { CreateEventForm } from "./components/CreateEventForm";
 import { McpDebugLog } from "../../Google/components/McpDebugLog";
+import { McpReauthBanner } from "../../Google/components/McpReauthBanner";
 
 function extractMcpText(res) {
     if (typeof res === "string") return res;
@@ -90,8 +91,17 @@ function formatDayHeader(dateStr) {
 }
 
 function GoogleCalendarContent({ title, defaultView }) {
-    const { isConnected, isConnecting, error, tools, callTool, status } =
-        useMcpProvider("google-calendar");
+    const {
+        isConnected,
+        isConnecting,
+        error,
+        tools,
+        callTool,
+        status,
+        provider,
+        connect,
+        disconnect,
+    } = useMcpProvider("google-calendar");
 
     const [view, setView] = useState(defaultView || "today");
     const [events, setEvents] = useState([]);
@@ -320,6 +330,15 @@ function GoogleCalendarContent({ title, defaultView }) {
                     loading={createLoading}
                 />
             )}
+
+            <McpReauthBanner
+                error={errorMsg}
+                provider={provider}
+                catalogId="google-calendar"
+                connect={connect}
+                disconnect={disconnect}
+                onReauthComplete={() => setErrorMsg(null)}
+            />
 
             {errorMsg && (
                 <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
