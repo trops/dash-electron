@@ -51,6 +51,12 @@ module.exports = {
 
             // === HANDLE node: URI SCHEME ===
             // Map node:* imports to regular module names, then to false (since we don't want them in browser)
+            // Prevent webpack from resolving symlinks to real paths.
+            // Without this, symlinked packages (e.g. npm run link-core) resolve
+            // their own node_modules/react instead of dash-electron's, causing
+            // dual React instance errors at runtime.
+            webpackConfig.resolve.symlinks = false;
+
             webpackConfig.resolve.alias = {
                 ...webpackConfig.resolve.alias,
                 "node:path": false,
