@@ -63,11 +63,11 @@ The dash-registry (`registry-index.json`) supports browsing and installing indiv
 
 ### Success Metrics
 
-| Metric | Target | How Measured |
-| --- | --- | --- |
-| Dashboard install success rate | >95% of installs complete without error | Error tracking in install flow |
-| Time to functional dashboard | <30 seconds from browse to working dashboard | Workflow timing (excluding provider setup) |
-| Registry dashboard count | 5+ community dashboards within first month | Registry index count where `type: "dashboard"` |
+| Metric                         | Target                                       | How Measured                                   |
+| ------------------------------ | -------------------------------------------- | ---------------------------------------------- |
+| Dashboard install success rate | >95% of installs complete without error      | Error tracking in install flow                 |
+| Time to functional dashboard   | <30 seconds from browse to working dashboard | Workflow timing (excluding provider setup)     |
+| Registry dashboard count       | 5+ community dashboards within first month   | Registry index count where `type: "dashboard"` |
 
 ### Non-Goals
 
@@ -171,6 +171,7 @@ The dash-registry (`registry-index.json`) supports browsing and installing indiv
 **Technical Notes:**
 
 The schema builds on existing models:
+
 -   `workspace` field contains the same JSON structure as entries in `workspaces.json` (managed by `workspaceController.js`)
 -   `widgets` array references packages from `registry-index.json`
 -   `eventWiring` maps to the `listeners` property in `LayoutModel.js`
@@ -210,7 +211,10 @@ The schema builds on existing models:
                     "cols": 2,
                     "gap": "gap-2",
                     "1.1": { "component": "AlgoliaSearchPage", "hide": false },
-                    "1.2": { "component": "AlgoliaResultsWidget", "hide": false },
+                    "1.2": {
+                        "component": "AlgoliaResultsWidget",
+                        "hide": false
+                    },
                     "2.1": { "component": "GitHubRepoWidget", "hide": false },
                     "2.2": { "component": "SlackChannelWidget", "hide": false }
                 }
@@ -312,6 +316,7 @@ The schema builds on existing models:
 **Technical Notes:**
 
 Key files to extend:
+
 -   `workspaceController.js` -- add `exportWorkspaceAsConfig()` method to serialize workspace + resolve dependencies
 -   `widgetRegistry.js` -- query installed widget metadata for dependency resolution
 -   New IPC handler in `electron.js` for the export action
@@ -370,6 +375,7 @@ ZIP contains devops-monitor.dashboard.json with shareable: true.
 **Technical Notes:**
 
 Key files to extend:
+
 -   `widgetRegistry.js` -- reuse `validateZipEntries()` for security; add batch install method
 -   `workspaceController.js` -- add `importWorkspaceFromConfig()` to create workspace from dashboard config
 -   `registryController.js` -- resolve widget packages from registry for auto-install
@@ -431,6 +437,7 @@ Dashboard shareable flag set to false.
 **Technical Notes:**
 
 Key files to extend:
+
 -   `registry-index.json` (dash-registry) -- add `type: "dashboard"` entries to packages array
 -   `registryController.js` -- extend `searchRegistry()` to filter by type; add installed-widget compatibility filter
 -   `registryApi.js` -- add IPC channels for dashboard-specific registry queries
@@ -485,6 +492,7 @@ Detail view shows: 4 widgets required (2 installed, 2 need install), 3 event wir
 **Technical Notes:**
 
 Key files to extend:
+
 -   `registryController.js` -- add `fetchDashboardConfig()` to download dashboard config from registry
 -   Reuse the import pipeline from US-003 (`importWorkspaceFromConfig`)
 -   New IPC handler for registry-based dashboard install
@@ -971,18 +979,18 @@ Requires a backend service or registry extension for storing ratings. This is a 
 
 **Key Files to Extend:**
 
-| File | Change |
-| --- | --- |
-| `dash-registry/scripts/build-index.js` | Include `type: "dashboard"` packages in index |
-| `dash-registry/public/registry-index.json` | Add dashboard entries to packages array |
-| `dash-core/electron/controller/registryController.js` | Filter by type, compatibility check, dashboard fetch |
+| File                                                   | Change                                                     |
+| ------------------------------------------------------ | ---------------------------------------------------------- |
+| `dash-registry/scripts/build-index.js`                 | Include `type: "dashboard"` packages in index              |
+| `dash-registry/public/registry-index.json`             | Add dashboard entries to packages array                    |
+| `dash-core/electron/controller/registryController.js`  | Filter by type, compatibility check, dashboard fetch       |
 | `dash-core/electron/controller/workspaceController.js` | `exportWorkspaceAsConfig()`, `importWorkspaceFromConfig()` |
-| `dash-core/electron/widgetRegistry.js` | Batch install from dashboard manifest |
-| `dash-core/electron/api/registryApi.js` | New IPC channels for dashboard operations |
-| `dash-core/src/Models/DashboardModel.js` | Support import from dashboard config schema |
-| `dash-core/src/Models/LayoutModel.js` | Apply event wiring from config `eventWiring` |
-| `dash-core/src/ComponentManager.js` | Verify widget registration after batch install |
-| `dash-electron/public/electron.js` | Register new IPC handlers for dashboard import/export |
+| `dash-core/electron/widgetRegistry.js`                 | Batch install from dashboard manifest                      |
+| `dash-core/electron/api/registryApi.js`                | New IPC channels for dashboard operations                  |
+| `dash-core/src/Models/DashboardModel.js`               | Support import from dashboard config schema                |
+| `dash-core/src/Models/LayoutModel.js`                  | Apply event wiring from config `eventWiring`               |
+| `dash-core/src/ComponentManager.js`                    | Verify widget registration after batch install             |
+| `dash-electron/public/electron.js`                     | Register new IPC handlers for dashboard import/export      |
 
 ### Dependencies
 
@@ -1024,12 +1032,12 @@ Requires a backend service or registry extension for storing ratings. This is a 
 
 ### Decisions Made
 
-| Date | Decision | Rationale | Owner |
-| --- | --- | --- | --- |
-| 2026-03-07 | Imported dashboards marked `shareable: false` | Prevents republishing someone else's dashboard without permission | Product |
-| 2026-03-07 | Dual sharing: ZIP export + registry publish | Supports both offline sharing (colleagues) and public sharing (community) | Product |
-| 2026-03-07 | Provider setup deferred to P2 | One-shot provider modal is a UX enhancement; users can manually configure providers in MVP | Product |
-| 2026-03-07 | Separate attribution for dashboard author and widget authors | Dashboard curator gets credit; widget authors retain their attribution within the config | Product |
+| Date       | Decision                                                     | Rationale                                                                                  | Owner   |
+| ---------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------ | ------- |
+| 2026-03-07 | Imported dashboards marked `shareable: false`                | Prevents republishing someone else's dashboard without permission                          | Product |
+| 2026-03-07 | Dual sharing: ZIP export + registry publish                  | Supports both offline sharing (colleagues) and public sharing (community)                  | Product |
+| 2026-03-07 | Provider setup deferred to P2                                | One-shot provider modal is a UX enhancement; users can manually configure providers in MVP | Product |
+| 2026-03-07 | Separate attribution for dashboard author and widget authors | Dashboard curator gets credit; widget authors retain their attribution within the config   | Product |
 
 ---
 
@@ -1173,6 +1181,6 @@ Requires a backend service or registry extension for storing ratings. This is a 
 
 ## Revision History
 
-| Version | Date | Author | Changes |
-| --- | --- | --- | --- |
-| 1.0 | 2026-03-07 | Core Team | Initial draft |
+| Version | Date       | Author    | Changes       |
+| ------- | ---------- | --------- | ------------- |
+| 1.0     | 2026-03-07 | Core Team | Initial draft |

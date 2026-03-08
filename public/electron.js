@@ -213,6 +213,7 @@ const {
     deleteProvider,
     // Dashboard config
     exportDashboardConfig,
+    importDashboardConfig,
     // Template controllers (now in dash-core)
     listIndices,
     partialUpdateObjectsFromDirectory,
@@ -910,6 +911,14 @@ function createWindow() {
                 message.appId,
                 message.workspaceId,
                 message.options,
+                widgetRegistry
+            )
+        );
+
+        ipcMain.handle(DASHBOARD_CONFIG_IMPORT, (e, message) =>
+            importDashboardConfig(
+                getSenderWindow(e),
+                message.appId,
                 widgetRegistry
             )
         );
