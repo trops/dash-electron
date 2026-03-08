@@ -968,7 +968,10 @@ function createWindow() {
             )
         );
         ipcMain.handle(DASHBOARD_CONFIG_COMPATIBILITY, (e, msg) =>
-            checkCompatibility(msg.dashboardWidgets, widgetRegistry.getWidgetRegistry())
+            checkCompatibility(
+                msg.dashboardWidgets,
+                widgetRegistry.getWidgetRegistry()
+            )
         );
         ipcMain.handle(DASHBOARD_CONFIG_PUBLISH, (e, message) =>
             prepareDashboardForPublish(
@@ -980,7 +983,10 @@ function createWindow() {
             )
         );
         ipcMain.handle(DASHBOARD_CONFIG_PREVIEW, (e, message) =>
-            getDashboardPreview(message.packageName, widgetRegistry.getWidgetRegistry())
+            getDashboardPreview(
+                message.packageName,
+                widgetRegistry.getWidgetRegistry()
+            )
         );
         ipcMain.handle(DASHBOARD_CONFIG_CHECK_UPDATES, (e, message) =>
             checkDashboardUpdatesForApp(message.appId)
@@ -1014,15 +1020,9 @@ function createWindow() {
         ipcMain.handle(REGISTRY_AUTH_POLL_TOKEN, (e, message) =>
             pollForToken(message.deviceCode)
         );
-        ipcMain.handle(REGISTRY_AUTH_GET_STATUS, () =>
-            getRegistryAuthStatus()
-        );
-        ipcMain.handle(REGISTRY_AUTH_GET_PROFILE, () =>
-            getRegistryProfile()
-        );
-        ipcMain.handle(REGISTRY_AUTH_LOGOUT, () =>
-            clearRegistryToken()
-        );
+        ipcMain.handle(REGISTRY_AUTH_GET_STATUS, () => getRegistryAuthStatus());
+        ipcMain.handle(REGISTRY_AUTH_GET_PROFILE, () => getRegistryProfile());
+        ipcMain.handle(REGISTRY_AUTH_LOGOUT, () => clearRegistryToken());
         ipcMain.handle(REGISTRY_AUTH_PUBLISH, (e, message) =>
             publishToRegistry(message.zipPath, message.manifest)
         );
