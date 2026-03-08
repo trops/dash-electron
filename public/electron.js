@@ -214,6 +214,7 @@ const {
     // Dashboard config
     exportDashboardConfig,
     importDashboardConfig,
+    installDashboardFromRegistry,
     // Template controllers (now in dash-core)
     listIndices,
     partialUpdateObjectsFromDirectory,
@@ -304,6 +305,7 @@ const {
     MENU_ITEMS_SAVE,
     DASHBOARD_CONFIG_EXPORT,
     DASHBOARD_CONFIG_IMPORT,
+    DASHBOARD_CONFIG_INSTALL,
 } = coreEvents;
 
 // Widget System
@@ -923,6 +925,15 @@ function createWindow() {
             importDashboardConfig(
                 getSenderWindow(e),
                 message.appId,
+                widgetRegistry
+            )
+        );
+
+        ipcMain.handle(DASHBOARD_CONFIG_INSTALL, (e, message) =>
+            installDashboardFromRegistry(
+                getSenderWindow(e),
+                message.appId,
+                message.packageName,
                 widgetRegistry
             )
         );
