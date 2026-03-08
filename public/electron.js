@@ -285,6 +285,7 @@ const {
     REGISTRY_SEARCH,
     REGISTRY_GET_PACKAGE,
     REGISTRY_CHECK_UPDATES,
+    REGISTRY_SEARCH_DASHBOARDS,
     ALGOLIA_LIST_INDICES,
     ALGOLIA_PARTIAL_UPDATE_OBJECTS,
     ALGOLIA_CREATE_BATCH,
@@ -902,6 +903,9 @@ function createWindow() {
         );
         ipcMain.handle(REGISTRY_CHECK_UPDATES, (e, installedWidgets) =>
             registryController.checkUpdates(installedWidgets)
+        );
+        ipcMain.handle(REGISTRY_SEARCH_DASHBOARDS, (e, query, filters) =>
+            registryController.searchDashboards(query, filters)
         );
 
         // --- Dashboard Config ---
