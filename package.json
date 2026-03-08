@@ -1,7 +1,7 @@
 {
     "name": "@trops/dash-electron",
     "productName": "Dash",
-    "version": "0.0.132",
+    "version": "0.0.133",
     "description": "A Dashboard Generator",
     "author": "John P. Giatropoulos",
     "publishConfig": {
@@ -89,9 +89,9 @@
         "build:css": "tailwindcss -i src/index.css -o public/tailwind.css -m",
         "build:css:watch": "tailwindcss -i src/index.css -o public/tailwind.css -m --watch",
         "dry": "npm run prettify && npm run bump && concurrently -k \"BROWSER=none npm start\" \"npm:electron\"",
-        "dev": "concurrently -k \"npm run build:css:watch\" \"BROWSER=none npm start\" \"wait-on http://localhost:3000 && electron .\"",
+        "dev": "concurrently -k \"npm run build:css:watch\" \"BROWSER=none npm start\" \"wait-on http://localhost:3000 && NODE_OPTIONS=--preserve-symlinks electron .\"",
         "prod": "NODE_ENV=prod npm run prettify && npm run bump-tag && npm run build",
-        "electron": "electron .",
+        "electron": "NODE_OPTIONS=--preserve-symlinks electron .",
         "package": "craco build && electron-forge package",
         "make": "craco build && electron-forge make",
         "bump": "npm version --no-git-tag-version patch",
@@ -115,7 +115,16 @@
         "validate:full": "./scripts/validate.sh && npm run test:widgets && npm run test:e2e",
         "prdize": "node scripts/prdize.js",
         "test:prd": "node scripts/test-prd.js",
-        "prd:coverage": "node scripts/prd-coverage.js"
+        "prd:coverage": "node scripts/prd-coverage.js",
+        "ci": "./scripts/ci.sh",
+        "ci:commit": "./scripts/ci.sh --commit",
+        "ci:push": "./scripts/ci.sh --push",
+        "ci:pr": "./scripts/ci.sh --pr",
+        "ci:release": "./scripts/ci.sh --release",
+        "link-core": "bash scripts/link-pkg.sh link @trops/dash-core",
+        "unlink-core": "bash scripts/link-pkg.sh unlink @trops/dash-core",
+        "link-react": "bash scripts/link-pkg.sh link @trops/dash-react",
+        "unlink-react": "bash scripts/link-pkg.sh unlink @trops/dash-react"
     },
     "browser": {
         "fs": false,

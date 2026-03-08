@@ -347,6 +347,29 @@ npm run apple-staple
 -   Updating dependencies
 -   Adding or modifying widgets
 
+### Local CI Script (Recommended)
+
+The `scripts/ci.sh` script handles the full validation pipeline (Node 20 via nvm, Prettier, Tailwind CSS, CI build with ESLint errors, widget tests) and optionally the git workflow:
+
+```bash
+# Validate only (prettify + build CSS + CI build + widget tests)
+npm run ci
+
+# Validate + commit + version bump
+npm run ci:commit -- -m "Your commit message"
+
+# Above + push branch
+npm run ci:push -- -m "Your commit message"
+
+# Above + create PR
+npm run ci:pr -- -m "Your commit message"
+
+# Above + merge PR + tag + cleanup branches
+npm run ci:release -- -m "Your commit message"
+```
+
+Each flag is cumulative — `--release` runs all prior steps. The script automatically switches to Node 20 using nvm and cleans up the build directory after validation.
+
 ### Pre-Commit Validation
 
 ```bash
