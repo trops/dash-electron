@@ -6,6 +6,15 @@
  * This is where we will place all of the listeners. This is very important.
  */
 
+// Load .env before any dash-core imports so controllers can read env vars
+try {
+    require("dotenv").config({
+        path: require("path").join(__dirname, "..", ".env"),
+    });
+} catch (e) {
+    // dotenv may not be available in packaged builds — that's fine
+}
+
 const path = require("path");
 const { pathToFileURL } = require("url");
 const {
