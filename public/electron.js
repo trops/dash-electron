@@ -220,6 +220,11 @@ const {
     getDashboardPreview,
     checkDashboardUpdatesForApp,
     getProviderSetupManifest,
+    // Dashboard ratings
+    saveDashboardRating,
+    getDashboardRating,
+    listDashboardRatings,
+    deleteDashboardRating,
     // Template controllers (now in dash-core)
     listIndices,
     partialUpdateObjectsFromDirectory,
@@ -316,6 +321,10 @@ const {
     DASHBOARD_CONFIG_PREVIEW,
     DASHBOARD_CONFIG_CHECK_UPDATES,
     DASHBOARD_CONFIG_PROVIDER_SETUP,
+    DASHBOARD_RATING_SAVE,
+    DASHBOARD_RATING_GET,
+    DASHBOARD_RATING_LIST,
+    DASHBOARD_RATING_DELETE,
 } = coreEvents;
 
 // Widget System
@@ -965,6 +974,24 @@ function createWindow() {
         );
         ipcMain.handle(DASHBOARD_CONFIG_PROVIDER_SETUP, (e, message) =>
             getProviderSetupManifest(message.appId, message.requiredProviders)
+        );
+
+        // --- Dashboard Ratings ---
+        ipcMain.handle(DASHBOARD_RATING_SAVE, (e, message) =>
+            saveDashboardRating(
+                message.appId,
+                message.packageName,
+                message.rating
+            )
+        );
+        ipcMain.handle(DASHBOARD_RATING_GET, (e, message) =>
+            getDashboardRating(message.appId, message.packageName)
+        );
+        ipcMain.handle(DASHBOARD_RATING_LIST, (e, message) =>
+            listDashboardRatings(message.appId)
+        );
+        ipcMain.handle(DASHBOARD_RATING_DELETE, (e, message) =>
+            deleteDashboardRating(message.appId, message.packageName)
         );
 
         // --- Widget System ---
