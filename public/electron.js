@@ -218,6 +218,8 @@ const {
     checkCompatibility,
     prepareDashboardForPublish,
     getDashboardPreview,
+    checkDashboardUpdatesForApp,
+    getProviderSetupManifest,
     // Template controllers (now in dash-core)
     listIndices,
     partialUpdateObjectsFromDirectory,
@@ -312,6 +314,8 @@ const {
     DASHBOARD_CONFIG_COMPATIBILITY,
     DASHBOARD_CONFIG_PUBLISH,
     DASHBOARD_CONFIG_PREVIEW,
+    DASHBOARD_CONFIG_CHECK_UPDATES,
+    DASHBOARD_CONFIG_PROVIDER_SETUP,
 } = coreEvents;
 
 // Widget System
@@ -955,6 +959,12 @@ function createWindow() {
         );
         ipcMain.handle(DASHBOARD_CONFIG_PREVIEW, (e, message) =>
             getDashboardPreview(message.packageName, widgetRegistry)
+        );
+        ipcMain.handle(DASHBOARD_CONFIG_CHECK_UPDATES, (e, message) =>
+            checkDashboardUpdatesForApp(message.appId)
+        );
+        ipcMain.handle(DASHBOARD_CONFIG_PROVIDER_SETUP, (e, message) =>
+            getProviderSetupManifest(message.appId, message.requiredProviders)
         );
 
         // --- Widget System ---
