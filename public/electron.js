@@ -221,6 +221,10 @@ const {
     saveMenuItemForApplication,
     listMenuItemsForApplication,
     pluginInstall,
+    exportDashboardConfig,
+    importDashboardConfig,
+    installDashboardFromRegistry,
+    checkCompatibility,
     // Namespaced controllers
     mcpController,
     llmController,
@@ -298,6 +302,11 @@ const {
     LLM_CLI_END_SESSION,
     MENU_ITEMS_LIST,
     MENU_ITEMS_SAVE,
+    REGISTRY_SEARCH_DASHBOARDS,
+    DASHBOARD_CONFIG_EXPORT,
+    DASHBOARD_CONFIG_IMPORT,
+    DASHBOARD_CONFIG_INSTALL,
+    DASHBOARD_CONFIG_COMPATIBILITY,
 } = coreEvents;
 
 // Widget System
@@ -897,6 +906,34 @@ function createWindow() {
         );
         ipcMain.handle(REGISTRY_CHECK_UPDATES, (e, installedWidgets) =>
             registryController.checkUpdates(installedWidgets)
+        );
+        ipcMain.handle(REGISTRY_SEARCH_DASHBOARDS, (e, query, filters) =>
+            registryController.searchDashboards(query, filters)
+        );
+
+        // --- Dashboard Config ---
+        ipcMain.handle(DASHBOARD_CONFIG_EXPORT, (e, msg) =>
+            exportDashboardConfig(
+                getSenderWindow(e),
+                msg.appId,
+                msg.workspaceId,
+                msg.options,
+                widgetRegistry
+            )
+        );
+        ipcMain.handle(DASHBOARD_CONFIG_IMPORT, (e, msg) =>
+            importDashboardConfig(getSenderWindow(e), msg.appId, widgetRegistry)
+        );
+        ipcMain.handle(DASHBOARD_CONFIG_INSTALL, (e, msg) =>
+            installDashboardFromRegistry(
+                getSenderWindow(e),
+                msg.appId,
+                msg.packageName,
+                widgetRegistry
+            )
+        );
+        ipcMain.handle(DASHBOARD_CONFIG_COMPATIBILITY, (e, msg) =>
+            checkCompatibility(msg.dashboardWidgets, widgetRegistry)
         );
 
         // --- Widget System ---
