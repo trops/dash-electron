@@ -51,14 +51,15 @@ module.exports = {
 
             // === HANDLE node: URI SCHEME ===
             // Map node:* imports to regular module names, then to false (since we don't want them in browser)
-            // Prevent webpack from resolving symlinks to real paths.
-            // Without this, symlinked packages (e.g. npm run link-core) resolve
-            // their own node_modules/react instead of dash-electron's, causing
-            // dual React instance errors at runtime.
-            webpackConfig.resolve.symlinks = false;
 
             webpackConfig.resolve.alias = {
                 ...webpackConfig.resolve.alias,
+                // Force single React instance for symlinked packages.
+                // Without this, symlinked packages (e.g. npm run link-core) resolve
+                // their own node_modules/react instead of dash-electron's, causing
+                // dual React instance errors at runtime.
+                react: path.resolve(__dirname, "node_modules/react"),
+                "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
                 "node:path": false,
                 "node:fs": false,
                 "node:os": false,
@@ -85,6 +86,20 @@ module.exports = {
                 "node:console": false,
                 "node:timers": false,
             };
+
+            // Allow react/react-dom aliases through CRA's ModuleScopePlugin
+            const moduleScopePlugin = (
+                webpackConfig.resolve.plugins || []
+            ).find(
+                (p) =>
+                    p.constructor && p.constructor.name === "ModuleScopePlugin"
+            );
+            if (moduleScopePlugin) {
+                moduleScopePlugin.allowedPaths.push(
+                    path.resolve(__dirname, "node_modules/react"),
+                    path.resolve(__dirname, "node_modules/react-dom")
+                );
+            }
 
             // Handle external modules
             // For Electron renderer process, we want to bundle most things
