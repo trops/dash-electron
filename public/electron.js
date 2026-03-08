@@ -211,6 +211,11 @@ const {
     listProviders,
     getProvider,
     deleteProvider,
+    // Dashboard config
+    exportDashboardConfig,
+    importDashboardConfig,
+    installDashboardFromRegistry,
+    checkCompatibility,
     // Template controllers (now in dash-core)
     listIndices,
     partialUpdateObjectsFromDirectory,
@@ -221,10 +226,6 @@ const {
     saveMenuItemForApplication,
     listMenuItemsForApplication,
     pluginInstall,
-    exportDashboardConfig,
-    importDashboardConfig,
-    installDashboardFromRegistry,
-    checkCompatibility,
     // Namespaced controllers
     mcpController,
     llmController,
@@ -286,6 +287,7 @@ const {
     REGISTRY_SEARCH,
     REGISTRY_GET_PACKAGE,
     REGISTRY_CHECK_UPDATES,
+    REGISTRY_SEARCH_DASHBOARDS,
     ALGOLIA_LIST_INDICES,
     ALGOLIA_PARTIAL_UPDATE_OBJECTS,
     ALGOLIA_CREATE_BATCH,
@@ -302,7 +304,6 @@ const {
     LLM_CLI_END_SESSION,
     MENU_ITEMS_LIST,
     MENU_ITEMS_SAVE,
-    REGISTRY_SEARCH_DASHBOARDS,
     DASHBOARD_CONFIG_EXPORT,
     DASHBOARD_CONFIG_IMPORT,
     DASHBOARD_CONFIG_INSTALL,
@@ -912,23 +913,27 @@ function createWindow() {
         );
 
         // --- Dashboard Config ---
-        ipcMain.handle(DASHBOARD_CONFIG_EXPORT, (e, msg) =>
+        ipcMain.handle(DASHBOARD_CONFIG_EXPORT, (e, message) =>
             exportDashboardConfig(
                 getSenderWindow(e),
-                msg.appId,
-                msg.workspaceId,
-                msg.options,
+                message.appId,
+                message.workspaceId,
+                message.options,
                 widgetRegistry
             )
         );
-        ipcMain.handle(DASHBOARD_CONFIG_IMPORT, (e, msg) =>
-            importDashboardConfig(getSenderWindow(e), msg.appId, widgetRegistry)
+        ipcMain.handle(DASHBOARD_CONFIG_IMPORT, (e, message) =>
+            importDashboardConfig(
+                getSenderWindow(e),
+                message.appId,
+                widgetRegistry
+            )
         );
-        ipcMain.handle(DASHBOARD_CONFIG_INSTALL, (e, msg) =>
+        ipcMain.handle(DASHBOARD_CONFIG_INSTALL, (e, message) =>
             installDashboardFromRegistry(
                 getSenderWindow(e),
-                msg.appId,
-                msg.packageName,
+                message.appId,
+                message.packageName,
                 widgetRegistry
             )
         );
