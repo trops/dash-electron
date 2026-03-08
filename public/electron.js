@@ -225,6 +225,13 @@ const {
     getDashboardRating,
     listDashboardRatings,
     deleteDashboardRating,
+    // Registry auth
+    initiateDeviceFlow,
+    pollForToken,
+    getRegistryAuthStatus,
+    getRegistryProfile,
+    clearRegistryToken,
+    publishToRegistry,
     // Template controllers (now in dash-core)
     listIndices,
     partialUpdateObjectsFromDirectory,
@@ -325,6 +332,12 @@ const {
     DASHBOARD_RATING_GET,
     DASHBOARD_RATING_LIST,
     DASHBOARD_RATING_DELETE,
+    REGISTRY_AUTH_INITIATE_LOGIN,
+    REGISTRY_AUTH_POLL_TOKEN,
+    REGISTRY_AUTH_GET_STATUS,
+    REGISTRY_AUTH_GET_PROFILE,
+    REGISTRY_AUTH_LOGOUT,
+    REGISTRY_AUTH_PUBLISH,
 } = coreEvents;
 
 // Widget System
@@ -936,14 +949,14 @@ function createWindow() {
                 message.appId,
                 message.workspaceId,
                 message.options,
-                widgetRegistry
+                widgetRegistry.getWidgetRegistry()
             )
         );
         ipcMain.handle(DASHBOARD_CONFIG_IMPORT, (e, message) =>
             importDashboardConfig(
                 getSenderWindow(e),
                 message.appId,
-                widgetRegistry
+                widgetRegistry.getWidgetRegistry()
             )
         );
         ipcMain.handle(DASHBOARD_CONFIG_INSTALL, (e, message) =>
@@ -951,11 +964,11 @@ function createWindow() {
                 getSenderWindow(e),
                 message.appId,
                 message.packageName,
-                widgetRegistry
+                widgetRegistry.getWidgetRegistry()
             )
         );
         ipcMain.handle(DASHBOARD_CONFIG_COMPATIBILITY, (e, msg) =>
-            checkCompatibility(msg.dashboardWidgets, widgetRegistry)
+            checkCompatibility(msg.dashboardWidgets, widgetRegistry.getWidgetRegistry())
         );
         ipcMain.handle(DASHBOARD_CONFIG_PUBLISH, (e, message) =>
             prepareDashboardForPublish(
@@ -963,11 +976,11 @@ function createWindow() {
                 message.appId,
                 message.workspaceId,
                 message.options,
-                widgetRegistry
+                widgetRegistry.getWidgetRegistry()
             )
         );
         ipcMain.handle(DASHBOARD_CONFIG_PREVIEW, (e, message) =>
-            getDashboardPreview(message.packageName, widgetRegistry)
+            getDashboardPreview(message.packageName, widgetRegistry.getWidgetRegistry())
         );
         ipcMain.handle(DASHBOARD_CONFIG_CHECK_UPDATES, (e, message) =>
             checkDashboardUpdatesForApp(message.appId)
@@ -992,6 +1005,26 @@ function createWindow() {
         );
         ipcMain.handle(DASHBOARD_RATING_DELETE, (e, message) =>
             deleteDashboardRating(message.appId, message.packageName)
+        );
+
+        // --- Registry Auth ---
+        ipcMain.handle(REGISTRY_AUTH_INITIATE_LOGIN, () =>
+            initiateDeviceFlow()
+        );
+        ipcMain.handle(REGISTRY_AUTH_POLL_TOKEN, (e, message) =>
+            pollForToken(message.deviceCode)
+        );
+        ipcMain.handle(REGISTRY_AUTH_GET_STATUS, () =>
+            getRegistryAuthStatus()
+        );
+        ipcMain.handle(REGISTRY_AUTH_GET_PROFILE, () =>
+            getRegistryProfile()
+        );
+        ipcMain.handle(REGISTRY_AUTH_LOGOUT, () =>
+            clearRegistryToken()
+        );
+        ipcMain.handle(REGISTRY_AUTH_PUBLISH, (e, message) =>
+            publishToRegistry(message.zipPath, message.manifest)
         );
 
         // --- Widget System ---
