@@ -211,6 +211,8 @@ const {
     listProviders,
     getProvider,
     deleteProvider,
+    // Dashboard config
+    exportDashboardConfig,
     // Template controllers (now in dash-core)
     listIndices,
     partialUpdateObjectsFromDirectory,
@@ -298,6 +300,8 @@ const {
     LLM_CLI_END_SESSION,
     MENU_ITEMS_LIST,
     MENU_ITEMS_SAVE,
+    DASHBOARD_CONFIG_EXPORT,
+    DASHBOARD_CONFIG_IMPORT,
 } = coreEvents;
 
 // Widget System
@@ -897,6 +901,17 @@ function createWindow() {
         );
         ipcMain.handle(REGISTRY_CHECK_UPDATES, (e, installedWidgets) =>
             registryController.checkUpdates(installedWidgets)
+        );
+
+        // --- Dashboard Config ---
+        ipcMain.handle(DASHBOARD_CONFIG_EXPORT, (e, message) =>
+            exportDashboardConfig(
+                getSenderWindow(e),
+                message.appId,
+                message.workspaceId,
+                message.options,
+                widgetRegistry
+            )
         );
 
         // --- Widget System ---
