@@ -217,6 +217,7 @@ const {
     installDashboardFromRegistry,
     checkCompatibility,
     prepareDashboardForPublish,
+    getDashboardPreview,
     // Template controllers (now in dash-core)
     listIndices,
     partialUpdateObjectsFromDirectory,
@@ -310,6 +311,7 @@ const {
     DASHBOARD_CONFIG_INSTALL,
     DASHBOARD_CONFIG_COMPATIBILITY,
     DASHBOARD_CONFIG_PUBLISH,
+    DASHBOARD_CONFIG_PREVIEW,
 } = coreEvents;
 
 // Widget System
@@ -950,6 +952,9 @@ function createWindow() {
                 message.options,
                 widgetRegistry
             )
+        );
+        ipcMain.handle(DASHBOARD_CONFIG_PREVIEW, (e, message) =>
+            getDashboardPreview(message.packageName, widgetRegistry)
         );
 
         // --- Widget System ---
