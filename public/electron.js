@@ -215,6 +215,7 @@ const {
     exportDashboardConfig,
     importDashboardConfig,
     installDashboardFromRegistry,
+    checkCompatibility,
     // Template controllers (now in dash-core)
     listIndices,
     partialUpdateObjectsFromDirectory,
@@ -306,6 +307,7 @@ const {
     DASHBOARD_CONFIG_EXPORT,
     DASHBOARD_CONFIG_IMPORT,
     DASHBOARD_CONFIG_INSTALL,
+    DASHBOARD_CONFIG_COMPATIBILITY,
 } = coreEvents;
 
 // Widget System
@@ -920,7 +922,6 @@ function createWindow() {
                 widgetRegistry
             )
         );
-
         ipcMain.handle(DASHBOARD_CONFIG_IMPORT, (e, message) =>
             importDashboardConfig(
                 getSenderWindow(e),
@@ -928,7 +929,6 @@ function createWindow() {
                 widgetRegistry
             )
         );
-
         ipcMain.handle(DASHBOARD_CONFIG_INSTALL, (e, message) =>
             installDashboardFromRegistry(
                 getSenderWindow(e),
@@ -936,6 +936,9 @@ function createWindow() {
                 message.packageName,
                 widgetRegistry
             )
+        );
+        ipcMain.handle(DASHBOARD_CONFIG_COMPATIBILITY, (e, msg) =>
+            checkCompatibility(msg.dashboardWidgets, widgetRegistry)
         );
 
         // --- Widget System ---
