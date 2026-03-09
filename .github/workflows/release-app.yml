@@ -84,7 +84,7 @@ jobs:
                   sudo sysctl -w kern.maxfiles=524288
                   sudo sysctl -w kern.maxfilesperproc=524288
                   ulimit -n 524288
-                  npx electron-forge make --arch=x64
+                  npx electron-forge make --arch=universal
               env:
                   REACT_APP_APPLE_CERT_ID: ${{ secrets.APPLE_CERT_ID }}
                   REACT_APP_APPLE_ID: ${{ secrets.APPLE_ID }}
