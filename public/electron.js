@@ -229,6 +229,7 @@ const {
     getDashboardPreview,
     checkDashboardUpdatesForApp,
     getProviderSetupManifest,
+    getDashboardPublishPreview,
     // Dashboard ratings
     saveDashboardRating,
     getDashboardRating,
@@ -337,6 +338,7 @@ const {
     DASHBOARD_CONFIG_PREVIEW,
     DASHBOARD_CONFIG_CHECK_UPDATES,
     DASHBOARD_CONFIG_PROVIDER_SETUP,
+    DASHBOARD_CONFIG_PUBLISH_PREVIEW,
     DASHBOARD_RATING_SAVE,
     DASHBOARD_RATING_GET,
     DASHBOARD_RATING_LIST,
@@ -1002,6 +1004,13 @@ function createWindow() {
         );
         ipcMain.handle(DASHBOARD_CONFIG_PROVIDER_SETUP, (e, message) =>
             getProviderSetupManifest(message.appId, message.requiredProviders)
+        );
+        ipcMain.handle(DASHBOARD_CONFIG_PUBLISH_PREVIEW, (e, message) =>
+            getDashboardPublishPreview(
+                message.appId,
+                message.workspaceId,
+                widgetRegistry.getWidgetRegistry()
+            )
         );
 
         // --- Dashboard Ratings ---
