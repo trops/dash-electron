@@ -108,19 +108,24 @@ function parseDashConfig(filePath) {
     const providersMatch = content.match(/providers\s*:\s*\[([\s\S]*?)\]/m);
     if (providersMatch) {
         const providerBlock = providersMatch[1];
-        const typeMatches = providerBlock.match(/type\s*:\s*["']([^"']+)["']/g);
-        const requiredMatches = providerBlock.match(
-            /required\s*:\s*(true|false)/g
-        );
-        if (typeMatches) {
-            typeMatches.forEach((t, i) => {
-                const provType = t.match(/["']([^"']+)["']/)[1];
-                const req =
-                    requiredMatches && requiredMatches[i]
-                        ? requiredMatches[i].includes("true")
-                        : false;
-                providers.push({ type: provType, required: req });
-            });
+        // Match individual provider objects
+        const objectRegex = /\{([^}]+)\}/g;
+        let objMatch;
+        while ((objMatch = objectRegex.exec(providerBlock)) !== null) {
+            const obj = objMatch[1];
+            const typeM = obj.match(/type\s*:\s*["']([^"']+)["']/);
+            const reqM = obj.match(/required\s*:\s*(true|false)/);
+            const classM = obj.match(/providerClass\s*:\s*["']([^"']+)["']/);
+            if (typeM) {
+                const entry = {
+                    type: typeM[1],
+                    required: reqM ? reqM[1] === "true" : false,
+                };
+                if (classM) {
+                    entry.providerClass = classM[1];
+                }
+                providers.push(entry);
+            }
         }
     }
 
@@ -183,6 +188,56 @@ function buildAndRelease(packageName, version) {
     } catch {
         console.error("Error: Failed to build widget package.");
         process.exit(1);
+    }
+
+    // Scan CJS bundle for unbundled require() calls
+    const HOST_MODULES = [
+        "react",
+        "react-dom",
+        "@trops/dash-core",
+        "@trops/dash-react",
+        "prop-types",
+    ];
+    const distDir = path.join(ROOT, "dist");
+    if (fs.existsSync(distDir)) {
+        const cjsFiles = fs
+            .readdirSync(distDir)
+            .filter((f) => f.endsWith(".cjs.js"));
+        for (const cjsFile of cjsFiles) {
+            const bundleContent = fs.readFileSync(
+                path.join(distDir, cjsFile),
+                "utf8"
+            );
+            const requireCalls = bundleContent.match(
+                /require\s*\(\s*["']([^"']+)["']\s*\)/g
+            );
+            if (requireCalls) {
+                const unknowns = [];
+                for (const call of requireCalls) {
+                    const mod = call.match(/["']([^"']+)["']/)[1];
+                    const isHost = HOST_MODULES.some(
+                        (h) => mod === h || mod.startsWith(h + "/")
+                    );
+                    const isRelative = mod.startsWith(".");
+                    const isBabelRuntime = mod.startsWith("@babel/runtime");
+                    if (!isHost && !isRelative && !isBabelRuntime) {
+                        unknowns.push(mod);
+                    }
+                }
+                const unique = [...new Set(unknowns)];
+                if (unique.length > 0) {
+                    console.warn(
+                        `\nWARNING: Unbundled dependencies detected in ${cjsFile}:`
+                    );
+                    unique.forEach((m) =>
+                        console.warn(`  - ${m} (not in host module list)`)
+                    );
+                    console.warn(
+                        "These will fail at runtime if not available in the host app.\n"
+                    );
+                }
+            }
+        }
     }
 
     const zipPath = path.join(ROOT, zipName);
@@ -336,6 +391,7 @@ function main() {
         repository: repoUrl,
         publishedAt: new Date().toISOString(),
         widgets: manifestWidgets,
+        appOrigin: pkg.name || "",
     };
 
     console.log("\nGenerated manifest:");

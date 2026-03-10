@@ -16,6 +16,7 @@ const widgetDefinition = {
     eventHandlers: [],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
+        { type: "algolia", providerClass: "api", required: true },
     ],
     styles: {
         backgroundColor: "bg-emerald-900",
