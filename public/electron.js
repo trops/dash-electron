@@ -247,8 +247,18 @@ const {
     pollForToken,
     getRegistryAuthStatus,
     getRegistryProfile,
+    updateRegistryProfile,
+    getRegistryPackages,
+    updateRegistryPackage,
     clearRegistryToken,
     publishToRegistry,
+    // Session
+    getRecentDashboards,
+    addRecentDashboard,
+    clearRecentDashboards,
+    getSessionState,
+    saveSessionState,
+    clearSessionState,
     // Template controllers (now in dash-core)
     listIndices,
     partialUpdateObjectsFromDirectory,
@@ -356,6 +366,15 @@ const {
     REGISTRY_AUTH_GET_PROFILE,
     REGISTRY_AUTH_LOGOUT,
     REGISTRY_AUTH_PUBLISH,
+    REGISTRY_AUTH_UPDATE_PROFILE,
+    REGISTRY_AUTH_GET_PACKAGES,
+    REGISTRY_AUTH_UPDATE_PACKAGE,
+    SESSION_GET_RECENTS,
+    SESSION_ADD_RECENT,
+    SESSION_CLEAR_RECENTS,
+    SESSION_GET_STATE,
+    SESSION_SAVE_STATE,
+    SESSION_CLEAR_STATE,
 } = coreEvents;
 
 // Widget System
@@ -1051,6 +1070,27 @@ function createWindow() {
         ipcMain.handle(REGISTRY_AUTH_PUBLISH, (e, message) =>
             publishToRegistry(message.zipPath, message.manifest)
         );
+        ipcMain.handle(REGISTRY_AUTH_UPDATE_PROFILE, (e, message) =>
+            updateRegistryProfile(message)
+        );
+        ipcMain.handle(REGISTRY_AUTH_GET_PACKAGES, () =>
+            getRegistryPackages()
+        );
+        ipcMain.handle(REGISTRY_AUTH_UPDATE_PACKAGE, (e, message) =>
+            updateRegistryPackage(message.scope, message.name, message.updates)
+        );
+
+        // --- Session ---
+        ipcMain.handle(SESSION_GET_RECENTS, () => getRecentDashboards());
+        ipcMain.handle(SESSION_ADD_RECENT, (e, message) =>
+            addRecentDashboard(message.workspaceId, message.name)
+        );
+        ipcMain.handle(SESSION_CLEAR_RECENTS, () => clearRecentDashboards());
+        ipcMain.handle(SESSION_GET_STATE, () => getSessionState());
+        ipcMain.handle(SESSION_SAVE_STATE, (e, message) =>
+            saveSessionState(message.openTabIds, message.activeTabId)
+        );
+        ipcMain.handle(SESSION_CLEAR_STATE, () => clearSessionState());
 
         // --- Widget System ---
         setupWidgetRegistryHandlers();
