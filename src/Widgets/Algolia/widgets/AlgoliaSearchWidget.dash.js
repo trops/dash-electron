@@ -14,7 +14,10 @@ const widgetDefinition = {
     type: "widget",
     events: ["algolia-record-selected", "algolia-index-selected"],
     eventHandlers: [],
-    providers: [{ type: "algolia", providerClass: "mcp", required: true }],
+    providers: [
+        { type: "algolia", providerClass: "mcp", required: true },
+        { type: "algolia", providerClass: "api", required: true },
+    ],
     styles: {
         backgroundColor: "bg-indigo-900",
         borderColor: "border-indigo-700",
