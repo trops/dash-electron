@@ -20,7 +20,7 @@
         "@heroicons/react": "^2.0.16",
         "@modelcontextprotocol/sdk": "^1.26.0",
         "@tailwindcss/forms": "^0.5.0",
-        "@trops/dash-core": "^0.1.105",
+        "@trops/dash-core": "^0.1.106",
         "@trops/dash-react": "^1.0.11",
         "@uiw/react-md-editor": "^3.20.5",
         "@uiw/react-textarea-code-editor": "^2.1.1",
