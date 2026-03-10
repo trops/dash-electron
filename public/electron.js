@@ -38,8 +38,10 @@ const { updateElectronApp } = require("update-electron-app");
 // Auto-update: checks update.electronjs.org every 10 minutes
 // Only runs in production (packaged app), no-ops in development
 // Repo is auto-detected from package.json "repository" field
+let updaterReady = false;
 if (!isDev) {
     updateElectronApp({ notifyUser: false });
+    updaterReady = true;
 }
 
 // --- Update state tracking ---
@@ -64,13 +66,18 @@ function buildMenu() {
         };
     } else {
         updateMenuItem = {
-            label: "Check for Updates...",
-            click: () => {
-                manualCheckInProgress = true;
-                updateState = "checking";
-                buildMenu();
-                autoUpdater.checkForUpdates();
-            },
+            label: updaterReady
+                ? "Check for Updates..."
+                : "Check for Updates (unavailable)",
+            enabled: updaterReady,
+            ...(updaterReady && {
+                click: () => {
+                    manualCheckInProgress = true;
+                    updateState = "checking";
+                    buildMenu();
+                    autoUpdater.checkForUpdates();
+                },
+            }),
         };
     }
 
