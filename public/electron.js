@@ -6,6 +6,16 @@
  * This is where we will place all of the listeners. This is very important.
  */
 
+// Suppress EPIPE errors on stdout/stderr (common when running under concurrently)
+process.stdout?.on?.("error", (err) => {
+    if (err.code === "EPIPE") return;
+    throw err;
+});
+process.stderr?.on?.("error", (err) => {
+    if (err.code === "EPIPE") return;
+    throw err;
+});
+
 // Load .env before any dash-core imports so controllers can read env vars
 try {
     require("dotenv").config({
@@ -32,6 +42,7 @@ if (require("electron-squirrel-startup")) app.quit();
 // Use process.defaultApp or NODE_ENV check which are available before app is ready
 const isDev = process.defaultApp || process.env.NODE_ENV === "development";
 const pe = require("pluggable-electron/main");
+const logger = require("./logger");
 
 const { updateElectronApp } = require("update-electron-app");
 
@@ -464,7 +475,7 @@ function createWindow() {
         ipcHandlersRegistered = true;
 
         // --- Dialog ---
-        ipcMain.handle(CHOOSE_FILE, async (e, message) => {
+        logger.loggedHandle(CHOOSE_FILE, async (e, message) => {
             return showDialog(
                 getSenderWindow(e),
                 message,
@@ -472,15 +483,15 @@ function createWindow() {
                 message.extensions
             );
         });
-        ipcMain.handle(CHOOSE_FILE_COMPLETE, (e, message) => {
+        logger.loggedHandle(CHOOSE_FILE_COMPLETE, (e, message) => {
             console.log("choose file complete ", e, message);
         });
-        ipcMain.handle(CHOOSE_FILE_ERROR, (e, message) =>
+        logger.loggedHandle(CHOOSE_FILE_ERROR, (e, message) =>
             fileChosenError(getSenderWindow(e), message)
         );
 
         // --- Secure Storage ---
-        ipcMain.handle(SECURE_STORE_ENCRYPTION_CHECK, (e, message) =>
+        logger.loggedHandle(SECURE_STORE_ENCRYPTION_CHECK, (e, message) =>
             isEncryptionAvailable(getSenderWindow(e), message)
         );
 
@@ -519,7 +530,7 @@ function createWindow() {
                 }
             )
         );
-        ipcMain.handle(
+        logger.loggedHandle(
             ALGOLIA_PARTIAL_UPDATE_OBJECTS,
             async (
                 e,
@@ -544,7 +555,7 @@ function createWindow() {
                 );
             }
         );
-        ipcMain.handle(ALGOLIA_CREATE_BATCH, (e, message) => {
+        logger.loggedHandle(ALGOLIA_CREATE_BATCH, (e, message) => {
             const { filepath, batchFilepath, batchSize } = message;
             createBatchesFromFile(
                 getSenderWindow(e),
@@ -553,7 +564,7 @@ function createWindow() {
                 batchSize
             );
         });
-        ipcMain.handle(
+        logger.loggedHandle(
             ALGOLIA_BROWSE_OBJECTS,
             async (
                 e,
@@ -572,7 +583,7 @@ function createWindow() {
                 );
             }
         );
-        ipcMain.handle(
+        logger.loggedHandle(
             ALGOLIA_SEARCH,
             async (
                 e,
@@ -612,7 +623,7 @@ function createWindow() {
             )
         );
 
-        ipcMain.handle(
+        logger.loggedHandle(
             "algolia-set-settings",
             async (
                 e,
@@ -704,7 +715,7 @@ function createWindow() {
         );
 
         // --- Plugins ---
-        ipcMain.handle("plugin-install", (e, message) =>
+        logger.loggedHandle("plugin-install", (e, message) =>
             pluginInstall(
                 getSenderWindow(e),
                 message.packageName,
@@ -713,10 +724,10 @@ function createWindow() {
         );
 
         // --- Workspaces ---
-        ipcMain.handle(WORKSPACE_LIST, (e, message) =>
+        logger.loggedHandle(WORKSPACE_LIST, (e, message) =>
             listWorkspacesForApplication(getSenderWindow(e), message.appId)
         );
-        ipcMain.handle(WORKSPACE_SAVE, async (e, message) => {
+        logger.loggedHandle(WORKSPACE_SAVE, async (e, message) => {
             const result = await saveWorkspaceForApplication(
                 getSenderWindow(e),
                 message.appId,
@@ -730,7 +741,7 @@ function createWindow() {
             }
             return result;
         });
-        ipcMain.handle(WORKSPACE_DELETE, (e, message) =>
+        logger.loggedHandle(WORKSPACE_DELETE, (e, message) =>
             deleteWorkspaceForApplication(
                 getSenderWindow(e),
                 message.appId,
@@ -739,10 +750,10 @@ function createWindow() {
         );
 
         // --- Menu Items (template-specific) ---
-        ipcMain.handle(MENU_ITEMS_LIST, (e, message) =>
+        logger.loggedHandle(MENU_ITEMS_LIST, (e, message) =>
             listMenuItemsForApplication(getSenderWindow(e), message.appId)
         );
-        ipcMain.handle(MENU_ITEMS_SAVE, (e, message) =>
+        logger.loggedHandle(MENU_ITEMS_SAVE, (e, message) =>
             saveMenuItemForApplication(
                 getSenderWindow(e),
                 message.appId,
@@ -751,10 +762,10 @@ function createWindow() {
         );
 
         // --- Themes ---
-        ipcMain.handle("theme-list", (e, message) => {
+        logger.loggedHandle("theme-list", (e, message) => {
             return listThemesForApplication(getSenderWindow(e), message.appId);
         });
-        ipcMain.handle(THEME_SAVE, (e, message) =>
+        logger.loggedHandle(THEME_SAVE, (e, message) =>
             saveThemeForApplication(
                 getSenderWindow(e),
                 message.appId,
@@ -762,7 +773,7 @@ function createWindow() {
                 message.themeObject
             )
         );
-        ipcMain.handle(THEME_DELETE, (e, message) =>
+        logger.loggedHandle(THEME_DELETE, (e, message) =>
             deleteThemeForApplication(
                 getSenderWindow(e),
                 message.appId,
@@ -771,12 +782,12 @@ function createWindow() {
         );
 
         // --- Layouts ---
-        ipcMain.handle(LAYOUT_LIST, (e, message) =>
+        logger.loggedHandle(LAYOUT_LIST, (e, message) =>
             listLayoutsForApplication(getSenderWindow(e), message.appId)
         );
 
         // --- Data ---
-        ipcMain.handle(DATA_JSON_TO_CSV_FILE, (e, message) =>
+        logger.loggedHandle(DATA_JSON_TO_CSV_FILE, (e, message) =>
             convertJsonToCsvFile(
                 getSenderWindow(e),
                 message.appId,
@@ -784,18 +795,18 @@ function createWindow() {
                 message.filename
             )
         );
-        ipcMain.handle(DATA_JSON_TO_CSV_STRING, (e, message) =>
+        logger.loggedHandle(DATA_JSON_TO_CSV_STRING, (e, message) =>
             convertJsonToCsvFile(
                 getSenderWindow(e),
                 message.appId,
                 message.jsonObject
             )
         );
-        ipcMain.handle(PARSE_XML_STREAM, (e, message) => {
+        logger.loggedHandle(PARSE_XML_STREAM, (e, message) => {
             const { filepath, outpath, start } = message;
             parseXMLStream(getSenderWindow(e), filepath, outpath, start);
         });
-        ipcMain.handle(PARSE_CSV_STREAM, (e, message) => {
+        logger.loggedHandle(PARSE_CSV_STREAM, (e, message) => {
             const {
                 filepath,
                 outpath,
@@ -814,15 +825,15 @@ function createWindow() {
                 limit
             );
         });
-        ipcMain.handle(READ_LINES, (e, message) => {
+        logger.loggedHandle(READ_LINES, (e, message) => {
             const { filepath, lineCount } = message;
             readLinesFromFile(getSenderWindow(e), filepath, lineCount);
         });
-        ipcMain.handle(READ_JSON, (e, message) => {
+        logger.loggedHandle(READ_JSON, (e, message) => {
             const { filepath, objectCount } = message;
             readJSONFromFile(getSenderWindow(e), filepath, objectCount);
         });
-        ipcMain.handle(TRANSFORM_FILE, (e, message) => {
+        logger.loggedHandle(TRANSFORM_FILE, (e, message) => {
             const { filepath, outFilepath, mappingFunctionBody, args } =
                 message;
             transformFile(
@@ -833,11 +844,11 @@ function createWindow() {
                 args
             );
         });
-        ipcMain.handle(EXTRACT_COLORS_FROM_IMAGE, (e, message) => {
+        logger.loggedHandle(EXTRACT_COLORS_FROM_IMAGE, (e, message) => {
             const { url } = message;
             extractColorsFromImageURL(getSenderWindow(e), url);
         });
-        ipcMain.handle(DATA_SAVE_TO_FILE, (e, message) =>
+        logger.loggedHandle(DATA_SAVE_TO_FILE, (e, message) =>
             saveToFile(
                 getSenderWindow(e),
                 message.data,
@@ -846,31 +857,31 @@ function createWindow() {
                 message.returnEmpty
             )
         );
-        ipcMain.handle(DATA_READ_FROM_FILE, (e, message) =>
+        logger.loggedHandle(DATA_READ_FROM_FILE, (e, message) =>
             readFromFile(
                 getSenderWindow(e),
                 message.filename,
                 message.returnEmpty
             )
         );
-        ipcMain.handle(READ_DATA_URL, (e, message) =>
+        logger.loggedHandle(READ_DATA_URL, (e, message) =>
             readDataFromURL(getSenderWindow(e), message.url, message.toFilepath)
         );
 
         // --- Settings ---
-        ipcMain.handle(SETTINGS_GET, (e, message) =>
+        logger.loggedHandle(SETTINGS_GET, (e, message) =>
             getSettingsForApplication(getSenderWindow(e))
         );
-        ipcMain.handle(SETTINGS_SAVE, (e, message) =>
+        logger.loggedHandle(SETTINGS_SAVE, (e, message) =>
             saveSettingsForApplication(getSenderWindow(e), message.data)
         );
-        ipcMain.handle(SETTINGS_GET_DATA_DIR, (e, message) =>
+        logger.loggedHandle(SETTINGS_GET_DATA_DIR, (e, message) =>
             getDataDirectory(getSenderWindow(e))
         );
-        ipcMain.handle(SETTINGS_SET_DATA_DIR, (e, message) =>
+        logger.loggedHandle(SETTINGS_SET_DATA_DIR, (e, message) =>
             setDataDirectory(getSenderWindow(e), message.dataDirectory)
         );
-        ipcMain.handle(SETTINGS_MIGRATE_DATA_DIR, (e, message) =>
+        logger.loggedHandle(SETTINGS_MIGRATE_DATA_DIR, (e, message) =>
             migrateDataDirectory(
                 getSenderWindow(e),
                 message.oldDirectory,
@@ -879,7 +890,7 @@ function createWindow() {
         );
 
         // --- OpenAI (template-specific) ---
-        ipcMain.handle(OPENAI_DESCRIBE_IMAGE, (e, message) => {
+        logger.loggedHandle(OPENAI_DESCRIBE_IMAGE, (e, message) => {
             describeImage(
                 getSenderWindow(e),
                 message.imageUrl,
@@ -889,7 +900,7 @@ function createWindow() {
         });
 
         // --- Providers ---
-        ipcMain.handle(PROVIDER_SAVE, (e, message) =>
+        logger.loggedHandle(PROVIDER_SAVE, (e, message) =>
             saveProvider(
                 getSenderWindow(e),
                 message.appId,
@@ -901,13 +912,13 @@ function createWindow() {
                 message.allowedTools
             )
         );
-        ipcMain.handle(PROVIDER_LIST, (e, message) =>
+        logger.loggedHandle(PROVIDER_LIST, (e, message) =>
             listProviders(getSenderWindow(e), message.appId)
         );
-        ipcMain.handle(PROVIDER_GET, (e, message) =>
+        logger.loggedHandle(PROVIDER_GET, (e, message) =>
             getProvider(getSenderWindow(e), message.appId, message.providerName)
         );
-        ipcMain.handle(PROVIDER_DELETE, (e, message) =>
+        logger.loggedHandle(PROVIDER_DELETE, (e, message) =>
             deleteProvider(
                 getSenderWindow(e),
                 message.appId,
@@ -916,7 +927,7 @@ function createWindow() {
         );
 
         // --- MCP ---
-        ipcMain.handle(MCP_START_SERVER, (e, message) =>
+        logger.loggedHandle(MCP_START_SERVER, (e, message) =>
             mcpController.startServer(
                 getSenderWindow(e),
                 message.serverName,
@@ -924,13 +935,13 @@ function createWindow() {
                 message.credentials
             )
         );
-        ipcMain.handle(MCP_STOP_SERVER, (e, message) =>
+        logger.loggedHandle(MCP_STOP_SERVER, (e, message) =>
             mcpController.stopServer(getSenderWindow(e), message.serverName)
         );
-        ipcMain.handle(MCP_LIST_TOOLS, (e, message) =>
+        logger.loggedHandle(MCP_LIST_TOOLS, (e, message) =>
             mcpController.listTools(getSenderWindow(e), message.serverName)
         );
-        ipcMain.handle(MCP_CALL_TOOL, (e, message) =>
+        logger.loggedHandle(MCP_CALL_TOOL, (e, message) =>
             mcpController.callTool(
                 getSenderWindow(e),
                 message.serverName,
@@ -939,26 +950,26 @@ function createWindow() {
                 message.allowedTools
             )
         );
-        ipcMain.handle(MCP_LIST_RESOURCES, (e, message) =>
+        logger.loggedHandle(MCP_LIST_RESOURCES, (e, message) =>
             mcpController.listResources(getSenderWindow(e), message.serverName)
         );
-        ipcMain.handle(MCP_READ_RESOURCE, (e, message) =>
+        logger.loggedHandle(MCP_READ_RESOURCE, (e, message) =>
             mcpController.readResource(
                 getSenderWindow(e),
                 message.serverName,
                 message.uri
             )
         );
-        ipcMain.handle(MCP_SERVER_STATUS, (e, message) =>
+        logger.loggedHandle(MCP_SERVER_STATUS, (e, message) =>
             mcpController.getServerStatus(
                 getSenderWindow(e),
                 message.serverName
             )
         );
-        ipcMain.handle(MCP_GET_CATALOG, (e) =>
+        logger.loggedHandle(MCP_GET_CATALOG, (e) =>
             mcpController.getCatalog(getSenderWindow(e))
         );
-        ipcMain.handle(MCP_RUN_AUTH, (e, message) =>
+        logger.loggedHandle(MCP_RUN_AUTH, (e, message) =>
             mcpController.runAuth(
                 getSenderWindow(e),
                 message.mcpConfig,
@@ -968,47 +979,47 @@ function createWindow() {
         );
 
         // --- LLM ---
-        ipcMain.handle(LLM_SEND_MESSAGE, (e, msg) =>
+        logger.loggedHandle(LLM_SEND_MESSAGE, (e, msg) =>
             llmController.sendMessage(getSenderWindow(e), msg.requestId, msg)
         );
-        ipcMain.handle(LLM_ABORT_REQUEST, (e, msg) =>
+        logger.loggedHandle(LLM_ABORT_REQUEST, (e, msg) =>
             llmController.abortRequest(getSenderWindow(e), msg.requestId)
         );
-        ipcMain.handle(LLM_LIST_CONNECTED_TOOLS, () =>
+        logger.loggedHandle(LLM_LIST_CONNECTED_TOOLS, () =>
             mcpController.listConnectedServers()
         );
-        ipcMain.handle(LLM_CHECK_CLI_AVAILABLE, () =>
+        logger.loggedHandle(LLM_CHECK_CLI_AVAILABLE, () =>
             cliController.isAvailable()
         );
-        ipcMain.handle(LLM_CLEAR_CLI_SESSION, (e, msg) =>
+        logger.loggedHandle(LLM_CLEAR_CLI_SESSION, (e, msg) =>
             cliController.clearSession(msg.widgetUuid)
         );
-        ipcMain.handle(LLM_CLI_SESSION_STATUS, (e, msg) =>
+        logger.loggedHandle(LLM_CLI_SESSION_STATUS, (e, msg) =>
             cliController.getSessionStatus(msg.widgetUuid)
         );
-        ipcMain.handle(LLM_CLI_END_SESSION, (e, msg) =>
+        logger.loggedHandle(LLM_CLI_END_SESSION, (e, msg) =>
             cliController.endSession(msg.widgetUuid)
         );
 
         // --- Registry ---
-        ipcMain.handle(REGISTRY_FETCH_INDEX, (e, forceRefresh) =>
+        logger.loggedHandle(REGISTRY_FETCH_INDEX, (e, forceRefresh) =>
             registryController.fetchRegistryIndex(forceRefresh)
         );
-        ipcMain.handle(REGISTRY_SEARCH, (e, query, filters) =>
+        logger.loggedHandle(REGISTRY_SEARCH, (e, query, filters) =>
             registryController.searchRegistry(query, filters)
         );
-        ipcMain.handle(REGISTRY_GET_PACKAGE, (e, packageName) =>
+        logger.loggedHandle(REGISTRY_GET_PACKAGE, (e, packageName) =>
             registryController.getPackage(packageName)
         );
-        ipcMain.handle(REGISTRY_CHECK_UPDATES, (e, installedWidgets) =>
+        logger.loggedHandle(REGISTRY_CHECK_UPDATES, (e, installedWidgets) =>
             registryController.checkUpdates(installedWidgets)
         );
-        ipcMain.handle(REGISTRY_SEARCH_DASHBOARDS, (e, query, filters) =>
+        logger.loggedHandle(REGISTRY_SEARCH_DASHBOARDS, (e, query, filters) =>
             registryController.searchDashboards(query, filters)
         );
 
         // --- Dashboard Config ---
-        ipcMain.handle(DASHBOARD_CONFIG_EXPORT, (e, message) =>
+        logger.loggedHandle(DASHBOARD_CONFIG_EXPORT, (e, message) =>
             exportDashboardConfig(
                 getSenderWindow(e),
                 message.appId,
@@ -1017,14 +1028,14 @@ function createWindow() {
                 widgetRegistry.getWidgetRegistry()
             )
         );
-        ipcMain.handle(DASHBOARD_CONFIG_IMPORT, (e, message) =>
+        logger.loggedHandle(DASHBOARD_CONFIG_IMPORT, (e, message) =>
             importDashboardConfig(
                 getSenderWindow(e),
                 message.appId,
                 widgetRegistry.getWidgetRegistry()
             )
         );
-        ipcMain.handle(DASHBOARD_CONFIG_INSTALL, (e, message) =>
+        logger.loggedHandle(DASHBOARD_CONFIG_INSTALL, (e, message) =>
             installDashboardFromRegistry(
                 getSenderWindow(e),
                 message.appId,
@@ -1032,13 +1043,13 @@ function createWindow() {
                 widgetRegistry.getWidgetRegistry()
             )
         );
-        ipcMain.handle(DASHBOARD_CONFIG_COMPATIBILITY, (e, msg) =>
+        logger.loggedHandle(DASHBOARD_CONFIG_COMPATIBILITY, (e, msg) =>
             checkCompatibility(
                 msg.dashboardWidgets,
                 widgetRegistry.getWidgetRegistry()
             )
         );
-        ipcMain.handle(DASHBOARD_CONFIG_PUBLISH, (e, message) =>
+        logger.loggedHandle(DASHBOARD_CONFIG_PUBLISH, (e, message) =>
             prepareDashboardForPublish(
                 getSenderWindow(e),
                 message.appId,
@@ -1047,19 +1058,19 @@ function createWindow() {
                 widgetRegistry.getWidgetRegistry()
             )
         );
-        ipcMain.handle(DASHBOARD_CONFIG_PREVIEW, (e, message) =>
+        logger.loggedHandle(DASHBOARD_CONFIG_PREVIEW, (e, message) =>
             getDashboardPreview(
                 message.packageName,
                 widgetRegistry.getWidgetRegistry()
             )
         );
-        ipcMain.handle(DASHBOARD_CONFIG_CHECK_UPDATES, (e, message) =>
+        logger.loggedHandle(DASHBOARD_CONFIG_CHECK_UPDATES, (e, message) =>
             checkDashboardUpdatesForApp(message.appId)
         );
-        ipcMain.handle(DASHBOARD_CONFIG_PROVIDER_SETUP, (e, message) =>
+        logger.loggedHandle(DASHBOARD_CONFIG_PROVIDER_SETUP, (e, message) =>
             getProviderSetupManifest(message.appId, message.requiredProviders)
         );
-        ipcMain.handle(DASHBOARD_CONFIG_PUBLISH_PREVIEW, (e, message) =>
+        logger.loggedHandle(DASHBOARD_CONFIG_PUBLISH_PREVIEW, (e, message) =>
             getDashboardPublishPreview(
                 message.appId,
                 message.workspaceId,
@@ -1068,58 +1079,71 @@ function createWindow() {
         );
 
         // --- Dashboard Ratings ---
-        ipcMain.handle(DASHBOARD_RATING_SAVE, (e, message) =>
+        logger.loggedHandle(DASHBOARD_RATING_SAVE, (e, message) =>
             saveDashboardRating(
                 message.appId,
                 message.packageName,
                 message.rating
             )
         );
-        ipcMain.handle(DASHBOARD_RATING_GET, (e, message) =>
+        logger.loggedHandle(DASHBOARD_RATING_GET, (e, message) =>
             getDashboardRating(message.appId, message.packageName)
         );
-        ipcMain.handle(DASHBOARD_RATING_LIST, (e, message) =>
+        logger.loggedHandle(DASHBOARD_RATING_LIST, (e, message) =>
             listDashboardRatings(message.appId)
         );
-        ipcMain.handle(DASHBOARD_RATING_DELETE, (e, message) =>
+        logger.loggedHandle(DASHBOARD_RATING_DELETE, (e, message) =>
             deleteDashboardRating(message.appId, message.packageName)
         );
 
         // --- Registry Auth ---
-        ipcMain.handle(REGISTRY_AUTH_INITIATE_LOGIN, () =>
+        logger.loggedHandle(REGISTRY_AUTH_INITIATE_LOGIN, () =>
             initiateDeviceFlow()
         );
-        ipcMain.handle(REGISTRY_AUTH_POLL_TOKEN, (e, message) =>
-            pollForToken(message.deviceCode)
+        logger.loggedHandle(REGISTRY_AUTH_POLL_TOKEN, async (e, message) => {
+            const result = await pollForToken(message.deviceCode);
+            if (result?.userId) logger.setUserId(result.userId);
+            return result;
+        });
+        logger.loggedHandle(REGISTRY_AUTH_GET_STATUS, () =>
+            getRegistryAuthStatus()
         );
-        ipcMain.handle(REGISTRY_AUTH_GET_STATUS, () => getRegistryAuthStatus());
-        ipcMain.handle(REGISTRY_AUTH_GET_PROFILE, () => getRegistryProfile());
-        ipcMain.handle(REGISTRY_AUTH_LOGOUT, () => clearRegistryToken());
-        ipcMain.handle(REGISTRY_AUTH_PUBLISH, (e, message) =>
+        logger.loggedHandle(REGISTRY_AUTH_GET_PROFILE, () =>
+            getRegistryProfile()
+        );
+        logger.loggedHandle(REGISTRY_AUTH_LOGOUT, () => {
+            logger.setUserId(null);
+            return clearRegistryToken();
+        });
+        logger.loggedHandle(REGISTRY_AUTH_PUBLISH, (e, message) =>
             publishToRegistry(message.zipPath, message.manifest)
         );
-        ipcMain.handle(REGISTRY_AUTH_UPDATE_PROFILE, (e, message) =>
+        logger.loggedHandle(REGISTRY_AUTH_UPDATE_PROFILE, (e, message) =>
             updateRegistryProfile(message)
         );
-        ipcMain.handle(REGISTRY_AUTH_GET_PACKAGES, () => getRegistryPackages());
-        ipcMain.handle(REGISTRY_AUTH_UPDATE_PACKAGE, (e, message) =>
+        logger.loggedHandle(REGISTRY_AUTH_GET_PACKAGES, () =>
+            getRegistryPackages()
+        );
+        logger.loggedHandle(REGISTRY_AUTH_UPDATE_PACKAGE, (e, message) =>
             updateRegistryPackage(message.scope, message.name, message.updates)
         );
-        ipcMain.handle(REGISTRY_AUTH_DELETE_PACKAGE, (e, message) =>
+        logger.loggedHandle(REGISTRY_AUTH_DELETE_PACKAGE, (e, message) =>
             deleteRegistryPackage(message.scope, message.name)
         );
 
         // --- Session ---
-        ipcMain.handle(SESSION_GET_RECENTS, () => getRecentDashboards());
-        ipcMain.handle(SESSION_ADD_RECENT, (e, message) =>
+        logger.loggedHandle(SESSION_GET_RECENTS, () => getRecentDashboards());
+        logger.loggedHandle(SESSION_ADD_RECENT, (e, message) =>
             addRecentDashboard(message.workspaceId, message.name)
         );
-        ipcMain.handle(SESSION_CLEAR_RECENTS, () => clearRecentDashboards());
-        ipcMain.handle(SESSION_GET_STATE, () => getSessionState());
-        ipcMain.handle(SESSION_SAVE_STATE, (e, message) =>
+        logger.loggedHandle(SESSION_CLEAR_RECENTS, () =>
+            clearRecentDashboards()
+        );
+        logger.loggedHandle(SESSION_GET_STATE, () => getSessionState());
+        logger.loggedHandle(SESSION_SAVE_STATE, (e, message) =>
             saveSessionState(message.openTabIds, message.activeTabId)
         );
-        ipcMain.handle(SESSION_CLEAR_STATE, () => clearSessionState());
+        logger.loggedHandle(SESSION_CLEAR_STATE, () => clearSessionState());
 
         // --- Widget System ---
         setupWidgetRegistryHandlers();
@@ -1128,7 +1152,7 @@ function createWindow() {
         setupCacheHandlers();
 
         // --- Popout Windows ---
-        ipcMain.handle("popout-open", (e, message) => {
+        logger.loggedHandle("popout-open", (e, message) => {
             const wsId = String(message.workspaceId);
             const existing = popoutWindows.get(wsId);
             if (existing && !existing.isDestroyed()) {
@@ -1138,7 +1162,7 @@ function createWindow() {
             createPopoutWindow(wsId);
             return { opened: true };
         });
-        ipcMain.handle("popout-set-title", (e, message) => {
+        logger.loggedHandle("popout-set-title", (e, message) => {
             const wsId = String(message.workspaceId);
             const win = popoutWindows.get(wsId);
             if (win && !win.isDestroyed()) {
@@ -1147,7 +1171,7 @@ function createWindow() {
         });
 
         // --- Widget Popout Windows ---
-        ipcMain.handle("widget-popout-open", (e, message) => {
+        logger.loggedHandle("widget-popout-open", (e, message) => {
             const key = `${message.workspaceId}:${message.widgetId}`;
             const existing = widgetPopoutWindows.get(key);
             if (existing && !existing.isDestroyed()) {
@@ -1157,7 +1181,7 @@ function createWindow() {
             createWidgetPopoutWindow(message.workspaceId, message.widgetId);
             return { opened: true };
         });
-        ipcMain.handle("widget-popout-set-title", (e, message) => {
+        logger.loggedHandle("widget-popout-set-title", (e, message) => {
             const key = `${message.workspaceId}:${message.widgetId}`;
             const win = widgetPopoutWindows.get(key);
             if (win && !win.isDestroyed()) {
@@ -1165,16 +1189,18 @@ function createWindow() {
             }
         });
         // --- Notifications ---
-        ipcMain.handle(NOTIFICATION_SEND, (e, payload) =>
+        logger.loggedHandle(NOTIFICATION_SEND, (e, payload) =>
             notificationController.send(mainWindow, payload)
         );
-        ipcMain.handle(NOTIFICATION_GET_PREFERENCES, () =>
+        logger.loggedHandle(NOTIFICATION_GET_PREFERENCES, () =>
             notificationController.getPreferences()
         );
-        ipcMain.handle(NOTIFICATION_SET_PREFERENCES, (e, { widgetId, prefs }) =>
-            notificationController.setPreferences(widgetId, prefs)
+        logger.loggedHandle(
+            NOTIFICATION_SET_PREFERENCES,
+            (e, { widgetId, prefs }) =>
+                notificationController.setPreferences(widgetId, prefs)
         );
-        ipcMain.handle(NOTIFICATION_SET_GLOBAL, (e, settings) =>
+        logger.loggedHandle(NOTIFICATION_SET_GLOBAL, (e, settings) =>
             notificationController.setGlobal(settings)
         );
 
@@ -1190,6 +1216,7 @@ function createWindow() {
     } // end ipcHandlersRegistered guard
 
     windows.add(mainWindow);
+    logger.logLifecycle("window-created");
 
     mainWindow.on("closed", () => {
         windows.delete(mainWindow);
@@ -1288,11 +1315,33 @@ app.whenReady().then(() => {
     });
 
     console.log("plugins path", path.join(app.getPath("userData"), "plugins"));
+
+    // Initialize logger
+    logger.init(() => {
+        const result = getDataDirectory(mainWindow);
+        return (
+            result?.dataDirectory ||
+            path.join(app.getPath("userData"), "Dashboard")
+        );
+    });
+
+    // Fetch initial auth status for logging
+    const authStatus = getRegistryAuthStatus();
+    if (authStatus?.authenticated) {
+        logger.setUserId(authStatus.userId);
+    }
+
+    // Clean old logs (>30 days)
+    logger.cleanOldLogs(30);
+
+    logger.logLifecycle("app-ready", { version: app.getVersion() });
+
     buildMenu();
     createWindow();
 });
 
 app.on("window-all-closed", () => {
+    logger.logLifecycle("window-all-closed");
     mcpController.stopAllServers().catch((err) => {
         console.error("[electron] Error stopping MCP servers:", err);
     });
@@ -1319,6 +1368,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("activate", () => {
+    logger.logLifecycle("app-activated");
     if (windows.size === 0) {
         createWindow();
     }
