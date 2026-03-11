@@ -5,41 +5,21 @@
  */
 import { StreamingText } from "./StreamingText";
 import { ToolCallBlock } from "./ToolCallBlock";
-
-/**
- * Simple markdown renderer for assistant messages.
- * Uses @uiw/react-md-editor's preview component if available,
- * otherwise falls back to a <pre> block.
- */
-let MDPreview = null;
-try {
-    const MDEditor = require("@uiw/react-md-editor");
-    MDPreview = MDEditor.default?.Markdown || null;
-} catch {
-    // Will fall back to <pre>
-}
+import { marked } from "marked";
 
 function AssistantTextContent({ text }) {
     if (!text) return null;
 
-    if (MDPreview) {
-        return (
-            <div
-                className="prose prose-invert prose-sm max-w-none
-                    prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1
-                    prose-pre:bg-black/40 prose-pre:text-gray-300 prose-code:text-indigo-300
-                    prose-a:text-indigo-400"
-                data-color-mode="dark"
-            >
-                <MDPreview source={text} />
-            </div>
-        );
-    }
+    const html = marked(text, { breaks: true });
 
     return (
-        <pre className="whitespace-pre-wrap break-words text-gray-200">
-            {text}
-        </pre>
+        <div
+            className="prose prose-invert prose-sm max-w-none
+                prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1
+                prose-pre:bg-black/40 prose-pre:text-gray-300 prose-code:text-indigo-300
+                prose-a:text-indigo-400"
+            dangerouslySetInnerHTML={{ __html: html }}
+        />
     );
 }
 
