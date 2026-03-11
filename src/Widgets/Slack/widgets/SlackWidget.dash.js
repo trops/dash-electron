@@ -18,6 +18,26 @@ const widgetDefinition = {
         backgroundColor: "bg-purple-900",
         borderColor: "border-purple-700",
     },
+    notifications: [
+        {
+            key: "newMessage",
+            displayName: "New Message",
+            description: "New message in a monitored channel",
+            defaultEnabled: true,
+        },
+        {
+            key: "mention",
+            displayName: "Mentioned",
+            description: "You were @mentioned",
+            defaultEnabled: true,
+        },
+        {
+            key: "directMessage",
+            displayName: "Direct Message",
+            description: "New direct message received",
+            defaultEnabled: true,
+        },
+    ],
     userConfig: {
         title: {
             type: "text",

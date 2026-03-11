@@ -21,6 +21,20 @@ const widgetDefinition = {
         backgroundColor: "bg-blue-900",
         borderColor: "border-blue-700",
     },
+    notifications: [
+        {
+            key: "upcomingEvent",
+            displayName: "Upcoming Event",
+            description: "An event is starting soon",
+            defaultEnabled: true,
+        },
+        {
+            key: "eventChanged",
+            displayName: "Event Changed",
+            description: "A calendar event was modified or cancelled",
+            defaultEnabled: false,
+        },
+    ],
     userConfig: {
         title: {
             type: "text",

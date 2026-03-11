@@ -18,6 +18,20 @@ const widgetDefinition = {
         backgroundColor: "bg-red-900",
         borderColor: "border-red-700",
     },
+    notifications: [
+        {
+            key: "newEmail",
+            displayName: "New Email",
+            description: "New email received",
+            defaultEnabled: true,
+        },
+        {
+            key: "importantEmail",
+            displayName: "Important Email",
+            description: "Email marked as important",
+            defaultEnabled: true,
+        },
+    ],
     userConfig: {
         title: {
             type: "text",

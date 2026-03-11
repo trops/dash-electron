@@ -359,6 +359,8 @@ function WidgetPopoutDashboard() {
 
 // Main App
 class App extends React.Component {
+    _removeNotificationClickListener = null;
+
     async componentDidMount() {
         console.log("[Dash App] componentDidMount called");
         // Listen for widget installation events (hot reload)
@@ -366,6 +368,20 @@ class App extends React.Component {
             window.mainApi.widgets.onInstalled(this.handleWidgetInstalled);
             window.mainApi.widgets.onLoaded(this.handleWidgetsLoaded);
             console.log("[Dash App] Widget listeners registered");
+
+            // Listen for notification click events to navigate to the widget's workspace
+            if (
+                window.mainApi.notifications &&
+                window.mainApi.notifications.onClicked
+            ) {
+                this._removeNotificationClickListener =
+                    window.mainApi.notifications.onClicked(
+                        this.handleNotificationClicked
+                    );
+                console.log(
+                    "[Dash App] Notification click listener registered"
+                );
+            }
         }
 
         // Load installed widgets (bundles first, then config fallback)
@@ -383,7 +399,22 @@ class App extends React.Component {
                 this.handleWidgetsLoaded
             );
         }
+        if (this._removeNotificationClickListener) {
+            this._removeNotificationClickListener();
+        }
     }
+
+    handleNotificationClicked = ({ workspaceId }) => {
+        console.log(
+            `[Dash App] Notification clicked, navigating to workspace ${workspaceId}`
+        );
+        // Dispatch a custom event that DashboardStage can listen to for workspace navigation
+        window.dispatchEvent(
+            new CustomEvent("dash:navigate-workspace", {
+                detail: { workspaceId },
+            })
+        );
+    };
 
     handleWidgetInstalled = async ({ widgetName, config }) => {
         console.log(`[App] Widget installed: ${widgetName}`, config);
