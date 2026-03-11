@@ -333,7 +333,6 @@ function PopoutDashboard() {
             <DashboardStage
                 dashApi={electronApi}
                 credentials={{ appId: process.env.REACT_APP_IDENTIFIER }}
-                backgroundColor="bg-gray-900"
                 height="h-full"
                 grow={true}
                 popout={true}
@@ -479,7 +478,6 @@ class App extends React.Component {
                                 credentials={{
                                     appId: process.env.REACT_APP_IDENTIFIER,
                                 }}
-                                backgroundColor="bg-gray-900"
                                 height="h-full"
                                 grow={true}
                             />
