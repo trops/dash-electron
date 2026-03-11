@@ -250,6 +250,7 @@ const {
     updateRegistryProfile,
     getRegistryPackages,
     updateRegistryPackage,
+    deleteRegistryPackage,
     clearRegistryToken,
     publishToRegistry,
     // Session
@@ -369,6 +370,7 @@ const {
     REGISTRY_AUTH_UPDATE_PROFILE,
     REGISTRY_AUTH_GET_PACKAGES,
     REGISTRY_AUTH_UPDATE_PACKAGE,
+    REGISTRY_AUTH_DELETE_PACKAGE,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_CLEAR_RECENTS,
@@ -1078,6 +1080,9 @@ function createWindow() {
         );
         ipcMain.handle(REGISTRY_AUTH_UPDATE_PACKAGE, (e, message) =>
             updateRegistryPackage(message.scope, message.name, message.updates)
+        );
+        ipcMain.handle(REGISTRY_AUTH_DELETE_PACKAGE, (e, message) =>
+            deleteRegistryPackage(message.scope, message.name)
         );
 
         // --- Session ---
