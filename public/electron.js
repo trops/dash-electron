@@ -120,6 +120,27 @@ function buildMenu() {
                 { role: "zoomOut" },
                 { type: "separator" },
                 { role: "togglefullscreen" },
+                { type: "separator" },
+                {
+                    label: "Do Not Disturb",
+                    type: "checkbox",
+                    checked: notificationController
+                        ? notificationController.getPreferences().doNotDisturb
+                        : false,
+                    click: (menuItem) => {
+                        if (notificationController) {
+                            notificationController.setGlobal({
+                                doNotDisturb: menuItem.checked,
+                            });
+                            if (mainWindow && !mainWindow.isDestroyed()) {
+                                mainWindow.webContents.send(
+                                    "notification:dnd-changed",
+                                    menuItem.checked
+                                );
+                            }
+                        }
+                    },
+                },
             ],
         },
         {
@@ -275,6 +296,7 @@ const {
     llmController,
     cliController,
     registryController,
+    notificationController,
     // Utils
     clientCache,
     responseCache,
@@ -377,6 +399,10 @@ const {
     SESSION_GET_STATE,
     SESSION_SAVE_STATE,
     SESSION_CLEAR_STATE,
+    NOTIFICATION_SEND,
+    NOTIFICATION_GET_PREFERENCES,
+    NOTIFICATION_SET_PREFERENCES,
+    NOTIFICATION_SET_GLOBAL,
 } = coreEvents;
 
 // Widget System
@@ -1075,9 +1101,7 @@ function createWindow() {
         ipcMain.handle(REGISTRY_AUTH_UPDATE_PROFILE, (e, message) =>
             updateRegistryProfile(message)
         );
-        ipcMain.handle(REGISTRY_AUTH_GET_PACKAGES, () =>
-            getRegistryPackages()
-        );
+        ipcMain.handle(REGISTRY_AUTH_GET_PACKAGES, () => getRegistryPackages());
         ipcMain.handle(REGISTRY_AUTH_UPDATE_PACKAGE, (e, message) =>
             updateRegistryPackage(message.scope, message.name, message.updates)
         );
@@ -1140,6 +1164,20 @@ function createWindow() {
                 win.setTitle(message.title);
             }
         });
+        // --- Notifications ---
+        ipcMain.handle(NOTIFICATION_SEND, (e, payload) =>
+            notificationController.send(mainWindow, payload)
+        );
+        ipcMain.handle(NOTIFICATION_GET_PREFERENCES, () =>
+            notificationController.getPreferences()
+        );
+        ipcMain.handle(NOTIFICATION_SET_PREFERENCES, (e, { widgetId, prefs }) =>
+            notificationController.setPreferences(widgetId, prefs)
+        );
+        ipcMain.handle(NOTIFICATION_SET_GLOBAL, (e, settings) =>
+            notificationController.setGlobal(settings)
+        );
+
         // --- Widget Event IPC Bridge ---
         // Broadcasts widget pub/sub events to all windows except the sender
         ipcMain.on("widget-event:publish", (e, message) => {

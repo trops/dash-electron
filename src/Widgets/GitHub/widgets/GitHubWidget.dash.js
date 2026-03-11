@@ -18,6 +18,26 @@ const widgetDefinition = {
         backgroundColor: "bg-gray-800",
         borderColor: "border-gray-600",
     },
+    notifications: [
+        {
+            key: "prReviewRequested",
+            displayName: "PR Review Requested",
+            description: "A pull request review was requested from you",
+            defaultEnabled: true,
+        },
+        {
+            key: "issueAssigned",
+            displayName: "Issue Assigned",
+            description: "An issue was assigned to you",
+            defaultEnabled: true,
+        },
+        {
+            key: "ciStatus",
+            displayName: "CI Status",
+            description: "CI pipeline completed or failed",
+            defaultEnabled: false,
+        },
+    ],
     userConfig: {
         title: {
             type: "text",

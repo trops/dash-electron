@@ -19,6 +19,20 @@ const widgetDefinition = {
         backgroundColor: "bg-orange-900",
         borderColor: "border-orange-700",
     },
+    notifications: [
+        {
+            key: "pageUpdated",
+            displayName: "Page Updated",
+            description: "A Notion page you follow was updated",
+            defaultEnabled: false,
+        },
+        {
+            key: "mentioned",
+            displayName: "Mentioned",
+            description: "You were mentioned in a Notion page",
+            defaultEnabled: true,
+        },
+    ],
     userConfig: {
         title: {
             type: "text",

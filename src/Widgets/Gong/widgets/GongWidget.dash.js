@@ -18,6 +18,20 @@ const widgetDefinition = {
         backgroundColor: "bg-emerald-900",
         borderColor: "border-emerald-700",
     },
+    notifications: [
+        {
+            key: "callCompleted",
+            displayName: "Call Completed",
+            description: "A Gong call recording is ready",
+            defaultEnabled: true,
+        },
+        {
+            key: "actionItemAssigned",
+            displayName: "Action Item Assigned",
+            description: "An action item was assigned to you",
+            defaultEnabled: true,
+        },
+    ],
     userConfig: {
         title: {
             type: "text",
