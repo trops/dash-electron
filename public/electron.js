@@ -261,6 +261,7 @@ const {
     deleteProvider,
     // Dashboard config
     exportDashboardConfig,
+    selectDashboardFile,
     importDashboardConfig,
     installDashboardFromRegistry,
     checkCompatibility,
@@ -288,6 +289,7 @@ const {
     // Session
     getRecentDashboards,
     addRecentDashboard,
+    removeRecentDashboard,
     clearRecentDashboards,
     getSessionState,
     saveSessionState,
@@ -383,6 +385,7 @@ const {
     MENU_ITEMS_SAVE,
     DASHBOARD_CONFIG_EXPORT,
     DASHBOARD_CONFIG_IMPORT,
+    DASHBOARD_CONFIG_SELECT_FILE,
     DASHBOARD_CONFIG_INSTALL,
     DASHBOARD_CONFIG_COMPATIBILITY,
     DASHBOARD_CONFIG_PUBLISH,
@@ -406,6 +409,7 @@ const {
     REGISTRY_AUTH_DELETE_PACKAGE,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
+    SESSION_REMOVE_RECENT,
     SESSION_CLEAR_RECENTS,
     SESSION_GET_STATE,
     SESSION_SAVE_STATE,
@@ -1028,11 +1032,19 @@ function createWindow() {
                 widgetRegistry.getWidgetRegistry()
             )
         );
+        logger.loggedHandle(DASHBOARD_CONFIG_SELECT_FILE, (e) =>
+            selectDashboardFile(getSenderWindow(e))
+        );
         logger.loggedHandle(DASHBOARD_CONFIG_IMPORT, (e, message) =>
             importDashboardConfig(
                 getSenderWindow(e),
                 message.appId,
-                widgetRegistry.getWidgetRegistry()
+                widgetRegistry.getWidgetRegistry(),
+                {
+                    filePath: message.filePath,
+                    menuId: message.menuId,
+                    themeKey: message.themeKey,
+                }
             )
         );
         logger.loggedHandle(DASHBOARD_CONFIG_INSTALL, (e, message) =>
@@ -1135,6 +1147,9 @@ function createWindow() {
         logger.loggedHandle(SESSION_GET_RECENTS, () => getRecentDashboards());
         logger.loggedHandle(SESSION_ADD_RECENT, (e, message) =>
             addRecentDashboard(message.workspaceId, message.name)
+        );
+        logger.loggedHandle(SESSION_REMOVE_RECENT, (e, message) =>
+            removeRecentDashboard(message.workspaceId)
         );
         logger.loggedHandle(SESSION_CLEAR_RECENTS, () =>
             clearRecentDashboards()
