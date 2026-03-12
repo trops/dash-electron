@@ -1040,6 +1040,7 @@ function createWindow() {
                 widgetRegistry.getWidgetRegistry(),
                 {
                     filePath: message.filePath,
+                    name: message.name,
                     menuId: message.menuId,
                     themeKey: message.themeKey,
                 }
