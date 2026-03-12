@@ -12,7 +12,7 @@
  * 3. Generates dash.json metadata from package.json + widget configs
  * 4. Bundles everything into a ZIP file in the project root
  *
- * Output: {package-name}-v{version}.zip
+ * Output: widgets-{package-name}-v{version}.zip
  */
 
 const fs = require("fs");
@@ -229,7 +229,7 @@ function main() {
 
     // Write ZIP
     const zipBaseName = singleWidget ? toKebabCase(singleWidget) : packageName;
-    const zipFileName = `${zipBaseName}-v${version}.zip`;
+    const zipFileName = `widgets-${zipBaseName}-v${version}.zip`;
     const zipPath = path.join(ROOT, zipFileName);
     zip.writeZip(zipPath);
 

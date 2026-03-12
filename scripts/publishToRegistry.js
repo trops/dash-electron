@@ -270,7 +270,7 @@ function buildWidget(widgetDirName) {
     const version = getPkg().version || "0.0.0";
     const tag = `v${version}`;
     const zipBaseName = toKebabCase(widgetDirName);
-    const zipName = `${zipBaseName}-${tag}.zip`;
+    const zipName = `widgets-${zipBaseName}-${tag}.zip`;
 
     console.log(`  Building ${widgetDirName}...`);
     try {
@@ -468,7 +468,7 @@ function buildManifest(widgetDirName, scope) {
     // Build download URL template (for manifest validation compatibility)
     const zipBaseName = toKebabCase(widgetDirName);
     const downloadUrl = repoUrl
-        ? `${repoUrl}/releases/download/v{version}/${zipBaseName}-v{version}.zip`
+        ? `${repoUrl}/releases/download/v{version}/widgets-${zipBaseName}-v{version}.zip`
         : `${REGISTRY_BASE_URL}/api/packages/${scope}/${registryName}/download?version={version}`;
 
     return {
