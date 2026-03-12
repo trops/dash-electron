@@ -15,7 +15,15 @@
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
     -->
         <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-        <link rel="stylesheet" href="%PUBLIC_URL%/tailwind.css" />
+        <link
+            rel="preload"
+            href="%PUBLIC_URL%/tailwind.css"
+            as="style"
+            onload="this.onload=null;this.rel='stylesheet'"
+        />
+        <noscript
+            ><link rel="stylesheet" href="%PUBLIC_URL%/tailwind.css"
+        /></noscript>
         <title>Dash</title>
         <script>
             window.global = window;
@@ -23,7 +31,35 @@
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
+        <style>
+            body {
+                margin: 0;
+            }
+            #root-loader {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                background: #171717;
+                color: #a3a3a3;
+                font-family: system-ui;
+                font-size: 14px;
+            }
+        </style>
+        <div id="root-loader"></div>
         <div id="root"></div>
+        <script>
+            const observer = new MutationObserver(() => {
+                const root = document.getElementById("root");
+                if (root && root.children.length > 0) {
+                    document.getElementById("root-loader")?.remove();
+                    observer.disconnect();
+                }
+            });
+            observer.observe(document.getElementById("root"), {
+                childList: true,
+            });
+        </script>
         <script>
             console.log("===== HTML LOADED =====");
             console.log(

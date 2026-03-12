@@ -1,26 +1,15 @@
-const tailwindColors = require("tailwindcss/colors");
-const colorSafeList = [];
+const path = require("path");
+const os = require("os");
 
-const deprecated = [
-    "lightBlue",
-    "warmGray",
-    "trueGray",
-    "coolGray",
-    "blueGray",
-];
-
-for (const colorName in tailwindColors) {
-    if (deprecated.includes(colorName)) continue;
-    const shades = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900];
-    const pallette = tailwindColors[colorName];
-    if (typeof pallette === "object") {
-        shades.forEach((shade) => {
-            if (shade in pallette) {
-                colorSafeList.push(`placeholder:text-${colorName}-${shade}`);
-            }
-        });
-    }
-}
+const widgetCachePath = path.join(
+    os.homedir(),
+    "Library",
+    "Application Support",
+    "Dash",
+    "widgets",
+    "**",
+    "*.{js,jsx,ts,tsx}"
+);
 
 module.exports = {
     important: true,
@@ -29,8 +18,7 @@ module.exports = {
         "./src/**/*.js",
         "./node_modules/@trops/dash-react/dist/**/*.js",
         "./node_modules/@trops/dash-core/dist/**/*.js",
-        // './src/tailwind_extra.js',
-        // './src/safelist.js'
+        widgetCachePath,
     ],
     theme: {
         extend: {
@@ -42,7 +30,6 @@ module.exports = {
         },
     },
     safelist: [
-        ...colorSafeList,
         // Theme system: bg/text/border colors with specific shade patterns
         {
             pattern:
@@ -66,6 +53,10 @@ module.exports = {
         },
         {
             pattern:
+                /via-(gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(50|100|200|300|400|500|600|700|800|900|950)/,
+        },
+        {
+            pattern:
                 /to-(gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(50|100|200|300|400|500|600|700|800|900|950)/,
         },
         // Named colors without shades
@@ -75,14 +66,8 @@ module.exports = {
         "text-black",
         "text-white",
         // Layout utilities used by theme system
-        {
-            pattern: /grid-cols-(1|2|3|4|5|6|7|8|9|10|11|12)/,
-            variants: ["lg", "xl", "2xl", "3xl"],
-        },
-        {
-            pattern: /grid-rows-(1|2|3|4|5|6)/,
-            variants: ["lg", "xl", "2xl", "3xl"],
-        },
+        { pattern: /grid-cols-(1|2|3|4|5|6|7|8|9|10|11|12)/ },
+        { pattern: /grid-rows-(1|2|3|4|5|6)/ },
         {
             pattern: /opacity-(0|5|10|20|25|30|40|50|60|70|75|80|90|95|100)/,
         },

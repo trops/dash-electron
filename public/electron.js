@@ -444,8 +444,6 @@ function getSenderWindow(e) {
 let ipcHandlersRegistered = false;
 
 function createWindow() {
-    ipcMain.removeAllListeners();
-
     // Create the browser window.
     mainWindow = new BrowserWindow({
         width: 1920,
