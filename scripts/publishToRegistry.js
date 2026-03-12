@@ -3,22 +3,22 @@
 /**
  * publishToRegistry.js
  *
- * Automates publishing widget packages to the dash-registry.
+ * Publishes widget packages to the dash-registry via the API.
  *
  * What it does:
- * 1. Scans src/Widgets/ for all .dash.js config files
- * 2. Reads metadata from each (name, author, description, icon, version, providers, etc.)
- * 3. Reads package.json for package-level info (name, version, author, repository)
- * 4. Generates a manifest.json conforming to the registry schema
- * 5. Uses `gh` CLI to fork dash-registry, create a branch, write manifest, and open a PR
- *
- * Prerequisites:
- * - `gh` CLI installed and authenticated (`gh auth login`)
- * - `npm run package-zip` script available (the script builds and uploads the ZIP automatically)
+ * 1. Scans src/Widgets/ for .dash.js config files
+ * 2. Builds a manifest from metadata (name, author, description, icon, version, providers)
+ * 3. Validates the manifest against the registry schema
+ * 4. Authenticates via OAuth device code flow (opens browser)
+ * 5. Builds the widget bundle (Rollup) and creates a ZIP
+ * 6. POSTs the ZIP + manifest to the registry API
  *
  * Usage:
- *   npm run publish-to-registry
- *   npm run publish-to-registry -- --dry-run    # Preview manifest without opening PR
+ *   npm run publish-to-registry                          # Publish default package
+ *   npm run publish-to-registry -- --widget Chat         # Publish single widget directory
+ *   npm run publish-to-registry -- --all                 # Publish all widget directories
+ *   npm run publish-to-registry -- --dry-run             # Preview manifest without publishing
+ *   npm run publish-to-registry -- --name custom-name    # Override registry name
  */
 
 const fs = require("fs");
@@ -26,15 +26,41 @@ const path = require("path");
 const { execSync } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
+
+// Load .env from project root
+require("dotenv").config({ path: path.join(ROOT, ".env") });
+
 const WIDGETS_DIR = path.join(ROOT, "src", "Widgets");
-const REGISTRY_REPO = "trops/dash-registry";
+const REGISTRY_BASE_URL =
+    process.env.DASH_REGISTRY_API_URL || "https://registry.trops.dev";
+
+const CATEGORY_MAP = {
+    DashSamples: "general",
+    Chat: "productivity",
+    GoogleCalendar: "productivity",
+    Gong: "productivity",
+    GitHub: "development",
+    Gmail: "productivity",
+    Slack: "social",
+    Notion: "productivity",
+    GoogleDrive: "productivity",
+    Algolia: "development",
+    AlgoliaSearch: "development",
+    Filesystem: "utilities",
+    Google: "productivity",
+};
+
+// ── CLI args ──────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
 const isDryRun = args.includes("--dry-run");
+const isAll = args.includes("--all");
 const nameIdx = args.indexOf("--name");
 const customName = nameIdx !== -1 ? args[nameIdx + 1] : null;
 const widgetIdx = args.indexOf("--widget");
 const singleWidget = widgetIdx !== -1 ? args[widgetIdx + 1] : null;
+
+// ── Helpers ───────────────────────────────────────────────────────────
 
 function toKebabCase(str) {
     return str
@@ -108,7 +134,6 @@ function parseDashConfig(filePath) {
     const providersMatch = content.match(/providers\s*:\s*\[([\s\S]*?)\]/m);
     if (providersMatch) {
         const providerBlock = providersMatch[1];
-        // Match individual provider objects
         const objectRegex = /\{([^}]+)\}/g;
         let objMatch;
         while ((objMatch = objectRegex.exec(providerBlock)) !== null) {
@@ -140,54 +165,129 @@ function parseDashConfig(filePath) {
     };
 }
 
-function exec(cmd) {
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ── Device auth flow ──────────────────────────────────────────────────
+
+async function authenticate() {
+    console.log("\nAuthenticating with the registry...");
+
+    // 1. Initiate device flow
+    const initRes = await fetch(`${REGISTRY_BASE_URL}/api/auth/device`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+    });
+
+    if (!initRes.ok) {
+        console.error(
+            `Error: Device flow initiation failed (HTTP ${initRes.status})`
+        );
+        process.exit(1);
+    }
+
+    const initData = await initRes.json();
+    const { device_code, user_code, verification_uri_complete, interval } =
+        initData;
+
+    // 2. Open browser
+    console.log(`\nOpening browser for authentication...`);
+    console.log(`Code: ${user_code}`);
+    console.log(`URL:  ${verification_uri_complete}\n`);
+
     try {
-        return execSync(cmd, { encoding: "utf8", stdio: "pipe" }).trim();
-    } catch (error) {
-        return null;
+        execSync(`open "${verification_uri_complete}"`, { stdio: "ignore" });
+    } catch {
+        console.log(
+            "Could not open browser automatically. Please visit the URL above."
+        );
     }
-}
 
-function checkGhCli() {
-    const version = exec("gh --version");
-    if (!version) {
-        console.error("Error: `gh` CLI is not installed.");
-        console.error("Install it: https://cli.github.com/");
+    // 3. Poll for token
+    console.log("Waiting for authorization...");
+    const maxAttempts = Math.ceil(900 / (interval || 5));
+    const pollInterval = (interval || 5) * 1000;
+
+    for (let i = 0; i < maxAttempts; i++) {
+        await sleep(pollInterval);
+
+        const pollRes = await fetch(
+            `${REGISTRY_BASE_URL}/api/auth/device?device_code=${encodeURIComponent(
+                device_code
+            )}`
+        );
+
+        if (pollRes.ok) {
+            const data = await pollRes.json();
+            console.log("Authorized!\n");
+            return data.access_token;
+        }
+
+        if (pollRes.status === 428) {
+            // authorization_pending — keep polling
+            continue;
+        }
+
+        if (pollRes.status === 400) {
+            const data = await pollRes.json();
+            if (data.error === "expired_token") {
+                console.error("Error: Device code expired. Please try again.");
+                process.exit(1);
+            }
+            continue;
+        }
+
+        console.error(
+            `Error: Unexpected poll response (HTTP ${pollRes.status})`
+        );
         process.exit(1);
     }
 
-    const authStatus = exec("gh auth status 2>&1");
-    if (!authStatus || authStatus.includes("not logged")) {
-        console.error("Error: `gh` CLI is not authenticated.");
-        console.error("Run: gh auth login");
-        process.exit(1);
-    }
+    console.error("Error: Authorization timed out. Please try again.");
+    process.exit(1);
 }
 
-function buildAndRelease(packageName, version) {
+async function getScope(token) {
+    const res = await fetch(`${REGISTRY_BASE_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+        console.error(
+            `Error: Could not fetch user profile (HTTP ${res.status}). Make sure you are registered at the registry website.`
+        );
+        process.exit(1);
+    }
+
+    const data = await res.json();
+    return data.user.username;
+}
+
+// ── Build ─────────────────────────────────────────────────────────────
+
+function buildWidget(widgetDirName) {
+    const version = getPkg().version || "0.0.0";
     const tag = `v${version}`;
-    const zipBaseName = singleWidget ? toKebabCase(singleWidget) : packageName;
+    const zipBaseName = toKebabCase(widgetDirName);
     const zipName = `${zipBaseName}-${tag}.zip`;
 
-    // Always build a fresh ZIP
-    console.log(`\nBuilding widget package...`);
+    console.log(`  Building ${widgetDirName}...`);
     try {
-        if (singleWidget) {
-            execSync("npm run package-widgets", {
-                cwd: ROOT,
-                stdio: "inherit",
-                env: { ...process.env, ROLLUP_WIDGET: singleWidget },
-            });
-            execSync(`node scripts/packageZip.js --widget ${singleWidget}`, {
-                cwd: ROOT,
-                stdio: "inherit",
-            });
-        } else {
-            execSync("npm run package-zip", { cwd: ROOT, stdio: "inherit" });
-        }
+        execSync("npm run package-widgets", {
+            cwd: ROOT,
+            stdio: "inherit",
+            env: { ...process.env, ROLLUP_WIDGET: widgetDirName },
+        });
+        execSync(`node scripts/packageZip.js --widget ${widgetDirName}`, {
+            cwd: ROOT,
+            stdio: "inherit",
+        });
     } catch {
-        console.error("Error: Failed to build widget package.");
-        process.exit(1);
+        console.error(
+            `Error: Failed to build widget package for ${widgetDirName}.`
+        );
+        return null;
     }
 
     // Scan CJS bundle for unbundled require() calls
@@ -227,13 +327,13 @@ function buildAndRelease(packageName, version) {
                 const unique = [...new Set(unknowns)];
                 if (unique.length > 0) {
                     console.warn(
-                        `\nWARNING: Unbundled dependencies detected in ${cjsFile}:`
+                        `\n  WARNING: Unbundled dependencies in ${cjsFile}:`
                     );
                     unique.forEach((m) =>
-                        console.warn(`  - ${m} (not in host module list)`)
+                        console.warn(`    - ${m} (not in host module list)`)
                     );
                     console.warn(
-                        "These will fail at runtime if not available in the host app.\n"
+                        "  These will fail at runtime if not available in the host app.\n"
                     );
                 }
             }
@@ -243,40 +343,72 @@ function buildAndRelease(packageName, version) {
     const zipPath = path.join(ROOT, zipName);
     if (!fs.existsSync(zipPath)) {
         console.error(`Error: Expected ZIP not found at ${zipPath}`);
-        process.exit(1);
+        return null;
     }
 
-    // Try creating a new release
-    console.log(`Uploading ${zipName} to release ${tag}...`);
-    const createResult = exec(
-        `gh release create ${tag} "${zipPath}" --generate-notes 2>&1`
-    );
-
-    if (createResult && !createResult.includes("already exists")) {
-        console.log(`Release ${tag} created.`);
-        return;
-    }
-
-    // Release already exists — replace the ZIP asset
-    console.log(`Release ${tag} exists. Replacing asset...`);
-    const uploadResult = exec(
-        `gh release upload ${tag} "${zipPath}" --clobber 2>&1`
-    );
-    if (!uploadResult || uploadResult.includes("error")) {
-        console.error("Error: Failed to upload ZIP to existing release.");
-        console.error(uploadResult);
-        process.exit(1);
-    }
-
-    console.log(`Release ${tag} updated with fresh ${zipName}.`);
+    return zipPath;
 }
 
-function main() {
-    // Read package.json
-    const pkg = JSON.parse(
-        fs.readFileSync(path.join(ROOT, "package.json"), "utf8")
+// ── Publish ───────────────────────────────────────────────────────────
+
+async function publishToApi(token, manifest, zipPath) {
+    const zipBuffer = fs.readFileSync(zipPath);
+    const zipFileName = path.basename(zipPath);
+
+    const { FormData, File } = await getFormDataImpl();
+    const form = new FormData();
+    form.append(
+        "file",
+        new File([zipBuffer], zipFileName, { type: "application/zip" })
     );
-    const projectName = (pkg.name || "widgets").replace(/^@[^/]+\//, "");
+    form.append("manifest", JSON.stringify(manifest));
+
+    const res = await fetch(`${REGISTRY_BASE_URL}/api/publish`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+        return {
+            success: false,
+            error: data.error || `HTTP ${res.status}`,
+            details: data.details,
+        };
+    }
+
+    return { success: true, ...data };
+}
+
+async function getFormDataImpl() {
+    // Node 18+ has global FormData and File via undici
+    if (
+        typeof globalThis.FormData !== "undefined" &&
+        typeof globalThis.File !== "undefined"
+    ) {
+        return { FormData: globalThis.FormData, File: globalThis.File };
+    }
+    // Fallback for older Node
+    const undici = await import("undici");
+    return { FormData: undici.FormData, File: undici.File };
+}
+
+// ── Manifest building ─────────────────────────────────────────────────
+
+let _pkg = null;
+function getPkg() {
+    if (!_pkg) {
+        _pkg = JSON.parse(
+            fs.readFileSync(path.join(ROOT, "package.json"), "utf8")
+        );
+    }
+    return _pkg;
+}
+
+function buildManifest(widgetDirName, scope) {
+    const pkg = getPkg();
     const version = pkg.version || "0.0.0";
     const author =
         typeof pkg.author === "string" ? pkg.author : pkg.author?.name || "";
@@ -284,18 +416,11 @@ function main() {
         typeof pkg.repository === "string"
             ? pkg.repository
             : pkg.repository?.url || "";
+    const repoUrl = repository.replace(/\.git$/, "");
 
-    // Detect scope (GitHub username) — needed for manifest even in dry-run
-    const scope = exec("gh api user --jq .login 2>/dev/null");
-    if (!scope && !isDryRun) {
-        checkGhCli(); // will error with helpful message
-    }
-
-    // Collect widget configs (scoped to single widget if --widget flag provided)
-    const effectiveWidgetsDir = singleWidget
-        ? path.join(WIDGETS_DIR, singleWidget)
-        : WIDGETS_DIR;
-    const dashConfigPaths = collectDashConfigs(effectiveWidgetsDir);
+    // Collect widget configs for this directory
+    const widgetDir = path.join(WIDGETS_DIR, widgetDirName);
+    const dashConfigPaths = collectDashConfigs(widgetDir);
     const widgets = [];
 
     for (const configPath of dashConfigPaths) {
@@ -313,73 +438,41 @@ function main() {
     }
 
     if (widgets.length === 0) {
-        console.error("Error: No widgets found in src/Widgets/");
-        process.exit(1);
+        return null;
     }
 
-    // ── Resolve registryName / registryDisplayName ──────────────────
+    // Resolve registry name
+    let registryName = toKebabCase(widgetDirName);
+    let registryDisplayName = toTitleCase(registryName);
 
-    let registryName = projectName; // Priority 4: package.json
-    let registryDisplayName = pkg.productName || projectName;
-
-    // Priority 3: Folder name under src/Widgets/ (or the --widget name directly)
-    if (singleWidget) {
-        registryName = toKebabCase(singleWidget);
-        registryDisplayName = toTitleCase(registryName);
-    } else {
-        const widgetDirs = fs
-            .readdirSync(WIDGETS_DIR, { withFileTypes: true })
-            .filter((e) => e.isDirectory())
-            .map((e) => e.name);
-        if (widgetDirs.length === 1) {
-            registryName = toKebabCase(widgetDirs[0]);
-            registryDisplayName = toTitleCase(registryName);
-        }
-    }
-
-    // Priority 2: .dash.js package field
+    // Override from .dash.js package field if consistent
     const packageNames = [
         ...new Set(widgets.map((w) => w.package).filter(Boolean)),
     ];
     if (packageNames.length === 1) {
         registryDisplayName = packageNames[0];
         registryName = toKebabCase(packageNames[0]);
-    } else if (packageNames.length > 1) {
-        console.warn(
-            `Warning: Multiple package names in configs: ${packageNames.join(
-                ", "
-            )}`
-        );
     }
 
-    // Priority 1: --name flag (always wins)
-    if (customName) {
-        if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(customName)) {
-            console.error(
-                `Error: --name must be kebab-case (got "${customName}").`
-            );
-            process.exit(1);
-        }
+    // --name flag always wins (only applies to single-widget mode)
+    if (customName && !isAll) {
         registryName = customName;
         registryDisplayName = toTitleCase(customName);
     }
 
-    // Strip internal "package" field from widget entries before manifest
-    const manifestWidgets = widgets.map(({ package: _pkg, ...rest }) => rest);
+    // Strip internal "package" field from widget entries
+    const manifestWidgets = widgets.map(({ package: _p, ...rest }) => rest);
 
-    // Infer category from tags or default
-    const category = "general";
+    const category = CATEGORY_MAP[widgetDirName] || "general";
 
-    // Build download URL template
-    const repoUrl = repository.replace(/\.git$/, "");
-    const zipBaseName = singleWidget ? toKebabCase(singleWidget) : projectName;
+    // Build download URL template (for manifest validation compatibility)
+    const zipBaseName = toKebabCase(widgetDirName);
     const downloadUrl = repoUrl
         ? `${repoUrl}/releases/download/v{version}/${zipBaseName}-v{version}.zip`
-        : "";
+        : `${REGISTRY_BASE_URL}/api/packages/${scope}/${registryName}/download?version={version}`;
 
-    // Generate manifest
-    const manifest = {
-        scope: scope || "unknown",
+    return {
+        scope: scope,
         name: registryName,
         displayName: registryDisplayName,
         author: author,
@@ -393,152 +486,161 @@ function main() {
         widgets: manifestWidgets,
         appOrigin: pkg.name || "",
     };
+}
 
-    console.log("\nGenerated manifest:");
-    console.log(JSON.stringify(manifest, null, 2));
-    console.log(`\nWidgets: ${manifestWidgets.map((w) => w.name).join(", ")}`);
+// ── Main ──────────────────────────────────────────────────────────────
 
-    // Pre-flight schema validation
-    const { validateManifestSchema } = require("./validateWidget.cjs");
-    const { errors: schemaErrors, warnings: schemaWarnings } =
-        validateManifestSchema(manifest);
+async function main() {
+    // Determine which widget directories to process
+    let widgetDirs;
 
-    if (schemaErrors.length > 0) {
-        console.error("\nManifest validation failed:");
-        schemaErrors.forEach((e) => console.error(`  ERROR: ${e}`));
-        schemaWarnings.forEach((w) => console.warn(`  WARNING: ${w}`));
-        process.exit(1);
-    }
-    if (schemaWarnings.length > 0) {
-        console.warn("\nManifest validation warnings:");
-        schemaWarnings.forEach((w) => console.warn(`  WARNING: ${w}`));
+    if (isAll) {
+        widgetDirs = fs
+            .readdirSync(WIDGETS_DIR, { withFileTypes: true })
+            .filter((e) => e.isDirectory())
+            .map((e) => e.name);
+    } else if (singleWidget) {
+        widgetDirs = [singleWidget];
     } else {
-        console.log("\nManifest schema validation passed.");
+        // Default: all directories (same as --all)
+        widgetDirs = fs
+            .readdirSync(WIDGETS_DIR, { withFileTypes: true })
+            .filter((e) => e.isDirectory())
+            .map((e) => e.name);
     }
 
-    if (isDryRun) {
-        console.log("\n[Dry run] No PR will be created.");
-        return;
-    }
-
-    if (!downloadUrl) {
+    // Validate --name is kebab-case
+    if (customName && !/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(customName)) {
         console.error(
-            "\nError: Could not determine download URL. Set `repository` in package.json."
+            `Error: --name must be kebab-case (got "${customName}").`
         );
         process.exit(1);
     }
 
-    // Check gh CLI (needed for release upload and PR creation)
-    checkGhCli();
+    // Use a placeholder scope for dry-run, real scope after auth
+    const dryRunScope = "unknown";
 
-    // Build fresh ZIP and ensure release has latest assets
-    const releasePackageName = singleWidget
-        ? toKebabCase(singleWidget)
-        : projectName;
-    buildAndRelease(releasePackageName, version);
+    // Build manifests and validate
+    const packages = [];
+    for (const dirName of widgetDirs) {
+        const manifest = buildManifest(dirName, dryRunScope);
+        if (!manifest) {
+            console.log(`Skipping ${dirName} (no widgets found)`);
+            continue;
+        }
+        packages.push({ dirName, manifest });
+    }
 
-    console.log("\nPublishing to dash-registry...");
-
-    // Fork the registry repo (idempotent)
-    console.log(`Forking ${REGISTRY_REPO}...`);
-    exec(`gh repo fork ${REGISTRY_REPO} --clone=false 2>&1`);
-
-    // Get the user's GitHub username (already have scope, but verify for PR)
-    const ghUser = scope;
-    if (!ghUser) {
-        console.error("Error: Could not determine GitHub username.");
+    if (packages.length === 0) {
+        console.error("Error: No publishable widget directories found.");
         process.exit(1);
     }
 
-    const branchName = `add-${registryName}`;
-    const manifestPath = `packages/${scope}/${registryName}/manifest.json`;
-    const manifestContent = JSON.stringify(manifest, null, 2);
+    // Print manifests and validate
+    const { validateManifestSchema } = require("./validateWidget.cjs");
+    let hasErrors = false;
 
-    // Create the manifest file via the GitHub API
-    console.log(`Creating ${manifestPath} on branch ${branchName}...`);
-
-    // Get the default branch SHA
-    const defaultBranch =
-        exec(
-            `gh api repos/${ghUser}/dash-registry --jq .default_branch 2>&1`
-        ) || "main";
-    const baseSha = exec(
-        `gh api repos/${ghUser}/dash-registry/git/ref/heads/${defaultBranch} --jq .object.sha 2>&1`
-    );
-
-    if (!baseSha) {
-        console.error(
-            "Error: Could not get base SHA. Make sure the fork exists."
+    for (const { dirName, manifest } of packages) {
+        console.log(`\n── ${dirName} ──`);
+        console.log(JSON.stringify(manifest, null, 2));
+        console.log(
+            `Widgets: ${manifest.widgets.map((w) => w.name).join(", ")}`
         );
-        process.exit(1);
-    }
 
-    // Create branch
-    exec(
-        `gh api repos/${ghUser}/dash-registry/git/refs -f ref=refs/heads/${branchName} -f sha=${baseSha} 2>&1`
-    );
+        const { errors, warnings } = validateManifestSchema(manifest);
 
-    // Write manifest file via Contents API
-    const encodedContent = Buffer.from(manifestContent).toString("base64");
-    const createResult = exec(
-        `gh api repos/${ghUser}/dash-registry/contents/${manifestPath} \
-        -X PUT \
-        -f message="Add ${registryName} v${version}" \
-        -f content="${encodedContent}" \
-        -f branch="${branchName}" 2>&1`
-    );
-
-    if (!createResult || createResult.includes("error")) {
-        // File might already exist, try updating
-        const existingSha = exec(
-            `gh api repos/${ghUser}/dash-registry/contents/${manifestPath}?ref=${branchName} --jq .sha 2>&1`
-        );
-        if (existingSha && !existingSha.includes("Not Found")) {
-            exec(
-                `gh api repos/${ghUser}/dash-registry/contents/${manifestPath} \
-                -X PUT \
-                -f message="Update ${registryName} to v${version}" \
-                -f content="${encodedContent}" \
-                -f branch="${branchName}" \
-                -f sha="${existingSha}" 2>&1`
-            );
+        if (errors.length > 0) {
+            console.error(`\nManifest validation failed for ${dirName}:`);
+            errors.forEach((e) => console.error(`  ERROR: ${e}`));
+            warnings.forEach((w) => console.warn(`  WARNING: ${w}`));
+            hasErrors = true;
+        } else if (warnings.length > 0) {
+            console.warn(`Validation warnings for ${dirName}:`);
+            warnings.forEach((w) => console.warn(`  WARNING: ${w}`));
+        } else {
+            console.log("Schema validation passed.");
         }
     }
 
-    // Create PR
-    console.log("Opening pull request...");
-    const prTitle = `Add ${manifest.displayName} v${version}`;
-    const prBody = `## New Package: ${manifest.displayName}
+    if (hasErrors) {
+        console.error("\nAborting due to validation errors.");
+        process.exit(1);
+    }
 
-**Author:** ${author}
-**Version:** ${version}
-**Widgets:** ${manifestWidgets.map((w) => w.displayName || w.name).join(", ")}
-
-${manifest.description}
-
----
-*Auto-generated by \`npm run publish-to-registry\`*`;
-
-    const prResult = exec(
-        `gh pr create \
-        --repo ${REGISTRY_REPO} \
-        --head ${ghUser}:${branchName} \
-        --title "${prTitle}" \
-        --body "${prBody.replace(/"/g, '\\"')}" 2>&1`
-    );
-
-    if (prResult && prResult.includes("github.com")) {
-        console.log(`\nPull request created: ${prResult}`);
-    } else {
+    if (isDryRun) {
         console.log(
-            "\nPR may already exist or was created. Check:",
-            `https://github.com/${REGISTRY_REPO}/pulls`
+            `\n[Dry run] ${packages.length} package(s) would be published. No changes made.`
+        );
+        return;
+    }
+
+    // Authenticate (once for all packages)
+    const token = await authenticate();
+    const scope = await getScope(token);
+    console.log(`Authenticated as: ${scope}`);
+
+    // Rebuild manifests with real scope
+    for (const pkg of packages) {
+        pkg.manifest = buildManifest(pkg.dirName, scope);
+    }
+
+    // Publish each package
+    const results = [];
+
+    for (const { dirName, manifest } of packages) {
+        console.log(`\n── Publishing ${dirName} (${manifest.name}) ──`);
+
+        // Build
+        const zipPath = buildWidget(dirName);
+        if (!zipPath) {
+            results.push({ dirName, success: false, error: "Build failed" });
+            continue;
+        }
+
+        // Publish
+        const result = await publishToApi(token, manifest, zipPath);
+
+        if (result.success) {
+            console.log(`  Published ${manifest.name} v${manifest.version}`);
+            console.log(`  Registry: ${result.registryUrl}`);
+            results.push({
+                dirName,
+                success: true,
+                registryUrl: result.registryUrl,
+            });
+        } else {
+            console.error(`  Failed: ${result.error}`);
+            if (result.details) {
+                result.details.forEach((d) => console.error(`    - ${d}`));
+            }
+            results.push({ dirName, success: false, error: result.error });
+        }
+    }
+
+    // Summary
+    const succeeded = results.filter((r) => r.success);
+    const failed = results.filter((r) => !r.success);
+
+    console.log("\n── Summary ──");
+    console.log(`Published: ${succeeded.length}/${results.length} package(s)`);
+
+    if (succeeded.length > 0) {
+        console.log("\nSucceeded:");
+        succeeded.forEach((r) =>
+            console.log(`  ${r.dirName} → ${r.registryUrl}`)
         );
     }
 
-    console.log(
-        "\nDone! Your widgets will appear in the Discover tab once the PR is merged."
-    );
+    if (failed.length > 0) {
+        console.log("\nFailed:");
+        failed.forEach((r) => console.log(`  ${r.dirName}: ${r.error}`));
+        process.exit(1);
+    }
+
+    console.log("\nDone!");
 }
 
-main();
+main().catch((err) => {
+    console.error(`Fatal: ${err.message}`);
+    process.exit(1);
+});

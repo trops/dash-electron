@@ -31,9 +31,7 @@ const GLOBALS = {
 };
 
 const PLUGINS = [
-    external({
-        includeDependencies: true,
-    }),
+    external(),
     postcss({
         extract: true,
         plugins: [autoprefixer],
@@ -60,10 +58,20 @@ const PLUGINS = [
     strip(),
 ];
 
-const EXTERNAL = ["react", "react-dom", "prop-types"];
+const EXTERNAL = [
+    "react",
+    "react-dom",
+    "prop-types",
+    "@trops/dash-core",
+    "@trops/dash-react",
+];
 
 // https://github.com/rollup/plugins/tree/master/packages/babel#babelhelpers
-const CJS_AND_ES_EXTERNALS = EXTERNAL.concat(/@babel\/runtime/);
+const CJS_AND_ES_EXTERNALS = EXTERNAL.concat(
+    /@babel\/runtime/,
+    /@trops\/dash-core/,
+    /@trops\/dash-react/
+);
 
 const OUTPUT_DATA = [
     {
