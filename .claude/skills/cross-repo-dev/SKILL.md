@@ -16,12 +16,12 @@ Use this workflow when a change touches `dash-core`, `dash-react`, or both, and 
 
 ## Repo Locations
 
-| Repo | Path | Main Branch | Package |
-|------|------|-------------|---------|
-| dash-core | `~/Development/dash-core/dash-core` | `master` | `@trops/dash-core` |
-| dash-react | `~/Development/dash-react/dash-react` | `main` | `@trops/dash-react` |
-| dash-electron | `~/Development/dash-electron/dash-electron` | `master` | N/A (app) |
-| dash-registry | `~/Development/dash-registry` | `main` | N/A (site) |
+| Repo          | Path                                        | Main Branch | Package             |
+| ------------- | ------------------------------------------- | ----------- | ------------------- |
+| dash-core     | `~/Development/dash-core/dash-core`         | `master`    | `@trops/dash-core`  |
+| dash-react    | `~/Development/dash-react/dash-react`       | `main`      | `@trops/dash-react` |
+| dash-electron | `~/Development/dash-electron/dash-electron` | `master`    | N/A (app)           |
+| dash-registry | `~/Development/dash-registry`               | `main`      | N/A (site)          |
 
 ## Step 1: Identify Scope
 
@@ -111,11 +111,11 @@ npm run ci
 
 Move the ticket through statuses at the right moments:
 
-| When | Transition | ID |
-|------|-----------|-----|
-| Start coding | To Do -> In Progress | 21 |
-| PR created | In Progress -> In Review | 31 |
-| PR merged | In Review -> Done | 41 |
+| When         | Transition               | ID  |
+| ------------ | ------------------------ | --- |
+| Start coding | To Do -> In Progress     | 21  |
+| PR created   | In Progress -> In Review | 31  |
+| PR merged    | In Review -> Done        | 41  |
 
 ```
 mcp__claude_ai_Atlassian__transitionJiraIssue({
@@ -139,12 +139,12 @@ npm run ci:release -- -m "message"  # above + merge + tag + cleanup
 
 ## Multi-Repo Change Checklist
 
-- [ ] Changes made in dependency repo
-- [ ] `npm run ci` passes in dependency repo
-- [ ] Linked into dash-electron and tested
-- [ ] `npm run ci` passes in dash-electron (while linked)
-- [ ] Unlinked from dash-electron
-- [ ] Dependency repo PR created/merged
-- [ ] dash-electron updated to published version
-- [ ] `npm run ci` passes in dash-electron (with published version)
-- [ ] Jira ticket transitioned appropriately
+-   [ ] Changes made in dependency repo
+-   [ ] `npm run ci` passes in dependency repo
+-   [ ] Linked into dash-electron and tested
+-   [ ] `npm run ci` passes in dash-electron (while linked)
+-   [ ] Unlinked from dash-electron
+-   [ ] Dependency repo PR created/merged
+-   [ ] dash-electron updated to published version
+-   [ ] `npm run ci` passes in dash-electron (with published version)
+-   [ ] Jira ticket transitioned appropriately

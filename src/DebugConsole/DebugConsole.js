@@ -67,7 +67,9 @@ function DebugConsole() {
                     {LEVEL_FILTERS.map((level) => (
                         <button
                             key={level}
-                            className={`debug-filter-btn ${level !== "all" ? `level-${level}` : ""} ${levelFilter === level ? "active" : ""}`}
+                            className={`debug-filter-btn ${
+                                level !== "all" ? `level-${level}` : ""
+                            } ${levelFilter === level ? "active" : ""}`}
                             onClick={() => setLevelFilter(level)}
                         >
                             {level.charAt(0).toUpperCase() + level.slice(1)}

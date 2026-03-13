@@ -16,7 +16,11 @@ function formatTs(ts) {
     if (!ts) return "";
     try {
         const d = new Date(ts);
-        return d.toLocaleTimeString("en-US", { hour12: false }) + "." + String(d.getMilliseconds()).padStart(3, "0");
+        return (
+            d.toLocaleTimeString("en-US", { hour12: false }) +
+            "." +
+            String(d.getMilliseconds()).padStart(3, "0")
+        );
     } catch {
         return ts;
     }
@@ -28,14 +32,16 @@ function DebugEntry({ entry }) {
     const color = LEVEL_COLORS[level] || "#94a3b8";
     const bg = LEVEL_BG[level] || "transparent";
 
-    const hasDetail = entry.args !== undefined || entry.result !== undefined || entry.error;
+    const hasDetail =
+        entry.args !== undefined || entry.result !== undefined || entry.error;
 
     return (
         <div
             style={{
                 borderBottom: "1px solid #1e293b",
                 padding: "4px 8px",
-                fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+                fontFamily:
+                    "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
                 fontSize: "12px",
                 lineHeight: "1.5",
                 backgroundColor: bg,
@@ -44,7 +50,13 @@ function DebugEntry({ entry }) {
             onClick={() => hasDetail && setExpanded(!expanded)}
         >
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <span style={{ color: "#64748b", minWidth: "85px", flexShrink: 0 }}>
+                <span
+                    style={{
+                        color: "#64748b",
+                        minWidth: "85px",
+                        flexShrink: 0,
+                    }}
+                >
                     {formatTs(entry.ts)}
                 </span>
                 <span
@@ -76,7 +88,9 @@ function DebugEntry({ entry }) {
                     </span>
                 )}
                 {entry.success === false && (
-                    <span style={{ color: "#f87171", flexShrink: 0 }}>FAIL</span>
+                    <span style={{ color: "#f87171", flexShrink: 0 }}>
+                        FAIL
+                    </span>
                 )}
                 {hasDetail && (
                     <span style={{ color: "#475569", flexShrink: 0 }}>

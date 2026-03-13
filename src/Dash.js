@@ -526,10 +526,7 @@ class App extends React.Component {
                     path="/popout-widget/:workspaceId/:widgetId"
                     element={<WidgetPopoutDashboard />}
                 />
-                <Route
-                    path="/debug-console"
-                    element={<DebugConsole />}
-                />
+                <Route path="/debug-console" element={<DebugConsole />} />
             </Routes>
         );
     }
