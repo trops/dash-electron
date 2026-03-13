@@ -1,7 +1,7 @@
 {
     "name": "@trops/dash-electron",
     "productName": "Dash",
-    "version": "0.0.181",
+    "version": "0.0.182",
     "description": "A Dashboard Generator",
     "author": "John P. Giatropoulos",
     "publishConfig": {
