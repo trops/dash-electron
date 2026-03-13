@@ -315,6 +315,7 @@ const {
     registryController,
     themeRegistryController,
     notificationController,
+    schedulerController,
     // Utils
     clientCache,
     responseCache,
@@ -427,6 +428,14 @@ const {
     NOTIFICATION_GET_PREFERENCES,
     NOTIFICATION_SET_PREFERENCES,
     NOTIFICATION_SET_GLOBAL,
+    SCHEDULER_REGISTER_TASK,
+    SCHEDULER_REMOVE_TASK,
+    SCHEDULER_REMOVE_TASKS,
+    SCHEDULER_GET_TASKS,
+    SCHEDULER_UPDATE_TASK,
+    SCHEDULER_ENABLE_TASK,
+    SCHEDULER_DISABLE_TASK,
+    SCHEDULER_GET_PENDING,
 } = coreEvents;
 
 // Widget System
@@ -1268,6 +1277,32 @@ function createWindow() {
             notificationController.setGlobal(settings)
         );
 
+        // --- Scheduler ---
+        logger.loggedHandle(SCHEDULER_REGISTER_TASK, (e, payload) =>
+            schedulerController.registerTask(payload)
+        );
+        logger.loggedHandle(SCHEDULER_REMOVE_TASK, (e, taskId) =>
+            schedulerController.removeTask(taskId)
+        );
+        logger.loggedHandle(SCHEDULER_REMOVE_TASKS, (e, widgetId) =>
+            schedulerController.removeTasks(widgetId)
+        );
+        logger.loggedHandle(SCHEDULER_GET_TASKS, (e, widgetId) =>
+            schedulerController.getTasks(widgetId)
+        );
+        logger.loggedHandle(SCHEDULER_UPDATE_TASK, (e, { taskId, updates }) =>
+            schedulerController.updateTask(taskId, updates)
+        );
+        logger.loggedHandle(SCHEDULER_ENABLE_TASK, (e, taskId) =>
+            schedulerController.enableTask(taskId)
+        );
+        logger.loggedHandle(SCHEDULER_DISABLE_TASK, (e, taskId) =>
+            schedulerController.disableTask(taskId)
+        );
+        logger.loggedHandle(SCHEDULER_GET_PENDING, (e, widgetId) =>
+            schedulerController.getPendingResults(widgetId)
+        );
+
         // --- Widget Event IPC Bridge ---
         // Broadcasts widget pub/sub events to all windows except the sender
         ipcMain.on("widget-event:publish", (e, message) => {
@@ -1466,10 +1501,23 @@ app.whenReady().then(() => {
 
     buildMenu();
     createWindow();
+
+    // --- Scheduler lifecycle ---
+    schedulerController.init({
+        getWindows: () => BrowserWindow.getAllWindows(),
+        notificationController,
+        getMainWindow: () => mainWindow,
+    });
+    schedulerController.start();
+
+    const { powerMonitor } = require("electron");
+    powerMonitor.on("suspend", () => schedulerController.handleSuspend());
+    powerMonitor.on("resume", () => schedulerController.handleResume());
 });
 
 app.on("window-all-closed", () => {
     logger.logLifecycle("window-all-closed");
+    schedulerController.stop();
     mcpController.stopAllServers().catch((err) => {
         console.error("[electron] Error stopping MCP servers:", err);
     });
