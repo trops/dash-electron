@@ -304,11 +304,16 @@ const {
     saveMenuItemForApplication,
     listMenuItemsForApplication,
     pluginInstall,
+    // Theme registry
+    prepareThemeForPublish,
+    installThemeFromRegistry,
+    getThemePublishPreview,
     // Namespaced controllers
     mcpController,
     llmController,
     cliController,
     registryController,
+    themeRegistryController,
     notificationController,
     // Utils
     clientCache,
@@ -367,6 +372,10 @@ const {
     REGISTRY_GET_PACKAGE,
     REGISTRY_CHECK_UPDATES,
     REGISTRY_SEARCH_DASHBOARDS,
+    REGISTRY_SEARCH_THEMES,
+    THEME_PUBLISH,
+    THEME_INSTALL_FROM_REGISTRY,
+    THEME_PUBLISH_PREVIEW,
     ALGOLIA_LIST_INDICES,
     ALGOLIA_PARTIAL_UPDATE_OBJECTS,
     ALGOLIA_CREATE_BATCH,
@@ -1018,6 +1027,32 @@ function createWindow() {
         );
         logger.loggedHandle(REGISTRY_SEARCH_DASHBOARDS, (e, query, filters) =>
             registryController.searchDashboards(query, filters)
+        );
+        logger.loggedHandle(REGISTRY_SEARCH_THEMES, (e, query, filters) =>
+            registryController.searchThemes(query, filters)
+        );
+
+        // --- Theme Registry ---
+        logger.loggedHandle(THEME_PUBLISH, (e, msg) =>
+            themeRegistryController.prepareThemeForPublish(
+                getSenderWindow(e),
+                msg.appId,
+                msg.themeKey,
+                msg.options
+            )
+        );
+        logger.loggedHandle(THEME_INSTALL_FROM_REGISTRY, (e, msg) =>
+            themeRegistryController.installThemeFromRegistry(
+                getSenderWindow(e),
+                msg.appId,
+                msg.packageName
+            )
+        );
+        logger.loggedHandle(THEME_PUBLISH_PREVIEW, (e, msg) =>
+            themeRegistryController.getThemePublishPreview(
+                msg.appId,
+                msg.themeKey
+            )
         );
 
         // --- Dashboard Config ---
