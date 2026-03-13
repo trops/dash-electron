@@ -47,6 +47,15 @@ const extendedApi = {
         clear: () => ipcRenderer.invoke("response-cache-clear"),
         stats: () => ipcRenderer.invoke("response-cache-stats"),
     },
+    debug: {
+        open: () => ipcRenderer.invoke("debug-window-open"),
+        close: () => ipcRenderer.invoke("debug-window-close"),
+        onLogEntry: (callback) => {
+            const handler = (_event, entry) => callback(entry);
+            ipcRenderer.on("debug:log-entry", handler);
+            return () => ipcRenderer.removeListener("debug:log-entry", handler);
+        },
+    },
 };
 
 // Expose the context bridge for renderer -> main communication
