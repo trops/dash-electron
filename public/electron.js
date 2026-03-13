@@ -440,6 +440,7 @@ let windows = new Set();
 let mainWindow = null;
 let popoutWindows = new Map(); // workspaceId string → BrowserWindow
 let widgetPopoutWindows = new Map(); // "workspaceId:widgetId" → BrowserWindow
+let debugWindow = null; // Debug Console BrowserWindow
 
 /**
  * Get the BrowserWindow that sent an IPC event.
@@ -1237,6 +1238,20 @@ function createWindow() {
                 win.setTitle(message.title);
             }
         });
+        // --- Debug Console Window ---
+        logger.loggedHandle("debug-window-open", () => {
+            if (debugWindow && !debugWindow.isDestroyed()) {
+                debugWindow.focus();
+                return { focused: true };
+            }
+            createDebugWindow();
+            return { opened: true };
+        });
+        logger.loggedHandle("debug-window-close", () => {
+            destroyDebugWindow();
+            return { closed: true };
+        });
+
         // --- Notifications ---
         logger.loggedHandle(NOTIFICATION_SEND, (e, payload) =>
             notificationController.send(mainWindow, payload)
@@ -1348,6 +1363,70 @@ function createWidgetPopoutWindow(workspaceId, widgetId) {
     return popoutWin;
 }
 
+function createDebugWindow() {
+    if (debugWindow && !debugWindow.isDestroyed()) {
+        debugWindow.focus();
+        return debugWindow;
+    }
+
+    debugWindow = new BrowserWindow({
+        width: 960,
+        height: 640,
+        minWidth: 600,
+        minHeight: 400,
+        title: "Dash — Debug Console",
+        fullscreen: false,
+        webPreferences: {
+            preload: path.join(__dirname, "preload.js"),
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: false,
+            webSecurity: true,
+        },
+    });
+
+    const hashRoute = "#/debug-console";
+    debugWindow.loadURL(
+        isDev
+            ? `http://localhost:3000${hashRoute}`
+            : `${
+                  pathToFileURL(path.join(__dirname, "../build/index.html"))
+                      .href
+              }${hashRoute}`
+    );
+
+    // Wire up the logger broadcast
+    logger.setDebugWindow(debugWindow);
+
+    // Send buffered entries once the window is ready
+    debugWindow.webContents.once("dom-ready", () => {
+        const buffer = logger.getRingBuffer();
+        for (const entry of buffer) {
+            if (debugWindow && !debugWindow.isDestroyed()) {
+                debugWindow.webContents.send("debug:log-entry", entry);
+            }
+        }
+    });
+
+    windows.add(debugWindow);
+
+    debugWindow.on("closed", () => {
+        windows.delete(debugWindow);
+        logger.setDebugWindow(null);
+        debugWindow = null;
+    });
+
+    return debugWindow;
+}
+
+function destroyDebugWindow() {
+    if (debugWindow && !debugWindow.isDestroyed()) {
+        debugWindow.close();
+    }
+    logger.setDebugWindow(null);
+    debugWindow = null;
+}
+
 app.whenReady().then(() => {
     pe.init({
         confirmInstall: async (plugins) => {
@@ -1408,6 +1487,9 @@ app.on("window-all-closed", () => {
         if (!win.isDestroyed()) win.close();
     }
     widgetPopoutWindows.clear();
+
+    // Close debug window
+    destroyDebugWindow();
 
     if (process.platform !== "darwin") {
         windows.delete(mainWindow);

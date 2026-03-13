@@ -19,6 +19,9 @@ import {
 // Local Widgets that integrate with Dash
 import * as myWidgets from "./Widgets";
 
+// Debug Console (standalone window)
+import { DebugConsole } from "./DebugConsole";
+
 // Inject dash-core module reference for the widget require shim.
 // This avoids the self-referential import in widgetBundleLoader.js that
 // breaks under webpack scope hoisting in production builds.
@@ -523,6 +526,7 @@ class App extends React.Component {
                     path="/popout-widget/:workspaceId/:widgetId"
                     element={<WidgetPopoutDashboard />}
                 />
+                <Route path="/debug-console" element={<DebugConsole />} />
             </Routes>
         );
     }

@@ -1,0 +1,119 @@
+.debug-console {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: #0f172a;
+    color: #e2e8f0;
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+    overflow: hidden;
+}
+
+.debug-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background-color: #1e293b;
+    border-bottom: 1px solid #334155;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.debug-toolbar-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.debug-filter-btn {
+    padding: 3px 10px;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.debug-filter-btn:hover {
+    background-color: #334155;
+    color: #e2e8f0;
+}
+
+.debug-filter-btn.active {
+    background-color: #334155;
+    color: #e2e8f0;
+    border-color: #818cf8;
+}
+
+.debug-filter-btn.level-info.active {
+    border-color: #4ade80;
+    color: #4ade80;
+}
+
+.debug-filter-btn.level-warn.active {
+    border-color: #facc15;
+    color: #facc15;
+}
+
+.debug-filter-btn.level-error.active {
+    border-color: #f87171;
+    color: #f87171;
+}
+
+.debug-api-select {
+    padding: 3px 8px;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    background-color: #0f172a;
+    color: #e2e8f0;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.debug-action-btn {
+    padding: 3px 10px;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    margin-left: auto;
+}
+
+.debug-action-btn:hover {
+    background-color: #334155;
+    color: #e2e8f0;
+}
+
+.debug-log-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.debug-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #475569;
+    font-size: 14px;
+}
+
+.debug-status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 12px;
+    background-color: #1e293b;
+    border-top: 1px solid #334155;
+    font-size: 11px;
+    color: #64748b;
+    flex-shrink: 0;
+}
