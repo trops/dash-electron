@@ -57,6 +57,7 @@ step() {
 
 # 1. Ensure Node 20 via nvm
 step "Ensuring Node 20 via nvm"
+unset npm_config_prefix
 export NVM_DIR="$HOME/.nvm"
 if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
     echo "Error: nvm not found at $NVM_DIR/nvm.sh"
