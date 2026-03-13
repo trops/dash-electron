@@ -455,6 +455,12 @@ npm run bump       # Patch (0.0.X)
 npm run bump-tag   # With git tag
 ```
 
+## Cross-Repo Development
+
+When making changes that span dash-core, dash-react, and/or dash-electron, use the **cross-repo-dev** skill (`.claude/skills/cross-repo-dev/SKILL.md`). It guides the full workflow: make changes in the dependency repo, link and test locally, unlink and ship, then update dash-electron.
+
+All four Dash repos support the same CI commands: `npm run ci`, `ci:commit`, `ci:push`, `ci:pr`, `ci:release`.
+
 ## Related Projects
 
 ### @trops/dash-core
