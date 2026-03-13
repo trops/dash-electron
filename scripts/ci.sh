@@ -103,6 +103,20 @@ fi
 # ============================================================================
 
 BRANCH="$(git branch --show-current)"
+MAIN_BRANCH="master"
+
+# --- Ensure git credentials via gh ---
+step "Configuring git credentials via gh"
+gh auth setup-git
+
+# --- Pull latest from remote ---
+step "Pulling latest from origin"
+git fetch origin
+if git rev-parse --verify "origin/$BRANCH" >/dev/null 2>&1; then
+    git pull origin "$BRANCH" --rebase
+elif [[ "$BRANCH" != "$MAIN_BRANCH" ]]; then
+    git pull origin "$MAIN_BRANCH" --rebase
+fi
 
 # --- Commit ---
 step "Committing changes"
