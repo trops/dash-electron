@@ -316,6 +316,7 @@ const {
     themeRegistryController,
     notificationController,
     schedulerController,
+    webSocketController,
     // Utils
     clientCache,
     responseCache,
@@ -436,6 +437,11 @@ const {
     SCHEDULER_ENABLE_TASK,
     SCHEDULER_DISABLE_TASK,
     SCHEDULER_GET_PENDING,
+    WS_CONNECT,
+    WS_DISCONNECT,
+    WS_SEND,
+    WS_STATUS,
+    WS_GET_ALL,
 } = coreEvents;
 
 // Widget System
@@ -999,6 +1005,37 @@ function createWindow() {
             )
         );
 
+        // --- WebSocket ---
+        logger.loggedHandle(WS_CONNECT, (e, message) =>
+            webSocketController.connect(
+                getSenderWindow(e),
+                message.providerName,
+                message.config
+            )
+        );
+        logger.loggedHandle(WS_DISCONNECT, (e, message) =>
+            webSocketController.disconnect(
+                getSenderWindow(e),
+                message.providerName
+            )
+        );
+        logger.loggedHandle(WS_SEND, (e, message) =>
+            webSocketController.send(
+                getSenderWindow(e),
+                message.providerName,
+                message.data
+            )
+        );
+        logger.loggedHandle(WS_STATUS, (e, message) =>
+            webSocketController.getStatus(
+                getSenderWindow(e),
+                message.providerName
+            )
+        );
+        logger.loggedHandle(WS_GET_ALL, (e) =>
+            webSocketController.getAll(getSenderWindow(e))
+        );
+
         // --- LLM ---
         logger.loggedHandle(LLM_SEND_MESSAGE, (e, msg) =>
             llmController.sendMessage(getSenderWindow(e), msg.requestId, msg)
@@ -1520,6 +1557,9 @@ app.on("window-all-closed", () => {
     schedulerController.stop();
     mcpController.stopAllServers().catch((err) => {
         console.error("[electron] Error stopping MCP servers:", err);
+    });
+    webSocketController.disconnectAll().catch((err) => {
+        console.error("[electron] Error closing WebSocket connections:", err);
     });
     clientCache.clear();
     responseCache.clear();
