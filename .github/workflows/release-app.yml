@@ -26,11 +26,11 @@ jobs:
                       echo "RELEASE_TAG=${{ inputs.tag }}" >> $GITHUB_ENV
                   fi
 
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
 
-            - uses: actions/setup-node@v4
+            - uses: actions/setup-node@v5
               with:
-                  node-version: "20"
+                  node-version: "22"
                   registry-url: "https://npm.pkg.github.com"
 
             - name: Install dependencies
@@ -143,7 +143,7 @@ jobs:
 
             - name: Upload as artifact
               if: env.RELEASE_TAG == ''
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v6
               with:
                   name: electron-app-macos
                   path: |
@@ -166,11 +166,11 @@ jobs:
                       echo "RELEASE_TAG=${{ inputs.tag }}" >> $GITHUB_ENV
                   fi
 
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
 
-            - uses: actions/setup-node@v4
+            - uses: actions/setup-node@v5
               with:
-                  node-version: "20"
+                  node-version: "22"
                   registry-url: "https://npm.pkg.github.com"
 
             - name: Install dependencies
@@ -221,7 +221,7 @@ jobs:
 
             - name: Upload as artifact
               if: env.RELEASE_TAG == ''
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v6
               with:
                   name: electron-app-windows
                   path: |
