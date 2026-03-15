@@ -369,9 +369,9 @@ git checkout -b feat/<TICKET-KEY>-<slug>
 
 **Things to avoid:**
 
-- Never push directly to master — always use feature branches and PRs
-- Never skip validation — always run `scripts/ci.sh` before shipping
-- Never use `git push --force` or `git reset --hard`
+-   Never push directly to master — always use feature branches and PRs
+-   Never skip validation — always run `scripts/ci.sh` before shipping
+-   Never use `git push --force` or `git reset --hard`
 
 ### Local CI Script (Recommended)
 
