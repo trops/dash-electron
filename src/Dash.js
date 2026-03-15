@@ -34,11 +34,11 @@ console.log("[Dash.js] Imported widgets:", myWidgets);
 // if you are not using Electron
 const mainApi = window.mainApi;
 
+// App identifier with fallback to package name when .env is missing
+const appId = process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron";
+
 console.log("[Dash.js] mainApi available:", !!mainApi);
-console.log(
-    "[Dash.js] process.env.REACT_APP_IDENTIFIER:",
-    process.env.REACT_APP_IDENTIFIER
-);
+console.log("[Dash.js] appId:", appId);
 
 // initialize the widgets,
 // NOTE: YOU MUST DO THIS ITERATION FOR ALL WIDGET LIBRARIES
@@ -75,17 +75,14 @@ try {
 
 // Only set app ID if mainApi is available
 if (mainApi && mainApi.setAppId) {
-    mainApi.setAppId(process.env.REACT_APP_IDENTIFIER);
+    mainApi.setAppId(appId);
     console.log("[Dash.js] App ID set");
 }
 
 // instantiate the ElectronApi
 let electronApi = null;
 if (mainApi) {
-    electronApi = new ElectronDashboardApi(
-        mainApi,
-        process.env.REACT_APP_IDENTIFIER
-    );
+    electronApi = new ElectronDashboardApi(mainApi, appId);
 }
 
 console.log("[Dash.js] electronApi created:", !!electronApi);
@@ -335,7 +332,7 @@ function PopoutDashboard() {
         <ErrorBoundary>
             <DashboardStage
                 dashApi={electronApi}
-                credentials={{ appId: process.env.REACT_APP_IDENTIFIER }}
+                credentials={{ appId }}
                 height="h-full"
                 grow={true}
                 popout={true}
@@ -352,7 +349,7 @@ function WidgetPopoutDashboard() {
         <ErrorBoundary>
             <WidgetPopoutStage
                 dashApi={electronApi}
-                credentials={{ appId: process.env.REACT_APP_IDENTIFIER }}
+                credentials={{ appId }}
                 workspaceId={Number(workspaceId)}
                 widgetId={Number(widgetId)}
             />
@@ -509,9 +506,7 @@ class App extends React.Component {
                         <ErrorBoundary>
                             <DashboardStage
                                 dashApi={electronApi}
-                                credentials={{
-                                    appId: process.env.REACT_APP_IDENTIFIER,
-                                }}
+                                credentials={{ appId }}
                                 height="h-full"
                                 grow={true}
                             />
