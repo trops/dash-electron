@@ -347,6 +347,32 @@ npm run apple-staple
 -   Updating dependencies
 -   Adding or modifying widgets
 
+### Git Branching Workflow
+
+Always work on feature branches, never push directly to master.
+
+**Before starting any new feature or fix:**
+
+```bash
+git checkout master && git pull
+git checkout -b feat/<TICKET-KEY>-<slug>
+```
+
+**Branch naming:** `feat/<TICKET-KEY>-<slug>` for features, `fix/<TICKET-KEY>-<slug>` for bug fixes.
+
+**Steps:**
+
+1. **Pull latest** — `git checkout master && git pull origin master`
+2. **Branch** — `git checkout -b feat/<TICKET-KEY>-<slug>`
+3. **Code** — Make changes, follow existing patterns
+4. **Validate + Ship** — Use `scripts/ci.sh --release` (see below) to validate, commit, push, PR, merge, tag, and clean up
+
+**Things to avoid:**
+
+- Never push directly to master — always use feature branches and PRs
+- Never skip validation — always run `scripts/ci.sh` before shipping
+- Never use `git push --force` or `git reset --hard`
+
 ### Local CI Script (Recommended)
 
 The `scripts/ci.sh` script handles the full validation pipeline (Node 20 via nvm, Prettier, Tailwind CSS, CI build with ESLint errors, widget tests) and optionally the git workflow:
