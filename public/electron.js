@@ -321,6 +321,7 @@ const {
     themeFromUrlController,
     paletteToThemeMapper,
     extractionCacheController,
+    themeFromUrlErrors,
     // Utils
     clientCache,
     responseCache,
@@ -815,73 +816,186 @@ function createWindow() {
         );
 
         // --- Theme from URL (with extraction cache) ---
+        const {
+            UrlTimeoutError,
+            UrlUnreachableError,
+            ExtractionFailedError,
+            ThemeExtractionError,
+        } = themeFromUrlErrors;
+
+        const LOAD_TIMEOUT_MS = 15000;
+
         logger.loggedHandle(THEME_EXTRACT_FROM_URL, async (e, message) => {
             const { url, forceRefresh = false } = message;
 
-            return extractionCacheController.get(
-                url,
-                async () => {
-                    const scanWindow = new BrowserWindow({
-                        width: 1280,
-                        height: 900,
-                        show: false,
-                        webPreferences: {
-                            nodeIntegration: false,
-                            contextIsolation: true,
-                        },
-                    });
-
-                    try {
-                        await scanWindow.loadURL(url);
-
-                        // Extract HTML, CSS custom properties, and computed styles from the page
-                        const extracted = await scanWindow.webContents
-                            .executeJavaScript(`
-                            (function() {
-                                const htmlContent = document.documentElement.outerHTML;
-
-                                // Gather all CSS text from stylesheets
-                                let cssContent = '';
-                                try {
-                                    for (const sheet of document.styleSheets) {
-                                        try {
-                                            for (const rule of sheet.cssRules) {
-                                                cssContent += rule.cssText + '\\n';
-                                            }
-                                        } catch (e) { /* cross-origin stylesheet */ }
-                                    }
-                                } catch (e) {}
-
-                                // Extract computed styles from key elements
-                                const selectors = ['body', 'header', 'nav', 'main', 'footer', 'a', 'button', 'h1', 'h2'];
-                                const computedStyles = {};
-                                for (const sel of selectors) {
-                                    const el = document.querySelector(sel);
-                                    if (!el) continue;
-                                    const cs = window.getComputedStyle(el);
-                                    computedStyles[sel] = {
-                                        color: cs.color,
-                                        backgroundColor: cs.backgroundColor,
-                                        borderColor: cs.borderColor,
-                                    };
-                                }
-
-                                return { htmlContent, cssContent, computedStyles };
-                            })();
-                        `);
-
-                        return themeFromUrlController.extractColorsFromUrl({
-                            htmlContent: extracted.htmlContent,
-                            cssContent: extracted.cssContent,
-                            computedStyles: extracted.computedStyles,
-                            baseUrl: url,
+            try {
+                const data = await extractionCacheController.get(
+                    url,
+                    async () => {
+                        const scanWindow = new BrowserWindow({
+                            width: 1280,
+                            height: 900,
+                            show: false,
+                            webPreferences: {
+                                nodeIntegration: false,
+                                contextIsolation: true,
+                            },
                         });
-                    } finally {
-                        scanWindow.destroy();
-                    }
-                },
-                { forceRefresh }
-            );
+
+                        let destroyed = false;
+                        const destroyScanWindow = () => {
+                            if (!destroyed) {
+                                destroyed = true;
+                                scanWindow.destroy();
+                            }
+                        };
+
+                        try {
+                            // Block navigation away from the target URL (e.g. auth redirects)
+                            scanWindow.webContents.on(
+                                "will-navigate",
+                                (event) => {
+                                    event.preventDefault();
+                                }
+                            );
+
+                            // Load URL with timeout and did-fail-load handling
+                            await new Promise((resolve, reject) => {
+                                const timeout = setTimeout(() => {
+                                    reject(
+                                        new UrlTimeoutError(
+                                            `Page load timed out after ${LOAD_TIMEOUT_MS}ms for ${url}`
+                                        )
+                                    );
+                                }, LOAD_TIMEOUT_MS);
+
+                                scanWindow.webContents.on(
+                                    "did-fail-load",
+                                    (event, errorCode, errorDescription) => {
+                                        clearTimeout(timeout);
+                                        const desc =
+                                            errorDescription ||
+                                            `Error code ${errorCode}`;
+                                        if (
+                                            errorDescription?.includes(
+                                                "TIMED_OUT"
+                                            )
+                                        ) {
+                                            reject(
+                                                new UrlTimeoutError(
+                                                    `Page load failed: ${desc}`
+                                                )
+                                            );
+                                        } else {
+                                            reject(
+                                                new UrlUnreachableError(
+                                                    `Page load failed: ${desc}`
+                                                )
+                                            );
+                                        }
+                                    }
+                                );
+
+                                scanWindow
+                                    .loadURL(url)
+                                    .then(() => {
+                                        clearTimeout(timeout);
+                                        resolve();
+                                    })
+                                    .catch((err) => {
+                                        clearTimeout(timeout);
+                                        reject(
+                                            new UrlUnreachableError(
+                                                `Failed to load ${url}: ${err.message}`,
+                                                { cause: err }
+                                            )
+                                        );
+                                    });
+                            });
+
+                            // Extract HTML, CSS custom properties, and computed styles from the page
+                            // Inner try-catch in the injected script handles CSP and runtime errors
+                            const extracted = await scanWindow.webContents
+                                .executeJavaScript(`
+                                (function() {
+                                    try {
+                                        const htmlContent = document.documentElement.outerHTML;
+
+                                        // Gather all CSS text from stylesheets
+                                        let cssContent = '';
+                                        try {
+                                            for (const sheet of document.styleSheets) {
+                                                try {
+                                                    for (const rule of sheet.cssRules) {
+                                                        cssContent += rule.cssText + '\\n';
+                                                    }
+                                                } catch (e) { /* cross-origin stylesheet */ }
+                                            }
+                                        } catch (e) {}
+
+                                        // Extract computed styles from key elements
+                                        const selectors = ['body', 'header', 'nav', 'main', 'footer', 'a', 'button', 'h1', 'h2'];
+                                        const computedStyles = {};
+                                        for (const sel of selectors) {
+                                            const el = document.querySelector(sel);
+                                            if (!el) continue;
+                                            const cs = window.getComputedStyle(el);
+                                            computedStyles[sel] = {
+                                                color: cs.color,
+                                                backgroundColor: cs.backgroundColor,
+                                                borderColor: cs.borderColor,
+                                            };
+                                        }
+
+                                        return { success: true, htmlContent, cssContent, computedStyles };
+                                    } catch (e) {
+                                        return { success: false, error: { type: 'EXTRACTION_FAILED', message: e.message } };
+                                    }
+                                })();
+                            `);
+
+                            if (!extracted || !extracted.success) {
+                                const errMsg =
+                                    extracted?.error?.message ||
+                                    "Script execution failed";
+                                throw new ExtractionFailedError(
+                                    `executeJavaScript failed: ${errMsg}`
+                                );
+                            }
+
+                            return themeFromUrlController.extractColorsFromUrl({
+                                htmlContent: extracted.htmlContent,
+                                cssContent: extracted.cssContent,
+                                computedStyles: extracted.computedStyles,
+                                baseUrl: url,
+                            });
+                        } finally {
+                            destroyScanWindow();
+                        }
+                    },
+                    { forceRefresh }
+                );
+
+                return { success: true, data };
+            } catch (err) {
+                if (err instanceof ThemeExtractionError) {
+                    return {
+                        success: false,
+                        error: {
+                            type: err.type,
+                            message: err.userMessage,
+                        },
+                    };
+                }
+                // Unexpected error — wrap as generic extraction failure
+                return {
+                    success: false,
+                    error: {
+                        type: "EXTRACTION_FAILED",
+                        message: "Failed to extract colors from this site.",
+                    },
+                };
+            }
         });
 
         logger.loggedHandle(THEME_MAP_PALETTE_TO_THEME, (e, message) => {
