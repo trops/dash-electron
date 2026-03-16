@@ -322,6 +322,8 @@ const {
     paletteToThemeMapper,
     extractionCacheController,
     themeFromUrlErrors,
+    // MCP Dash Server (hosted server for external LLM clients)
+    mcpDashServerController,
     // Utils
     clientCache,
     responseCache,
@@ -449,6 +451,10 @@ const {
     WS_GET_ALL,
     THEME_EXTRACT_FROM_URL,
     THEME_MAP_PALETTE_TO_THEME,
+    MCP_DASH_SERVER_START,
+    MCP_DASH_SERVER_STOP,
+    MCP_DASH_SERVER_STATUS,
+    MCP_DASH_SERVER_GET_TOKEN,
 } = coreEvents;
 
 // Widget System
@@ -1203,6 +1209,20 @@ function createWindow() {
             )
         );
 
+        // --- MCP Dash Server (hosted server for external LLM clients) ---
+        logger.loggedHandle(MCP_DASH_SERVER_START, (e, message) =>
+            mcpDashServerController.startServer(getSenderWindow(e), message)
+        );
+        logger.loggedHandle(MCP_DASH_SERVER_STOP, (e) =>
+            mcpDashServerController.stopServer(getSenderWindow(e))
+        );
+        logger.loggedHandle(MCP_DASH_SERVER_STATUS, (e) =>
+            mcpDashServerController.getStatus(getSenderWindow(e))
+        );
+        logger.loggedHandle(MCP_DASH_SERVER_GET_TOKEN, (e) =>
+            mcpDashServerController.getOrCreateToken(getSenderWindow(e))
+        );
+
         // --- WebSocket ---
         logger.loggedHandle(WS_CONNECT, (e, message) =>
             webSocketController.connect(
@@ -1745,6 +1765,11 @@ app.whenReady().then(() => {
     });
     schedulerController.start();
 
+    // --- MCP Dash Server auto-start ---
+    mcpDashServerController.autoStart(mainWindow).catch((err) => {
+        console.error("[electron] MCP Dash Server auto-start failed:", err);
+    });
+
     const { powerMonitor } = require("electron");
     powerMonitor.on("suspend", () => schedulerController.handleSuspend());
     powerMonitor.on("resume", () => schedulerController.handleResume());
@@ -1755,6 +1780,9 @@ app.on("window-all-closed", () => {
     schedulerController.stop();
     mcpController.stopAllServers().catch((err) => {
         console.error("[electron] Error stopping MCP servers:", err);
+    });
+    mcpDashServerController.stopServer(mainWindow).catch((err) => {
+        console.error("[electron] Error stopping MCP Dash Server:", err);
     });
     webSocketController.disconnectAll().catch((err) => {
         console.error("[electron] Error closing WebSocket connections:", err);
