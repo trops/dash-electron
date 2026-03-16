@@ -297,6 +297,69 @@ function getUserId() {
 }
 
 /**
+ * Log an info-level message.
+ */
+function info(message, ...details) {
+    const entry = {
+        ts: new Date().toISOString(),
+        level: "info",
+        event: "log",
+        message: typeof message === "string" ? message : String(message),
+    };
+    if (details.length > 0) entry.details = details;
+    log(entry);
+    broadcast({
+        id: randomUUID(),
+        ...entry,
+        api: "system",
+        method: "log",
+        channel: "log",
+    });
+}
+
+/**
+ * Log a warn-level message.
+ */
+function warn(message, ...details) {
+    const entry = {
+        ts: new Date().toISOString(),
+        level: "warn",
+        event: "log",
+        message: typeof message === "string" ? message : String(message),
+    };
+    if (details.length > 0) entry.details = details;
+    log(entry);
+    broadcast({
+        id: randomUUID(),
+        ...entry,
+        api: "system",
+        method: "log",
+        channel: "log",
+    });
+}
+
+/**
+ * Log an error-level message.
+ */
+function error(message, ...details) {
+    const entry = {
+        ts: new Date().toISOString(),
+        level: "error",
+        event: "log",
+        message: typeof message === "string" ? message : String(message),
+    };
+    if (details.length > 0) entry.details = details;
+    log(entry);
+    broadcast({
+        id: randomUUID(),
+        ...entry,
+        api: "system",
+        method: "log",
+        channel: "log",
+    });
+}
+
+/**
  * Delete log files older than maxAgeDays.
  */
 function cleanOldLogs(maxAgeDays = 30) {
@@ -324,6 +387,9 @@ module.exports = {
     init,
     getLogDir,
     log,
+    info,
+    warn,
+    error,
     loggedHandle,
     logLifecycle,
     setUserId,
