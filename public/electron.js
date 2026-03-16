@@ -317,6 +317,10 @@ const {
     notificationController,
     schedulerController,
     webSocketController,
+    // Theme from URL
+    themeFromUrlController,
+    paletteToThemeMapper,
+    extractionCacheController,
     // Utils
     clientCache,
     responseCache,
@@ -442,6 +446,8 @@ const {
     WS_SEND,
     WS_STATUS,
     WS_GET_ALL,
+    THEME_EXTRACT_FROM_URL,
+    THEME_MAP_PALETTE_TO_THEME,
 } = coreEvents;
 
 // Widget System
@@ -807,6 +813,84 @@ function createWindow() {
                 message.themeKey
             )
         );
+
+        // --- Theme from URL (with extraction cache) ---
+        logger.loggedHandle(THEME_EXTRACT_FROM_URL, async (e, message) => {
+            const { url, forceRefresh = false } = message;
+
+            return extractionCacheController.get(
+                url,
+                async () => {
+                    const scanWindow = new BrowserWindow({
+                        width: 1280,
+                        height: 900,
+                        show: false,
+                        webPreferences: {
+                            nodeIntegration: false,
+                            contextIsolation: true,
+                        },
+                    });
+
+                    try {
+                        await scanWindow.loadURL(url);
+
+                        // Extract HTML, CSS custom properties, and computed styles from the page
+                        const extracted = await scanWindow.webContents
+                            .executeJavaScript(`
+                            (function() {
+                                const htmlContent = document.documentElement.outerHTML;
+
+                                // Gather all CSS text from stylesheets
+                                let cssContent = '';
+                                try {
+                                    for (const sheet of document.styleSheets) {
+                                        try {
+                                            for (const rule of sheet.cssRules) {
+                                                cssContent += rule.cssText + '\\n';
+                                            }
+                                        } catch (e) { /* cross-origin stylesheet */ }
+                                    }
+                                } catch (e) {}
+
+                                // Extract computed styles from key elements
+                                const selectors = ['body', 'header', 'nav', 'main', 'footer', 'a', 'button', 'h1', 'h2'];
+                                const computedStyles = {};
+                                for (const sel of selectors) {
+                                    const el = document.querySelector(sel);
+                                    if (!el) continue;
+                                    const cs = window.getComputedStyle(el);
+                                    computedStyles[sel] = {
+                                        color: cs.color,
+                                        backgroundColor: cs.backgroundColor,
+                                        borderColor: cs.borderColor,
+                                    };
+                                }
+
+                                return { htmlContent, cssContent, computedStyles };
+                            })();
+                        `);
+
+                        return themeFromUrlController.extractColorsFromUrl({
+                            htmlContent: extracted.htmlContent,
+                            cssContent: extracted.cssContent,
+                            computedStyles: extracted.computedStyles,
+                            baseUrl: url,
+                        });
+                    } finally {
+                        scanWindow.destroy();
+                    }
+                },
+                { forceRefresh }
+            );
+        });
+
+        logger.loggedHandle(THEME_MAP_PALETTE_TO_THEME, (e, message) => {
+            const { palette, overrides } = message;
+            return paletteToThemeMapper.generateThemeFromPalette(
+                palette,
+                overrides
+            );
+        });
 
         // --- Layouts ---
         logger.loggedHandle(LAYOUT_LIST, (e, message) =>
