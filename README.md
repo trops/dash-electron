@@ -449,10 +449,88 @@ git checkout master
 git merge template/master
 ```
 
+## MCP Dash Server
+
+Dash includes a built-in MCP (Model Context Protocol) server that lets external LLM clients — such as Claude Desktop, Cursor, or any MCP-compatible agent — connect to your running Dash instance and control dashboards, widgets, themes, and providers programmatically.
+
+### Overview
+
+-   **Localhost only** — binds to `127.0.0.1` (never exposed to the network)
+-   **Default port:** `3141` (configurable in Settings)
+-   **Endpoint:** `http://127.0.0.1:3141/mcp`
+-   **Authentication:** Bearer token (auto-generated UUID)
+-   **Rate limit:** 60 requests per minute
+-   **Lifecycle:** Auto-starts when enabled; shuts down gracefully when the app closes
+
+### Enabling the Server
+
+Open **Dash Settings**, find the **MCP Dash Server** section, and toggle it on. Your bearer token is displayed there — copy it for use in client configuration.
+
+### Connecting from Claude Desktop
+
+Add the following to your `claude_desktop_config.json`:
+
+```json
+{
+    "mcpServers": {
+        "dash": {
+            "url": "http://127.0.0.1:3141/mcp",
+            "headers": {
+                "Authorization": "Bearer YOUR_TOKEN_HERE"
+            }
+        }
+    }
+}
+```
+
+Replace `YOUR_TOKEN_HERE` with the token from Dash Settings, then restart Claude Desktop.
+
+### Available Tools
+
+| Category  | Tool                    | Description                                                    |
+| --------- | ----------------------- | -------------------------------------------------------------- |
+| Dashboard | `list_dashboards`       | List all dashboards with their IDs, names, and widget counts   |
+| Dashboard | `get_dashboard`         | Get full details of a dashboard including layout and widgets   |
+| Dashboard | `create_dashboard`      | Create a new dashboard with the given name                     |
+| Dashboard | `delete_dashboard`      | Delete a dashboard by ID                                       |
+| Dashboard | `get_app_stats`         | Get counts of dashboards, widgets, themes, and providers       |
+| Widget    | `add_widget`            | Add a widget to a dashboard by component name                  |
+| Widget    | `remove_widget`         | Remove a widget instance from a dashboard by its ID            |
+| Widget    | `configure_widget`      | Update a widget's configuration (merged into existing config)  |
+| Widget    | `list_widgets`          | List available widgets from the registry                       |
+| Widget    | `search_widgets`        | Search the widget registry by keyword                          |
+| Theme     | `list_themes`           | List all saved themes with active state                        |
+| Theme     | `get_theme`             | Get full details of a theme including all color values         |
+| Theme     | `create_theme`          | Create a new theme from a colors object                        |
+| Theme     | `create_theme_from_url` | Extract brand colors from a website URL and generate a theme   |
+| Theme     | `apply_theme`           | Apply a saved theme to the active dashboard                    |
+| Provider  | `list_providers`        | List all configured providers (credentials are never returned) |
+| Provider  | `add_provider`          | Add a new credential or MCP provider (encrypted at rest)       |
+| Provider  | `remove_provider`       | Remove a provider and its stored credentials permanently       |
+
+### Available Resources
+
+| Resource         | URI                        | Description                                                         |
+| ---------------- | -------------------------- | ------------------------------------------------------------------- |
+| Active Dashboard | `dash://dashboards/active` | Current active dashboard — layout, widgets, theme, and widget count |
+| All Dashboards   | `dash://dashboards`        | Summary of all dashboards — IDs, names, widget counts, active state |
+| All Themes       | `dash://themes`            | All saved themes — names, active state, and color definitions       |
+| All Providers    | `dash://providers`         | All configured providers — names, types, classes (no secrets)       |
+| App Info         | `dash://app/info`          | Application info — version, appId, and aggregate counts             |
+
+### Security
+
+-   **Localhost-only binding** — the server never listens on external interfaces
+-   **Bearer token required** — every request must include the `Authorization` header
+-   **No secrets in responses** — credential values are never returned by any tool or resource
+-   **Rate limiting** — 60 requests per minute to prevent abuse
+-   **Token regeneration** — generate a new token at any time from Dash Settings
+
 ## Advanced Topics
 
 For detailed information on advanced topics, see the documentation:
 
+-   **MCP Dash Server** — See [MCP Dash Server](#mcp-dash-server) above
 -   **Hot Module Reloading** - See [DEVELOPMENT_WORKFLOW.md](./docs/DEVELOPMENT_WORKFLOW.md)
 -   **Widget Registry** - See [WIDGET_REGISTRY.md](./docs/WIDGET_REGISTRY.md)
 -   **Provider System** - See [PROVIDER_API_SETUP.md](./docs/PROVIDER_API_SETUP.md)
