@@ -48,11 +48,25 @@ const { updateElectronApp } = require("update-electron-app");
 
 // Auto-update: checks update.electronjs.org every 10 minutes
 // Only runs in production (packaged app), no-ops in development
-// Repo is auto-detected from package.json "repository" field
 let updaterReady = false;
 if (!isDev) {
-    updateElectronApp({ notifyUser: false });
+    updateElectronApp({
+        repo: "trops/dash-electron",
+        updateInterval: "10 minutes",
+        notifyUser: false,
+        logger: {
+            log: (...args) => logger.info("[auto-update]", ...args),
+            warn: (...args) => logger.warn("[auto-update]", ...args),
+            error: (...args) => logger.error("[auto-update]", ...args),
+            info: (...args) => logger.info("[auto-update]", ...args),
+        },
+    });
     updaterReady = true;
+    logger.info(
+        `[auto-update] Initialized — repo: trops/dash-electron, feed: https://update.electronjs.org/trops/dash-electron/${
+            process.platform
+        }-${process.arch}/${app.getVersion()}`
+    );
 }
 
 // --- Update state tracking ---
@@ -86,6 +100,18 @@ function buildMenu() {
                     manualCheckInProgress = true;
                     updateState = "checking";
                     buildMenu();
+                    // Safety timeout: reset stale checking state after 30s
+                    if (manualCheckTimeout) clearTimeout(manualCheckTimeout);
+                    manualCheckTimeout = setTimeout(() => {
+                        if (manualCheckInProgress) {
+                            logger.warn(
+                                "[AutoUpdater] Manual check timed out after 30s"
+                            );
+                            resetManualCheck();
+                            updateState = "idle";
+                            buildMenu();
+                        }
+                    }, 30000);
                     autoUpdater.checkForUpdates();
                 },
             }),
@@ -170,12 +196,46 @@ function buildMenu() {
 }
 
 // --- autoUpdater event listeners (work alongside update-electron-app) ---
+let manualCheckTimeout = null;
+
+function resetManualCheck() {
+    manualCheckInProgress = false;
+    if (manualCheckTimeout) {
+        clearTimeout(manualCheckTimeout);
+        manualCheckTimeout = null;
+    }
+}
+
 if (!isDev) {
-    autoUpdater.on("update-not-available", () => {
-        updateState = "idle";
+    autoUpdater.on("checking-for-update", () => {
+        logger.info("[AutoUpdater] Checking for updates...");
+        updateState = "checking";
+        buildMenu();
+    });
+
+    autoUpdater.on("update-available", (_event) => {
+        logger.info("[AutoUpdater] Update available");
+        updateState = "checking"; // stays checking until downloaded
         buildMenu();
         if (manualCheckInProgress) {
-            manualCheckInProgress = false;
+            dialog.showMessageBox({
+                title: "Update Available",
+                message: "A new version is being downloaded.",
+                detail: "The update will be applied when the download finishes.",
+                buttons: ["OK"],
+            });
+        }
+    });
+
+    autoUpdater.on("update-not-available", () => {
+        logger.info(
+            `[AutoUpdater] No update available — current version: ${app.getVersion()}`
+        );
+        updateState = "idle";
+        buildMenu();
+        const wasManual = manualCheckInProgress;
+        resetManualCheck();
+        if (wasManual) {
             dialog.showMessageBox({
                 title: "No Updates",
                 message: "You're up to date!",
@@ -188,8 +248,14 @@ if (!isDev) {
     });
 
     autoUpdater.on("update-downloaded", (_event, releaseNotes, releaseName) => {
+        logger.info(
+            `[AutoUpdater] Update downloaded — release: ${
+                releaseName || "unknown"
+            }`
+        );
         updateState = "downloaded";
         buildMenu();
+        resetManualCheck();
         dialog
             .showMessageBox({
                 title: "Update Ready",
@@ -208,14 +274,18 @@ if (!isDev) {
                     autoUpdater.quitAndInstall();
                 }
             });
-        manualCheckInProgress = false;
     });
 
     autoUpdater.on("error", (err) => {
+        logger.error(
+            `[AutoUpdater] Error: ${err?.message || "unknown error"}`,
+            err?.stack
+        );
         updateState = "idle";
         buildMenu();
-        if (manualCheckInProgress) {
-            manualCheckInProgress = false;
+        const wasManual = manualCheckInProgress;
+        resetManualCheck();
+        if (wasManual) {
             dialog.showMessageBox({
                 title: "Update Error",
                 message: "Could not check for updates.",
