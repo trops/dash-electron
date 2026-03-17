@@ -24,6 +24,10 @@ let _debugWindow = null; // BrowserWindow reference, set by electron.js
 const RING_BUFFER_MAX = 500;
 const _ringBuffer = [];
 
+// --- Handler registry for API Catalog ---
+// Maps channel name → { api, callCount }
+const _handlerRegistry = new Map();
+
 // Sensitive field names to redact from broadcast payloads
 const SENSITIVE_KEYS = new Set([
     "apiKey",
@@ -216,9 +220,12 @@ function log(entry) {
  * Broadcasts enriched entries (with args/result) to the debug console.
  */
 function loggedHandle(channel, handler) {
+    const api = deriveApi(channel);
+    _handlerRegistry.set(channel, { api, callCount: 0 });
+
     ipcMain.handle(channel, async (e, ...args) => {
         const start = Date.now();
-        const api = deriveApi(channel);
+        _handlerRegistry.get(channel).callCount++;
         try {
             const result = await handler(e, ...args);
             const durationMs = Date.now() - start;
@@ -404,6 +411,28 @@ function cleanOldLogs(maxAgeDays = 30) {
     }
 }
 
+/**
+ * Return the API catalog: all registered handlers grouped by namespace,
+ * with call counts.
+ */
+function getApiCatalog() {
+    const groups = {};
+    for (const [channel, { api, callCount }] of _handlerRegistry) {
+        if (!groups[api]) {
+            groups[api] = { namespace: api, channels: [] };
+        }
+        groups[api].channels.push({ channel, callCount });
+    }
+    // Sort groups alphabetically, channels within groups alphabetically
+    const sorted = Object.values(groups).sort((a, b) =>
+        a.namespace.localeCompare(b.namespace)
+    );
+    for (const group of sorted) {
+        group.channels.sort((a, b) => a.channel.localeCompare(b.channel));
+    }
+    return sorted;
+}
+
 module.exports = {
     init,
     getLogDir,
@@ -419,4 +448,5 @@ module.exports = {
     setDebugWindow,
     getRingBuffer,
     broadcast,
+    getApiCatalog,
 };

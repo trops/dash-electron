@@ -50,6 +50,7 @@ const extendedApi = {
     debug: {
         open: () => ipcRenderer.invoke("debug-window-open"),
         close: () => ipcRenderer.invoke("debug-window-close"),
+        getApiCatalog: () => ipcRenderer.invoke("debug-api-catalog"),
         onLogEntry: (callback) => {
             const handler = (_event, entry) => callback(entry);
             ipcRenderer.on("debug:log-entry", handler);

@@ -1624,6 +1624,9 @@ function createWindow() {
             destroyDebugWindow();
             return { closed: true };
         });
+        logger.loggedHandle("debug-api-catalog", () => {
+            return logger.getApiCatalog();
+        });
 
         // --- Notifications ---
         logger.loggedHandle(NOTIFICATION_SEND, (e, payload) =>

@@ -8,6 +8,36 @@
     overflow: hidden;
 }
 
+.debug-tab-bar {
+    display: flex;
+    gap: 0;
+    background-color: #1e293b;
+    border-bottom: 1px solid #334155;
+    flex-shrink: 0;
+}
+
+.debug-tab {
+    padding: 6px 16px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: #64748b;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.debug-tab:hover {
+    color: #94a3b8;
+    background-color: rgba(51, 65, 85, 0.3);
+}
+
+.debug-tab.active {
+    color: #e2e8f0;
+    border-bottom-color: #818cf8;
+}
+
 .debug-toolbar {
     display: flex;
     align-items: center;
@@ -115,5 +145,109 @@
     border-top: 1px solid #334155;
     font-size: 11px;
     color: #64748b;
+    flex-shrink: 0;
+}
+
+/* --- API Catalog --- */
+
+.api-catalog {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+
+.api-catalog-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background-color: #1e293b;
+    border-bottom: 1px solid #334155;
+    flex-shrink: 0;
+}
+
+.api-catalog-search {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    background-color: #0f172a;
+    color: #e2e8f0;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+}
+
+.api-catalog-search:focus {
+    border-color: #818cf8;
+}
+
+.api-catalog-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.api-catalog-group {
+    border-bottom: 1px solid #1e293b;
+}
+
+.api-catalog-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    background-color: rgba(30, 41, 59, 0.5);
+}
+
+.api-catalog-group-header:hover {
+    background-color: rgba(51, 65, 85, 0.4);
+}
+
+.api-catalog-toggle {
+    color: #475569;
+    font-size: 10px;
+    width: 12px;
+    flex-shrink: 0;
+}
+
+.api-catalog-namespace {
+    color: #818cf8;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.api-catalog-count {
+    color: #64748b;
+    font-size: 11px;
+    margin-left: auto;
+}
+
+.api-catalog-channels {
+    padding: 0 12px 4px 32px;
+}
+
+.api-catalog-channel {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(30, 41, 59, 0.5);
+}
+
+.api-catalog-channel:last-child {
+    border-bottom: none;
+}
+
+.api-catalog-channel-name {
+    color: #e2e8f0;
+    font-size: 12px;
+}
+
+.api-catalog-call-count {
+    color: #64748b;
+    font-size: 11px;
     flex-shrink: 0;
 }
