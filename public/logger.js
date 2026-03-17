@@ -61,6 +61,27 @@ function deriveApi(channel) {
     if (lower.startsWith("client-cache") || lower.startsWith("response-cache"))
         return "cache";
     if (lower.startsWith("debug")) return "debug";
+    if (lower.startsWith("llm")) return "llm";
+    if (lower.startsWith("ws-")) return "websocket";
+    if (lower.startsWith("scheduler")) return "scheduler";
+    if (lower.startsWith("session")) return "session";
+    if (lower.startsWith("registry-auth")) return "registry-auth";
+    if (lower.startsWith("registry")) return "registry";
+    if (lower.startsWith("dashboard-config")) return "dashboard-config";
+    if (lower.startsWith("dashboard-rating")) return "dashboard-ratings";
+    if (lower.startsWith("secure-store")) return "secure-store";
+    if (lower.startsWith("choose-file")) return "dialog";
+    if (lower.startsWith("plugin")) return "plugins";
+    if (lower.startsWith("openai")) return "openai";
+    if (lower.startsWith("layout")) return "layout";
+    if (
+        lower.startsWith("data-") ||
+        lower.startsWith("read-") ||
+        lower.startsWith("transform-") ||
+        lower.startsWith("parse-") ||
+        lower.startsWith("extract-colors")
+    )
+        return "data";
     return "system";
 }
 
