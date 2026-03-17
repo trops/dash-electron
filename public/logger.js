@@ -14,6 +14,7 @@ const fs = require("fs");
 const path = require("path");
 const { ipcMain } = require("electron");
 const { randomUUID } = require("crypto");
+const { API_GROUPS } = require("@trops/dash-core/electron");
 
 let _getDataDir = null;
 let _dataDir = null;
@@ -45,47 +46,34 @@ const SENSITIVE_KEYS = new Set([
 ]);
 
 /**
+ * Reverse lookup: channel string → API group name.
+ * Built once from dash-core's API_GROUPS so adding a new event constant
+ * in dash-core automatically categorizes it here.
+ */
+const _channelToGroup = new Map();
+for (const [group, channels] of Object.entries(API_GROUPS)) {
+    for (const ch of channels) {
+        _channelToGroup.set(ch, group);
+    }
+}
+
+/**
  * Derive an API category from an IPC channel name.
- * e.g. "algolia-search" → "algolia", "mcp-call-tool" → "mcp"
+ * First checks the auto-generated map from dash-core event constants,
+ * then falls back to template-specific prefixes, then "system".
  */
 function deriveApi(channel) {
     if (!channel) return "unknown";
+    // Auto-derived from dash-core API_GROUPS
+    const mapped = _channelToGroup.get(channel);
+    if (mapped) return mapped;
+    // Template-specific channels (not in dash-core events)
     const lower = channel.toLowerCase();
-    if (lower.startsWith("algolia")) return "algolia";
-    if (lower.startsWith("mcp")) return "mcp";
-    if (lower.startsWith("settings")) return "settings";
-    if (lower.startsWith("workspace")) return "workspace";
-    if (lower.startsWith("theme")) return "themes";
-    if (lower.startsWith("provider")) return "providers";
-    if (lower.startsWith("context")) return "contexts";
-    if (lower.startsWith("menu")) return "menu";
+    if (lower.startsWith("popout") || lower.startsWith("widget-popout"))
+        return "popout";
     if (lower.startsWith("widget")) return "widgets";
-    if (lower.startsWith("popout")) return "popout";
-    if (lower.startsWith("notification")) return "notifications";
-    if (lower.startsWith("client-cache") || lower.startsWith("response-cache"))
-        return "cache";
     if (lower.startsWith("debug")) return "debug";
-    if (lower.startsWith("llm")) return "llm";
-    if (lower.startsWith("ws-")) return "websocket";
-    if (lower.startsWith("scheduler")) return "scheduler";
-    if (lower.startsWith("session")) return "session";
-    if (lower.startsWith("registry-auth")) return "registry-auth";
-    if (lower.startsWith("registry")) return "registry";
-    if (lower.startsWith("dashboard-config")) return "dashboard-config";
-    if (lower.startsWith("dashboard-rating")) return "dashboard-ratings";
-    if (lower.startsWith("secure-store")) return "secure-store";
-    if (lower.startsWith("choose-file")) return "dialog";
     if (lower.startsWith("plugin")) return "plugins";
-    if (lower.startsWith("openai")) return "openai";
-    if (lower.startsWith("layout")) return "layout";
-    if (
-        lower.startsWith("data-") ||
-        lower.startsWith("read-") ||
-        lower.startsWith("transform-") ||
-        lower.startsWith("parse-") ||
-        lower.startsWith("extract-colors")
-    )
-        return "data";
     return "system";
 }
 
