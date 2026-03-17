@@ -29,8 +29,8 @@ while [[ $# -gt 0 ]]; do
         --release) MODE="release"; shift ;;
         -m)
             shift
-            COMMIT_MSG="$1"
-            shift
+            COMMIT_MSG="$*"
+            break
             ;;
         *)
             echo "Unknown argument: $1"
@@ -120,6 +120,11 @@ fi
 
 BRANCH="$(git branch --show-current)"
 MAIN_BRANCH="master"
+
+if [[ "$BRANCH" == "$MAIN_BRANCH" ]]; then
+    echo "Error: Cannot run --$MODE from $MAIN_BRANCH. Create a feature branch first."
+    exit 1
+fi
 
 # --- Ensure git credentials via gh ---
 step "Configuring git credentials via gh"
