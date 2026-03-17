@@ -608,7 +608,7 @@ function createWindow() {
         // --- Algolia (template-specific) ---
         // All handlers accept { providerHash, dashboardAppId, providerName }
         // and resolve credentials on the main process side.
-        ipcMain.handle(
+        logger.loggedHandle(
             ALGOLIA_LIST_INDICES,
             responseCache.cachedHandler(
                 "algolia-list-indices",
@@ -714,7 +714,7 @@ function createWindow() {
         );
 
         // --- Algolia Settings (use clientCache for cached client) ---
-        ipcMain.handle(
+        logger.loggedHandle(
             "algolia-get-settings",
             responseCache.cachedHandler(
                 "algolia-get-settings",
@@ -757,7 +757,7 @@ function createWindow() {
             }
         );
 
-        ipcMain.handle(
+        logger.loggedHandle(
             ALGOLIA_ANALYTICS_FOR_QUERY,
             responseCache.cachedHandler(
                 "algolia-analytics",
