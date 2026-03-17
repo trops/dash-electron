@@ -81,9 +81,15 @@ echo "Updated dependencies installed"
 step "Running Prettier"
 npx prettier --write .
 
-# 4. Build CSS
-step "Building Tailwind CSS"
-npx tailwindcss -i src/index.css -o public/tailwind.css -m
+# 4. Build CSS (only if CSS source files have changed)
+CSS_CHANGED=$(git diff --name-only HEAD -- src/index.css tailwind.config.js 'src/**/*.css' 2>/dev/null || true)
+if [ -n "$CSS_CHANGED" ]; then
+    step "Building Tailwind CSS (source changes detected)"
+    npx tailwindcss -i src/index.css -o public/tailwind.css -m
+else
+    step "Skipping Tailwind CSS build (no source changes)"
+    echo "No changes in src/index.css or tailwind.config.js — skipping rebuild."
+fi
 
 # 5. CI Build (ESLint warnings as errors, same as GitHub Actions)
 step "Running CI build"
@@ -132,7 +138,12 @@ git stash pop -q 2>/dev/null || true
 
 # --- Commit ---
 step "Committing changes"
-git add -A
+# Stage only tracked, modified files — never use git add -A
+git add -u
+# If public/tailwind.css was rebuilt, stage it explicitly
+if [ -n "$(git diff --name-only HEAD -- public/tailwind.css 2>/dev/null)" ]; then
+    git add public/tailwind.css
+fi
 git commit -m "$COMMIT_MSG"
 
 step "Bumping version"

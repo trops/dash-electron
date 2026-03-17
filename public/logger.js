@@ -51,7 +51,7 @@ const SENSITIVE_KEYS = new Set([
  * in dash-core automatically categorizes it here.
  */
 const _channelToGroup = new Map();
-for (const [group, channels] of Object.entries(API_GROUPS)) {
+for (const [group, channels] of Object.entries(API_GROUPS || {})) {
     for (const ch of channels) {
         _channelToGroup.set(ch, group);
     }
