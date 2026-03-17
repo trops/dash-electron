@@ -423,6 +423,40 @@ After `npm run dev`:
 
 ---
 
+### Visual Inspection
+
+After `npm run ci` passes, capture a screenshot of the feature for UI review. Requires the React dev server to be running (`npm start` or `npm run dev`).
+
+**Usage:**
+
+```bash
+npm run screenshot                                    # full window → /tmp/dash-review.png
+npm run screenshot -- --click "Home"                  # click sidebar item, then capture
+npm run screenshot -- --click-selector "css" --click "Text"  # CSS click, then text click
+npm run screenshot -- --steps scripts/steps/nav.js    # run JS navigation file
+npm run screenshot -- --selector ".sidebar" /tmp/s.png       # element screenshot
+```
+
+**Navigation map** — use this to determine the `--click` / `--click-selector` flags for each feature area:
+
+| Feature Area | Screenshot Command |
+|---|---|
+| Home / default view | `npm run screenshot` |
+| Settings > General | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings"` |
+| Settings > Themes | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "Themes"` |
+| Settings > Providers | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "Providers"` |
+| Settings > Widgets | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "Widgets"` |
+| Settings > Folders | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "Folders"` |
+| Settings > Notifications | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "Notifications"` |
+| Settings > Account | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "Account"` |
+| Settings > MCP Server | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "MCP Server"` |
+| Specific workspace | `npm run screenshot -- --click "<workspace name>"` |
+| Sidebar only | `npm run screenshot -- --selector "aside"` |
+
+**Planning requirement:** When planning a task that affects the UI, the plan's verification section MUST include the `npm run screenshot` command with the appropriate flags from the navigation map above. Claude determines the correct navigation by mapping the changed files to the feature area they affect.
+
+---
+
 ## Code Style
 
 -   **React components:** PascalCase (`MyWidget.js`)
