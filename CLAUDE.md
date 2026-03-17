@@ -1,5 +1,155 @@
 # Dash-Electron — Electron App Template
 
+> ⚠️ **THIS FILE IS A PROTOCOL, NOT DOCUMENTATION.**
+> Every section marked MANDATORY must be followed in order, without exception.
+> If anything is unclear — requirements, file locations, which repo to change —
+> **ASK before proceeding. Do not infer. Do not improvise.**
+
+---
+
+## ⚠️ MANDATORY: Before Any Code Changes
+
+These steps are NON-NEGOTIABLE and must happen in this exact order before writing any code:
+
+1. Sync dash-electron:
+
+    ```bash
+    cd ~/Development/dash-electron/dash-electron
+    git checkout master && git pull origin master
+    ```
+
+2. Sync dependency repos:
+
+    ```bash
+    cd ~/Development/dash-core/dash-core && git pull origin master
+    cd ~/Development/dash-react/dash-react && git pull origin master
+    ```
+
+3. Create a feature branch in dash-electron:
+    ```bash
+    cd ~/Development/dash-electron/dash-electron
+    git checkout -b feat/<TICKET-KEY>-<slug>
+    ```
+
+**If any pull fails: STOP. Report the exact error. Do not proceed.**
+
+---
+
+## ⚠️ MANDATORY: PRD Gate
+
+Before writing any code for a feature:
+
+1. Run:
+    ```bash
+    ls docs/requirements/prd/
+    ```
+2. If a relevant PRD exists, read it fully before proceeding.
+3. Confirm to the user: "Read PRD: `<filename>`" or "No relevant PRD found."
+4. Do not start implementation until this confirmation is given.
+
+---
+
+## ⚠️ MANDATORY: Development Phases
+
+These four phases are sequential and cannot be skipped, combined, or reordered.
+
+### Phase 1 — PLAN
+
+1. State the task in one sentence.
+2. List every file that will be created or modified.
+3. List any dependencies that will be added.
+4. Identify risks, ambiguities, or cross-repo implications.
+5. **Wait for explicit user approval before writing a single line of code.**
+   Acceptable approvals: "proceed", "looks good", "go ahead", 👍.
+   Silence is NOT approval.
+
+### Phase 2 — IMPLEMENT
+
+1. Make only the changes listed in the approved plan.
+2. Do not refactor, rename, or "improve" anything outside the plan.
+3. Do not add dependencies not listed in the plan.
+4. Run Prettier when done:
+    ```bash
+    npm run prettify
+    ```
+5. Fix any Prettier errors before proceeding.
+
+### Phase 3 — VALIDATE
+
+1. Run the full CI validation:
+    ```bash
+    npm run ci
+    ```
+2. If it fails, fix the errors and re-run. Do not proceed with a failing build.
+3. Do not mark this phase complete until `npm run ci` exits cleanly.
+4. **If you cannot make CI pass: STOP. Report the exact output. Do not proceed.**
+
+### Phase 4 — RELEASE
+
+1. Use the CI script — **this is the only approved release path**:
+    ```bash
+    npm run ci:release -- -m "type(scope): description"
+    ```
+2. Do not manually construct `git commit`, `git push`, `git tag`, or `gh pr` commands.
+   Manual git commands outside of `ci.sh` are not permitted.
+3. Confirm to the user: "Released. Commit: `<hash>` pushed to `<branch>`."
+
+---
+
+## ⚠️ MANDATORY: Cross-Repo Changes
+
+When a task touches dash-core or dash-react AND dash-electron:
+
+1. Sync ALL repos first (see Mandatory Pre-Work above).
+2. Make and validate changes in the dependency repo **first** (dash-core or dash-react).
+3. Run that repo's `npm run ci` to confirm it passes before touching dash-electron.
+4. Only then update dash-electron.
+5. Never modify dash-electron to work around a missing dash-core change — fix it at the source.
+6. Read `.claude/skills/cross-repo-dev/SKILL.md` before starting any cross-repo task.
+
+---
+
+## ⚠️ NON-NEGOTIABLE RULES
+
+-   **Never skip a phase.** Even if the task "seems simple."
+-   **Never combine phases.** Do not implement and validate in the same step.
+-   **Never push directly to master.** Always use feature branches and PRs via `ci:release`.
+-   **Never use `git push --force` or `git reset --hard`.**
+-   **Never use `git add .` or `git add -A`.** Stage only the files changed in Phase 2.
+-   **When in doubt, ask.** Do not infer requirements. Do not improvise solutions.
+-   **If a command fails, stop.** Report the exact error output. Do not attempt workarounds.
+-   **Never run `npm run build:css` manually.** Tailwind CSS is only rebuilt by `ci.sh`
+    when `src/index.css` or `tailwind.config.js` has changed. Do not add `build:css`
+    to any validate, dev, or pre-commit sequence.
+
+---
+
+## ci.sh — The Only Approved Release Path
+
+The `scripts/ci.sh` script handles the full pipeline: Node 20 via nvm, Prettier, Tailwind CSS,
+CI build with ESLint errors, widget tests, commit, version bump, push, PR, merge, tag, and cleanup.
+
+```bash
+# Validate only
+npm run ci
+
+# Validate + commit + version bump
+npm run ci:commit -- -m "Your commit message"
+
+# Above + push branch
+npm run ci:push -- -m "Your commit message"
+
+# Above + create PR
+npm run ci:pr -- -m "Your commit message"
+
+# Above + merge PR + tag + cleanup
+npm run ci:release -- -m "Your commit message"
+```
+
+Each flag is cumulative. `--release` runs all prior steps automatically.
+
+---
+
 ## Project Overview
 
 Dash-electron is a thin Electron application template built on two core packages:
@@ -18,55 +168,42 @@ This template provides the application shell, template-specific widgets, and Ele
 -   Template-specific API extensions (algolia, openai, menuItems, plugins)
 -   Build/packaging scripts for Electron .dmg distribution
 
+---
+
 ## Product Requirements Documentation
 
 **Location:** `docs/requirements/`
 
-Before implementing features, check for relevant Product Requirements Documents (PRDs):
+Before implementing features, check for relevant Product Requirements Documents (PRDs).
+**See the PRD Gate above — this check is mandatory, not optional.**
 
-### Workflow
-
-**1. Check if PRD exists**
-
-```bash
-ls docs/requirements/prd/
-```
-
-**2. Read PRD before implementing**
-
--   PRDs define WHY features exist and WHO they're for
--   User stories contain acceptance criteria (what defines success)
--   User workflows show expected behavior with concrete examples
-
-**3. When implementing user stories:**
-
--   [ ] Read related PRD for full context (problem statement, personas)
--   [ ] Review acceptance criteria - each criterion should be testable
--   [ ] Check technical notes for implementation hints and constraints
--   [ ] Review user workflows for expected behavior and time estimates
--   [ ] Consider edge cases documented in stories
--   [ ] Consult technical docs linked from PRD for architecture details
-
-**4. Testing PRD acceptance criteria:**
+### PRD Commands
 
 ```bash
+# Test PRD acceptance criteria
 npm run test:prd layout-builder-hybrid
 npm run test:prd layout-builder-hybrid --checklist
 npm run prd:coverage layout-builder-hybrid
-```
 
-### Creating New PRDs
-
-```bash
+# Create new PRD
 npm run prdize "Feature Name"
 npm run prdize "Feature Name" --dry-run
 ```
 
-**See:** [docs/requirements/README.md](docs/requirements/README.md) for complete PRD documentation
+**When implementing user stories:**
+
+-   Read related PRD for full context (problem statement, personas)
+-   Review acceptance criteria — each criterion should be testable
+-   Check technical notes for implementation hints and constraints
+-   Review user workflows for expected behavior
+-   Consider edge cases documented in stories
+-   Consult technical docs linked from PRD for architecture details
+
+**See:** [docs/requirements/README.md](docs/requirements/README.md)
+
+---
 
 ## Architecture
-
-Dash-electron is a thin scaffold. The core architecture (widgets, workspaces, providers, contexts, MCP, widget API) is defined in `@trops/dash-core`.
 
 **Technology Stack:**
 
@@ -79,9 +216,9 @@ Dash-electron is a thin scaffold. The core architecture (widgets, workspaces, pr
 
 **For complete architecture docs, see:** [@trops/dash-core documentation](https://github.com/trops/dash-core)
 
-## Directory Structure
+---
 
-Only template-specific files live here. Everything else comes from `@trops/dash-core`.
+## Directory Structure
 
 ```
 ./
@@ -102,6 +239,7 @@ Only template-specific files live here. Everything else comes from `@trops/dash-
 │   ├── index.html              # HTML shell
 │   └── tailwind.css            # Built CSS output
 ├── scripts/                    # Build, validation, and utility scripts
+│   ├── ci.sh                   # Full CI pipeline — the only approved release path
 │   ├── widgetize.js            # Generate new widget scaffold
 │   ├── validate.sh             # Automated validation
 │   ├── prdize.js               # Generate PRD from template
@@ -114,9 +252,9 @@ Only template-specific files live here. Everything else comes from `@trops/dash-
 └── tailwind.config.js          # TailwindCSS config
 ```
 
-## Development Workflow
+---
 
-### Environment Setup
+## Environment Setup
 
 **Prerequisites:**
 
@@ -132,7 +270,9 @@ cp .env.default .env
 npm run setup
 ```
 
-### Development Commands
+---
+
+## Development Commands
 
 ```bash
 # Start dev server + Electron with hot reload
@@ -157,125 +297,41 @@ npm run prettify
 npm run bump
 ```
 
-### Hot Reload Development
+---
 
-When you run `npm run dev`:
-
-1. Tailwind CSS watcher starts (rebuilds on class changes)
-2. React dev server starts at http://localhost:3000
-3. Electron app launches and connects to dev server
-4. File changes automatically reload without restart
-5. DevTools are available for debugging
-
-## Key Files and Locations
+## Key Files
 
 ### Dash.js — Main App Component
 
-**File:** [src/Dash.js](src/Dash.js)
-
 -   Imports all local widgets from `src/Widgets/` and registers them with `ComponentManager`
 -   Creates `ElectronDashboardApi` instance from `@trops/dash-core`
--   Loads installed external widgets via two-phase loading (CJS bundles first, config fallback second)
--   Renders `DashboardStage` from `@trops/dash-core` with the API and credentials
--   Listens for widget install/load events for hot reload
-
-### index.js — Entry Point
-
-**File:** [src/index.js](src/index.js)
-
-Renders the React app with `HashRouter` wrapping the `Dash` component.
+-   Loads installed external widgets via two-phase loading
+-   Renders `DashboardStage` with the API and credentials
 
 ### electron.js — Main Process
 
-**File:** [public/electron.js](public/electron.js)
-
-Creates the Electron `BrowserWindow` and registers all IPC handlers. Imports controllers and events from `@trops/dash-core/electron`, then wires them to `ipcMain.handle()` calls. Includes both core handlers (workspaces, themes, providers, MCP, registry) and template-specific handlers (algolia, openai, menuItems, plugins).
+Creates the Electron `BrowserWindow` and registers all IPC handlers. Imports controllers and events from `@trops/dash-core/electron`, then wires them to `ipcMain.handle()` calls. Includes both core handlers and template-specific handlers (algolia, openai, menuItems, plugins).
 
 ### preload.js — Context Bridge
-
-**File:** [public/preload.js](public/preload.js)
-
-Exposes the main API to the renderer process:
 
 ```javascript
 const { defaultMainApi } = require("@trops/dash-core/electron");
 contextBridge.exposeInMainWorld("mainApi", defaultMainApi);
 ```
 
-### Widgets/ — Template-Specific Widgets
-
-**Location:** [src/Widgets/](src/Widgets/)
-
-Contains `DashSamples` with sample widgets: SampleThemeViewerWidget, SampleNotepadWidget, SampleEventSenderWidget, SampleEventReceiverWidget, SampleSlackWidget, SampleGitHubWidget, SampleGmailWidget, SampleReaderWidget.
-
-## Template-Specific Extensions
-
-The `electron.js` main process registers template-specific IPC handlers beyond what `@trops/dash-core` provides:
-
-**Algolia** — Search index management:
-
-```javascript
-ipcMain.handle(ALGOLIA_LIST_INDICES, (e, app) => listIndices(mainWindow, app));
-ipcMain.handle(ALGOLIA_BROWSE_OBJECTS, (e, msg) => browseObjectsToFile(...));
-```
-
-**OpenAI** — Image description:
-
-```javascript
-ipcMain.handle(OPENAI_DESCRIBE_IMAGE, (e, msg) => describeImage(...));
-```
-
-**Menu Items** — Custom menu persistence:
-
-```javascript
-ipcMain.handle(MENU_ITEMS_LIST, (e, msg) => listMenuItemsForApplication(...));
-ipcMain.handle(MENU_ITEMS_SAVE, (e, msg) => saveMenuItemForApplication(...));
-```
-
-**Plugins** — pluggable-electron plugin installation:
-
-```javascript
-ipcMain.handle("plugin-install", (e, msg) => pluginInstall(...));
-```
-
-## Widget System
-
-Widgets are React components registered with `ComponentManager` from `@trops/dash-core`. Each widget has a `.dash.js` config file defining its component, type, workspace, and user-configurable properties.
-
-**Creating a new widget:**
-
-```bash
-node ./scripts/widgetize MyAwesomeWidget
-# Creates: src/Widgets/MyAwesomeWidget/{widgets/, workspaces/, index.js}
-```
-
-**For complete widget system docs, see:** [dash-core Widget System](https://github.com/trops/dash-core/blob/master/docs/WIDGET_SYSTEM.md)
-
-## Provider System
-
-Two provider classes: `"credential"` (encrypted API keys) and `"mcp"` (MCP server connections).
-
-**Critical:** Providers are read from `AppContext.providers`, NOT `DashboardContext.providers`. DashboardContext.providers is structurally empty due to component tree ordering.
-
-**For complete provider docs, see:** [dash-core Provider Architecture](https://github.com/trops/dash-core/blob/master/docs/PROVIDER_ARCHITECTURE.md)
-
-## MCP Provider System
-
-MCP (Model Context Protocol) providers spawn stdio child processes exposing tools to widgets. The lifecycle is managed by `useMcpProvider` hook and `mcpController` from `@trops/dash-core`.
-
-**For complete MCP docs, see:** [dash-core Provider Architecture](https://github.com/trops/dash-core/blob/master/docs/PROVIDER_ARCHITECTURE.md)
+---
 
 ## Important Patterns
 
 ### Import Rules
 
-**ThemeContext** must come from `@trops/dash-react` to avoid dual context instances:
+**ThemeContext** must come from `@trops/dash-react`:
 
 ```javascript
 // CORRECT
 import { ThemeContext } from "@trops/dash-react";
 
-// WRONG - creates dual context
+// WRONG - creates dual context instance
 import { ThemeContext } from "./Context/ThemeContext";
 ```
 
@@ -310,7 +366,26 @@ import {
 } from "@trops/dash-react";
 ```
 
-**For more patterns (context providers, widget communication, data persistence), see:** [dash-core Widget Development](https://github.com/trops/dash-core/blob/master/docs/WIDGET_DEVELOPMENT.md)
+### Provider System
+
+**Critical:** Providers are read from `AppContext.providers`, NOT `DashboardContext.providers`.
+DashboardContext.providers is structurally empty due to component tree ordering.
+
+**For complete provider docs, see:** [dash-core Provider Architecture](https://github.com/trops/dash-core/blob/master/docs/PROVIDER_ARCHITECTURE.md)
+
+---
+
+## Widget System
+
+```bash
+# Create a new widget
+node ./scripts/widgetize MyAwesomeWidget
+# Creates: src/Widgets/MyAwesomeWidget/{widgets/, workspaces/, index.js}
+```
+
+**For complete widget docs, see:** [dash-core Widget System](https://github.com/trops/dash-core/blob/master/docs/WIDGET_SYSTEM.md)
+
+---
 
 ## Build and Deploy
 
@@ -336,136 +411,49 @@ npm run apple-staple
 
 **Output:** `/out/make/YourApp.dmg`
 
-## Validation and Testing
+---
 
-### When to Validate
+## Runtime Validation Checklist
 
-**Always validate after:**
+After `npm run dev`:
 
--   Modifying source code in `src/`
--   Changing build configuration (rollup, craco, tailwind)
--   Updating dependencies
--   Adding or modifying widgets
+-   **Terminal:** "Compiled successfully!" appears, no red errors, Electron process starts
+-   **Electron Window:** Application window opens, dashboard renders, no blank panels
+-   **DevTools Console:** Theme loading messages appear, no NULL theme or module resolution errors
 
-### Git Branching Workflow
+---
 
-Always work on feature branches, never push directly to master.
+## Code Style
 
-**Before starting any new feature or fix:**
-
-```bash
-git checkout master && git pull
-git checkout -b feat/<TICKET-KEY>-<slug>
-```
-
-**Branch naming:** `feat/<TICKET-KEY>-<slug>` for features, `fix/<TICKET-KEY>-<slug>` for bug fixes.
-
-**Steps:**
-
-1. **Pull latest** — `git checkout master && git pull origin master`
-2. **Branch** — `git checkout -b feat/<TICKET-KEY>-<slug>`
-3. **Code** — Make changes, follow existing patterns
-4. **Validate + Ship** — Use `scripts/ci.sh --release` (see below) to validate, commit, push, PR, merge, tag, and clean up
-
-**Things to avoid:**
-
--   Never push directly to master — always use feature branches and PRs
--   Never skip validation — always run `scripts/ci.sh` before shipping
--   Never use `git push --force` or `git reset --hard`
-
-### Local CI Script (Recommended)
-
-The `scripts/ci.sh` script handles the full validation pipeline (Node 20 via nvm, Prettier, Tailwind CSS, CI build with ESLint errors, widget tests) and optionally the git workflow:
-
-```bash
-# Validate only (prettify + build CSS + CI build + widget tests)
-npm run ci
-
-# Validate + commit + version bump
-npm run ci:commit -- -m "Your commit message"
-
-# Above + push branch
-npm run ci:push -- -m "Your commit message"
-
-# Above + create PR
-npm run ci:pr -- -m "Your commit message"
-
-# Above + merge PR + tag + cleanup branches
-npm run ci:release -- -m "Your commit message"
-```
-
-Each flag is cumulative — `--release` runs all prior steps. The script automatically switches to Node 20 using nvm and cleans up the build directory after validation.
-
-### Pre-Commit Validation
-
-```bash
-npm run prettify
-npm run build:css
-npm run build 2>&1 | head -50
-```
-
-### Quick Validation Script
-
-```bash
-./scripts/validate.sh
-```
-
-Or manually:
-
-```bash
-npm run prettify && npm run build:css && timeout 30 bash -c 'BROWSER=none npm start'
-```
-
-### Runtime Validation
-
-```bash
-npm run dev
-```
-
-**In Terminal:** "Compiled successfully!" appears, no red errors, Electron process starts.
-
-**In Electron Window:** Application window opens, dashboard renders, no blank panels.
-
-**In DevTools Console:** Theme loading messages appear, no NULL theme or module resolution errors.
-
-### Automated Validation (Claude Code)
-
-```bash
-# Quick (30 seconds)
-npm run prettify && npm run build:css
-
-# Full (60 seconds)
-npm run prettify && npm run build:css && timeout 30 bash -c 'BROWSER=none npm start'
-```
-
-**Success criteria:** No errors, "Compiled successfully!" message, process completes without crashing.
-
-## Code Style and Conventions
-
-Same conventions as `@trops/dash-core`:
-
--   **React components:** PascalCase (e.g., `MyWidget.js`)
+-   **React components:** PascalCase (`MyWidget.js`)
 -   **Widget configs:** `{ComponentName}.dash.js`
--   **Utilities:** camelCase (e.g., `layout.js`)
+-   **Utilities:** camelCase (`layout.js`)
 -   **Formatting:** Prettier (`.prettierrc`), 4-space indentation
--   **Run `npm run prettify` before committing**
+-   Run `npm run prettify` before every commit — enforced by `ci.sh`
+
+---
 
 ## Environment Variables
 
-**Optional:**
+-   `.env` — Your local environment (not committed)
+-   `.env.default` — Template with all variables
+
+**Optional vars:**
 
 -   `REACT_APP_IDENTIFIER` — App identifier (defaults to package name)
 -   `REACT_APP_APPLE_*` — Apple signing credentials for packaging
 -   `REACT_APP_GOOGLE_*` — Google API credentials
 
-**Files:**
-
--   `.env` — Your local environment (not committed)
--   `.env.default` — Template with all variables
+---
 
 ## Version Management
 
-**Current Versions:**
+```bash
+npm run bump       # Patch bump (0.0.X)
+npm run bump-tag   # Patch bump with git tag
+```
+
+**Current versions:**
 
 -   dash-electron: 0.0.58
 -   @trops/dash-core: ^0.1.3
@@ -474,44 +462,17 @@ Same conventions as `@trops/dash-core`:
 -   Electron: ^39.0.0
 -   React: ^18.2.0
 
-**Bumping Versions:**
-
-```bash
-npm run bump       # Patch (0.0.X)
-npm run bump-tag   # With git tag
-```
-
-## Cross-Repo Development
-
-When making changes that span dash-core, dash-react, and/or dash-electron, use the **cross-repo-dev** skill (`.claude/skills/cross-repo-dev/SKILL.md`). It guides the full workflow: make changes in the dependency repo, link and test locally, unlink and ship, then update dash-electron.
-
-All four Dash repos support the same CI commands: `npm run ci`, `ci:commit`, `ci:push`, `ci:pr`, `ci:release`.
+---
 
 ## Related Projects
 
-### @trops/dash-core
+| Repo              | Location                               | Purpose                       |
+| ----------------- | -------------------------------------- | ----------------------------- |
+| @trops/dash-core  | `~/Development/dash-core/dash-core/`   | Core framework                |
+| @trops/dash-react | `~/Development/dash-react/dash-react/` | UI component library          |
+| dash (monolith)   | `~/Development/dash/dash/`             | Original app, safety net only |
 
-**Location:** `~/Development/dash-core/dash-core/`
-**Package:** `@trops/dash-core`
-**Purpose:** Core framework — contexts, hooks, models, controllers, APIs, widget system, provider architecture
-
--   Two export paths: `@trops/dash-core` (renderer, ESM+CJS) and `@trops/dash-core/electron` (CJS only)
--   [Documentation](https://github.com/trops/dash-core)
-
-### @trops/dash-react
-
-**Location:** `~/Development/dash-react/dash-react/`
-**Package:** `@trops/dash-react`
-**Purpose:** UI component library (Panel, Button, Widget, Workspace, ThemeContext, FontAwesomeIcon, etc.)
-
-### dash (original monolith)
-
-**Location:** `~/Development/dash/dash/`
-**Purpose:** Original monolithic app, preserved as safety net. Not actively developed.
-
-### Development Sync
-
-When working across projects:
+### Development Sync (Cross-Repo)
 
 ```bash
 # Terminal 1 - rebuild dash-core
@@ -523,6 +484,8 @@ cd ~/Development/dash-react/dash-react && npm run build
 # Terminal 3 - reinstall and run dash-electron
 cd ~/Development/dash-electron/dash-electron && npm install && npm run dev
 ```
+
+---
 
 ## Troubleshooting
 
@@ -536,6 +499,8 @@ cd ~/Development/dash-electron/dash-electron && npm install && npm run dev
 
 **Blank Electron window:** Clear cache `rm -rf node_modules/.cache` and restart `npm run dev`.
 
+---
+
 ## Resources
 
 **Local Documentation:**
@@ -545,7 +510,7 @@ cd ~/Development/dash-electron/dash-electron && npm install && npm run dev
 -   [Development Workflow](./docs/DEVELOPMENT_WORKFLOW.md)
 -   [Main App Integration](./docs/MAIN_APP_INTEGRATION.md)
 
-**Core Framework Documentation (dash-core):**
+**Core Framework Documentation:**
 
 -   [Widget System](https://github.com/trops/dash-core/blob/master/docs/WIDGET_SYSTEM.md)
 -   [Widget API](https://github.com/trops/dash-core/blob/master/docs/WIDGET_API.md)
