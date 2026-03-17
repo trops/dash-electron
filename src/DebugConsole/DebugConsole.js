@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import DebugEntry from "./DebugEntry";
+import ApiCatalog from "./ApiCatalog";
 import "./DebugConsole.css";
 
 const LEVEL_FILTERS = ["all", "info", "warn", "error"];
+const TABS = ["Log Stream", "API Catalog"];
 
 function DebugConsole() {
+    const [activeTab, setActiveTab] = useState("Log Stream");
     const [entries, setEntries] = useState([]);
     const [levelFilter, setLevelFilter] = useState("all");
     const [apiFilter, setApiFilter] = useState("all");
@@ -62,67 +65,93 @@ function DebugConsole() {
 
     return (
         <div className="debug-console">
-            <div className="debug-toolbar">
-                <div className="debug-toolbar-group">
-                    {LEVEL_FILTERS.map((level) => (
-                        <button
-                            key={level}
-                            className={`debug-filter-btn ${
-                                level !== "all" ? `level-${level}` : ""
-                            } ${levelFilter === level ? "active" : ""}`}
-                            onClick={() => setLevelFilter(level)}
+            <div className="debug-tab-bar">
+                {TABS.map((tab) => (
+                    <button
+                        key={tab}
+                        className={`debug-tab ${
+                            activeTab === tab ? "active" : ""
+                        }`}
+                        onClick={() => setActiveTab(tab)}
+                    >
+                        {tab}
+                    </button>
+                ))}
+            </div>
+
+            {activeTab === "Log Stream" ? (
+                <>
+                    <div className="debug-toolbar">
+                        <div className="debug-toolbar-group">
+                            {LEVEL_FILTERS.map((level) => (
+                                <button
+                                    key={level}
+                                    className={`debug-filter-btn ${
+                                        level !== "all" ? `level-${level}` : ""
+                                    } ${levelFilter === level ? "active" : ""}`}
+                                    onClick={() => setLevelFilter(level)}
+                                >
+                                    {level.charAt(0).toUpperCase() +
+                                        level.slice(1)}
+                                </button>
+                            ))}
+                        </div>
+
+                        <select
+                            className="debug-api-select"
+                            value={apiFilter}
+                            onChange={(e) => setApiFilter(e.target.value)}
                         >
-                            {level.charAt(0).toUpperCase() + level.slice(1)}
+                            <option value="all">All APIs</option>
+                            {apiNames.map((api) => (
+                                <option key={api} value={api}>
+                                    {api}
+                                </option>
+                            ))}
+                        </select>
+
+                        <button
+                            className={`debug-filter-btn ${
+                                autoScroll ? "active" : ""
+                            }`}
+                            onClick={() => setAutoScroll(!autoScroll)}
+                            title="Auto-scroll to latest"
+                        >
+                            {autoScroll ? "Auto-scroll ON" : "Auto-scroll OFF"}
                         </button>
-                    ))}
-                </div>
 
-                <select
-                    className="debug-api-select"
-                    value={apiFilter}
-                    onChange={(e) => setApiFilter(e.target.value)}
-                >
-                    <option value="all">All APIs</option>
-                    {apiNames.map((api) => (
-                        <option key={api} value={api}>
-                            {api}
-                        </option>
-                    ))}
-                </select>
-
-                <button
-                    className={`debug-filter-btn ${autoScroll ? "active" : ""}`}
-                    onClick={() => setAutoScroll(!autoScroll)}
-                    title="Auto-scroll to latest"
-                >
-                    {autoScroll ? "Auto-scroll ON" : "Auto-scroll OFF"}
-                </button>
-
-                <button className="debug-action-btn" onClick={handleClear}>
-                    Clear
-                </button>
-            </div>
-
-            <div className="debug-log-list" ref={listRef}>
-                {filtered.length === 0 ? (
-                    <div className="debug-empty">
-                        {entries.length === 0
-                            ? "Waiting for log entries..."
-                            : "No entries match current filters"}
+                        <button
+                            className="debug-action-btn"
+                            onClick={handleClear}
+                        >
+                            Clear
+                        </button>
                     </div>
-                ) : (
-                    filtered.map((entry) => (
-                        <DebugEntry key={entry.id} entry={entry} />
-                    ))
-                )}
-            </div>
 
-            <div className="debug-status-bar">
-                <span>
-                    {filtered.length} / {entries.length} entries
-                </span>
-                <span>Debug Console</span>
-            </div>
+                    <div className="debug-log-list" ref={listRef}>
+                        {filtered.length === 0 ? (
+                            <div className="debug-empty">
+                                {entries.length === 0
+                                    ? "Waiting for log entries..."
+                                    : "No entries match current filters"}
+                            </div>
+                        ) : (
+                            filtered.map((entry) => (
+                                <DebugEntry key={entry.id} entry={entry} />
+                            ))
+                        )}
+                    </div>
+
+                    <div className="debug-status-bar">
+                        <span>
+                            {filtered.length} / {entries.length} entries
+                        </span>
+                        <span>Debug Console</span>
+                    </div>
+                </>
+            ) : (
+                <ApiCatalog />
+            )}
         </div>
     );
 }
