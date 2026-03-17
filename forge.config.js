@@ -13,6 +13,7 @@ module.exports = {
     packagerConfig: {
         asar: true,
         name: process.env.REACT_APP_PACKAGE_NAME,
+        icon: "./assets/icons/icon",
         ...(process.env.REACT_APP_APPLE_CERT_ID
             ? {
                   osxSign: {
@@ -41,6 +42,9 @@ module.exports = {
             platforms: ["win32"],
             config: {
                 name: process.env.REACT_APP_APP_NAME,
+                iconUrl:
+                    "https://raw.githubusercontent.com/trops/dash-electron/master/assets/icons/icon.ico",
+                setupIcon: "./assets/icons/icon.ico",
             },
         },
         {
@@ -48,6 +52,7 @@ module.exports = {
             platforms: ["darwin"],
             config: {
                 name: process.env.REACT_APP_APP_NAME,
+                icon: "./assets/icons/icon.icns",
                 format: "ULFO",
                 overwrite: true,
             },
