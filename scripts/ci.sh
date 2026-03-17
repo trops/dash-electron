@@ -68,26 +68,35 @@ nvm use --delete-prefix v20.20.0
 echo "Node version: $(node -v)"
 echo "npm version: $(npm -v)"
 
-# 2. Prettify
+# 2. Update @trops dependencies to latest published versions
+step "Updating @trops dependencies"
+CORE_LATEST="$(npm view @trops/dash-core version)"
+REACT_LATEST="$(npm view @trops/dash-react version)"
+echo "Latest @trops/dash-core: $CORE_LATEST"
+echo "Latest @trops/dash-react: $REACT_LATEST"
+npm install "@trops/dash-core@^${CORE_LATEST}" "@trops/dash-react@^${REACT_LATEST}" --save
+echo "Updated dependencies installed"
+
+# 3. Prettify
 step "Running Prettier"
 npx prettier --write .
 
-# 3. Build CSS
+# 4. Build CSS
 step "Building Tailwind CSS"
 npx tailwindcss -i src/index.css -o public/tailwind.css -m
 
-# 4. CI Build (ESLint warnings as errors, same as GitHub Actions)
+# 5. CI Build (ESLint warnings as errors, same as GitHub Actions)
 step "Running CI build"
 CI=true npx craco build
 
-# 5. Widget tests (disabled — test references stale local modules moved to @trops/dash-core)
+# 6. Widget tests (disabled — test references stale local modules moved to @trops/dash-core)
 # TODO: update testWidgetIntegration.cjs to import from @trops/dash-core/electron
 # if [[ -f scripts/testWidgetIntegration.cjs ]]; then
 #     step "Running widget integration tests"
 #     node scripts/testWidgetIntegration.cjs
 # fi
 
-# 6. Cleanup build dir (only used for validation)
+# 7. Cleanup build dir (only used for validation)
 step "Cleaning up build directory"
 rm -rf build/
 
@@ -113,11 +122,13 @@ gh auth setup-git
 # --- Pull latest from remote ---
 step "Pulling latest from origin"
 git fetch origin
+git stash --include-untracked -q
 if git rev-parse --verify "origin/$BRANCH" >/dev/null 2>&1; then
     git pull origin "$BRANCH" --rebase
 elif [[ "$BRANCH" != "$MAIN_BRANCH" ]]; then
     git pull origin "$MAIN_BRANCH" --rebase
 fi
+git stash pop -q 2>/dev/null || true
 
 # --- Commit ---
 step "Committing changes"
