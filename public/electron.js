@@ -554,6 +554,7 @@ let ipcHandlersRegistered = false;
 function createWindow() {
     // Create the browser window.
     mainWindow = new BrowserWindow({
+        icon: path.join(__dirname, "..", "assets", "icons", "icon-256.png"),
         width: 1920,
         height: 1080,
         minWidth: 1024,
