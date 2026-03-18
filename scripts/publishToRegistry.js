@@ -32,7 +32,8 @@ require("dotenv").config({ path: path.join(ROOT, ".env") });
 
 const WIDGETS_DIR = path.join(ROOT, "src", "Widgets");
 const REGISTRY_BASE_URL =
-    process.env.DASH_REGISTRY_API_URL || "https://registry.trops.dev";
+    process.env.DASH_REGISTRY_API_URL ||
+    "https://main.d919rwhuzp7rj.amplifyapp.com";
 
 const CATEGORY_MAP = {
     DashSamples: "general",
