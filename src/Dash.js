@@ -19,6 +19,13 @@ import {
 // Local Widgets that integrate with Dash
 import * as myWidgets from "./Widgets";
 
+// Kitchen Sink sample dashboard
+import {
+    WelcomePrompt,
+    STORAGE_KEY,
+    createKitchenSinkWorkspace,
+} from "./KitchenSink";
+
 // Debug Console (standalone window)
 import { DebugConsole } from "./DebugConsole";
 
@@ -361,6 +368,11 @@ function WidgetPopoutDashboard() {
 class App extends React.Component {
     _removeNotificationClickListener = null;
 
+    state = {
+        showWelcomePrompt: false,
+        stageKey: 0,
+    };
+
     async componentDidMount() {
         console.log("[Dash App] componentDidMount called");
         // Listen for widget installation events (hot reload)
@@ -387,6 +399,28 @@ class App extends React.Component {
         // Load installed widgets (bundles first, then config fallback)
         await loadInstalledWidgets();
         window.dispatchEvent(new Event("dash:widgets-updated"));
+
+        // First-launch check: offer Kitchen Sink sample if no workspaces exist
+        if (window.mainApi && !localStorage.getItem(STORAGE_KEY)) {
+            try {
+                const result =
+                    await window.mainApi.workspace.listWorkspacesForApplication(
+                        appId
+                    );
+                if (
+                    result &&
+                    result.workspaces &&
+                    result.workspaces.length === 0
+                ) {
+                    this.setState({ showWelcomePrompt: true });
+                }
+            } catch (err) {
+                console.warn(
+                    "[Dash App] Could not check workspaces for first-launch prompt:",
+                    err
+                );
+            }
+        }
     }
 
     componentWillUnmount() {
@@ -496,33 +530,65 @@ class App extends React.Component {
         window.dispatchEvent(new Event("dash:widgets-updated"));
     };
 
+    handleAcceptKitchenSink = async () => {
+        try {
+            const workspace = createKitchenSinkWorkspace();
+            await window.mainApi.workspace.saveWorkspaceForApplication(
+                appId,
+                workspace
+            );
+            this.setState((prev) => ({
+                showWelcomePrompt: false,
+                stageKey: prev.stageKey + 1,
+            }));
+        } catch (err) {
+            console.error(
+                "[Dash App] Failed to create Kitchen Sink workspace:",
+                err
+            );
+            this.setState({ showWelcomePrompt: false });
+        }
+    };
+
+    handleDismissKitchenSink = () => {
+        this.setState({ showWelcomePrompt: false });
+    };
+
     render() {
         console.log("[Dash App] render called, electronApi:", !!electronApi);
         return (
-            <Routes>
-                <Route
-                    path="/"
-                    element={
-                        <ErrorBoundary>
-                            <DashboardStage
-                                dashApi={electronApi}
-                                credentials={{ appId }}
-                                height="h-full"
-                                grow={true}
-                            />
-                        </ErrorBoundary>
-                    }
+            <>
+                <Routes>
+                    <Route
+                        path="/"
+                        element={
+                            <ErrorBoundary>
+                                <DashboardStage
+                                    key={this.state.stageKey}
+                                    dashApi={electronApi}
+                                    credentials={{ appId }}
+                                    height="h-full"
+                                    grow={true}
+                                />
+                            </ErrorBoundary>
+                        }
+                    />
+                    <Route
+                        path="/popout/:workspaceId"
+                        element={<PopoutDashboard />}
+                    />
+                    <Route
+                        path="/popout-widget/:workspaceId/:widgetId"
+                        element={<WidgetPopoutDashboard />}
+                    />
+                    <Route path="/debug-console" element={<DebugConsole />} />
+                </Routes>
+                <WelcomePrompt
+                    isOpen={this.state.showWelcomePrompt}
+                    onAccept={this.handleAcceptKitchenSink}
+                    onDismiss={this.handleDismissKitchenSink}
                 />
-                <Route
-                    path="/popout/:workspaceId"
-                    element={<PopoutDashboard />}
-                />
-                <Route
-                    path="/popout-widget/:workspaceId/:widgetId"
-                    element={<WidgetPopoutDashboard />}
-                />
-                <Route path="/debug-console" element={<DebugConsole />} />
-            </Routes>
+            </>
         );
     }
 }
