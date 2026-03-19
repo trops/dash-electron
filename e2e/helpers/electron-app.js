@@ -7,15 +7,18 @@ const ROOT = path.resolve(__dirname, "../..");
  * Launch the Electron app in development mode.
  * Expects the React dev server to already be running at http://localhost:3000.
  *
+ * @param {Object} [options] - Launch options
+ * @param {Object} [options.env] - Additional environment variables to merge
  * @returns {{ electronApp: import('playwright').ElectronApplication, window: import('playwright').Page }}
  */
-async function launchApp() {
+async function launchApp(options = {}) {
     const electronApp = await electron.launch({
         args: [path.join(ROOT, "public/electron.js")],
         cwd: ROOT,
         env: {
             ...process.env,
             NODE_ENV: "development",
+            ...(options.env || {}),
         },
     });
 
