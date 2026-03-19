@@ -16,6 +16,7 @@
  *   npm run publish-themes                   # Publish all 10 themes
  *   npm run publish-themes -- --dry-run      # Preview manifests without publishing
  *   npm run publish-themes -- --theme nordic-frost  # Publish a single theme
+ *   npm run publish-themes -- --local        # Save themes locally (skip registry)
  */
 
 const fs = require("fs");
@@ -115,8 +116,11 @@ const THEMES = [
 
 const args = process.argv.slice(2);
 const isDryRun = args.includes("--dry-run");
+const isLocal = args.includes("--local");
 const themeIdx = args.indexOf("--theme");
 const singleTheme = themeIdx !== -1 ? args[themeIdx + 1] : null;
+
+const FALLBACK_DIR = path.join(ROOT, "themes");
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -311,6 +315,49 @@ async function publishToApi(token, manifest, zipPath) {
     return { success: true, ...data };
 }
 
+// ── Local fallback ───────────────────────────────────────────────────
+
+function saveThemesLocally(themes, scope) {
+    fs.mkdirSync(FALLBACK_DIR, { recursive: true });
+
+    const saved = [];
+
+    for (const theme of themes) {
+        const manifest = buildThemeManifest(theme, scope || "local");
+
+        // Save installable ZIP (manifest.json + .theme.json)
+        const zip = new AdmZip();
+        zip.addFile(
+            "manifest.json",
+            Buffer.from(JSON.stringify(manifest, null, 2))
+        );
+
+        const themeData = {
+            name: theme.displayName,
+            primary: theme.colors.primary,
+            secondary: theme.colors.secondary,
+            tertiary: theme.colors.tertiary,
+            shadeBackgroundFrom: 600,
+            shadeBorderFrom: 600,
+            shadeTextFrom: 100,
+        };
+        zip.addFile(
+            `${theme.name}.theme.json`,
+            Buffer.from(JSON.stringify(themeData, null, 2))
+        );
+
+        const zipPath = path.join(
+            FALLBACK_DIR,
+            `theme-${theme.name}-v${manifest.version}.zip`
+        );
+        zip.writeZip(zipPath);
+        saved.push({ name: theme.name, path: zipPath });
+        console.log(`  Saved: ${zipPath}`);
+    }
+
+    return saved;
+}
+
 // ── Main ──────────────────────────────────────────────────────────────
 
 async function main() {
@@ -351,6 +398,19 @@ async function main() {
         );
         console.log("\nManifest preview:");
         console.log(JSON.stringify(packages[0].manifest, null, 2));
+        return;
+    }
+
+    // Local-only mode: save ZIPs without publishing
+    if (isLocal) {
+        console.log(`\nSaving ${themes.length} theme(s) locally...\n`);
+        const saved = saveThemesLocally(themes, "local");
+        console.log(`\n── Summary ──`);
+        console.log(`Saved ${saved.length} theme(s) to ${FALLBACK_DIR}/`);
+        console.log(
+            "\nTo install: open Dash → Settings → Themes → install from local ZIP"
+        );
+        console.log("Done!");
         return;
     }
 
@@ -421,7 +481,19 @@ async function main() {
     if (failed.length > 0) {
         console.log("\nFailed:");
         failed.forEach((r) => console.log(`  ${r.name}: ${r.error}`));
-        process.exit(1);
+
+        // Fallback: save failed themes locally
+        const failedThemes = themes.filter((t) =>
+            failed.some((f) => f.name === t.name)
+        );
+        console.log(
+            `\nFallback: saving ${failedThemes.length} failed theme(s) locally...`
+        );
+        const saved = saveThemesLocally(failedThemes, scope);
+        console.log(`Saved ${saved.length} theme(s) to ${FALLBACK_DIR}/`);
+        console.log(
+            "To install: open Dash → Settings → Themes → install from local ZIP"
+        );
     }
 
     console.log("\nDone!");
