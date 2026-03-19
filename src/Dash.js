@@ -14,17 +14,14 @@ import {
     evaluateBundle,
     extractWidgetConfigs,
     setHostModules,
+    WELCOME_STORAGE_KEY,
 } from "@trops/dash-core";
 
 // Local Widgets that integrate with Dash
 import * as myWidgets from "./Widgets";
 
 // Kitchen Sink sample dashboard
-import {
-    WelcomePrompt,
-    STORAGE_KEY,
-    createKitchenSinkWorkspace,
-} from "./KitchenSink";
+import { createKitchenSinkWorkspace } from "./KitchenSink";
 
 // Debug Console (standalone window)
 import { DebugConsole } from "./DebugConsole";
@@ -401,7 +398,7 @@ class App extends React.Component {
         window.dispatchEvent(new Event("dash:widgets-updated"));
 
         // First-launch check: offer Kitchen Sink sample if no workspaces exist
-        if (window.mainApi && !localStorage.getItem(STORAGE_KEY)) {
+        if (window.mainApi && !localStorage.getItem(WELCOME_STORAGE_KEY)) {
             try {
                 const result =
                     await window.mainApi.workspace.listWorkspacesForApplication(
@@ -569,6 +566,15 @@ class App extends React.Component {
                                     credentials={{ appId }}
                                     height="h-full"
                                     grow={true}
+                                    showWelcomePrompt={
+                                        this.state.showWelcomePrompt
+                                    }
+                                    onAcceptWelcome={
+                                        this.handleAcceptKitchenSink
+                                    }
+                                    onDismissWelcome={
+                                        this.handleDismissKitchenSink
+                                    }
                                 />
                             </ErrorBoundary>
                         }
@@ -583,11 +589,6 @@ class App extends React.Component {
                     />
                     <Route path="/debug-console" element={<DebugConsole />} />
                 </Routes>
-                <WelcomePrompt
-                    isOpen={this.state.showWelcomePrompt}
-                    onAccept={this.handleAcceptKitchenSink}
-                    onDismiss={this.handleDismissKitchenSink}
-                />
             </>
         );
     }
