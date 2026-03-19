@@ -1,5 +1,11 @@
-import React from "react";
-import { Modal, Button, Button2, FontAwesomeIcon } from "@trops/dash-react";
+import React, { useContext } from "react";
+import {
+    Modal,
+    Button,
+    Button2,
+    FontAwesomeIcon,
+    ThemeContext,
+} from "@trops/dash-react";
 
 const STORAGE_KEY = "dash:kitchen-sink-prompted";
 
@@ -8,6 +14,8 @@ function markPrompted() {
 }
 
 const WelcomePrompt = ({ isOpen, onAccept, onDismiss }) => {
+    const { currentTheme } = useContext(ThemeContext);
+
     const handleAccept = () => {
         markPrompted();
         onAccept();
@@ -25,15 +33,23 @@ const WelcomePrompt = ({ isOpen, onAccept, onDismiss }) => {
             width="w-[520px]"
             height="h-auto"
         >
-            <div className="bg-white dark:bg-zinc-900 rounded-lg overflow-hidden">
+            <div
+                className={`${currentTheme["bg-primary-very-dark"]} rounded-lg overflow-hidden`}
+            >
                 <div className="px-8 pt-8 pb-4 flex flex-col items-center text-center gap-4">
-                    <div className="text-4xl text-blue-500">
+                    <div
+                        className={`text-4xl ${currentTheme["text-tertiary-medium"]}`}
+                    >
                         <FontAwesomeIcon icon="table-cells-large" />
                     </div>
-                    <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+                    <h2
+                        className={`text-xl font-semibold ${currentTheme["text-primary-light"]}`}
+                    >
                         Welcome to Dash!
                     </h2>
-                    <p className="text-sm text-zinc-600 dark:text-zinc-400 max-w-sm">
+                    <p
+                        className={`text-sm ${currentTheme["text-primary-medium"]} max-w-sm`}
+                    >
                         Get started with a sample dashboard that showcases
                         widgets for AI chat, notes, GitHub, Slack, Gmail,
                         Calendar, and more — all in a ready-made 4x3 grid.
