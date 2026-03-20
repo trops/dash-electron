@@ -33,6 +33,37 @@ const REGISTRY_BASE_URL =
     process.env.DASH_REGISTRY_API_URL ||
     "https://main.d919rwhuzp7rj.amplifyapp.com";
 
+// Tailwind color name → hex (500 shade) for manifest colors
+const TAILWIND_COLORS = {
+    slate: "#64748b",
+    gray: "#6b7280",
+    zinc: "#71717a",
+    neutral: "#737373",
+    stone: "#78716c",
+    red: "#ef4444",
+    orange: "#f97316",
+    amber: "#f59e0b",
+    yellow: "#eab308",
+    lime: "#84cc16",
+    green: "#22c55e",
+    emerald: "#10b981",
+    teal: "#14b8a6",
+    cyan: "#06b6d4",
+    sky: "#0ea5e9",
+    blue: "#3b82f6",
+    indigo: "#6366f1",
+    violet: "#8b5cf6",
+    purple: "#a855f7",
+    fuchsia: "#d946ef",
+    pink: "#ec4899",
+    rose: "#f43f5e",
+};
+
+function toHex(name) {
+    if (!name) return "";
+    return TAILWIND_COLORS[name.toLowerCase().trim()] || name;
+}
+
 // ── Theme Definitions ────────────────────────────────────────────────
 
 const { REGISTRY_THEMES: THEMES } = require("./registryThemes");
@@ -42,6 +73,7 @@ const { REGISTRY_THEMES: THEMES } = require("./registryThemes");
 const args = process.argv.slice(2);
 const isDryRun = args.includes("--dry-run");
 const isLocal = args.includes("--local");
+const isRepublish = args.includes("--republish");
 const themeIdx = args.indexOf("--theme");
 const singleTheme = themeIdx !== -1 ? args[themeIdx + 1] : null;
 
@@ -175,19 +207,40 @@ function buildThemeManifest(theme, scope) {
         repository: repoUrl,
         publishedAt: new Date().toISOString(),
         appOrigin: pkg.name || "",
-        colors: theme.colors,
+        colors: {
+            primary: toHex(theme.colors.primary),
+            secondary: toHex(theme.colors.secondary),
+            tertiary: toHex(theme.colors.tertiary),
+            neutral: toHex(theme.colors.neutral || ""),
+        },
         widgets: [],
     };
 }
 
 // ── ZIP creation ──────────────────────────────────────────────────────
 
-function createThemeZip(manifest) {
+function createThemeZip(manifest, theme) {
     const zip = new AdmZip();
     zip.addFile(
         "manifest.json",
         Buffer.from(JSON.stringify(manifest, null, 2))
     );
+
+    // Include the .theme.json so the install flow can extract it
+    const themeData = {
+        name: theme.displayName,
+        primary: theme.colors.primary,
+        secondary: theme.colors.secondary,
+        tertiary: theme.colors.tertiary,
+        shadeBackgroundFrom: 600,
+        shadeBorderFrom: 600,
+        shadeTextFrom: 100,
+    };
+    zip.addFile(
+        `${theme.name}.theme.json`,
+        Buffer.from(JSON.stringify(themeData, null, 2))
+    );
+
     const tmpPath = path.join(
         ROOT,
         `theme-${manifest.name}-v${manifest.version}.zip`
@@ -238,6 +291,34 @@ async function publishToApi(token, manifest, zipPath) {
     }
 
     return { success: true, ...data };
+}
+
+// ── Delete ────────────────────────────────────────────────────────────
+
+async function deleteFromApi(token, scope, name) {
+    const res = await fetch(
+        `${REGISTRY_BASE_URL}/api/packages/${encodeURIComponent(
+            scope
+        )}/${encodeURIComponent(name)}`,
+        {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+        }
+    );
+
+    if (res.status === 404) {
+        return { success: true, notFound: true };
+    }
+
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return {
+            success: false,
+            error: data.error || `HTTP ${res.status}`,
+        };
+    }
+
+    return { success: true };
 }
 
 // ── Local fallback ───────────────────────────────────────────────────
@@ -349,6 +430,26 @@ async function main() {
         pkg.manifest = buildThemeManifest(pkg.theme, scope);
     }
 
+    // Delete existing packages first when --republish
+    if (isRepublish) {
+        console.log("Deleting existing packages...\n");
+        for (const { theme, manifest } of packages) {
+            const delResult = await deleteFromApi(token, scope, manifest.name);
+            if (delResult.success) {
+                console.log(
+                    `  Deleted ${manifest.name}${
+                        delResult.notFound ? " (not found, skipping)" : ""
+                    }`
+                );
+            } else {
+                console.error(
+                    `  Delete failed for ${manifest.name}: ${delResult.error}`
+                );
+            }
+        }
+        console.log("");
+    }
+
     // Publish each theme
     const results = [];
     const zipPaths = [];
@@ -356,7 +457,7 @@ async function main() {
     for (const { theme, manifest } of packages) {
         console.log(`Publishing ${theme.displayName}...`);
 
-        const zipPath = createThemeZip(manifest);
+        const zipPath = createThemeZip(manifest, theme);
         zipPaths.push(zipPath);
 
         const result = await publishToApi(token, manifest, zipPath);
