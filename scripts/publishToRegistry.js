@@ -31,9 +31,6 @@ const ROOT = path.resolve(__dirname, "..");
 // Load .env from project root
 require("dotenv").config({ path: path.join(ROOT, ".env") });
 
-const WIDGETS_DIR = customDir
-    ? path.resolve(ROOT, customDir)
-    : path.join(ROOT, "src", "Widgets");
 const REGISTRY_BASE_URL =
     process.env.DASH_REGISTRY_API_URL ||
     "https://main.d919rwhuzp7rj.amplifyapp.com";
@@ -66,6 +63,10 @@ const widgetIdx = args.indexOf("--widget");
 const singleWidget = widgetIdx !== -1 ? args[widgetIdx + 1] : null;
 const dirIdx = args.indexOf("--dir");
 const customDir = dirIdx !== -1 ? args[dirIdx + 1] : null;
+
+const WIDGETS_DIR = customDir
+    ? path.resolve(ROOT, customDir)
+    : path.join(ROOT, "src", "Widgets");
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
