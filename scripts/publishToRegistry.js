@@ -265,6 +265,59 @@ async function getScope(token) {
     return data.user.username;
 }
 
+// ── Widget ID injection ───────────────────────────────────────────────
+
+/**
+ * Write scoped id, scope, and packageName fields into each .dash.js file
+ * in the given widget directory. Called after auth so scope is known.
+ *
+ * @param {string} widgetDirName - Widget directory name under src/Widgets/
+ * @param {string} scope - Authenticated registry username
+ */
+function writeWidgetIds(widgetDirName, scope) {
+    const widgetDir = path.join(WIDGETS_DIR, widgetDirName);
+    const dashConfigPaths = collectDashConfigs(widgetDir);
+    const pkgName = toKebabCase(widgetDirName);
+
+    for (const configPath of dashConfigPaths) {
+        const widgetName = path.basename(configPath, ".dash.js");
+        const scopedId = `${scope}.${pkgName}.${widgetName}`;
+
+        let content = fs.readFileSync(configPath, "utf8");
+        const original = content;
+
+        // Fields to inject/update after "const widgetDefinition = {"
+        const fields = [
+            { key: "id", value: scopedId },
+            { key: "scope", value: scope },
+            { key: "packageName", value: pkgName },
+        ];
+
+        for (const { key, value } of fields) {
+            const existingPattern = new RegExp(
+                `(\\s+)${key}:\\s*["'][^"']*["'],?\\s*\\n`
+            );
+            const replacement = `$1${key}: "${value}",\n`;
+
+            if (existingPattern.test(content)) {
+                // Update existing field
+                content = content.replace(existingPattern, replacement);
+            } else {
+                // Insert after "const widgetDefinition = {" line
+                content = content.replace(
+                    /(const widgetDefinition = \{)\n/,
+                    `$1\n    ${key}: "${value}",\n`
+                );
+            }
+        }
+
+        if (content !== original) {
+            fs.writeFileSync(configPath, content, "utf8");
+            console.log(`  Updated IDs in ${path.relative(ROOT, configPath)}`);
+        }
+    }
+}
+
 // ── Build ─────────────────────────────────────────────────────────────
 
 function buildWidget(widgetDirName) {
@@ -461,8 +514,13 @@ function buildManifest(widgetDirName, scope) {
         registryDisplayName = toTitleCase(customName);
     }
 
-    // Strip internal "package" field from widget entries
-    const manifestWidgets = widgets.map(({ package: _p, ...rest }) => rest);
+    // Build manifest widget entries with scoped identity fields
+    const manifestWidgets = widgets.map(({ package: _p, ...rest }) => ({
+        ...rest,
+        scope,
+        packageName: registryName,
+        widgetName: rest.name,
+    }));
 
     const category = CATEGORY_MAP[widgetDirName] || "general";
 
@@ -579,6 +637,11 @@ async function main() {
     const token = await authenticate();
     const scope = await getScope(token);
     console.log(`Authenticated as: ${scope}`);
+
+    // Write scoped IDs into .dash.js files
+    for (const { dirName } of packages) {
+        writeWidgetIds(dirName, scope);
+    }
 
     // Rebuild manifests with real scope
     for (const pkg of packages) {
