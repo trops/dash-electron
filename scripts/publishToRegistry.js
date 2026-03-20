@@ -328,10 +328,7 @@ function writeWidgetIds(widgetDirName, scope) {
 // ── Build ─────────────────────────────────────────────────────────────
 
 function buildWidget(widgetDirName) {
-    const version = getPkg().version || "0.0.0";
-    const tag = `v${version}`;
     const zipBaseName = toKebabCase(widgetDirName);
-    const zipName = `widgets-${zipBaseName}-${tag}.zip`;
 
     console.log(`  Building ${widgetDirName}...`);
     try {
@@ -409,9 +406,16 @@ function buildWidget(widgetDirName) {
         }
     }
 
-    const zipPath = path.join(ROOT, zipName);
-    if (!fs.existsSync(zipPath)) {
-        console.error(`Error: Expected ZIP not found at ${zipPath}`);
+    // Find the actual ZIP created by packageZip.js (avoids version cache mismatch)
+    const zipPattern = `widgets-${zipBaseName}-v`;
+    const actualZip = fs
+        .readdirSync(ROOT)
+        .find((f) => f.startsWith(zipPattern) && f.endsWith(".zip"));
+    const zipPath = actualZip ? path.join(ROOT, actualZip) : null;
+    if (!zipPath) {
+        console.error(
+            `Error: No ZIP matching ${zipPattern}*.zip found in project root`
+        );
         return null;
     }
 
