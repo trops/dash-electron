@@ -244,6 +244,23 @@ function validateManifestSchema(manifest) {
                     });
                 }
             }
+
+            // Scope enforcement warnings (will become errors in a future release)
+            if (!widget.scope) {
+                warnings.push(
+                    `${prefix}.scope is missing — scoped widget IDs will be required in a future release`
+                );
+            }
+            if (!widget.packageName) {
+                warnings.push(
+                    `${prefix}.packageName is missing — scoped widget IDs will be required in a future release`
+                );
+            }
+            if (!widget.widgetName) {
+                warnings.push(
+                    `${prefix}.widgetName is missing — scoped widget IDs will be required in a future release`
+                );
+            }
         });
     }
 

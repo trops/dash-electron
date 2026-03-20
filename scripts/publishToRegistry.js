@@ -56,6 +56,7 @@ const CATEGORY_MAP = {
 const args = process.argv.slice(2);
 const isDryRun = args.includes("--dry-run");
 const isAll = args.includes("--all");
+const isRepublish = args.includes("--republish");
 const nameIdx = args.indexOf("--name");
 const customName = nameIdx !== -1 ? args[nameIdx + 1] : null;
 const widgetIdx = args.indexOf("--widget");
@@ -436,6 +437,32 @@ async function publishToApi(token, manifest, zipPath) {
     return { success: true, ...data };
 }
 
+async function deleteFromApi(token, scope, name) {
+    const res = await fetch(
+        `${REGISTRY_BASE_URL}/api/packages/${encodeURIComponent(
+            scope
+        )}/${encodeURIComponent(name)}`,
+        {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+        }
+    );
+
+    if (res.status === 404) {
+        return { success: true, notFound: true };
+    }
+
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return {
+            success: false,
+            error: data.error || `HTTP ${res.status}`,
+        };
+    }
+
+    return { success: true };
+}
+
 async function getFormDataImpl() {
     // Node 18+ has global FormData and File via undici
     if (
@@ -653,6 +680,29 @@ async function main() {
 
     for (const { dirName, manifest } of packages) {
         console.log(`\n── Publishing ${dirName} (${manifest.name}) ──`);
+
+        // Delete existing version if --republish is set
+        if (isRepublish) {
+            console.log(
+                `  Deleting existing package ${scope}/${manifest.name}...`
+            );
+            const delResult = await deleteFromApi(token, scope, manifest.name);
+            if (delResult.success) {
+                if (delResult.notFound) {
+                    console.log("  (not found — nothing to delete)");
+                } else {
+                    console.log("  Deleted.");
+                }
+            } else {
+                console.error(`  Delete failed: ${delResult.error}`);
+                results.push({
+                    dirName,
+                    success: false,
+                    error: `Delete failed: ${delResult.error}`,
+                });
+                continue;
+            }
+        }
 
         // Build
         const zipPath = buildWidget(dirName);
