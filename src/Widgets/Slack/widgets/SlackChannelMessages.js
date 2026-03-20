@@ -25,7 +25,7 @@ function extractMcpText(res) {
 function SlackChannelMessagesContent({ title, widgetId }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("slack");
-    const { publish, subscribe } = useWidgetEvents(widgetId);
+    const { publishEvent, listen, listeners } = useWidgetEvents();
 
     const [channelId, setChannelId] = useState(null);
     const [channelName, setChannelName] = useState(null);
@@ -35,12 +35,13 @@ function SlackChannelMessagesContent({ title, widgetId }) {
     const [result, setResult] = useState(null);
 
     useEffect(() => {
-        const unsub = subscribe("channelSelected", (payload) => {
-            setChannelId(payload.id);
-            setChannelName(payload.name);
+        listen(listeners, {
+            channelSelected: (payload) => {
+                setChannelId(payload.id);
+                setChannelName(payload.name);
+            },
         });
-        return unsub;
-    }, [subscribe]);
+    }, [listen, listeners]);
 
     const fetchMessages = async (id) => {
         if (!id) return;
@@ -78,7 +79,7 @@ function SlackChannelMessagesContent({ title, widgetId }) {
     const handleSelectMessage = (msg) => {
         const ts = msg.ts || msg.timestamp;
         setSelectedTs(ts);
-        publish("messageSelected", {
+        publishEvent("messageSelected", {
             ts,
             channel: channelId,
             text: msg.text || "",

@@ -24,7 +24,7 @@ function extractMcpText(res) {
 function SlackSearchMessagesContent({ title, widgetId }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("slack");
-    const { publish } = useWidgetEvents(widgetId);
+    const { publishEvent } = useWidgetEvents();
 
     const [query, setQuery] = useState("");
     const [results, setResults] = useState([]);
@@ -65,7 +65,7 @@ function SlackSearchMessagesContent({ title, widgetId }) {
     const handleSelectMessage = (msg) => {
         const ts = msg.ts || msg.timestamp;
         setSelectedTs(ts);
-        publish("messageSelected", {
+        publishEvent("messageSelected", {
             ts,
             channel: msg.channel?.id || msg.channel || "",
             text: msg.text || "",

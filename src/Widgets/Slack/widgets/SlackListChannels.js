@@ -24,7 +24,7 @@ function extractMcpText(res) {
 function SlackListChannelsContent({ title, widgetId }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("slack");
-    const { publish } = useWidgetEvents(widgetId);
+    const { publishEvent } = useWidgetEvents();
 
     const [channels, setChannels] = useState([]);
     const [filter, setFilter] = useState("");
@@ -66,7 +66,7 @@ function SlackListChannelsContent({ title, widgetId }) {
         const id = ch.id || ch;
         const name = ch.name || ch.id || ch;
         setSelectedId(id);
-        publish("channelSelected", { id, name });
+        publishEvent("channelSelected", { id, name });
     };
 
     const filtered = channels.filter((ch) => {
