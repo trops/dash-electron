@@ -1,1 +1,0 @@
-export { createKitchenSinkWorkspace } from "./kitchenSinkLayout";

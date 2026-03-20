@@ -13,9 +13,10 @@ import ts from "@rollup/plugin-typescript";
 import strip from "@rollup/plugin-strip";
 
 const SINGLE_WIDGET = process.env.ROLLUP_WIDGET || null;
+const WIDGETS_BASE = process.env.ROLLUP_WIDGETS_DIR || "src/Widgets";
 const INPUT_FILE_PATH = SINGLE_WIDGET
-    ? `src/Widgets/${SINGLE_WIDGET}/index.js`
-    : "src/Widgets/index.js";
+    ? `${WIDGETS_BASE}/${SINGLE_WIDGET}/index.js`
+    : `${WIDGETS_BASE}/index.js`;
 const OUTPUT_NAME = "Dash-Widgets";
 
 // change the package.main so this points to the bundler

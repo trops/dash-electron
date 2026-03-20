@@ -21,11 +21,15 @@ const AdmZip = require("adm-zip");
 
 const ROOT = path.resolve(__dirname, "..");
 const DIST_DIR = path.join(ROOT, "dist");
-const WIDGETS_DIR = path.join(ROOT, "src", "Widgets");
-
 const args = process.argv.slice(2);
 const widgetIdx = args.indexOf("--widget");
 const singleWidget = widgetIdx !== -1 ? args[widgetIdx + 1] : null;
+const dirIdx = args.indexOf("--dir");
+const customDir = dirIdx !== -1 ? args[dirIdx + 1] : null;
+
+const WIDGETS_DIR = customDir
+    ? path.resolve(ROOT, customDir)
+    : path.join(ROOT, "src", "Widgets");
 
 function toKebabCase(str) {
     return str

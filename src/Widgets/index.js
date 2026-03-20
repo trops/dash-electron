@@ -1,12 +1,2 @@
-export * from "./DashSamples";
-export * from "./Chat";
-export * from "./Gong";
-export * from "./GoogleCalendar";
-export * from "./Gmail";
-export * from "./Slack";
-export * from "./GitHub";
-export * from "./Notion";
-export * from "./GoogleDrive";
-export * from "./Algolia";
-export * from "./AlgoliaSearch";
-export * from "./Filesystem";
+// Add your built-in widgets here.
+// See src/SampleWidgets/ for examples.
