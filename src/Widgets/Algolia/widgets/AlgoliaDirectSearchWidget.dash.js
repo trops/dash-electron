@@ -1,6 +1,9 @@
 import { AlgoliaDirectSearchWidget } from "./AlgoliaDirectSearchWidget";
 
 const widgetDefinition = {
+    packageName: "algolia",
+    scope: "trops",
+    id: "trops.algolia.AlgoliaDirectSearchWidget",
     name: "AlgoliaDirectSearchWidget",
     displayName: "Algolia Direct Search",
     component: AlgoliaDirectSearchWidget,

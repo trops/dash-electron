@@ -1,6 +1,9 @@
 import { AlgoliaAnalyticsWidget } from "./AlgoliaAnalyticsWidget";
 
 const widgetDefinition = {
+    packageName: "algolia",
+    scope: "trops",
+    id: "trops.algolia.AlgoliaAnalyticsWidget",
     name: "AlgoliaAnalyticsWidget",
     displayName: "Algolia Analytics",
     component: AlgoliaAnalyticsWidget,

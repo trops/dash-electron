@@ -1,6 +1,9 @@
 import { SocketWidget } from "./SocketWidget";
 
 const widgetDefinition = {
+    packageName: "dash-samples",
+    scope: "trops",
+    id: "trops.dash-samples.SocketWidget",
     name: "SocketWidget",
     displayName: "SocketWidget",
     component: SocketWidget,

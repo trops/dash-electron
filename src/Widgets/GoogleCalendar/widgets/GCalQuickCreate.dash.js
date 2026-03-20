@@ -1,6 +1,9 @@
 import { GCalQuickCreate } from "./GCalQuickCreate";
 
 const widgetDefinition = {
+    packageName: "google-calendar",
+    scope: "trops",
+    id: "trops.google-calendar.GCalQuickCreate",
     name: "GCalQuickCreate",
     displayName: "GCalQuickCreate",
     component: GCalQuickCreate,

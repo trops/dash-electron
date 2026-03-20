@@ -10,8 +10,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Panel, SubHeading2 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
-import { McpDebugLog } from "../../Google/components/McpDebugLog";
-import { McpReauthBanner } from "../../Google/components/McpReauthBanner";
+import { McpDebugLog } from "../components/McpDebugLog";
+import { McpReauthBanner } from "../components/McpReauthBanner";
 
 function extractMcpText(res) {
     if (typeof res === "string") return res;

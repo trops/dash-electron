@@ -1,6 +1,9 @@
 import { GmailCompose } from "./GmailCompose";
 
 const widgetDefinition = {
+    packageName: "gmail",
+    scope: "trops",
+    id: "trops.gmail.GmailCompose",
     name: "GmailCompose",
     displayName: "GmailCompose",
     component: GmailCompose,

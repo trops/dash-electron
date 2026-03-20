@@ -1,6 +1,9 @@
 import { SlackSearchMessages } from "./SlackSearchMessages";
 
 const widgetDefinition = {
+    packageName: "slack",
+    scope: "trops",
+    id: "trops.slack.SlackSearchMessages",
     name: "SlackSearchMessages",
     displayName: "Slack Search Messages",
     component: SlackSearchMessages,

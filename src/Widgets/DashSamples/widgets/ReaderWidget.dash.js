@@ -1,6 +1,9 @@
 import { ReaderWidget } from "./ReaderWidget";
 
 const widgetDefinition = {
+    packageName: "dash-samples",
+    scope: "trops",
+    id: "trops.dash-samples.ReaderWidget",
     name: "ReaderWidget",
     displayName: "ReaderWidget",
     component: ReaderWidget,

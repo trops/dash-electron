@@ -1,6 +1,9 @@
 import { AlgoliaHighlightSnippetWidget } from "./AlgoliaHighlightSnippetWidget";
 
 const widgetDefinition = {
+    packageName: "algolia",
+    scope: "trops",
+    id: "trops.algolia.AlgoliaHighlightSnippetWidget",
     name: "AlgoliaHighlightSnippetWidget",
     displayName: "Algolia Highlight & Snippet",
     component: AlgoliaHighlightSnippetWidget,

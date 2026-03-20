@@ -1,6 +1,9 @@
 import { GmailMessageView } from "./GmailMessageView";
 
 const widgetDefinition = {
+    packageName: "gmail",
+    scope: "trops",
+    id: "trops.gmail.GmailMessageView",
     name: "GmailMessageView",
     displayName: "GmailMessageView",
     component: GmailMessageView,

@@ -1,6 +1,9 @@
 import { GoogleDriveWidget } from "./GoogleDriveWidget";
 
 const widgetDefinition = {
+    packageName: "google-drive",
+    scope: "trops",
+    id: "trops.google-drive.GoogleDriveWidget",
     name: "GoogleDriveWidget",
     displayName: "GoogleDriveWidget",
     component: GoogleDriveWidget,

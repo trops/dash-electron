@@ -1,6 +1,9 @@
 import { FilesystemWidget } from "./FilesystemWidget";
 
 const widgetDefinition = {
+    packageName: "filesystem",
+    scope: "trops",
+    id: "trops.filesystem.FilesystemWidget",
     name: "FilesystemWidget",
     displayName: "FilesystemWidget",
     component: FilesystemWidget,

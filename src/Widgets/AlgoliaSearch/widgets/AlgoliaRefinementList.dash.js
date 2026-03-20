@@ -2,6 +2,9 @@ import { AlgoliaRefinementList } from "./AlgoliaRefinementList";
 import { algoliaProvider } from "./algoliaProviderConfig";
 
 const widgetDefinition = {
+    packageName: "algolia-search",
+    scope: "trops",
+    id: "trops.algolia-search.AlgoliaRefinementList",
     name: "AlgoliaRefinementList",
     displayName: "Algolia Refinement List",
     component: AlgoliaRefinementList,

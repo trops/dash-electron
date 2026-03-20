@@ -1,6 +1,9 @@
 import { AlgoliaDisplayAttributesWidget } from "./AlgoliaDisplayAttributesWidget";
 
 const widgetDefinition = {
+    packageName: "algolia",
+    scope: "trops",
+    id: "trops.algolia.AlgoliaDisplayAttributesWidget",
     name: "AlgoliaDisplayAttributesWidget",
     displayName: "Algolia Display Attributes",
     component: AlgoliaDisplayAttributesWidget,

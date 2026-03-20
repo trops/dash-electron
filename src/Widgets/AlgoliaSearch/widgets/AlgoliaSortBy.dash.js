@@ -2,6 +2,9 @@ import { AlgoliaSortBy } from "./AlgoliaSortBy";
 import { algoliaProvider } from "./algoliaProviderConfig";
 
 const widgetDefinition = {
+    packageName: "algolia-search",
+    scope: "trops",
+    id: "trops.algolia-search.AlgoliaSortBy",
     name: "AlgoliaSortBy",
     displayName: "Algolia Sort By",
     component: AlgoliaSortBy,

@@ -2,6 +2,9 @@ import { AlgoliaPagination } from "./AlgoliaPagination";
 import { algoliaProvider } from "./algoliaProviderConfig";
 
 const widgetDefinition = {
+    packageName: "algolia-search",
+    scope: "trops",
+    id: "trops.algolia-search.AlgoliaPagination",
     name: "AlgoliaPagination",
     displayName: "Algolia Pagination",
     component: AlgoliaPagination,

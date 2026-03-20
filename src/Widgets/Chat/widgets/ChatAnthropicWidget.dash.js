@@ -1,6 +1,9 @@
 import { ChatAnthropicWidget } from "./ChatAnthropicWidget";
 
 const widgetDefinition = {
+    packageName: "chat",
+    scope: "trops",
+    id: "trops.chat.ChatAnthropicWidget",
     name: "ChatAnthropicWidget",
     displayName: "AI Chat (Anthropic)",
     component: ChatAnthropicWidget,

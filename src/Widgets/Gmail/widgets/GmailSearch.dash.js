@@ -1,6 +1,9 @@
 import { GmailSearch } from "./GmailSearch";
 
 const widgetDefinition = {
+    packageName: "gmail",
+    scope: "trops",
+    id: "trops.gmail.GmailSearch",
     name: "GmailSearch",
     displayName: "GmailSearch",
     component: GmailSearch,

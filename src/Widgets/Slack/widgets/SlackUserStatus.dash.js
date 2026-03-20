@@ -1,6 +1,9 @@
 import { SlackUserStatus } from "./SlackUserStatus";
 
 const widgetDefinition = {
+    packageName: "slack",
+    scope: "trops",
+    id: "trops.slack.SlackUserStatus",
     name: "SlackUserStatus",
     displayName: "Slack User Status",
     component: SlackUserStatus,

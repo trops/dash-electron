@@ -1,6 +1,9 @@
 import { AlgoliaPaginationWidget } from "./AlgoliaPaginationWidget";
 
 const widgetDefinition = {
+    packageName: "algolia",
+    scope: "trops",
+    id: "trops.algolia.AlgoliaPaginationWidget",
     name: "AlgoliaPaginationWidget",
     displayName: "Algolia Pagination Settings",
     component: AlgoliaPaginationWidget,

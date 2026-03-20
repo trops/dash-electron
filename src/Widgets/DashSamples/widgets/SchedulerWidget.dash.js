@@ -1,6 +1,9 @@
 import { SchedulerWidget } from "./SchedulerWidget";
 
 const widgetDefinition = {
+    packageName: "dash-samples",
+    scope: "trops",
+    id: "trops.dash-samples.SchedulerWidget",
     name: "SchedulerWidget",
     displayName: "SchedulerWidget",
     component: SchedulerWidget,

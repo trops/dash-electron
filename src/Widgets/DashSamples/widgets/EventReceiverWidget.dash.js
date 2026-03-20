@@ -1,6 +1,9 @@
 import { EventReceiverWidget } from "./EventReceiverWidget";
 
 const widgetDefinition = {
+    packageName: "dash-samples",
+    scope: "trops",
+    id: "trops.dash-samples.EventReceiverWidget",
     name: "EventReceiverWidget",
     displayName: "EventReceiverWidget",
     component: EventReceiverWidget,

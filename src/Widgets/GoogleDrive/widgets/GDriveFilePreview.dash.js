@@ -1,6 +1,9 @@
 import { GDriveFilePreview } from "./GDriveFilePreview";
 
 const widgetDefinition = {
+    packageName: "google-drive",
+    scope: "trops",
+    id: "trops.google-drive.GDriveFilePreview",
     name: "GDriveFilePreview",
     displayName: "GDriveFilePreview",
     component: GDriveFilePreview,

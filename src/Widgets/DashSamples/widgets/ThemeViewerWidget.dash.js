@@ -1,6 +1,9 @@
 import { ThemeViewerWidget } from "./ThemeViewerWidget";
 
 const widgetDefinition = {
+    packageName: "dash-samples",
+    scope: "trops",
+    id: "trops.dash-samples.ThemeViewerWidget",
     name: "ThemeViewerWidget",
     displayName: "ThemeViewerWidget",
     component: ThemeViewerWidget,
