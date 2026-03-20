@@ -19,6 +19,7 @@
  *   npm run publish-to-registry -- --all                 # Publish all widget directories
  *   npm run publish-to-registry -- --dry-run             # Preview manifest without publishing
  *   npm run publish-to-registry -- --name custom-name    # Override registry name
+ *   npm run publish-to-registry -- --dir src/SampleWidgets  # Custom widget source directory
  */
 
 const fs = require("fs");
@@ -30,7 +31,9 @@ const ROOT = path.resolve(__dirname, "..");
 // Load .env from project root
 require("dotenv").config({ path: path.join(ROOT, ".env") });
 
-const WIDGETS_DIR = path.join(ROOT, "src", "Widgets");
+const WIDGETS_DIR = customDir
+    ? path.resolve(ROOT, customDir)
+    : path.join(ROOT, "src", "Widgets");
 const REGISTRY_BASE_URL =
     process.env.DASH_REGISTRY_API_URL ||
     "https://main.d919rwhuzp7rj.amplifyapp.com";
@@ -61,6 +64,8 @@ const nameIdx = args.indexOf("--name");
 const customName = nameIdx !== -1 ? args[nameIdx + 1] : null;
 const widgetIdx = args.indexOf("--widget");
 const singleWidget = widgetIdx !== -1 ? args[widgetIdx + 1] : null;
+const dirIdx = args.indexOf("--dir");
+const customDir = dirIdx !== -1 ? args[dirIdx + 1] : null;
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -332,12 +337,20 @@ function buildWidget(widgetDirName) {
         execSync("npm run package-widgets", {
             cwd: ROOT,
             stdio: "inherit",
-            env: { ...process.env, ROLLUP_WIDGET: widgetDirName },
+            env: {
+                ...process.env,
+                ROLLUP_WIDGET: widgetDirName,
+                ROLLUP_WIDGETS_DIR: WIDGETS_DIR,
+            },
         });
-        execSync(`node scripts/packageZip.js --widget ${widgetDirName}`, {
-            cwd: ROOT,
-            stdio: "inherit",
-        });
+        const dirFlag = customDir ? ` --dir ${customDir}` : "";
+        execSync(
+            `node scripts/packageZip.js --widget ${widgetDirName}${dirFlag}`,
+            {
+                cwd: ROOT,
+                stdio: "inherit",
+            }
+        );
     } catch {
         console.error(
             `Error: Failed to build widget package for ${widgetDirName}.`
