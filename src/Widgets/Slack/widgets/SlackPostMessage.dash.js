@@ -1,6 +1,9 @@
 import { SlackPostMessage } from "./SlackPostMessage";
 
 const widgetDefinition = {
+    packageName: "slack",
+    scope: "trops",
+    id: "trops.slack.SlackPostMessage",
     name: "SlackPostMessage",
     displayName: "Slack Post Message",
     component: SlackPostMessage,

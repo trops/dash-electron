@@ -1,6 +1,9 @@
 import { AlgoliaFacetingWidget } from "./AlgoliaFacetingWidget";
 
 const widgetDefinition = {
+    packageName: "algolia",
+    scope: "trops",
+    id: "trops.algolia.AlgoliaFacetingWidget",
     name: "AlgoliaFacetingWidget",
     displayName: "Algolia Faceting",
     component: AlgoliaFacetingWidget,

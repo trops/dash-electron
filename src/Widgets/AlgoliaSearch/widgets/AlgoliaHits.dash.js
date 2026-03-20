@@ -2,6 +2,9 @@ import { AlgoliaHits } from "./AlgoliaHits";
 import { algoliaProvider } from "./algoliaProviderConfig";
 
 const widgetDefinition = {
+    packageName: "algolia-search",
+    scope: "trops",
+    id: "trops.algolia-search.AlgoliaHits",
     name: "AlgoliaHits",
     displayName: "Algolia Hits",
     component: AlgoliaHits,

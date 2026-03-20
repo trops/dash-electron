@@ -1,6 +1,9 @@
 import { GongWidget } from "./GongWidget";
 
 const widgetDefinition = {
+    packageName: "gong",
+    scope: "trops",
+    id: "trops.gong.GongWidget",
     name: "GongWidget",
     displayName: "GongWidget",
     component: GongWidget,

@@ -1,6 +1,9 @@
 import { GitHubWidget } from "./GitHubWidget";
 
 const widgetDefinition = {
+    packageName: "git-hub",
+    scope: "trops",
+    id: "trops.git-hub.GitHubWidget",
     name: "GitHubWidget",
     displayName: "GitHubWidget",
     component: GitHubWidget,

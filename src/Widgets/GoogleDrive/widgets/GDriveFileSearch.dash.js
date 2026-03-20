@@ -1,6 +1,9 @@
 import { GDriveFileSearch } from "./GDriveFileSearch";
 
 const widgetDefinition = {
+    packageName: "google-drive",
+    scope: "trops",
+    id: "trops.google-drive.GDriveFileSearch",
     name: "GDriveFileSearch",
     displayName: "GDriveFileSearch",
     component: GDriveFileSearch,

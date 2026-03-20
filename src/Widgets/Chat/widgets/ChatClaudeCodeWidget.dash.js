@@ -1,6 +1,9 @@
 import { ChatClaudeCodeWidget } from "./ChatClaudeCodeWidget";
 
 const widgetDefinition = {
+    packageName: "chat",
+    scope: "trops",
+    id: "trops.chat.ChatClaudeCodeWidget",
     name: "ChatClaudeCodeWidget",
     displayName: "AI Chat (Claude Code)",
     component: ChatClaudeCodeWidget,

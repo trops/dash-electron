@@ -1,6 +1,9 @@
 import { NotificationWidget } from "./NotificationWidget";
 
 const widgetDefinition = {
+    packageName: "dash-samples",
+    scope: "trops",
+    id: "trops.dash-samples.NotificationWidget",
     name: "NotificationWidget",
     displayName: "NotificationWidget",
     component: NotificationWidget,

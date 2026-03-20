@@ -1,6 +1,9 @@
 import { EventSenderWidget } from "./EventSenderWidget";
 
 const widgetDefinition = {
+    packageName: "dash-samples",
+    scope: "trops",
+    id: "trops.dash-samples.EventSenderWidget",
     name: "EventSenderWidget",
     displayName: "EventSenderWidget",
     component: EventSenderWidget,

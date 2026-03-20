@@ -2,6 +2,9 @@ import { AlgoliaSearchPage } from "./AlgoliaSearchPage";
 import { algoliaProvider } from "./algoliaProviderConfig";
 
 const widgetDefinition = {
+    packageName: "algolia-search",
+    scope: "trops",
+    id: "trops.algolia-search.AlgoliaSearchPage",
     name: "AlgoliaSearchPage",
     displayName: "Algolia Search Page",
     component: AlgoliaSearchPage,

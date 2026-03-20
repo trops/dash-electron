@@ -1,6 +1,9 @@
 import { GDriveFileList } from "./GDriveFileList";
 
 const widgetDefinition = {
+    packageName: "google-drive",
+    scope: "trops",
+    id: "trops.google-drive.GDriveFileList",
     name: "GDriveFileList",
     displayName: "GDriveFileList",
     component: GDriveFileList,

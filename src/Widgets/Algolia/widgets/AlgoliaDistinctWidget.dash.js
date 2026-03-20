@@ -1,6 +1,9 @@
 import { AlgoliaDistinctWidget } from "./AlgoliaDistinctWidget";
 
 const widgetDefinition = {
+    packageName: "algolia",
+    scope: "trops",
+    id: "trops.algolia.AlgoliaDistinctWidget",
     name: "AlgoliaDistinctWidget",
     displayName: "Algolia Distinct Settings",
     component: AlgoliaDistinctWidget,

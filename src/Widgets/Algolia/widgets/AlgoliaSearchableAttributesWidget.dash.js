@@ -1,6 +1,9 @@
 import { AlgoliaSearchableAttributesWidget } from "./AlgoliaSearchableAttributesWidget";
 
 const widgetDefinition = {
+    packageName: "algolia",
+    scope: "trops",
+    id: "trops.algolia.AlgoliaSearchableAttributesWidget",
     name: "AlgoliaSearchableAttributesWidget",
     displayName: "Algolia Searchable Attributes",
     component: AlgoliaSearchableAttributesWidget,

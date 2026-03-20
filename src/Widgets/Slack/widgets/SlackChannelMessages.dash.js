@@ -1,6 +1,9 @@
 import { SlackChannelMessages } from "./SlackChannelMessages";
 
 const widgetDefinition = {
+    packageName: "slack",
+    scope: "trops",
+    id: "trops.slack.SlackChannelMessages",
     name: "SlackChannelMessages",
     displayName: "Slack Channel Messages",
     component: SlackChannelMessages,

@@ -1,6 +1,9 @@
 import { SlackWidget } from "./SlackWidget";
 
 const widgetDefinition = {
+    packageName: "slack",
+    scope: "trops",
+    id: "trops.slack.SlackWidget",
     name: "SlackWidget",
     displayName: "SlackWidget",
     component: SlackWidget,

@@ -1,6 +1,9 @@
 import { AlgoliaIndexDashboardWidget } from "./AlgoliaIndexDashboardWidget";
 
 const widgetDefinition = {
+    packageName: "algolia",
+    scope: "trops",
+    id: "trops.algolia.AlgoliaIndexDashboardWidget",
     name: "AlgoliaIndexDashboardWidget",
     displayName: "Algolia Index Dashboard",
     component: AlgoliaIndexDashboardWidget,

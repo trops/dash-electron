@@ -1,6 +1,9 @@
 import { AlgoliaExportWidget } from "./AlgoliaExportWidget";
 
 const widgetDefinition = {
+    packageName: "algolia",
+    scope: "trops",
+    id: "trops.algolia.AlgoliaExportWidget",
     name: "AlgoliaExportWidget",
     displayName: "Algolia Export",
     component: AlgoliaExportWidget,

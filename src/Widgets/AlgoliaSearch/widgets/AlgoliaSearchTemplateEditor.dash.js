@@ -1,6 +1,9 @@
 import { AlgoliaSearchTemplateEditor } from "./AlgoliaSearchTemplateEditor";
 
 const widgetDefinition = {
+    packageName: "algolia-search",
+    scope: "trops",
+    id: "trops.algolia-search.AlgoliaSearchTemplateEditor",
     name: "AlgoliaSearchTemplateEditor",
     displayName: "Algolia Template Editor",
     component: AlgoliaSearchTemplateEditor,

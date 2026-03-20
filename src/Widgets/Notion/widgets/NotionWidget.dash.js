@@ -1,6 +1,9 @@
 import { NotionWidget } from "./NotionWidget";
 
 const widgetDefinition = {
+    packageName: "notion",
+    scope: "trops",
+    id: "trops.notion.NotionWidget",
     name: "NotionWidget",
     displayName: "NotionWidget",
     component: NotionWidget,

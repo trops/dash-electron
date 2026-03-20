@@ -1,6 +1,9 @@
 import { AlgoliaRankingFormulaWidget } from "./AlgoliaRankingFormulaWidget";
 
 const widgetDefinition = {
+    packageName: "algolia",
+    scope: "trops",
+    id: "trops.algolia.AlgoliaRankingFormulaWidget",
     name: "AlgoliaRankingFormulaWidget",
     displayName: "Algolia Ranking Formula",
     component: AlgoliaRankingFormulaWidget,

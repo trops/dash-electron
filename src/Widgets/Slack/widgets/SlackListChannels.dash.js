@@ -1,6 +1,9 @@
 import { SlackListChannels } from "./SlackListChannels";
 
 const widgetDefinition = {
+    packageName: "slack",
+    scope: "trops",
+    id: "trops.slack.SlackListChannels",
     name: "SlackListChannels",
     displayName: "Slack List Channels",
     component: SlackListChannels,

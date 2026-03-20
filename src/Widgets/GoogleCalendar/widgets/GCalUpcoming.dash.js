@@ -1,6 +1,9 @@
 import { GCalUpcoming } from "./GCalUpcoming";
 
 const widgetDefinition = {
+    packageName: "google-calendar",
+    scope: "trops",
+    id: "trops.google-calendar.GCalUpcoming",
     name: "GCalUpcoming",
     displayName: "GCalUpcoming",
     component: GCalUpcoming,

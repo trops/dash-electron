@@ -1,6 +1,9 @@
 import { GitHubPRList } from "./GitHubPRList";
 
 const widgetDefinition = {
+    packageName: "git-hub",
+    scope: "trops",
+    id: "trops.git-hub.GitHubPRList",
     name: "GitHubPRList",
     displayName: "GitHub PR List",
     component: GitHubPRList,

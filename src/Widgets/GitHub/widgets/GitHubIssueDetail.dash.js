@@ -1,6 +1,9 @@
 import { GitHubIssueDetail } from "./GitHubIssueDetail";
 
 const widgetDefinition = {
+    packageName: "git-hub",
+    scope: "trops",
+    id: "trops.git-hub.GitHubIssueDetail",
     name: "GitHubIssueDetail",
     displayName: "GitHub Issue Detail",
     component: GitHubIssueDetail,

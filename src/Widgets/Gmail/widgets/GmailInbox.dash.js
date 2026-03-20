@@ -1,6 +1,9 @@
 import { GmailInbox } from "./GmailInbox";
 
 const widgetDefinition = {
+    packageName: "gmail",
+    scope: "trops",
+    id: "trops.gmail.GmailInbox",
     name: "GmailInbox",
     displayName: "GmailInbox",
     component: GmailInbox,

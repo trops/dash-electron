@@ -1,6 +1,9 @@
 import { GoogleCalendarWidget } from "./GoogleCalendarWidget";
 
 const widgetDefinition = {
+    packageName: "google-calendar",
+    scope: "trops",
+    id: "trops.google-calendar.GoogleCalendarWidget",
     name: "GoogleCalendarWidget",
     displayName: "GoogleCalendarWidget",
     component: GoogleCalendarWidget,

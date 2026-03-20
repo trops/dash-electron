@@ -1,6 +1,9 @@
 import { AlgoliaBatchManagerWidget } from "./AlgoliaBatchManagerWidget";
 
 const widgetDefinition = {
+    packageName: "algolia",
+    scope: "trops",
+    id: "trops.algolia.AlgoliaBatchManagerWidget",
     name: "AlgoliaBatchManagerWidget",
     displayName: "Algolia Batch Manager",
     component: AlgoliaBatchManagerWidget,

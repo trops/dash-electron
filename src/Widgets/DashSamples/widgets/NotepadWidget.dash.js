@@ -1,6 +1,9 @@
 import { NotepadWidget } from "./NotepadWidget";
 
 const widgetDefinition = {
+    packageName: "dash-samples",
+    scope: "trops",
+    id: "trops.dash-samples.NotepadWidget",
     name: "NotepadWidget",
     displayName: "NotepadWidget",
     component: NotepadWidget,

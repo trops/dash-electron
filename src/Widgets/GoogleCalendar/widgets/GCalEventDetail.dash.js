@@ -1,6 +1,9 @@
 import { GCalEventDetail } from "./GCalEventDetail";
 
 const widgetDefinition = {
+    packageName: "google-calendar",
+    scope: "trops",
+    id: "trops.google-calendar.GCalEventDetail",
     name: "GCalEventDetail",
     displayName: "GCalEventDetail",
     component: GCalEventDetail,

@@ -1,6 +1,9 @@
 import { AlgoliaTypoToleranceWidget } from "./AlgoliaTypoToleranceWidget";
 
 const widgetDefinition = {
+    packageName: "algolia",
+    scope: "trops",
+    id: "trops.algolia.AlgoliaTypoToleranceWidget",
     name: "AlgoliaTypoToleranceWidget",
     displayName: "Algolia Typo Tolerance",
     component: AlgoliaTypoToleranceWidget,
