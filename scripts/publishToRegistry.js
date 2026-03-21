@@ -569,11 +569,8 @@ function buildManifest(widgetDirName, scope) {
 
     const category = CATEGORY_MAP[widgetDirName] || "general";
 
-    // Build download URL template (for manifest validation compatibility)
-    const zipBaseName = toKebabCase(widgetDirName);
-    const downloadUrl = repoUrl
-        ? `${repoUrl}/releases/download/v{version}/widgets-${zipBaseName}-v{version}.zip`
-        : `${REGISTRY_BASE_URL}/api/packages/${scope}/${registryName}/download?version={version}`;
+    // Use registry API download endpoint (the ZIP is stored on the registry, not GitHub releases)
+    const downloadUrl = `${REGISTRY_BASE_URL}/api/packages/${scope}/${registryName}/download?version={version}`;
 
     return {
         scope: scope,
