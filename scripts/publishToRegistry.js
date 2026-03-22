@@ -569,6 +569,17 @@ function buildManifest(widgetDirName, scope) {
 
     const category = CATEGORY_MAP[widgetDirName] || "general";
 
+    // Derive description from widget configs instead of app package.json
+    const widgetDescriptions = widgets
+        .map((w) => w.description)
+        .filter(Boolean);
+    const derivedDescription =
+        widgetDescriptions.length === 1
+            ? widgetDescriptions[0]
+            : widgetDescriptions.length > 0
+            ? widgetDescriptions.join("; ")
+            : "";
+
     // Use registry API download endpoint (the ZIP is stored on the registry, not GitHub releases)
     const downloadUrl = `${REGISTRY_BASE_URL}/api/packages/${scope}/${registryName}/download?version={version}`;
 
@@ -577,7 +588,7 @@ function buildManifest(widgetDirName, scope) {
         name: registryName,
         displayName: registryDisplayName,
         author: author,
-        description: pkg.description || "",
+        description: derivedDescription,
         version: version,
         category: category,
         tags: pkg.keywords || [],

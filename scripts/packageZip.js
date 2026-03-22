@@ -127,6 +127,7 @@ function parseDashConfig(filePath) {
         icon: extract("icon") || null,
         type,
         providers,
+        package: extract("package") || null,
     };
 }
 
@@ -169,6 +170,7 @@ function main() {
                 description: config.description,
                 icon: config.icon,
                 providers: config.providers,
+                package: config.package,
             });
         } else if (config.type === "workspace") {
             workspaces.push({
@@ -182,12 +184,34 @@ function main() {
         `Found ${widgets.length} widget(s) and ${workspaces.length} workspace(s)`
     );
 
+    // Derive display name from widget configs (same logic as publishToRegistry.js)
+    const packageNames = [
+        ...new Set(widgets.map((w) => w.package).filter(Boolean)),
+    ];
+    const derivedDisplayName =
+        packageNames.length === 1
+            ? packageNames[0]
+            : singleWidget
+            ? singleWidget
+            : packageName;
+
+    // Derive description from widget configs
+    const widgetDescriptions = widgets
+        .map((w) => w.description)
+        .filter(Boolean);
+    const derivedDescription =
+        widgetDescriptions.length === 1
+            ? widgetDescriptions[0]
+            : widgetDescriptions.length > 0
+            ? widgetDescriptions.join("; ")
+            : "";
+
     // Generate dash.json metadata
     const dashJson = {
         name: packageName,
-        displayName: pkg.productName || packageName,
+        displayName: derivedDisplayName,
         version: version,
-        description: pkg.description || "",
+        description: derivedDescription,
         author:
             typeof pkg.author === "string"
                 ? pkg.author
