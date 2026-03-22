@@ -48,6 +48,7 @@ const CATEGORY_MAP = {
     Algolia: "development",
     AlgoliaSearch: "development",
     Filesystem: "utilities",
+    Clock: "utilities",
     Google: "productivity",
 };
 
