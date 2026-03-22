@@ -66,6 +66,7 @@ Update both PRD and technical docs when:
 
 ## Existing PRDs
 
+-   **[Widget Display & Installation UX](./prd/widget-display-and-installation.md)** - Status: Draft - 2026-03-22
 -   **[Test Feature](./prd/test-feature.md)** - Status: Draft - 2026-02-14
 -   **[LayoutBuilder Hybrid Redesign](./prd/layout-builder-hybrid.md)** - Status: In Progress - 2026-02-14
 -   **[Enhanced WidgetDropdown with Mac Finder-Style Interface](./prd/widget-dropdown.md)** - Status: Draft - 2026-02-14
