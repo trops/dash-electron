@@ -206,9 +206,12 @@ function main() {
             ? widgetDescriptions.join("; ")
             : "";
 
+    // Compute package-specific name for dash.json (not the app name)
+    const zipBaseName = singleWidget ? toKebabCase(singleWidget) : packageName;
+
     // Generate dash.json metadata
     const dashJson = {
-        name: packageName,
+        name: zipBaseName,
         displayName: derivedDisplayName,
         version: version,
         description: derivedDescription,
@@ -256,7 +259,6 @@ function main() {
     zip.addFile("dash.json", Buffer.from(JSON.stringify(dashJson, null, 2)));
 
     // Write ZIP
-    const zipBaseName = singleWidget ? toKebabCase(singleWidget) : packageName;
     const zipFileName = `widgets-${zipBaseName}-v${version}.zip`;
     const zipPath = path.join(ROOT, zipFileName);
     zip.writeZip(zipPath);
