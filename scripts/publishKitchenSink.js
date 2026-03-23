@@ -74,7 +74,7 @@ const dashboardConfig = {
             },
             {
                 id: 2,
-                component: "ChatClaudeCodeWidget",
+                component: "trops.chat.ChatClaudeCodeWidget",
                 type: "widget",
                 parent: 1,
                 order: 1,
@@ -84,7 +84,7 @@ const dashboardConfig = {
             },
             {
                 id: 3,
-                component: "NotepadWidget",
+                component: "trops.dash-samples.NotepadWidget",
                 type: "widget",
                 parent: 1,
                 order: 2,
@@ -94,7 +94,7 @@ const dashboardConfig = {
             },
             {
                 id: 4,
-                component: "ThemeViewerWidget",
+                component: "trops.dash-samples.ThemeViewerWidget",
                 type: "widget",
                 parent: 1,
                 order: 3,
@@ -104,7 +104,7 @@ const dashboardConfig = {
             },
             {
                 id: 5,
-                component: "GitHubWidget",
+                component: "trops.git-hub.GitHubWidget",
                 type: "widget",
                 parent: 1,
                 order: 4,
@@ -114,7 +114,7 @@ const dashboardConfig = {
             },
             {
                 id: 6,
-                component: "SlackWidget",
+                component: "trops.slack.SlackWidget",
                 type: "widget",
                 parent: 1,
                 order: 5,
@@ -124,7 +124,7 @@ const dashboardConfig = {
             },
             {
                 id: 7,
-                component: "GmailWidget",
+                component: "trops.gmail.GmailWidget",
                 type: "widget",
                 parent: 1,
                 order: 6,
@@ -134,7 +134,7 @@ const dashboardConfig = {
             },
             {
                 id: 8,
-                component: "GoogleCalendarWidget",
+                component: "trops.google-calendar.GoogleCalendarWidget",
                 type: "widget",
                 parent: 1,
                 order: 7,
@@ -144,7 +144,7 @@ const dashboardConfig = {
             },
             {
                 id: 9,
-                component: "NotionWidget",
+                component: "trops.notion.NotionWidget",
                 type: "widget",
                 parent: 1,
                 order: 8,
@@ -154,7 +154,7 @@ const dashboardConfig = {
             },
             {
                 id: 10,
-                component: "FilesystemWidget",
+                component: "trops.filesystem.FilesystemWidget",
                 type: "widget",
                 parent: 1,
                 order: 9,
@@ -164,7 +164,7 @@ const dashboardConfig = {
             },
             {
                 id: 11,
-                component: "EventSenderWidget",
+                component: "trops.dash-samples.EventSenderWidget",
                 type: "widget",
                 parent: 1,
                 order: 10,
@@ -172,12 +172,14 @@ const dashboardConfig = {
                 scrollable: true,
                 workspace: "layout",
                 listeners: {
-                    customEvent: ["EventSenderWidget[11].customEvent"],
+                    customEvent: [
+                        "trops.dash-samples.EventSenderWidget[11].customEvent",
+                    ],
                 },
             },
             {
                 id: 12,
-                component: "EventReceiverWidget",
+                component: "trops.dash-samples.EventReceiverWidget",
                 type: "widget",
                 parent: 1,
                 order: 11,
@@ -185,12 +187,14 @@ const dashboardConfig = {
                 scrollable: true,
                 workspace: "layout",
                 listeners: {
-                    customEvent: ["EventSenderWidget[11].customEvent"],
+                    customEvent: [
+                        "trops.dash-samples.EventSenderWidget[11].customEvent",
+                    ],
                 },
             },
             {
                 id: 13,
-                component: "NotificationWidget",
+                component: "trops.dash-samples.NotificationWidget",
                 type: "widget",
                 parent: 1,
                 order: 12,
