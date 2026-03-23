@@ -331,6 +331,12 @@ function writeWidgetIds(widgetDirName, scope) {
 function buildWidget(widgetDirName) {
     const zipBaseName = toKebabCase(widgetDirName);
 
+    // Clean stale ZIPs before building to avoid find() picking an old version
+    const stalePattern = `widgets-${zipBaseName}-v`;
+    fs.readdirSync(ROOT)
+        .filter((f) => f.startsWith(stalePattern) && f.endsWith(".zip"))
+        .forEach((f) => fs.unlinkSync(path.join(ROOT, f)));
+
     console.log(`  Building ${widgetDirName}...`);
     try {
         execSync("npm run package-widgets", {
