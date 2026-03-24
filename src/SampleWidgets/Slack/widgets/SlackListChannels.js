@@ -38,8 +38,15 @@ function SlackListChannelsContent({ title, widgetId }) {
                 setResult({ type: "error", text: mcpError });
                 return;
             }
-            setChannels(Array.isArray(data) ? data : []);
-            setResult({ type: "success", text: "Channels loaded" });
+            const list = Array.isArray(data) ? data : [];
+            setChannels(list);
+            setResult({
+                type: list.length > 0 ? "success" : "error",
+                text:
+                    list.length > 0
+                        ? `${list.length} channel(s) loaded`
+                        : "No channels found",
+            });
         } catch (err) {
             setResult({ type: "error", text: err.message });
         } finally {

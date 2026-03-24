@@ -48,8 +48,15 @@ function SlackChannelMessagesContent({ title, widgetId }) {
                 setResult({ type: "error", text: mcpError });
                 return;
             }
-            setMessages(Array.isArray(data) ? data : []);
-            setResult({ type: "success", text: "Messages loaded" });
+            const list = Array.isArray(data) ? data : [];
+            setMessages(list);
+            setResult({
+                type: list.length > 0 ? "success" : "error",
+                text:
+                    list.length > 0
+                        ? `${list.length} message(s) loaded`
+                        : "No messages found",
+            });
         } catch (err) {
             setResult({ type: "error", text: err.message });
         } finally {
