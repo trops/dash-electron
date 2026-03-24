@@ -228,8 +228,13 @@ async function loadInstalledWidgets() {
             );
 
             for (const { componentName, widgetPackage, config } of configs) {
-                // Skip if already registered via bundle (Phase 1) or built-in
-                if (ComponentManager.componentMap()[componentName]) {
+                // Skip if already registered via bundle (Phase 1) or built-in.
+                // Check both plain componentName and scoped config.id since
+                // Phase 1 registers under the canonical scoped ID only.
+                if (
+                    ComponentManager.componentMap()[componentName] ||
+                    (config?.id && ComponentManager.componentMap()[config.id])
+                ) {
                     console.log(
                         `[Dash.js] Phase 2: Skipping "${componentName}" — already registered`
                     );
@@ -455,7 +460,10 @@ class App extends React.Component {
                     widgetPackage,
                     config: cfg,
                 } of configs) {
-                    if (ComponentManager.componentMap()[componentName])
+                    if (
+                        ComponentManager.componentMap()[componentName] ||
+                        (cfg?.id && ComponentManager.componentMap()[cfg.id])
+                    )
                         continue;
                     ComponentManager.registerWidget(
                         {
