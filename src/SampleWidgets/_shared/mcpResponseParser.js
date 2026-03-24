@@ -72,6 +72,8 @@ export function extractJsonFromText(text) {
 
 /**
  * Check if an MCP response indicates an error.
+ * Detects: MCP-level isError, text starting with "error",
+ * and API-level {ok:false, error:"..."} patterns (Slack, etc.)
  * @param {object} res - Raw MCP response
  * @param {any} parsed - Parsed response data
  * @returns {string|null} Error message or null
@@ -85,6 +87,15 @@ export function isMcpError(res, parsed) {
         parsed.toLowerCase().startsWith("error")
     ) {
         return parsed;
+    }
+    // Detect API-level errors: {ok: false, error: "..."} (Slack, etc.)
+    if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        parsed.ok === false &&
+        parsed.error
+    ) {
+        return String(parsed.error);
     }
     return null;
 }
