@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
-import { extractMcpText, isMcpError } from "../../_shared/mcpResponseParser";
+import { extractMcpText, isMcpError } from "../utils/mcpUtils";
 
 function getEntryIcon(name, isDir) {
     if (isDir) return "folder";

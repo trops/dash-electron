@@ -12,10 +12,7 @@ import { Widget, useMcpProvider } from "@trops/dash-core";
 import { CallList } from "./components/CallList";
 import { CallSummary } from "./components/CallSummary";
 import { CallTranscript } from "./components/CallTranscript";
-import {
-    parseMcpResponse,
-    parseGongTextEntries,
-} from "../../_shared/mcpResponseParser";
+import { parseMcpResponse, parseGongTextEntries } from "../utils/mcpUtils";
 
 function GongContent({ title, defaultDaysBack }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =

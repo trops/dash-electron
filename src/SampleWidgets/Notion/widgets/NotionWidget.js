@@ -9,10 +9,7 @@
 import { useState } from "react";
 import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
-import {
-    parseMcpResponse,
-    parseNotionTextEntries,
-} from "../../_shared/mcpResponseParser";
+import { parseMcpResponse, parseNotionTextEntries } from "../utils/mcpUtils";
 
 function NotionContent({ title }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
