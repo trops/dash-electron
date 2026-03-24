@@ -14,7 +14,7 @@ import {
     extractMcpText,
     isMcpError,
     parseSlackTextEntries,
-} from "../../_shared/mcpResponseParser";
+} from "../utils/mcpUtils";
 
 function SlackContent({ title }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =

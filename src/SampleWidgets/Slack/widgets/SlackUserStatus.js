@@ -13,7 +13,7 @@ import {
     parseMcpResponse,
     extractMcpText,
     isMcpError,
-} from "../../_shared/mcpResponseParser";
+} from "../utils/mcpUtils";
 
 function SlackUserStatusContent({ title, widgetId }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =

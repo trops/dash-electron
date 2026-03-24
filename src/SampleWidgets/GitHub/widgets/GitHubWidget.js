@@ -9,10 +9,7 @@
 import { useState } from "react";
 import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
-import {
-    parseMcpResponse,
-    parseGitHubTextEntries,
-} from "../../_shared/mcpResponseParser";
+import { parseMcpResponse, parseGitHubTextEntries } from "../utils/mcpUtils";
 
 function GitHubContent({ title, defaultRepo }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =

@@ -10,7 +10,7 @@
 import { useState, useEffect } from "react";
 import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
-import { parseMcpResponse } from "../../_shared/mcpResponseParser";
+import { parseMcpResponse } from "../utils/mcpUtils";
 
 function SlackChannelMessagesContent({ title, widgetId }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
