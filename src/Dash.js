@@ -54,11 +54,11 @@ try {
             Object.keys(widget).forEach((subKey) => {
                 const subWidget = widget[subKey];
                 if (subWidget && subWidget.component) {
+                    // Use widget name as fallback key (config.id takes priority
+                    // inside registerWidget, so this only matters if id is unset)
+                    const fallbackKey = subWidget.name || widgetKey;
                     console.log(`[Dash.js] Registering ${widgetKey}.${subKey}`);
-                    ComponentManager.registerWidget(
-                        subWidget,
-                        `${widgetKey}_${subKey}`
-                    );
+                    ComponentManager.registerWidget(subWidget, fallbackKey);
                 }
             });
         } else if (widget && widget.component) {
