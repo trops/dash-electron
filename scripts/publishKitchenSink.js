@@ -13,7 +13,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { authenticate, getScope, publishToApi } = require("./lib/registryAuth");
 
 const ROOT = path.resolve(__dirname, "..");
 require("dotenv").config({ path: path.join(ROOT, ".env") });
@@ -409,108 +409,6 @@ function buildManifest(scope) {
     };
 }
 
-// ── Auth helpers (copied from publishToRegistry.js) ──────────────────
-
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function authenticate() {
-    console.log("\nAuthenticating with the registry...");
-
-    const initRes = await fetch(`${REGISTRY_BASE_URL}/api/auth/device`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-    });
-
-    if (!initRes.ok) {
-        console.error(
-            `Error: Device flow initiation failed (HTTP ${initRes.status})`
-        );
-        process.exit(1);
-    }
-
-    const initData = await initRes.json();
-    const { device_code, user_code, verification_uri_complete, interval } =
-        initData;
-
-    console.log(`\nOpening browser for authentication...`);
-    console.log(`Code: ${user_code}`);
-    console.log(`URL:  ${verification_uri_complete}\n`);
-
-    try {
-        execSync(`open "${verification_uri_complete}"`, { stdio: "ignore" });
-    } catch {
-        console.log(
-            "Could not open browser automatically. Please visit the URL above."
-        );
-    }
-
-    console.log("Waiting for authorization...");
-    const maxAttempts = Math.ceil(900 / (interval || 5));
-    const pollInterval = (interval || 5) * 1000;
-
-    for (let i = 0; i < maxAttempts; i++) {
-        await sleep(pollInterval);
-
-        const pollRes = await fetch(
-            `${REGISTRY_BASE_URL}/api/auth/device?device_code=${encodeURIComponent(
-                device_code
-            )}`
-        );
-
-        if (pollRes.ok) {
-            const data = await pollRes.json();
-            console.log("Authorized!\n");
-            return data.access_token;
-        }
-
-        if (pollRes.status === 428) continue;
-
-        if (pollRes.status === 400) {
-            const data = await pollRes.json();
-            if (data.error === "expired_token") {
-                console.error("Error: Device code expired. Please try again.");
-                process.exit(1);
-            }
-            continue;
-        }
-
-        console.error(
-            `Error: Unexpected poll response (HTTP ${pollRes.status})`
-        );
-        process.exit(1);
-    }
-
-    console.error("Error: Authorization timed out.");
-    process.exit(1);
-}
-
-async function getScope(token) {
-    const res = await fetch(`${REGISTRY_BASE_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-        console.error(
-            `Error: Could not fetch user profile (HTTP ${res.status})`
-        );
-        process.exit(1);
-    }
-    const data = await res.json();
-    return data.user.username;
-}
-
-async function getFormDataImpl() {
-    if (
-        typeof globalThis.FormData !== "undefined" &&
-        typeof globalThis.File !== "undefined"
-    ) {
-        return { FormData: globalThis.FormData, File: globalThis.File };
-    }
-    const undici = await import("undici");
-    return { FormData: undici.FormData, File: undici.File };
-}
-
 // ── Main ─────────────────────────────────────────────────────────────
 
 async function main() {
@@ -531,8 +429,8 @@ async function main() {
     }
 
     // Authenticate
-    const token = await authenticate();
-    const authScope = await getScope(token);
+    const token = await authenticate(REGISTRY_BASE_URL);
+    const authScope = await getScope(REGISTRY_BASE_URL, token);
     console.log(`Authenticated as: ${authScope}`);
 
     // Rebuild manifest with real scope
@@ -556,37 +454,25 @@ async function main() {
     console.log(`\nCreated ZIP: ${zipPath}`);
 
     // Publish to registry
-    const zipBuffer = fs.readFileSync(zipPath);
-    const { FormData, File } = await getFormDataImpl();
-    const form = new FormData();
-    form.append(
-        "file",
-        new File([zipBuffer], "dashboard-kitchen-sink-v1.0.0.zip", {
-            type: "application/zip",
-        })
-    );
-    form.append("manifest", JSON.stringify(finalManifest));
-
     console.log("Publishing to registry...");
-    const res = await fetch(`${REGISTRY_BASE_URL}/api/publish`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-    });
+    const result = await publishToApi(
+        REGISTRY_BASE_URL,
+        token,
+        finalManifest,
+        zipPath
+    );
 
-    const data = await res.json();
-
-    if (!res.ok) {
-        console.error(`Publish failed: ${data.error || `HTTP ${res.status}`}`);
-        if (data.details) {
-            data.details.forEach((d) => console.error(`  - ${d}`));
+    if (!result.success) {
+        console.error(`Publish failed: ${result.error}`);
+        if (result.details) {
+            result.details.forEach((d) => console.error(`  - ${d}`));
         }
         process.exit(1);
     }
 
     console.log(`\nPublished Kitchen Sink dashboard!`);
-    console.log(`Registry: ${data.registryUrl}`);
-    console.log(`Version: ${data.version}`);
+    console.log(`Registry: ${result.registryUrl}`);
+    console.log(`Version: ${result.version}`);
 
     // Clean up ZIP
     fs.unlinkSync(zipPath);

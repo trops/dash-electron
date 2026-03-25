@@ -25,6 +25,12 @@
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+const {
+    authenticate,
+    getScope,
+    publishToApi,
+    deleteFromApi,
+} = require("./lib/registryAuth");
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -172,105 +178,6 @@ function parseDashConfig(filePath) {
         providers,
         package: extract("package") || null,
     };
-}
-
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// ── Device auth flow ──────────────────────────────────────────────────
-
-async function authenticate() {
-    console.log("\nAuthenticating with the registry...");
-
-    // 1. Initiate device flow
-    const initRes = await fetch(`${REGISTRY_BASE_URL}/api/auth/device`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-    });
-
-    if (!initRes.ok) {
-        console.error(
-            `Error: Device flow initiation failed (HTTP ${initRes.status})`
-        );
-        process.exit(1);
-    }
-
-    const initData = await initRes.json();
-    const { device_code, user_code, verification_uri_complete, interval } =
-        initData;
-
-    // 2. Open browser
-    console.log(`\nOpening browser for authentication...`);
-    console.log(`Code: ${user_code}`);
-    console.log(`URL:  ${verification_uri_complete}\n`);
-
-    try {
-        execSync(`open "${verification_uri_complete}"`, { stdio: "ignore" });
-    } catch {
-        console.log(
-            "Could not open browser automatically. Please visit the URL above."
-        );
-    }
-
-    // 3. Poll for token
-    console.log("Waiting for authorization...");
-    const maxAttempts = Math.ceil(900 / (interval || 5));
-    const pollInterval = (interval || 5) * 1000;
-
-    for (let i = 0; i < maxAttempts; i++) {
-        await sleep(pollInterval);
-
-        const pollRes = await fetch(
-            `${REGISTRY_BASE_URL}/api/auth/device?device_code=${encodeURIComponent(
-                device_code
-            )}`
-        );
-
-        if (pollRes.ok) {
-            const data = await pollRes.json();
-            console.log("Authorized!\n");
-            return data.access_token;
-        }
-
-        if (pollRes.status === 428) {
-            // authorization_pending — keep polling
-            continue;
-        }
-
-        if (pollRes.status === 400) {
-            const data = await pollRes.json();
-            if (data.error === "expired_token") {
-                console.error("Error: Device code expired. Please try again.");
-                process.exit(1);
-            }
-            continue;
-        }
-
-        console.error(
-            `Error: Unexpected poll response (HTTP ${pollRes.status})`
-        );
-        process.exit(1);
-    }
-
-    console.error("Error: Authorization timed out. Please try again.");
-    process.exit(1);
-}
-
-async function getScope(token) {
-    const res = await fetch(`${REGISTRY_BASE_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!res.ok) {
-        console.error(
-            `Error: Could not fetch user profile (HTTP ${res.status}). Make sure you are registered at the registry website.`
-        );
-        process.exit(1);
-    }
-
-    const data = await res.json();
-    return data.user.username;
 }
 
 // ── Widget ID injection ───────────────────────────────────────────────
@@ -427,78 +334,6 @@ function buildWidget(widgetDirName) {
     }
 
     return zipPath;
-}
-
-// ── Publish ───────────────────────────────────────────────────────────
-
-async function publishToApi(token, manifest, zipPath) {
-    const zipBuffer = fs.readFileSync(zipPath);
-    const zipFileName = path.basename(zipPath);
-
-    const { FormData, File } = await getFormDataImpl();
-    const form = new FormData();
-    form.append(
-        "file",
-        new File([zipBuffer], zipFileName, { type: "application/zip" })
-    );
-    form.append("manifest", JSON.stringify(manifest));
-
-    const res = await fetch(`${REGISTRY_BASE_URL}/api/publish`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-        return {
-            success: false,
-            error: data.error || `HTTP ${res.status}`,
-            details: data.details,
-        };
-    }
-
-    return { success: true, ...data };
-}
-
-async function deleteFromApi(token, scope, name) {
-    const res = await fetch(
-        `${REGISTRY_BASE_URL}/api/packages/${encodeURIComponent(
-            scope
-        )}/${encodeURIComponent(name)}`,
-        {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${token}` },
-        }
-    );
-
-    if (res.status === 404) {
-        return { success: true, notFound: true };
-    }
-
-    if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        return {
-            success: false,
-            error: data.error || `HTTP ${res.status}`,
-        };
-    }
-
-    return { success: true };
-}
-
-async function getFormDataImpl() {
-    // Node 18+ has global FormData and File via undici
-    if (
-        typeof globalThis.FormData !== "undefined" &&
-        typeof globalThis.File !== "undefined"
-    ) {
-        return { FormData: globalThis.FormData, File: globalThis.File };
-    }
-    // Fallback for older Node
-    const undici = await import("undici");
-    return { FormData: undici.FormData, File: undici.File };
 }
 
 // ── Manifest building ─────────────────────────────────────────────────
@@ -694,8 +529,8 @@ async function main() {
     }
 
     // Authenticate (once for all packages)
-    const token = await authenticate();
-    const scope = await getScope(token);
+    const token = await authenticate(REGISTRY_BASE_URL);
+    const scope = await getScope(REGISTRY_BASE_URL, token);
     console.log(`Authenticated as: ${scope}`);
 
     // Write scoped IDs into .dash.js files
@@ -719,7 +554,12 @@ async function main() {
             console.log(
                 `  Deleting existing package ${scope}/${manifest.name}...`
             );
-            const delResult = await deleteFromApi(token, scope, manifest.name);
+            const delResult = await deleteFromApi(
+                REGISTRY_BASE_URL,
+                token,
+                scope,
+                manifest.name
+            );
             if (delResult.success) {
                 if (delResult.notFound) {
                     console.log("  (not found — nothing to delete)");
@@ -745,7 +585,12 @@ async function main() {
         }
 
         // Publish
-        const result = await publishToApi(token, manifest, zipPath);
+        const result = await publishToApi(
+            REGISTRY_BASE_URL,
+            token,
+            manifest,
+            zipPath
+        );
 
         if (result.success) {
             console.log(`  Published ${manifest.name} v${manifest.version}`);

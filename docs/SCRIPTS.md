@@ -278,18 +278,62 @@ npm run validate:manifest
 
 ---
 
-## Theme Publishing
+## Theme Development
+
+### `npm run themeize`
+
+Create a theme definition from color names, color harmony, or randomly.
+
+```bash
+# Create from explicit colors
+npm run themeize "My Theme" --primary blue --secondary rose --tertiary amber
+
+# Auto-generate secondary/tertiary via color harmony
+npm run themeize "Ocean" --primary cyan --harmony triadic
+
+# Generate a random theme
+npm run themeize "Surprise" --random
+
+# List valid Tailwind color names
+npm run themeize -- --list-colors
+```
+
+**What it does:** Creates a `.theme.json` file in the `themes/` directory.
+
+**Flags:**
+| Flag | Description |
+| --------------------------------- | ----------------------------------------------------------- |
+| `--primary <color>` | Primary color (required unless `--random`) |
+| `--secondary <color>` | Secondary color |
+| `--tertiary <color>` | Tertiary color |
+| `--harmony <strategy>` | Auto-generate secondary/tertiary from primary |
+| `--random` | Generate a random theme |
+| `--list-colors` | Show valid Tailwind color names |
+
+**Harmony strategies:** `complementary`, `triadic`, `analogous`, `split-complementary`
+
+**Output:** `themes/{name}.theme.json`
+
+**Next steps:** Install via Settings > Themes > Install from ZIP, or publish via `npm run publish-themes -- --from-file themes/{name}.theme.json`
+
+---
 
 ### `npm run publish-themes`
 
-Publish curated themes to the Dash Registry.
+Publish themes to the Dash Registry (curated themes or custom `.theme.json` files).
 
 ```bash
 # Publish all 10 curated themes
 npm run publish-themes
 
-# Publish a single theme
+# Publish a single curated theme
 npm run publish-themes -- --theme nordic-frost
+
+# Publish from a .theme.json file (created by themeize)
+npm run publish-themes -- --from-file themes/my-theme.theme.json
+
+# Publish all .theme.json files in a directory
+npm run publish-themes -- --from-file themes/
 
 # Preview without publishing
 npm run publish-themes -- --dry-run
@@ -303,7 +347,7 @@ npm run publish-themes -- --republish
 
 **What it does:**
 
-1. Reads 10 curated theme definitions from `scripts/registryThemes.js`
+1. Loads themes from curated list (`registryThemes.js`) or `--from-file` path
 2. Builds manifest for each theme (type: "theme" with colors)
 3. Authenticates via OAuth device flow (unless `--local`)
 4. Creates minimal ZIP for each theme (manifest.json + .theme.json)
@@ -311,8 +355,9 @@ npm run publish-themes -- --republish
 
 **Flags:**
 | Flag | Description |
-| ----------------- | ---------------------------------------------- |
-| `--theme <name>` | Publish a single theme by name |
+| ----------------------- | ------------------------------------------------------- |
+| `--theme <name>` | Publish a single curated theme by name |
+| `--from-file <path>` | Publish from .theme.json file or directory of files |
 | `--dry-run` | Preview manifests without publishing |
 | `--local` | Save ZIPs to `themes/` directory (skip registry) |
 | `--republish` | Delete existing versions before publishing |

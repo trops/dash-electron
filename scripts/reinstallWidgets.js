@@ -14,8 +14,8 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
 const AdmZip = require("adm-zip");
+const { authenticate } = require("./lib/registryAuth");
 
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
@@ -30,81 +30,6 @@ const WIDGETS_DIR = path.join(
 const REGISTRY_FILE = path.join(WIDGETS_DIR, "registry.json");
 
 const isDryRun = process.argv.includes("--dry-run");
-
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function authenticate() {
-    console.log("\nAuthenticating with the registry...");
-
-    const initRes = await fetch(`${REGISTRY_BASE_URL}/api/auth/device`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-    });
-
-    if (!initRes.ok) {
-        console.error(
-            `Error: Device flow initiation failed (HTTP ${initRes.status})`
-        );
-        process.exit(1);
-    }
-
-    const initData = await initRes.json();
-    const { device_code, user_code, verification_uri_complete, interval } =
-        initData;
-
-    console.log(`\nOpening browser for authentication...`);
-    console.log(`Code: ${user_code}`);
-    console.log(`URL:  ${verification_uri_complete}\n`);
-
-    try {
-        execSync(`open "${verification_uri_complete}"`, { stdio: "ignore" });
-    } catch {
-        console.log(
-            "Could not open browser automatically. Please visit the URL above."
-        );
-    }
-
-    console.log("Waiting for authorization...");
-    const maxAttempts = Math.ceil(900 / (interval || 5));
-    const pollInterval = (interval || 5) * 1000;
-
-    for (let i = 0; i < maxAttempts; i++) {
-        await sleep(pollInterval);
-
-        const pollRes = await fetch(
-            `${REGISTRY_BASE_URL}/api/auth/device?device_code=${encodeURIComponent(
-                device_code
-            )}`
-        );
-
-        if (pollRes.ok) {
-            const data = await pollRes.json();
-            console.log("Authorized!\n");
-            return data.access_token;
-        }
-
-        if (pollRes.status === 428) continue;
-
-        if (pollRes.status === 400) {
-            const data = await pollRes.json();
-            if (data.error === "expired_token") {
-                console.error("Error: Device code expired. Please try again.");
-                process.exit(1);
-            }
-            continue;
-        }
-
-        console.error(
-            `Error: Unexpected poll response (HTTP ${pollRes.status})`
-        );
-        process.exit(1);
-    }
-
-    console.error("Error: Authorization timed out. Please try again.");
-    process.exit(1);
-}
 
 async function downloadPackage(token, scopedId, widgetPath) {
     // Parse @scope/name from the scoped ID
@@ -192,7 +117,7 @@ async function main() {
         return;
     }
 
-    const token = await authenticate();
+    const token = await authenticate(REGISTRY_BASE_URL);
 
     let succeeded = 0;
     let failed = 0;

@@ -105,6 +105,7 @@
         "clean": "npm run cache clean && rm ./npm run.lock",
         "package-widgets": "NODE_ENV=prod rollup -c",
         "package-zip": "npm run package-widgets && node scripts/packageZip.js",
+        "themeize": "node scripts/themeize.js",
         "publish-themes": "node scripts/publishThemes.js",
         "publish-to-registry": "node scripts/publishToRegistry.js",
         "rebuild": "electron-rebuild -f -w node-expat",
