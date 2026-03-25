@@ -66,12 +66,11 @@ Update both PRD and technical docs when:
 
 ## Existing PRDs
 
--   **[Widget Display & Installation UX](./prd/widget-display-and-installation.md)** - Status: Draft - 2026-03-22
--   **[Test Feature](./prd/test-feature.md)** - Status: Draft - 2026-02-14
--   **[LayoutBuilder Hybrid Redesign](./prd/layout-builder-hybrid.md)** - Status: In Progress - 2026-02-14
--   **[Enhanced WidgetDropdown with Mac Finder-Style Interface](./prd/widget-dropdown.md)** - Status: Draft - 2026-02-14
--   **[MCP Providers](./prd/mcp-providers.md)** - Status: Completed - MCP provider system for widget-to-tool connectivity
--   **[Command Palette Navigation](./prd/command-palette-navigation.md)** - Status: Draft - Command palette for quick navigation
+**Framework PRDs have moved to @trops/dash-core.** See `dash-core/docs/requirements/prd/` for:
+CommandPalette Navigation, LayoutBuilder Hybrid, Dashboard Marketplace, MCP Providers,
+Widget Installation Model, Widget Dropdown, Widget Display & Installation UX.
+
+This directory retains the PRD template and tooling for template-specific PRDs only.
 
 ---
 

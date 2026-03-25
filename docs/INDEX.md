@@ -14,15 +14,12 @@ Documentation for the dash-electron application template — an Electron dashboa
 
 ## Requirements & Product Design
 
-Product Requirements Documents (PRDs) define the "why" and "what" of features:
+**Feature PRDs have moved to @trops/dash-core** (`docs/requirements/prd/`).
 
--   **[requirements/README.md](./requirements/README.md)** - PRD system overview and navigation
+Local tooling retained here:
+
+-   **[requirements/README.md](./requirements/README.md)** - PRD system overview
 -   **[requirements/PRD-TEMPLATE.md](./requirements/PRD-TEMPLATE.md)** - Template for creating new PRDs
--   **[requirements/prd/layout-builder-hybrid.md](./requirements/prd/layout-builder-hybrid.md)** - LayoutBuilder Hybrid Redesign PRD
--   **[requirements/prd/mcp-providers.md](./requirements/prd/mcp-providers.md)** - MCP Provider System PRD
--   **[requirements/prd/command-palette-navigation.md](./requirements/prd/command-palette-navigation.md)** - Command Palette Navigation PRD
-
-**PRDs answer:** Why are we building this? Who is it for? What defines success?
 
 ## Template-Specific Documentation
 
