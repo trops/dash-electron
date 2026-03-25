@@ -501,6 +501,28 @@ Themes define the color palette for the entire Dash application -- 85+ themed co
     - **Custom** -- pick primary, secondary, and tertiary colors manually
 4. Name your theme and save
 
+#### From the CLI (`themeize`)
+
+Create a theme from color names without the running app:
+
+```bash
+# Explicit colors
+npm run themeize "Corporate Blue" --primary blue --secondary slate --tertiary amber
+
+# Color harmony (auto-generates secondary/tertiary)
+npm run themeize "Ocean" --primary cyan --harmony triadic
+
+# Random theme
+npm run themeize "Surprise" --random
+
+# List valid color names
+npm run themeize -- --list-colors
+```
+
+**Output:** `themes/{name}.theme.json` -- installable via Settings > Themes > Install from ZIP, or publishable via `npm run publish-themes -- --from-file themes/{name}.theme.json`.
+
+**Harmony strategies:** `complementary`, `triadic`, `analogous`, `split-complementary`
+
 #### From a Website URL (MCP)
 
 With the MCP Dash Server enabled:
@@ -558,20 +580,26 @@ Output: `themes/theme-{name}-v{version}.zip` files.
 4. Authenticate via OAuth
 5. Submit
 
-#### From the CLI (Curated Themes)
+#### From the CLI
 
 ```bash
 # Publish all 10 curated themes
 npm run publish-themes
 
-# Publish a single theme
+# Publish a single curated theme
 npm run publish-themes -- --theme nordic-frost
+
+# Publish a custom theme created with themeize
+npm run publish-themes -- --from-file themes/corporate-blue.theme.json
+
+# Publish all .theme.json files in a directory
+npm run publish-themes -- --from-file themes/
 
 # Preview without publishing
 npm run publish-themes -- --dry-run
 ```
 
-**Flags:** `--theme <name>`, `--dry-run`, `--local`, `--republish`
+**Flags:** `--theme <name>`, `--from-file <path>`, `--dry-run`, `--local`, `--republish`
 
 ### 5.5 Distribute
 

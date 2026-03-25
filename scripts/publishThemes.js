@@ -6,23 +6,30 @@
  * Publishes theme packages to the dash-registry via the API.
  *
  * What it does:
- * 1. Defines 10 curated theme color palettes
+ * 1. Loads themes from curated list, --from-file, or both
  * 2. Builds a manifest for each theme (type: "theme" with colors)
  * 3. Authenticates via OAuth device code flow (opens browser)
- * 4. Creates a minimal ZIP for each theme (manifest.json only)
+ * 4. Creates a minimal ZIP for each theme (manifest.json + .theme.json)
  * 5. POSTs each ZIP + manifest to the registry API
  *
  * Usage:
- *   npm run publish-themes                   # Publish all 10 themes
- *   npm run publish-themes -- --dry-run      # Preview manifests without publishing
- *   npm run publish-themes -- --theme nordic-frost  # Publish a single theme
- *   npm run publish-themes -- --local        # Save themes locally (skip registry)
+ *   npm run publish-themes                              # Publish all 10 curated themes
+ *   npm run publish-themes -- --dry-run                 # Preview manifests without publishing
+ *   npm run publish-themes -- --theme nordic-frost      # Publish a single curated theme
+ *   npm run publish-themes -- --local                   # Save themes locally (skip registry)
+ *   npm run publish-themes -- --from-file themes/my.theme.json   # Publish from .theme.json file
+ *   npm run publish-themes -- --from-file themes/       # Publish all .theme.json files in dir
  */
 
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
 const AdmZip = require("adm-zip");
+const {
+    authenticate,
+    getScope,
+    publishToApi,
+    deleteFromApi,
+} = require("./lib/registryAuth");
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -64,9 +71,18 @@ function toHex(name) {
     return TAILWIND_COLORS[name.toLowerCase().trim()] || name;
 }
 
+function toKebabCase(str) {
+    return str
+        .trim()
+        .replace(/([a-z])([A-Z])/g, "$1-$2")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+}
+
 // ── Theme Definitions ────────────────────────────────────────────────
 
-const { REGISTRY_THEMES: THEMES } = require("./registryThemes");
+const { REGISTRY_THEMES: CURATED_THEMES } = require("./registryThemes");
 
 // ── CLI args ──────────────────────────────────────────────────────────
 
@@ -76,106 +92,60 @@ const isLocal = args.includes("--local");
 const isRepublish = args.includes("--republish");
 const themeIdx = args.indexOf("--theme");
 const singleTheme = themeIdx !== -1 ? args[themeIdx + 1] : null;
+const fromFileIdx = args.indexOf("--from-file");
+const fromFilePath = fromFileIdx !== -1 ? args[fromFileIdx + 1] : null;
 
 const FALLBACK_DIR = path.join(ROOT, "themes");
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function getPkg() {
     return JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
 }
 
-// ── Device auth flow ──────────────────────────────────────────────────
+/**
+ * Load themes from .theme.json files.
+ * Accepts a file path or a directory (scans for *.theme.json).
+ */
+function loadThemesFromFile(filePath) {
+    const resolved = path.resolve(ROOT, filePath);
+    const themes = [];
 
-async function authenticate() {
-    console.log("\nAuthenticating with the registry...");
-
-    const initRes = await fetch(`${REGISTRY_BASE_URL}/api/auth/device`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-    });
-
-    if (!initRes.ok) {
-        console.error(
-            `Error: Device flow initiation failed (HTTP ${initRes.status})`
-        );
+    if (!fs.existsSync(resolved)) {
+        console.error(`Error: Path not found: ${resolved}`);
         process.exit(1);
     }
 
-    const initData = await initRes.json();
-    const { device_code, user_code, verification_uri_complete, interval } =
-        initData;
+    const stat = fs.statSync(resolved);
+    const files = stat.isDirectory()
+        ? fs
+              .readdirSync(resolved)
+              .filter((f) => f.endsWith(".theme.json"))
+              .map((f) => path.join(resolved, f))
+        : [resolved];
 
-    console.log(`\nOpening browser for authentication...`);
-    console.log(`Code: ${user_code}`);
-    console.log(`URL:  ${verification_uri_complete}\n`);
-
-    try {
-        execSync(`open "${verification_uri_complete}"`, { stdio: "ignore" });
-    } catch {
-        console.log(
-            "Could not open browser automatically. Please visit the URL above."
-        );
-    }
-
-    console.log("Waiting for authorization...");
-    const maxAttempts = Math.ceil(900 / (interval || 5));
-    const pollInterval = (interval || 5) * 1000;
-
-    for (let i = 0; i < maxAttempts; i++) {
-        await sleep(pollInterval);
-
-        const pollRes = await fetch(
-            `${REGISTRY_BASE_URL}/api/auth/device?device_code=${encodeURIComponent(
-                device_code
-            )}`
-        );
-
-        if (pollRes.ok) {
-            const data = await pollRes.json();
-            console.log("Authorized!\n");
-            return data.access_token;
-        }
-
-        if (pollRes.status === 428) continue;
-
-        if (pollRes.status === 400) {
-            const data = await pollRes.json();
-            if (data.error === "expired_token") {
-                console.error("Error: Device code expired. Please try again.");
-                process.exit(1);
-            }
-            continue;
-        }
-
-        console.error(
-            `Error: Unexpected poll response (HTTP ${pollRes.status})`
-        );
+    if (files.length === 0) {
+        console.error(`Error: No .theme.json files found in ${resolved}`);
         process.exit(1);
     }
 
-    console.error("Error: Authorization timed out. Please try again.");
-    process.exit(1);
-}
-
-async function getScope(token) {
-    const res = await fetch(`${REGISTRY_BASE_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!res.ok) {
-        console.error(
-            `Error: Could not fetch user profile (HTTP ${res.status}). Make sure you are registered at the registry website.`
-        );
-        process.exit(1);
+    for (const file of files) {
+        const data = JSON.parse(fs.readFileSync(file, "utf8"));
+        const baseName = path.basename(file, ".theme.json");
+        themes.push({
+            name: toKebabCase(data.name || baseName),
+            displayName: data.name || baseName,
+            description: data.description || "",
+            colors: {
+                primary: data.primary,
+                secondary: data.secondary,
+                tertiary: data.tertiary,
+            },
+            tags: data.tags || [],
+        });
     }
 
-    const data = await res.json();
-    return data.user.username;
+    return themes;
 }
 
 // ── Manifest building ─────────────────────────────────────────────────
@@ -249,78 +219,6 @@ function createThemeZip(manifest, theme) {
     return tmpPath;
 }
 
-// ── Publish ───────────────────────────────────────────────────────────
-
-async function getFormDataImpl() {
-    if (
-        typeof globalThis.FormData !== "undefined" &&
-        typeof globalThis.File !== "undefined"
-    ) {
-        return { FormData: globalThis.FormData, File: globalThis.File };
-    }
-    const undici = await import("undici");
-    return { FormData: undici.FormData, File: undici.File };
-}
-
-async function publishToApi(token, manifest, zipPath) {
-    const zipBuffer = fs.readFileSync(zipPath);
-    const zipFileName = path.basename(zipPath);
-
-    const { FormData, File } = await getFormDataImpl();
-    const form = new FormData();
-    form.append(
-        "file",
-        new File([zipBuffer], zipFileName, { type: "application/zip" })
-    );
-    form.append("manifest", JSON.stringify(manifest));
-
-    const res = await fetch(`${REGISTRY_BASE_URL}/api/publish`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-        return {
-            success: false,
-            error: data.error || `HTTP ${res.status}`,
-            details: data.details,
-        };
-    }
-
-    return { success: true, ...data };
-}
-
-// ── Delete ────────────────────────────────────────────────────────────
-
-async function deleteFromApi(token, scope, name) {
-    const res = await fetch(
-        `${REGISTRY_BASE_URL}/api/packages/${encodeURIComponent(
-            scope
-        )}/${encodeURIComponent(name)}`,
-        {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${token}` },
-        }
-    );
-
-    if (res.status === 404) {
-        return { success: true, notFound: true };
-    }
-
-    if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        return {
-            success: false,
-            error: data.error || `HTTP ${res.status}`,
-        };
-    }
-
-    return { success: true };
-}
-
 // ── Local fallback ───────────────────────────────────────────────────
 
 function saveThemesLocally(themes, scope) {
@@ -367,19 +265,28 @@ function saveThemesLocally(themes, scope) {
 // ── Main ──────────────────────────────────────────────────────────────
 
 async function main() {
-    // Select themes to publish
-    let themes = THEMES;
-    if (singleTheme) {
-        const found = THEMES.find((t) => t.name === singleTheme);
+    // Determine theme source
+    let themes;
+
+    if (fromFilePath) {
+        // --from-file: load from .theme.json file(s)
+        themes = loadThemesFromFile(fromFilePath);
+        console.log(
+            `\nLoaded ${themes.length} theme(s) from ${fromFilePath}\n`
+        );
+    } else if (singleTheme) {
+        const found = CURATED_THEMES.find((t) => t.name === singleTheme);
         if (!found) {
             console.error(
-                `Error: Theme "${singleTheme}" not found. Available: ${THEMES.map(
+                `Error: Theme "${singleTheme}" not found. Available: ${CURATED_THEMES.map(
                     (t) => t.name
                 ).join(", ")}`
             );
             process.exit(1);
         }
         themes = [found];
+    } else {
+        themes = CURATED_THEMES;
     }
 
     console.log(`\nPublishing ${themes.length} theme(s) to registry...\n`);
@@ -421,8 +328,8 @@ async function main() {
     }
 
     // Authenticate
-    const token = await authenticate();
-    const scope = await getScope(token);
+    const token = await authenticate(REGISTRY_BASE_URL);
+    const scope = await getScope(REGISTRY_BASE_URL, token);
     console.log(`Authenticated as: ${scope}\n`);
 
     // Rebuild manifests with real scope
@@ -434,7 +341,12 @@ async function main() {
     if (isRepublish) {
         console.log("Deleting existing packages...\n");
         for (const { theme, manifest } of packages) {
-            const delResult = await deleteFromApi(token, scope, manifest.name);
+            const delResult = await deleteFromApi(
+                REGISTRY_BASE_URL,
+                token,
+                scope,
+                manifest.name
+            );
             if (delResult.success) {
                 console.log(
                     `  Deleted ${manifest.name}${
@@ -460,7 +372,12 @@ async function main() {
         const zipPath = createThemeZip(manifest, theme);
         zipPaths.push(zipPath);
 
-        const result = await publishToApi(token, manifest, zipPath);
+        const result = await publishToApi(
+            REGISTRY_BASE_URL,
+            token,
+            manifest,
+            zipPath
+        );
 
         if (result.success) {
             console.log(`  Published ${manifest.name} v${manifest.version}`);
