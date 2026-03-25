@@ -102,6 +102,11 @@ npm run build
 
 For comprehensive guides, see [docs/INDEX.md](./docs/INDEX.md):
 
+**Developer Guide:**
+
+-   [Developer Guide](./docs/DEVELOPER_GUIDE.md) - Complete guide to building widgets, dashboards, and themes
+-   [Script Reference](./docs/SCRIPTS.md) - All npm scripts with usage examples
+
 **Getting Started:**
 
 -   [Quick Start](./docs/QUICK_START.md) - Commands, workflows, and troubleshooting

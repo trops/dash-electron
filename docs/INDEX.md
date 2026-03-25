@@ -2,6 +2,11 @@
 
 Documentation for the dash-electron application template — an Electron dashboard app built on `@trops/dash-core` and `@trops/dash-react`.
 
+## Developer Guide
+
+-   **[DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md)** - Comprehensive guide to building widgets, dashboards, and themes (start here)
+-   **[SCRIPTS.md](./SCRIPTS.md)** - Complete npm script reference with usage examples
+
 ## Getting Started
 
 -   **[QUICK_START.md](./QUICK_START.md)** - Quick start guide to get up and running
@@ -14,12 +19,11 @@ Documentation for the dash-electron application template — an Electron dashboa
 
 ## Requirements & Product Design
 
-**Feature PRDs have moved to @trops/dash-core** (`docs/requirements/prd/`).
-
-Local tooling retained here:
-
+-   **[requirements/prd/developer-experience.md](./requirements/prd/developer-experience.md)** - Developer Experience & Asset Distribution PRD
 -   **[requirements/README.md](./requirements/README.md)** - PRD system overview
 -   **[requirements/PRD-TEMPLATE.md](./requirements/PRD-TEMPLATE.md)** - Template for creating new PRDs
+
+Framework-level PRDs are in [@trops/dash-core](https://github.com/trops/dash-core/tree/master/docs/requirements/prd).
 
 ## Template-Specific Documentation
 
