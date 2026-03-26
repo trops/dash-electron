@@ -1,4 +1,4 @@
-export function CallList({ calls, onSelectCall }) {
+export function CallList({ calls, onSelectCall, selectedId = null }) {
     if (calls.length === 0) {
         return (
             <div className="text-xs text-gray-600 italic">No calls found</div>
@@ -11,7 +11,13 @@ export function CallList({ calls, onSelectCall }) {
                 <button
                     key={call.id || call.metaData?.id || call.callId || i}
                     onClick={() => onSelectCall(call)}
-                    className="w-full text-left px-2 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs transition-colors"
+                    className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
+                        selectedId &&
+                        selectedId ===
+                            (call.id || call.metaData?.id || call.callId)
+                            ? "bg-emerald-900/40 border border-emerald-600"
+                            : "bg-white/5 hover:bg-white/10"
+                    }`}
                 >
                     <div className="text-gray-300 truncate">
                         {call.title ||
