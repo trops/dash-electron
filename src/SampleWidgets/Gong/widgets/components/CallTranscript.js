@@ -22,7 +22,9 @@ export function CallTranscript({ transcript, loading, onLoadMore }) {
 
     if (!transcript) return null;
 
-    const segments = transcript.segments || transcript.transcript || [];
+    const segments = Array.isArray(transcript)
+        ? transcript
+        : transcript.segments || transcript.transcript || [];
     const speakerMap = {};
     let speakerIndex = 0;
 
