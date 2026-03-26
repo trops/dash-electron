@@ -91,9 +91,7 @@ function GongContent({ title, defaultDaysBack }) {
 
             callTool("get_call_transcript", { callId })
                 .then((res) => {
-                    const { data, error: mcpError } = parseMcpResponse(res, {
-                        arrayKeys: ["segments", "transcript"],
-                    });
+                    const { data, error: mcpError } = parseMcpResponse(res);
                     if (mcpError) {
                         setTranscript({ error: mcpError });
                     } else {
@@ -123,9 +121,7 @@ function GongContent({ title, defaultDaysBack }) {
                     callId,
                     cursor,
                 });
-                const { data, error: mcpError } = parseMcpResponse(res, {
-                    arrayKeys: ["segments", "transcript"],
-                });
+                const { data, error: mcpError } = parseMcpResponse(res);
                 if (mcpError) {
                     setErrorMsg(mcpError);
                     return;
@@ -257,6 +253,7 @@ function GongContent({ title, defaultDaysBack }) {
                     <SubHeading3
                         title={
                             selectedCall.title ||
+                            selectedCall.metaData?.title ||
                             selectedCall.subject ||
                             selectedCall.name ||
                             "Call Details"

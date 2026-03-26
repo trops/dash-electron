@@ -9,21 +9,33 @@ export function CallList({ calls, onSelectCall }) {
         <div className="max-h-64 overflow-y-auto space-y-1">
             {calls.map((call, i) => (
                 <button
-                    key={call.id || i}
+                    key={call.id || call.metaData?.id || call.callId || i}
                     onClick={() => onSelectCall(call)}
                     className="w-full text-left px-2 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs transition-colors"
                 >
                     <div className="text-gray-300 truncate">
-                        {call.title || call.subject || call.name || "Untitled"}
+                        {call.title ||
+                            call.metaData?.title ||
+                            call.subject ||
+                            call.name ||
+                            "Untitled"}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5 text-gray-500">
-                        {call.started && (
+                        {(call.started || call.metaData?.started) && (
                             <span>
-                                {new Date(call.started).toLocaleDateString()}
+                                {new Date(
+                                    call.started || call.metaData?.started
+                                ).toLocaleDateString()}
                             </span>
                         )}
-                        {call.duration != null && (
-                            <span>{Math.round(call.duration / 60)}m</span>
+                        {(call.duration ?? call.metaData?.duration) != null && (
+                            <span>
+                                {Math.round(
+                                    (call.duration ?? call.metaData?.duration) /
+                                        60
+                                )}
+                                m
+                            </span>
                         )}
                         {call.parties?.length > 0 && (
                             <span>
