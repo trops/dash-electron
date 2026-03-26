@@ -481,16 +481,22 @@ Add the following to your `claude_desktop_config.json`:
 {
     "mcpServers": {
         "dash": {
-            "url": "https://127.0.0.1:3141/mcp",
-            "headers": {
-                "Authorization": "Bearer YOUR_TOKEN_HERE"
+            "command": "npx",
+            "args": [
+                "mcp-remote",
+                "https://127.0.0.1:3141/mcp",
+                "--header",
+                "Authorization: Bearer YOUR_TOKEN_HERE"
+            ],
+            "env": {
+                "NODE_TLS_REJECT_UNAUTHORIZED": "0"
             }
         }
     }
 }
 ```
 
-Replace `YOUR_TOKEN_HERE` with the token from Dash Settings, then restart Claude Desktop.
+Replace `YOUR_TOKEN_HERE` with the token from Dash Settings, then restart Claude Desktop. The `mcp-remote` bridge is downloaded automatically by `npx`.
 
 ### Available Tools
 

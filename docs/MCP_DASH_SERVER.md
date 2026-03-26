@@ -20,15 +20,23 @@ The MCP Dash Server is a built-in Model Context Protocol server that lets extern
 
 #### Claude Desktop
 
+Claude Desktop uses **stdio-based** MCP connections. The `mcp-remote` bridge translates between Claude Desktop's stdio transport and the Dash HTTPS server.
+
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
     "mcpServers": {
         "dash": {
-            "url": "https://127.0.0.1:3141/mcp",
-            "headers": {
-                "Authorization": "Bearer YOUR_TOKEN_HERE"
+            "command": "npx",
+            "args": [
+                "mcp-remote",
+                "https://127.0.0.1:3141/mcp",
+                "--header",
+                "Authorization: Bearer YOUR_TOKEN_HERE"
+            ],
+            "env": {
+                "NODE_TLS_REJECT_UNAUTHORIZED": "0"
             }
         }
     }
@@ -37,16 +45,29 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 Replace `YOUR_TOKEN_HERE` with the token from Settings. Restart Claude Desktop.
 
+**How it works:** Claude Desktop spawns `mcp-remote` as a local process. `mcp-remote` connects to the Dash HTTPS server and proxies MCP messages over stdio. The `NODE_TLS_REJECT_UNAUTHORIZED` env var allows the self-signed localhost certificate.
+
+**Note:** `mcp-remote` is downloaded automatically by `npx` on first use. No manual installation required.
+
+#### Claude Code
+
+Add the MCP server in Claude Code settings or via the CLI:
+
+```bash
+claude mcp add dash -- npx mcp-remote https://127.0.0.1:3141/mcp --header "Authorization: Bearer YOUR_TOKEN_HERE"
+```
+
 #### Cursor
 
 Add an MCP server in Cursor settings with:
 
--   **URL:** `https://127.0.0.1:3141/mcp`
--   **Header:** `Authorization: Bearer YOUR_TOKEN_HERE`
+-   **Type:** Command
+-   **Command:** `npx mcp-remote https://127.0.0.1:3141/mcp --header "Authorization: Bearer YOUR_TOKEN_HERE"`
+-   **Env:** `NODE_TLS_REJECT_UNAUTHORIZED=0`
 
-#### Any MCP Client
+#### Direct HTTPS (for MCP clients that support HTTP transport)
 
-The server uses HTTPS with an auto-generated self-signed certificate. Connect to:
+The server uses HTTPS with an auto-generated self-signed certificate:
 
 -   **Endpoint:** `https://127.0.0.1:{port}/mcp`
 -   **Default port:** `3141` (configurable in Settings)
@@ -56,7 +77,7 @@ The server uses HTTPS with an auto-generated self-signed certificate. Connect to
 
 ### 3. Verify Connection
 
-Once connected, your LLM client should show the Dash MCP server with its tools, prompts, and resources.
+Once connected, your MCP client should show the Dash server with its 19 tools, 3 prompts, and 5 resources. In Claude Desktop, look for the hammer icon showing "dash" in the MCP server list.
 
 ---
 
@@ -582,15 +603,18 @@ The server auto-starts when enabled and the app launches. It shuts down graceful
 
 ## Troubleshooting
 
-| Problem                                | Cause                                | Solution                                                          |
-| -------------------------------------- | ------------------------------------ | ----------------------------------------------------------------- |
-| Claude Desktop doesn't show Dash tools | Config not loaded                    | Restart Claude Desktop after editing config. Check JSON syntax    |
-| "Unauthorized" errors                  | Token mismatch                       | Copy the token from Settings > MCP Server. Ensure no extra spaces |
-| "Connection refused"                   | Server not running                   | Ensure `npm run dev` is running and MCP Server is enabled         |
-| Tools return empty results             | No data in the app                   | Create dashboards, install widgets, or add themes first           |
-| `create_theme_from_url` fails          | URL unreachable or no visible colors | Try a different URL. Works best with pages that have brand colors |
-| Rate limit errors                      | Too many requests                    | Wait 1 minute. Limit is 60 requests/minute                        |
-| Port conflict                          | Another service on 3141              | Change the port in Settings > MCP Server                          |
+| Problem                                     | Cause                                | Solution                                                                                      |
+| ------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------- |
+| "not valid MCP server configurations: dash" | Wrong config format                  | Use the `command`/`args`/`env` format with `mcp-remote`, not `url`/`headers`. See setup above |
+| Claude Desktop doesn't show Dash tools      | Config not loaded or bridge failed   | Restart Claude Desktop. Check JSON syntax. Ensure `npm run dev` is running with MCP Server on |
+| "Unauthorized" errors                       | Token mismatch                       | Copy the token from Settings > MCP Server. Ensure no extra spaces in the `--header` arg       |
+| "Connection refused"                        | Server not running                   | Ensure `npm run dev` is running and MCP Server is enabled in Settings                         |
+| TLS / certificate errors                    | Self-signed cert rejected            | Add `"NODE_TLS_REJECT_UNAUTHORIZED": "0"` to the `env` object in your config                  |
+| `mcp-remote` not found                      | npx hasn't cached it yet             | Run `npx mcp-remote --help` once manually to download it, then restart Claude Desktop         |
+| Tools return empty results                  | No data in the app                   | Create dashboards, install widgets, or add themes first                                       |
+| `create_theme_from_url` fails               | URL unreachable or no visible colors | Try a different URL. Works best with pages that have visible brand colors                     |
+| Rate limit errors                           | Too many requests                    | Wait 1 minute. Limit is 60 requests/minute                                                    |
+| Port conflict                               | Another service on 3141              | Change the port in Settings > MCP Server                                                      |
 
 ---
 

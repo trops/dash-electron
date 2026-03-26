@@ -760,22 +760,30 @@ Dash includes a built-in MCP server that lets external LLM clients (Claude Deskt
 2. Toggle the server **On**
 3. Copy the bearer token
 
-### Connect
+### Connect from Claude Desktop
 
-Add to your MCP client config (e.g., `claude_desktop_config.json`):
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
     "mcpServers": {
         "dash": {
-            "url": "https://127.0.0.1:3141/mcp",
-            "headers": {
-                "Authorization": "Bearer YOUR_TOKEN_HERE"
+            "command": "npx",
+            "args": [
+                "mcp-remote",
+                "https://127.0.0.1:3141/mcp",
+                "--header",
+                "Authorization: Bearer YOUR_TOKEN_HERE"
+            ],
+            "env": {
+                "NODE_TLS_REJECT_UNAUTHORIZED": "0"
             }
         }
     }
 }
 ```
+
+Replace `YOUR_TOKEN_HERE` with the token from Settings. Restart Claude Desktop.
 
 ### Available Tools
 
