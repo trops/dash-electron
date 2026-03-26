@@ -14,6 +14,33 @@ import { CallSummary } from "./components/CallSummary";
 import { CallTranscript } from "./components/CallTranscript";
 import { parseMcpResponse, parseGongTextEntries } from "../utils/mcpUtils";
 
+/**
+ * RawResponsePanel — shows the raw MCP response so the user always sees
+ * *something*, even when structured parsing fails.
+ */
+function RawResponsePanel({ raw, label }) {
+    const [expanded, setExpanded] = useState(false);
+    if (!raw) return null;
+    return (
+        <div className="mt-2">
+            <button
+                onClick={() => setExpanded((p) => !p)}
+                className="text-[10px] text-gray-500 hover:text-gray-300 underline"
+            >
+                {expanded ? "Hide" : "Show"} raw response
+                {label ? ` (${label})` : ""}
+            </button>
+            {expanded && (
+                <pre className="mt-1 p-2 bg-gray-900 border border-gray-700 rounded text-[10px] text-gray-400 overflow-auto max-h-48 whitespace-pre-wrap">
+                    {typeof raw === "string"
+                        ? raw
+                        : JSON.stringify(raw, null, 2)}
+                </pre>
+            )}
+        </div>
+    );
+}
+
 function GongContent({ title, defaultDaysBack }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("gong");
@@ -32,10 +59,12 @@ function GongContent({ title, defaultDaysBack }) {
         transcript: false,
         summary: false,
     });
+    const [rawResponse, setRawResponse] = useState(null);
 
     const handleLoadCalls = useCallback(async () => {
         setLoading(true);
         setErrorMsg(null);
+        setRawResponse(null);
         try {
             const days = parseInt(defaultDaysBack) || 30;
             const from =
@@ -48,15 +77,43 @@ function GongContent({ title, defaultDaysBack }) {
             if (searchQuery.trim()) args.query = searchQuery.trim();
 
             const res = await callTool(toolName, args);
-            const { data, error: mcpError } = parseMcpResponse(res, {
+            const {
+                data,
+                error: mcpError,
+                raw,
+            } = parseMcpResponse(res, {
                 arrayKeys: ["calls", "records"],
                 textParser: parseGongTextEntries,
             });
+
+            // Always store the raw response for debug display
+            setRawResponse(raw);
+
             if (mcpError) {
                 setErrorMsg(mcpError);
                 return;
             }
-            setCalls(Array.isArray(data) ? data : []);
+
+            // If data is an array, use it directly
+            if (Array.isArray(data)) {
+                setCalls(data);
+                return;
+            }
+
+            // If data is an object but not an array, display it as a single
+            // "call" entry so the user sees *something* and can click into it
+            if (data && typeof data === "object") {
+                setCalls([data]);
+                return;
+            }
+
+            // If data is a non-empty string, show as a single text entry
+            if (typeof data === "string" && data.trim()) {
+                setCalls([{ title: data.slice(0, 120), _raw: data }]);
+                return;
+            }
+
+            setCalls([]);
         } catch (err) {
             setErrorMsg(err.message);
         } finally {
@@ -238,6 +295,9 @@ function GongContent({ title, defaultDaysBack }) {
 
                     {/* Call List */}
                     <CallList calls={calls} onSelectCall={handleSelectCall} />
+
+                    {/* Raw response debug — always available when there's data */}
+                    <RawResponsePanel raw={rawResponse} label="list_calls" />
                 </>
             )}
 
