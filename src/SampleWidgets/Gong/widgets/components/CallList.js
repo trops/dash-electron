@@ -6,7 +6,7 @@ export function CallList({ calls, onSelectCall }) {
     }
 
     return (
-        <div className="max-h-64 overflow-y-auto space-y-1">
+        <div className="max-h-96 overflow-y-auto space-y-1">
             {calls.map((call, i) => (
                 <button
                     key={call.id || call.metaData?.id || call.callId || i}
@@ -21,11 +21,15 @@ export function CallList({ calls, onSelectCall }) {
                             "Untitled"}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5 text-gray-500">
-                        {(call.started || call.metaData?.started) && (
+                        {(call.started ||
+                            call.date ||
+                            call.metaData?.started) && (
                             <span>
-                                {new Date(
-                                    call.started || call.metaData?.started
-                                ).toLocaleDateString()}
+                                {formatDate(
+                                    call.started ||
+                                        call.date ||
+                                        call.metaData?.started
+                                )}
                             </span>
                         )}
                         {(call.duration ?? call.metaData?.duration) != null && (
@@ -36,6 +40,9 @@ export function CallList({ calls, onSelectCall }) {
                                 )}
                                 m
                             </span>
+                        )}
+                        {call.scope && (
+                            <span className="text-gray-600">{call.scope}</span>
                         )}
                         {call.parties?.length > 0 && (
                             <span>
@@ -48,4 +55,16 @@ export function CallList({ calls, onSelectCall }) {
             ))}
         </div>
     );
+}
+
+/** Display a date string — handles ISO dates and short formats like "3/24/2026". */
+function formatDate(value) {
+    if (!value) return "";
+    // If it's already a short human-readable string, use as-is
+    if (typeof value === "string" && !value.includes("T")) return value;
+    try {
+        return new Date(value).toLocaleDateString();
+    } catch {
+        return String(value);
+    }
 }

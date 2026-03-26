@@ -166,9 +166,24 @@ export function parseMcpResponse(res, options = {}) {
 }
 
 /**
- * Parse Gong text entries like "1. Call Title (2026-03-01) - ID: abc123"
+ * Parse Gong MCP text responses.
+ *
+ * The Gong MCP (gongio-mcp) returns markdown tables:
+ *   | ID | Title | Date | Duration | Scope |
+ *   |---|---|---|---|---|
+ *   | 123 | Call Title | 3/24/2026 | 64m | External |
+ *
+ * Also handles numbered-list format as a fallback:
+ *   1. Call Title (2026-03-01) - ID: abc123
  */
 export function parseGongTextEntries(text) {
+    if (typeof text !== "string") return null;
+
+    // Try markdown table first
+    const tableResult = parseMarkdownTable(text);
+    if (tableResult && tableResult.length > 0) return tableResult;
+
+    // Fallback: numbered list format
     const lines = text.split("\n").filter((l) => l.trim());
     const entries = [];
     for (const line of lines) {
@@ -184,4 +199,68 @@ export function parseGongTextEntries(text) {
         }
     }
     return entries.length > 0 ? entries : null;
+}
+
+/**
+ * Parse a markdown table into an array of objects keyed by header names.
+ * Normalises common Gong column names into the fields CallList expects.
+ */
+function parseMarkdownTable(text) {
+    const lines = text.split("\n").map((l) => l.trim());
+
+    // Find header row: first line that starts and ends with |
+    const headerIdx = lines.findIndex(
+        (l) => l.startsWith("|") && l.endsWith("|") && !l.match(/^\|[-|\s]+\|$/)
+    );
+    if (headerIdx === -1) return null;
+
+    const headers = lines[headerIdx]
+        .split("|")
+        .map((h) => h.trim().toLowerCase())
+        .filter(Boolean);
+
+    if (headers.length === 0) return null;
+
+    const entries = [];
+    // Data rows start after the separator row (headerIdx + 2)
+    for (let i = headerIdx + 2; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.startsWith("|")) continue;
+        // Stop at cursor / footer lines
+        if (line.startsWith("*")) break;
+
+        const cells = line
+            .split("|")
+            .map((c) => c.trim())
+            .filter((_, idx, arr) => idx > 0 && idx < arr.length);
+        if (cells.length === 0) continue;
+
+        const row = {};
+        headers.forEach((h, idx) => {
+            row[h] = cells[idx] || "";
+        });
+
+        // Normalise to the fields CallList.js expects
+        entries.push({
+            id: row.id || row.callid || row["call id"] || "",
+            title: row.title || row.name || row.subject || "",
+            started: row.date || row.started || "",
+            duration: parseDuration(row.duration),
+            scope: row.scope || "",
+            parties: [],
+        });
+    }
+
+    return entries.length > 0 ? entries : null;
+}
+
+/** Convert "64m" or "1h 4m" style durations to seconds. */
+function parseDuration(str) {
+    if (!str) return null;
+    const m = str.match(/(\d+)\s*m/);
+    const h = str.match(/(\d+)\s*h/);
+    let seconds = 0;
+    if (h) seconds += parseInt(h[1]) * 3600;
+    if (m) seconds += parseInt(m[1]) * 60;
+    return seconds || null;
 }
