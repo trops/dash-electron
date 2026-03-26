@@ -768,7 +768,7 @@ Add to your MCP client config (e.g., `claude_desktop_config.json`):
 {
     "mcpServers": {
         "dash": {
-            "url": "http://127.0.0.1:3141/mcp",
+            "url": "https://127.0.0.1:3141/mcp",
             "headers": {
                 "Authorization": "Bearer YOUR_TOKEN_HERE"
             }

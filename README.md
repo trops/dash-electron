@@ -464,7 +464,7 @@ Dash includes a built-in MCP (Model Context Protocol) server that lets external 
 
 -   **Localhost only** — binds to `127.0.0.1` (never exposed to the network)
 -   **Default port:** `3141` (configurable in Settings)
--   **Endpoint:** `http://127.0.0.1:3141/mcp`
+-   **Endpoint:** `https://127.0.0.1:3141/mcp`
 -   **Authentication:** Bearer token (auto-generated UUID)
 -   **Rate limit:** 60 requests per minute
 -   **Lifecycle:** Auto-starts when enabled; shuts down gracefully when the app closes
@@ -481,7 +481,7 @@ Add the following to your `claude_desktop_config.json`:
 {
     "mcpServers": {
         "dash": {
-            "url": "http://127.0.0.1:3141/mcp",
+            "url": "https://127.0.0.1:3141/mcp",
             "headers": {
                 "Authorization": "Bearer YOUR_TOKEN_HERE"
             }
