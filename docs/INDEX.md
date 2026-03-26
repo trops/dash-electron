@@ -25,6 +25,10 @@ Documentation for the dash-electron application template — an Electron dashboa
 
 Framework-level PRDs are in [@trops/dash-core](https://github.com/trops/dash-core/tree/master/docs/requirements/prd).
 
+## MCP Dash Server
+
+-   **[MCP_DASH_SERVER.md](./MCP_DASH_SERVER.md)** - Complete MCP server reference — all 19 tools, 3 prompts, 5 resources, setup, and usage examples
+
 ## Template-Specific Documentation
 
 -   **[MAIN_APP_INTEGRATION.md](./MAIN_APP_INTEGRATION.md)** - Application integration patterns and checklist
