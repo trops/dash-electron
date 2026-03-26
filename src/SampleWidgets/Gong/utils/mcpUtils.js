@@ -31,6 +31,11 @@ export function unwrapResponse(res) {
         if (text) return text;
     }
 
+    // Single content block: { type: "text", text: "..." }
+    if (res.type === "text" && typeof res.text === "string") {
+        return res.text;
+    }
+
     // { result: <inner> } wrapper (some servers / IPC bridges)
     if ("result" in res && Object.keys(res).length <= 3) {
         return unwrapResponse(res.result);
