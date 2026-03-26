@@ -99,6 +99,19 @@ export function parseMcpResponse(res, options = {}) {
 
     const extracted = extractJsonFromText(parsed);
     if (extracted !== null) {
+        if (Array.isArray(extracted)) {
+            return { data: extracted, error: null, text };
+        }
+        if (arrayKeys && typeof extracted === "object") {
+            for (const key of arrayKeys) {
+                const value = key
+                    .split(".")
+                    .reduce((obj, k) => obj?.[k], extracted);
+                if (Array.isArray(value)) {
+                    return { data: value, error: null, text };
+                }
+            }
+        }
         return { data: extracted, error: null, text };
     }
 
