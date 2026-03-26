@@ -66,9 +66,10 @@ Update both PRD and technical docs when:
 
 ## Existing PRDs
 
-**Framework PRDs have moved to @trops/dash-core.** See `dash-core/docs/requirements/prd/` for:
-CommandPalette Navigation, LayoutBuilder Hybrid, Dashboard Marketplace, MCP Providers,
-Widget Installation Model, Widget Dropdown, Widget Display & Installation UX.
+-   **[Gong Multi-Widget Decomposition](./prd/gong-multi-widget-decomposition.md)** - Status: Draft - 2026-03-26
+    **Framework PRDs have moved to @trops/dash-core.** See `dash-core/docs/requirements/prd/` for:
+    CommandPalette Navigation, LayoutBuilder Hybrid, Dashboard Marketplace, MCP Providers,
+    Widget Installation Model, Widget Dropdown, Widget Display & Installation UX.
 
 This directory retains the PRD template and tooling for template-specific PRDs only.
 
