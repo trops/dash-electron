@@ -458,6 +458,8 @@ git merge template/master
 
 Dash includes a built-in MCP (Model Context Protocol) server that lets external LLM clients — such as Claude Desktop, Cursor, or any MCP-compatible agent — connect to your running Dash instance and control dashboards, widgets, themes, and providers programmatically.
 
+**Full reference:** [docs/MCP_DASH_SERVER.md](./docs/MCP_DASH_SERVER.md) — complete API documentation with all 19 tools, 3 prompts, 5 resources, and usage examples.
+
 ### Overview
 
 -   **Localhost only** — binds to `127.0.0.1` (never exposed to the network)

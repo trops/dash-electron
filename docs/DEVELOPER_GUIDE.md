@@ -798,7 +798,7 @@ Add to your MCP client config (e.g., `claude_desktop_config.json`):
 
 **Security:** Localhost-only binding, bearer token required, no secrets in responses, 60 req/min rate limit.
 
-**Deep-dive:** See the [MCP Dash Server section in README.md](../README.md#mcp-dash-server).
+**Full API reference:** [MCP_DASH_SERVER.md](./MCP_DASH_SERVER.md) — all 19 tools, 3 prompts, 5 resources, setup, and usage examples.
 
 ---
 
