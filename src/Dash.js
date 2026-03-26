@@ -376,6 +376,11 @@ class App extends React.Component {
         if (window.mainApi) {
             window.mainApi.widgets.onInstalled(this.handleWidgetInstalled);
             window.mainApi.widgets.onLoaded(this.handleWidgetsLoaded);
+            if (window.mainApi.widgets.onUninstalled) {
+                window.mainApi.widgets.onUninstalled(
+                    this.handleWidgetUninstalled
+                );
+            }
             console.log("[Dash App] Widget listeners registered");
 
             // Listen for notification click events to navigate to the widget's workspace
@@ -404,6 +409,11 @@ class App extends React.Component {
             window.mainApi.widgets.removeInstalledListener(
                 this.handleWidgetInstalled
             );
+            if (window.mainApi.widgets.removeUninstalledListener) {
+                window.mainApi.widgets.removeUninstalledListener(
+                    this.handleWidgetUninstalled
+                );
+            }
             window.mainApi.widgets.removeLoadedListener(
                 this.handleWidgetsLoaded
             );
@@ -498,6 +508,18 @@ class App extends React.Component {
             }
         }
 
+        window.dispatchEvent(new Event("dash:widgets-updated"));
+    };
+
+    handleWidgetUninstalled = ({ widgetName }) => {
+        console.log(`[App] Widget uninstalled: ${widgetName}`);
+        // Remove matching ComponentManager entries so stale widgets don't persist
+        const cMap = ComponentManager.componentMap() || {};
+        Object.keys(cMap).forEach((key) => {
+            if (cMap[key]._sourcePackage === widgetName) {
+                delete cMap[key];
+            }
+        });
         window.dispatchEvent(new Event("dash:widgets-updated"));
     };
 
