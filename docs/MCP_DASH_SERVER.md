@@ -26,7 +26,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 {
     "mcpServers": {
         "dash": {
-            "url": "http://127.0.0.1:3141/mcp",
+            "url": "https://127.0.0.1:3141/mcp",
             "headers": {
                 "Authorization": "Bearer YOUR_TOKEN_HERE"
             }
@@ -41,17 +41,18 @@ Replace `YOUR_TOKEN_HERE` with the token from Settings. Restart Claude Desktop.
 
 Add an MCP server in Cursor settings with:
 
--   **URL:** `http://127.0.0.1:3141/mcp`
+-   **URL:** `https://127.0.0.1:3141/mcp`
 -   **Header:** `Authorization: Bearer YOUR_TOKEN_HERE`
 
 #### Any MCP Client
 
-The server uses the Streamable HTTP transport. Connect to:
+The server uses HTTPS with an auto-generated self-signed certificate. Connect to:
 
--   **Endpoint:** `http://127.0.0.1:{port}/mcp`
+-   **Endpoint:** `https://127.0.0.1:{port}/mcp`
 -   **Default port:** `3141` (configurable in Settings)
 -   **Auth:** Bearer token in the `Authorization` header
--   **Health check:** `GET /health` returns `{ status: "ok" }`
+-   **TLS:** Self-signed cert for `127.0.0.1` and `localhost`, auto-generated on first start
+-   **Health check:** `curl -k https://127.0.0.1:3141/health` (use `-k` to accept self-signed cert)
 
 ### 3. Verify Connection
 
@@ -557,6 +558,7 @@ Or from a website:
 
 ## Security
 
+-   **HTTPS with self-signed cert** — TLS encryption on all connections. Certificate auto-generated on first start, stored in `~/Library/Application Support/Dash/certs/`
 -   **Localhost only** — the server binds to `127.0.0.1` and is never exposed to the network
 -   **Bearer token** — every request must include the `Authorization` header with the correct token
 -   **No secrets in responses** — credential values are never returned by any tool or resource
