@@ -50,10 +50,14 @@ function GitHubPRListContent({ title }) {
         [isConnected, callTool]
     );
 
+    const [listenerStatus, setListenerStatus] = useState("not configured");
+
     const handlerRef = useRef(null);
     handlerRef.current = useCallback(
         (data) => {
-            const fullName = data.fullName || data.full_name || data.name;
+            const payload = data.message || data;
+            const fullName =
+                payload.fullName || payload.full_name || payload.name;
             if (fullName) {
                 setRepo(fullName);
                 setPrs([]);
@@ -70,10 +74,13 @@ function GitHubPRListContent({ title }) {
                 typeof listeners === "object" &&
                 Object.keys(listeners).length > 0;
             if (hasListeners) {
+                setListenerStatus("listening");
                 const handlers = {
                     repoSelected: (data) => handlerRef.current(data),
                 };
                 listen(listeners, handlers);
+            } else {
+                setListenerStatus("no listeners assigned");
             }
         }
     }, [listeners, listen]);
@@ -120,6 +127,21 @@ function GitHubPRListContent({ title }) {
                 />
                 <span className="text-gray-400 font-mono">{status}</span>
                 <span className="text-gray-600">({tools.length} tools)</span>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs">
+                <span
+                    className={`inline-block w-2 h-2 rounded-full ${
+                        listenerStatus === "listening"
+                            ? "bg-green-500"
+                            : "bg-yellow-500"
+                    }`}
+                />
+                <span className="text-gray-500">
+                    {listenerStatus === "listening"
+                        ? "Listening for repoSelected"
+                        : "No event listeners configured"}
+                </span>
             </div>
 
             {error && (
@@ -196,8 +218,9 @@ function GitHubPRListContent({ title }) {
                 </div>
             ) : (
                 <div className="text-xs text-gray-600 italic">
-                    Select a repository from the GitHubRepoList widget to view
-                    pull requests.
+                    {listenerStatus === "no listeners assigned"
+                        ? "No event listeners configured. Wire repoSelected from a GitHubRepoList widget."
+                        : "Select a repository from the GitHubRepoList widget to view pull requests."}
                 </div>
             )}
 
