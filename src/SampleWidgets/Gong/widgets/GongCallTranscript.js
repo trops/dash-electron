@@ -83,13 +83,16 @@ function GongCallTranscriptContent({ title }) {
         [callTool, callId]
     );
 
+    const [listenerStatus, setListenerStatus] = useState("not configured");
+
     const handlerRef = useRef(null);
     handlerRef.current = useCallback(
         (data) => {
-            if (data.id) {
-                setCallId(data.id);
-                setCallTitle(data.title || null);
-                loadTranscript(data.id);
+            const payload = data.message || data;
+            if (payload.id) {
+                setCallId(payload.id);
+                setCallTitle(payload.title || null);
+                loadTranscript(payload.id);
             }
         },
         [loadTranscript]
@@ -101,9 +104,12 @@ function GongCallTranscriptContent({ title }) {
                 typeof listeners === "object" &&
                 Object.keys(listeners).length > 0;
             if (hasListeners) {
+                setListenerStatus("listening");
                 listen(listeners, {
                     callSelected: (data) => handlerRef.current(data),
                 });
+            } else {
+                setListenerStatus("no listeners assigned");
             }
         }
     }, [listeners, listen]);
@@ -128,6 +134,21 @@ function GongCallTranscriptContent({ title }) {
                 <span className="text-gray-600">({tools.length} tools)</span>
             </div>
 
+            <div className="flex items-center gap-2 text-xs">
+                <span
+                    className={`inline-block w-2 h-2 rounded-full ${
+                        listenerStatus === "listening"
+                            ? "bg-green-500"
+                            : "bg-yellow-500"
+                    }`}
+                />
+                <span className="text-gray-500">
+                    {listenerStatus === "listening"
+                        ? "Listening for callSelected"
+                        : "No event listeners configured"}
+                </span>
+            </div>
+
             {error && (
                 <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
                     {error}
@@ -144,7 +165,9 @@ function GongCallTranscriptContent({ title }) {
 
             {!transcript && !loading && !errorMsg && (
                 <div className="text-xs text-gray-600 italic">
-                    Select a call from Gong Call Search to view its transcript.
+                    {listenerStatus === "no listeners assigned"
+                        ? "No event listeners configured. Wire callSelected from a Gong Call Search or Library Folders widget."
+                        : "Select a call from Gong Call Search to view its transcript."}
                 </div>
             )}
 
