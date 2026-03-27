@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import DebugEntry from "./DebugEntry";
 import ApiCatalog from "./ApiCatalog";
+import EventMonitor from "./EventMonitor";
 import "./DebugConsole.css";
 
 const LEVEL_FILTERS = ["all", "info", "warn", "error"];
-const TABS = ["Log Stream", "API Catalog"];
+const TABS = ["Log Stream", "API Catalog", "Widget Events"];
 
 function DebugConsole() {
     const [activeTab, setActiveTab] = useState("Log Stream");
@@ -79,7 +80,7 @@ function DebugConsole() {
                 ))}
             </div>
 
-            {activeTab === "Log Stream" ? (
+            {activeTab === "Log Stream" && (
                 <>
                     <div className="debug-toolbar">
                         <div className="debug-toolbar-group">
@@ -149,9 +150,11 @@ function DebugConsole() {
                         <span>Debug Console</span>
                     </div>
                 </>
-            ) : (
-                <ApiCatalog />
             )}
+
+            {activeTab === "API Catalog" && <ApiCatalog />}
+
+            {activeTab === "Widget Events" && <EventMonitor />}
         </div>
     );
 }
