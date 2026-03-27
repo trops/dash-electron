@@ -2,7 +2,7 @@
 
 The MCP Dash Server is a built-in Model Context Protocol server that lets external LLM clients — Claude Desktop, Cursor, or any MCP-compatible agent — connect to your running Dash instance and control dashboards, widgets, themes, and providers programmatically.
 
-**Quick links:** [Setup](#setup) | [Tools](#tools-19) | [Prompts](#prompts-3) | [Resources](#resources-5) | [Workflows](#common-workflows) | [Security](#security) | [Troubleshooting](#troubleshooting)
+**Quick links:** [Setup](#setup) | [Tools](#tools-22) | [Prompts](#prompts-3) | [Resources](#resources-5) | [Workflows](#common-workflows) | [Security](#security) | [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -77,11 +77,11 @@ The server uses HTTPS with an auto-generated self-signed certificate:
 
 ### 3. Verify Connection
 
-Once connected, your MCP client should show the Dash server with its 19 tools, 3 prompts, and 5 resources. In Claude Desktop, look for the hammer icon showing "dash" in the MCP server list.
+Once connected, your MCP client should show the Dash server with its 22 tools, 3 prompts, and 5 resources. In Claude Desktop, look for the hammer icon showing "dash" in the MCP server list.
 
 ---
 
-## Tools (19)
+## Tools (22)
 
 ### Dashboard Tools
 
@@ -135,13 +135,19 @@ Get full details of a dashboard including layout, widgets, and theme.
             {
                 "id": 1,
                 "component": "LayoutGridContainer",
-                "parentId": 0,
-                "config": { "columns": 2 }
+                "parent": 0,
+                "grid": {
+                    "rows": 1,
+                    "cols": 2,
+                    "gap": "gap-2",
+                    "1.1": { "component": 2 },
+                    "1.2": null
+                }
             },
             {
                 "id": 2,
                 "component": "SlackWidget",
-                "parentId": 1,
+                "parent": 1,
                 "config": { "title": "Slack Feed" }
             }
         ],
@@ -155,13 +161,32 @@ Get full details of a dashboard including layout, widgets, and theme.
 
 #### `create_dashboard`
 
-Create a new empty dashboard.
+Create a new dashboard. Optionally provide a grid layout.
 
-| Parameter | Type   | Required | Description                    |
-| --------- | ------ | -------- | ------------------------------ |
-| `name`    | string | **Yes**  | Display name for the dashboard |
+| Parameter         | Type   | Required | Description                                                                           |
+| ----------------- | ------ | -------- | ------------------------------------------------------------------------------------- |
+| `name`            | string | **Yes**  | Display name for the dashboard                                                        |
+| `layout`          | object | No       | Grid layout configuration. When provided, creates a grid dashboard                    |
+| `layout.rows`     | number | Yes\*    | Number of rows (1-10). \*Required when `layout` is provided                           |
+| `layout.cols`     | number | Yes\*    | Number of columns (1-10). \*Required when `layout` is provided                        |
+| `layout.gap`      | string | No       | Tailwind gap class (e.g., `"gap-2"`, `"gap-4"`). Defaults to `"gap-2"`                |
+| `layout.colModes` | object | No       | Per-row column sizing. Keys = row numbers, values = `"equal"`, `"1/4"`, `"1/3"`, etc. |
 
-**Returns:** The new dashboard ID. Use `add_widget` to populate it.
+**Returns:** The new dashboard ID (and layout dimensions if a grid was created). Use `add_widget` to populate it.
+
+**Example (grid dashboard):**
+
+```json
+{
+    "name": "Gong Playground",
+    "layout": {
+        "rows": 1,
+        "cols": 2,
+        "gap": "gap-2",
+        "colModes": { "1": "equal" }
+    }
+}
+```
 
 ---
 
@@ -200,16 +225,24 @@ Get counts of dashboards, widgets, themes, and providers.
 
 #### `add_widget`
 
-Add a widget to a dashboard by component name. Call `list_widgets` or `search_widgets` first to discover available names.
+Add a widget to a dashboard by component name. Call `list_widgets` or `search_widgets` first to discover available names. If the dashboard has a grid layout, you can specify `row`/`col` for explicit placement.
 
-| Parameter     | Type   | Required | Description                                       |
-| ------------- | ------ | -------- | ------------------------------------------------- |
-| `widgetName`  | string | **Yes**  | Component name (e.g., `"SlackWidget"`, `"Clock"`) |
-| `dashboardId` | string | No       | Dashboard ID. Omit to use the active dashboard    |
+| Parameter     | Type   | Required | Description                                                                            |
+| ------------- | ------ | -------- | -------------------------------------------------------------------------------------- |
+| `widgetName`  | string | **Yes**  | Component name (e.g., `"SlackWidget"`, `"Clock"`)                                      |
+| `dashboardId` | string | No       | Dashboard ID. Omit to use the active dashboard                                         |
+| `row`         | number | No       | Grid row (1-indexed). Must be used with `col`. Requires a grid layout on the dashboard |
+| `col`         | number | No       | Grid column (1-indexed). Must be used with `row`                                       |
 
-**Returns:** The widget instance ID (use with `configure_widget` or `remove_widget`).
+**Returns:** The widget instance ID and cell position (if grid-placed). Use with `configure_widget` or `remove_widget`.
 
-**Tip:** Call this multiple times to add multiple widgets. Each call appends to the dashboard.
+**Grid placement behavior:**
+
+-   `row` + `col` provided → places in that specific cell (errors if occupied or out of bounds)
+-   `row`/`col` omitted, grid exists → auto-places in the next empty cell (left-to-right, top-to-bottom)
+-   No grid layout → appends to the dashboard (original behavior)
+
+**Tip:** Call this multiple times to add multiple widgets.
 
 ---
 
@@ -437,6 +470,73 @@ Remove a provider and its stored credentials permanently.
 
 ---
 
+### Layout Tools
+
+#### `set_layout`
+
+Set or replace the grid layout on a dashboard. Creates a `LayoutGridContainer` with the specified dimensions. Existing widget cell assignments that fit the new grid are preserved; widgets outside the new bounds are orphaned (kept but unassigned from cells).
+
+| Parameter     | Type   | Required | Description                                                      |
+| ------------- | ------ | -------- | ---------------------------------------------------------------- |
+| `rows`        | number | **Yes**  | Number of rows (1-10)                                            |
+| `cols`        | number | **Yes**  | Number of columns (1-10)                                         |
+| `dashboardId` | string | No       | Dashboard ID. Omit to use the active dashboard                   |
+| `gap`         | string | No       | Tailwind gap class (e.g., `"gap-2"`). Defaults to `"gap-2"`      |
+| `colModes`    | object | No       | Per-row column sizing. Keys = row numbers, values = sizing modes |
+
+**Returns:** Dashboard ID, grid dimensions, and any orphaned widget IDs.
+
+**Example:**
+
+```json
+{ "dashboardId": "123", "rows": 2, "cols": 3 }
+```
+
+---
+
+#### `update_layout`
+
+Partially update grid layout properties. Only specified properties change — omitted properties keep their current values. `colModes` is merged (not replaced). Dashboard must already have a grid layout.
+
+| Parameter     | Type   | Required | Description                                              |
+| ------------- | ------ | -------- | -------------------------------------------------------- |
+| `dashboardId` | string | No       | Dashboard ID. Omit to use the active dashboard           |
+| `rows`        | number | No       | New number of rows (1-10). Omit to keep current          |
+| `cols`        | number | No       | New number of columns (1-10). Omit to keep current       |
+| `gap`         | string | No       | Tailwind gap class. Omit to keep current                 |
+| `colModes`    | object | No       | Column sizing modes to merge. Set a key to null to reset |
+
+**Returns:** Dashboard ID, updated grid dimensions, and any orphaned widget IDs.
+
+**Example:**
+
+```json
+{ "dashboardId": "123", "cols": 3, "colModes": { "1": "1/4" } }
+```
+
+---
+
+#### `move_widget`
+
+Move a widget to a different grid cell. If the target cell is occupied, the two widgets are swapped.
+
+| Parameter     | Type   | Required | Description                                    |
+| ------------- | ------ | -------- | ---------------------------------------------- |
+| `widgetId`    | string | **Yes**  | ID of the widget to move                       |
+| `row`         | number | **Yes**  | Target row (1-indexed)                         |
+| `col`         | number | **Yes**  | Target column (1-indexed)                      |
+| `dashboardId` | string | No       | Dashboard ID. Omit to use the active dashboard |
+
+**Returns:** Widget ID, new cell position, whether a swap occurred, and swapped widget ID if applicable.
+
+**Example:**
+
+```json
+{ "widgetId": "7", "row": 1, "col": 3 }
+```
+
+---
+
 ### Guide Tools
 
 #### `get_setup_guide`
@@ -527,15 +627,29 @@ Resources provide read-only snapshots of application state. MCP clients can read
 ### Build a Dashboard from Scratch
 
 ```
-1. search_widgets("slack")           → find Slack widgets
-2. search_widgets("github")          → find GitHub widgets
-3. list_providers()                   → check existing connections
-4. create_dashboard("DevOps")        → create the dashboard (returns ID)
-5. add_widget("SlackWidget")         → add Slack widget (returns instance ID)
-6. add_widget("GitHubPRList")        → add GitHub PR widget
-7. configure_widget(id, config)       → set titles and options
-8. create_theme_from_url("https://...")  → create a matching theme
-9. apply_theme("theme-name")         → apply the theme
+1. search_widgets("slack")                              → find Slack widgets
+2. search_widgets("github")                             → find GitHub widgets
+3. list_providers()                                      → check existing connections
+4. create_dashboard("DevOps", layout: { rows: 1, cols: 2 })
+                                                         → create dashboard with 1×2 grid
+5. add_widget("SlackWidget", row: 1, col: 1)            → placed in left column
+6. add_widget("GitHubPRList", row: 1, col: 2)           → placed in right column
+7. configure_widget(id, config)                          → set titles and options
+8. create_theme_from_url("https://...")                  → create a matching theme
+9. apply_theme("theme-name")                             → apply the theme
+```
+
+### Layout Management
+
+```
+# Add a grid to an existing dashboard
+set_layout({ dashboardId: "123", rows: 2, cols: 3 })
+
+# Move a widget to a new position
+move_widget({ widgetId: "7", row: 1, col: 3 })
+
+# Expand the grid and adjust column sizing
+update_layout({ dashboardId: "123", cols: 4, colModes: { "1": "1/4" } })
 ```
 
 ### Create and Apply a Theme
