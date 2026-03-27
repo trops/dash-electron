@@ -47,11 +47,14 @@ function GitHubIssueDetailContent({ title }) {
         [isConnected, callTool]
     );
 
+    const [listenerStatus, setListenerStatus] = useState("not configured");
+
     const handlerRef = useRef(null);
     handlerRef.current = useCallback(
         (data) => {
-            const repo = data.repo;
-            const issueNumber = data.number;
+            const payload = data.message || data;
+            const repo = payload.repo;
+            const issueNumber = payload.number;
             if (repo && issueNumber) {
                 setIssue(null);
                 fetchIssue(repo, issueNumber);
@@ -66,10 +69,13 @@ function GitHubIssueDetailContent({ title }) {
                 typeof listeners === "object" &&
                 Object.keys(listeners).length > 0;
             if (hasListeners) {
+                setListenerStatus("listening");
                 const handlers = {
                     issueSelected: (data) => handlerRef.current(data),
                 };
                 listen(listeners, handlers);
+            } else {
+                setListenerStatus("no listeners assigned");
             }
         }
     }, [listeners, listen]);
@@ -93,6 +99,21 @@ function GitHubIssueDetailContent({ title }) {
                 />
                 <span className="text-gray-400 font-mono">{status}</span>
                 <span className="text-gray-600">({tools.length} tools)</span>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs">
+                <span
+                    className={`inline-block w-2 h-2 rounded-full ${
+                        listenerStatus === "listening"
+                            ? "bg-green-500"
+                            : "bg-yellow-500"
+                    }`}
+                />
+                <span className="text-gray-500">
+                    {listenerStatus === "listening"
+                        ? "Listening for issueSelected"
+                        : "No event listeners configured"}
+                </span>
             </div>
 
             {error && (
@@ -211,8 +232,9 @@ function GitHubIssueDetailContent({ title }) {
             ) : (
                 !loading && (
                     <div className="text-xs text-gray-600 italic">
-                        Select an issue from the GitHubIssueList widget to view
-                        details.
+                        {listenerStatus === "no listeners assigned"
+                            ? "No event listeners configured. Wire issueSelected from a GitHubIssueList widget."
+                            : "Select an issue from the GitHubIssueList widget to view details."}
                     </div>
                 )
             )}
