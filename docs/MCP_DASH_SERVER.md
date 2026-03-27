@@ -225,11 +225,11 @@ Get counts of dashboards, widgets, themes, and providers.
 
 #### `add_widget`
 
-Add a widget to a dashboard by component name. Call `list_widgets` or `search_widgets` first to discover available names. If the dashboard has a grid layout, you can specify `row`/`col` for explicit placement.
+Add a widget to a dashboard by its scoped component name. Call `list_widgets` or `search_widgets` first to get the exact name. Widget names use the scoped format `scope.package.WidgetName`. If the dashboard has a grid layout, you can specify `row`/`col` for explicit placement.
 
 | Parameter     | Type   | Required | Description                                                                            |
 | ------------- | ------ | -------- | -------------------------------------------------------------------------------------- |
-| `widgetName`  | string | **Yes**  | Component name (e.g., `"SlackWidget"`, `"Clock"`)                                      |
+| `widgetName`  | string | **Yes**  | Scoped name from `list_widgets`/`search_widgets` (e.g., `"trops.gong.GongCallSearch"`) |
 | `dashboardId` | string | No       | Dashboard ID. Omit to use the active dashboard                                         |
 | `row`         | number | No       | Grid row (1-indexed). Must be used with `col`. Requires a grid layout on the dashboard |
 | `col`         | number | No       | Grid column (1-indexed). Must be used with `row`                                       |
@@ -285,13 +285,13 @@ Update a widget's configuration. The config object is merged into the existing c
 
 #### `list_widgets`
 
-List all available widgets from the registry.
+List all available widgets from the registry. Returns scoped component names that can be passed directly to `add_widget`.
 
 | Parameter | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
 | _(none)_  |      |          |             |
 
-**Returns:** Widget name, display name, description, icon, and provider requirements for each available widget.
+**Returns:** Scoped widget name (e.g., `"trops.gong.GongCallSearch"`), display name, description, icon, package, scope, and provider requirements for each available widget.
 
 ---
 
@@ -309,7 +309,7 @@ Search the widget registry by keyword.
 { "query": "slack" }
 ```
 
-**Returns:** Matching widgets with name, description, and provider info. Use the `name` field with `add_widget`.
+**Returns:** Matching widgets with scoped name (e.g., `"trops.slack.SlackChannelFeed"`), description, and provider info. Use the `name` field directly with `add_widget`.
 
 ---
 
@@ -632,8 +632,10 @@ Resources provide read-only snapshots of application state. MCP clients can read
 3. list_providers()                                      → check existing connections
 4. create_dashboard("DevOps", layout: { rows: 1, cols: 2 })
                                                          → create dashboard with 1×2 grid
-5. add_widget("SlackWidget", row: 1, col: 1)            → placed in left column
-6. add_widget("GitHubPRList", row: 1, col: 2)           → placed in right column
+5. add_widget("trops.slack.SlackChannelFeed", row: 1, col: 1)
+                                                         → placed in left column
+6. add_widget("trops.github.GitHubPRList", row: 1, col: 2)
+                                                         → placed in right column
 7. configure_widget(id, config)                          → set titles and options
 8. create_theme_from_url("https://...")                  → create a matching theme
 9. apply_theme("theme-name")                             → apply the theme
