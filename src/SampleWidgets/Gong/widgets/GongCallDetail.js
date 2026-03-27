@@ -45,10 +45,13 @@ function GongCallDetailContent({ title }) {
         [isConnected, callTool]
     );
 
+    const [listenerStatus, setListenerStatus] = useState("not configured");
+
     const handlerRef = useRef(null);
     handlerRef.current = useCallback(
         (data) => {
-            if (data.id) loadCall(data.id);
+            const payload = data.message || data;
+            if (payload.id) loadCall(payload.id);
         },
         [loadCall]
     );
@@ -59,9 +62,12 @@ function GongCallDetailContent({ title }) {
                 typeof listeners === "object" &&
                 Object.keys(listeners).length > 0;
             if (hasListeners) {
+                setListenerStatus("listening");
                 listen(listeners, {
                     callSelected: (data) => handlerRef.current(data),
                 });
+            } else {
+                setListenerStatus("no listeners assigned");
             }
         }
     }, [listeners, listen]);
@@ -84,6 +90,21 @@ function GongCallDetailContent({ title }) {
                 />
                 <span className="text-gray-400 font-mono">{status}</span>
                 <span className="text-gray-600">({tools.length} tools)</span>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs">
+                <span
+                    className={`inline-block w-2 h-2 rounded-full ${
+                        listenerStatus === "listening"
+                            ? "bg-green-500"
+                            : "bg-yellow-500"
+                    }`}
+                />
+                <span className="text-gray-500">
+                    {listenerStatus === "listening"
+                        ? "Listening for callSelected"
+                        : "No event listeners configured"}
+                </span>
             </div>
 
             {error && (
@@ -171,7 +192,9 @@ function GongCallDetailContent({ title }) {
                 !loading &&
                 !errorMsg && (
                     <div className="text-xs text-gray-600 italic">
-                        Select a call from Gong Call Search to view details.
+                        {listenerStatus === "no listeners assigned"
+                            ? "No event listeners configured. Wire callSelected from a Gong Call Search or Library Folders widget."
+                            : "Select a call from Gong Call Search to view details."}
                     </div>
                 )
             )}

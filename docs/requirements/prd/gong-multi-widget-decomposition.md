@@ -1,7 +1,7 @@
 # PRD: Gong Multi-Widget Decomposition
 
-**Status:** In Progress
-**Last Updated:** 2026-03-26
+**Status:** Implemented
+**Last Updated:** 2026-03-27
 **Owner:** John Giatropoulos
 
 ---
@@ -49,3 +49,7 @@ As a sales manager, I want to search Gong calls in one widget and see the AI sum
 -   Follows GitHub/Slack multi-widget event patterns (`useWidgetEvents` hook)
 -   Shares `utils/mcpUtils.js` across all widgets (markdown table parser, unwrapResponse)
 -   Event payload: `{ id, title, date, duration, scope }`
+-   **Bug fix (2026-03-27):** Receiver widgets accessed `data.id` directly instead of `data.message.id`. DashboardPublisher wraps payloads as `{ message, event, uuid }`. Fixed using `data.message || data` defensive pattern (matching GCalEventDetail/GDriveFilePreview).
+-   Listener status UI added to receiver widgets — shows green/yellow dot indicating whether event listeners are configured.
+-   Gong event chain tests added to dash-core `useWidgetEvents.test.js` (6 tests + 2 isolation tests).
+-   DashboardMonitor event debugger implemented in dash-core — live event log and active subscriptions view.
