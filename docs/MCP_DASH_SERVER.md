@@ -313,6 +313,26 @@ Search the widget registry by keyword.
 
 ---
 
+#### `install_widget`
+
+Install a widget package from the Dash registry. Requires the user to be signed in via Settings > Account in the Dash app (OAuth device code flow). Use `search_widgets` first to find available packages, then install by package name.
+
+| Parameter     | Type   | Required | Description                                                                                                             |
+| ------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `packageName` | string | **Yes**  | Package name from registry (e.g., `"slack"`, `"gong"`, `"chat"`). Use the `package` field from `search_widgets` results |
+
+**Example:**
+
+```json
+{ "packageName": "slack" }
+```
+
+**Returns:** Package name, scope, version, and a list of installed widget names with their scoped IDs (use with `add_widget`). Returns `authRequired: true` if the user is not authenticated.
+
+**Workflow:** `search_widgets` → `install_widget` → `add_widget`
+
+---
+
 ### Theme Tools
 
 #### `list_themes`
@@ -628,17 +648,19 @@ Resources provide read-only snapshots of application state. MCP clients can read
 
 ```
 1. search_widgets("slack")                              → find Slack widgets
-2. search_widgets("github")                             → find GitHub widgets
-3. list_providers()                                      → check existing connections
-4. create_dashboard("DevOps", layout: { rows: 1, cols: 2 })
+2. install_widget("slack")                              → install from registry (if not installed)
+3. search_widgets("github")                             → find GitHub widgets
+4. install_widget("github")                             → install from registry (if not installed)
+5. list_providers()                                      → check existing connections
+6. create_dashboard("DevOps", layout: { rows: 1, cols: 2 })
                                                          → create dashboard with 1×2 grid
-5. add_widget("trops.slack.SlackChannelFeed", row: 1, col: 1)
+7. add_widget("trops.slack.SlackChannelFeed", row: 1, col: 1)
                                                          → placed in left column
-6. add_widget("trops.github.GitHubPRList", row: 1, col: 2)
+8. add_widget("trops.github.GitHubPRList", row: 1, col: 2)
                                                          → placed in right column
-7. configure_widget(id, config)                          → set titles and options
-8. create_theme_from_url("https://...")                  → create a matching theme
-9. apply_theme("theme-name")                             → apply the theme
+9. configure_widget(id, config)                          → set titles and options
+10. create_theme_from_url("https://...")                  → create a matching theme
+11. apply_theme("theme-name")                             → apply the theme
 ```
 
 ### Layout Management
