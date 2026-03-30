@@ -71,8 +71,11 @@ function EventEntry({ entry }) {
                         flexShrink: 0,
                     }}
                 >
-                    {entry.subscriberCount} sub
-                    {entry.subscriberCount !== 1 ? "s" : ""}
+                    {entry.subscriberCount != null
+                        ? `${entry.subscriberCount} sub${
+                              entry.subscriberCount !== 1 ? "s" : ""
+                          }`
+                        : "via IPC"}
                 </span>
                 <span style={{ color: "#475569", flexShrink: 0 }}>
                     {expanded ? "▼" : "▶"}
@@ -133,7 +136,10 @@ function SubscriptionList() {
     return (
         <div className="debug-log-list">
             {subs.length === 0 ? (
-                <div className="debug-empty">No active subscriptions</div>
+                <div className="debug-empty">
+                    No local subscriptions (this window). Subscriptions are
+                    registered in the main app window.
+                </div>
             ) : (
                 subs.map((sub, i) => (
                     <div
@@ -194,17 +200,50 @@ function EventMonitor() {
     const [autoScroll, setAutoScroll] = useState(true);
     const listRef = useRef(null);
 
+    const addEntry = useCallback((entry) => {
+        setEntries((prev) => {
+            const next = [...prev, entry];
+            return next.length > MAX_ENTRIES
+                ? next.slice(next.length - MAX_ENTRIES)
+                : next;
+        });
+    }, []);
+
+    // Listen for local events (same renderer window)
     useEffect(() => {
         const unsub = DashboardPublisher.onMonitor((data) => {
-            setEntries((prev) => {
-                const next = [...prev, data];
-                return next.length > MAX_ENTRIES
-                    ? next.slice(next.length - MAX_ENTRIES)
-                    : next;
-            });
+            addEntry({ ...data, source: "local" });
         });
         return unsub;
-    }, []);
+    }, [addEntry]);
+
+    // Listen for cross-window events via IPC bridge
+    // The debug console runs in a separate renderer — widgets publish
+    // events in the main window, which the main process broadcasts
+    // to all other windows via "widget-event:broadcast".
+    useEffect(() => {
+        if (!window.mainApi?.on) return;
+
+        const ipcHandler = (_event, message) => {
+            addEntry({
+                eventType: message.eventType,
+                content: message.content,
+                timestamp: Date.now(),
+                subscriberCount: null,
+                source: "ipc-bridge",
+            });
+        };
+        window.mainApi.on("widget-event:broadcast", ipcHandler);
+
+        return () => {
+            if (window.mainApi?.removeListener) {
+                window.mainApi.removeListener(
+                    "widget-event:broadcast",
+                    ipcHandler
+                );
+            }
+        };
+    }, [addEntry]);
 
     useEffect(() => {
         if (autoScroll && listRef.current) {
