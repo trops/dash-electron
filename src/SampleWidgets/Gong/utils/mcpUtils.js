@@ -210,7 +210,7 @@ export function parseGongTextEntries(text) {
  * Parse a markdown table into an array of objects keyed by header names.
  * Normalises common Gong column names into the fields CallList expects.
  */
-function parseMarkdownTable(text) {
+export function parseMarkdownTable(text) {
     const lines = text.split("\n").map((l) => l.trim());
 
     // Find header row: first line that starts and ends with |
@@ -260,7 +260,7 @@ function parseMarkdownTable(text) {
 }
 
 /** Convert "64m" or "1h 4m" style durations to seconds. */
-function parseDuration(str) {
+export function parseDuration(str) {
     if (!str) return null;
     const m = str.match(/(\d+)\s*m/);
     const h = str.match(/(\d+)\s*h/);

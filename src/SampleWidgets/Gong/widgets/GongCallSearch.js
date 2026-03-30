@@ -59,7 +59,7 @@ function GongCallSearchContent({ title, defaultDaysBack }) {
         (call) => {
             const id = call.id || call.metaData?.id || call.callId || "";
             setSelectedCallId(id);
-            publishEvent("callSelected", {
+            const payload = {
                 id,
                 title:
                     call.title ||
@@ -70,7 +70,17 @@ function GongCallSearchContent({ title, defaultDaysBack }) {
                 date: call.started || call.date || call.metaData?.started || "",
                 duration: call.duration ?? call.metaData?.duration ?? null,
                 scope: call.scope || "",
-            });
+            };
+            try {
+                publishEvent("callSelected", payload);
+            } catch (err) {
+                console.error(
+                    "[GongCallSearch] Failed to publish callSelected event:",
+                    err,
+                    "Payload:",
+                    payload
+                );
+            }
         },
         [publishEvent]
     );
