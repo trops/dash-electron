@@ -1,6 +1,9 @@
 import { AttributeExplorer } from "./AttributeExplorer";
 
-export default {
+const widgetDefinition = {
+    packageName: "algolia-se-tools",
+    scope: "trops",
+    id: "trops.algolia-se-tools.AttributeExplorer",
     name: "AttributeExplorer",
     displayName: "Attribute Explorer",
     description:
@@ -8,6 +11,7 @@ export default {
     component: AttributeExplorer,
     canHaveChildren: false,
     workspace: "algolia-se-tools-workspace",
+    package: "Algolia SE Tools",
     author: "Dash Team",
     icon: "table-cells",
     type: "widget",
@@ -43,3 +47,4 @@ export default {
         },
     },
 };
+export default widgetDefinition;

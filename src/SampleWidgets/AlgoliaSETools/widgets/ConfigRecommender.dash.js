@@ -1,6 +1,9 @@
 import { ConfigRecommender } from "./ConfigRecommender";
 
-export default {
+const widgetDefinition = {
+    packageName: "algolia-se-tools",
+    scope: "trops",
+    id: "trops.algolia-se-tools.ConfigRecommender",
     name: "ConfigRecommender",
     displayName: "Config Recommender",
     description:
@@ -8,6 +11,7 @@ export default {
     component: ConfigRecommender,
     canHaveChildren: false,
     workspace: "algolia-se-tools-workspace",
+    package: "Algolia SE Tools",
     author: "Dash Team",
     icon: "lightbulb",
     type: "widget",
@@ -43,3 +47,4 @@ export default {
         },
     },
 };
+export default widgetDefinition;
