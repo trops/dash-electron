@@ -56,6 +56,7 @@ const CATEGORY_MAP = {
     Filesystem: "utilities",
     Clock: "utilities",
     Google: "productivity",
+    AlgoliaSETools: "development",
 };
 
 // ── CLI args ──────────────────────────────────────────────────────────
@@ -183,16 +184,24 @@ function parseDashConfig(filePath) {
 // ── Widget ID injection ───────────────────────────────────────────────
 
 /**
- * Write scoped id, scope, and packageName fields into each .dash.js file
- * in the given widget directory. Called after auth so scope is known.
+ * Write scoped id, scope, packageName, and package fields into each
+ * .dash.js file in the given widget directory.
  *
- * @param {string} widgetDirName - Widget directory name under src/Widgets/
+ * Called BEFORE building so the injected fields are baked into the
+ * Rollup CJS bundle and the configs copied by packageZip.js.
+ *
+ * Handles two export patterns:
+ *   1. "const widgetDefinition = { ... }; export default widgetDefinition;"
+ *   2. "export default { ... };"  — converts to pattern 1 first
+ *
+ * @param {string} widgetDirName - Widget directory name under WIDGETS_DIR
  * @param {string} scope - Authenticated registry username
+ * @param {string} displayName - Human-readable package name (e.g., "Algolia SE Tools")
  */
-function writeWidgetIds(widgetDirName, scope) {
+function writeWidgetIds(widgetDirName, scope, displayName) {
     const widgetDir = path.join(WIDGETS_DIR, widgetDirName);
     const dashConfigPaths = collectDashConfigs(widgetDir);
-    const pkgName = toKebabCase(widgetDirName);
+    const pkgName = customName || toKebabCase(widgetDirName);
 
     for (const configPath of dashConfigPaths) {
         const widgetName = path.basename(configPath, ".dash.js");
@@ -201,11 +210,31 @@ function writeWidgetIds(widgetDirName, scope) {
         let content = fs.readFileSync(configPath, "utf8");
         const original = content;
 
-        // Fields to inject/update after "const widgetDefinition = {"
+        // Convert "export default { ... };" to "const widgetDefinition = { ... }; export default widgetDefinition;"
+        // so we have a consistent pattern to inject into.
+        if (
+            /export\s+default\s+\{/.test(content) &&
+            !/const\s+widgetDefinition/.test(content)
+        ) {
+            content = content.replace(
+                /export\s+default\s+\{/,
+                "const widgetDefinition = {"
+            );
+            // Replace the final "};" with "};\nexport default widgetDefinition;"
+            const lastBrace = content.lastIndexOf("};");
+            if (lastBrace !== -1) {
+                content =
+                    content.slice(0, lastBrace + 2) +
+                    "\nexport default widgetDefinition;\n";
+            }
+        }
+
+        // Fields to inject/update
         const fields = [
-            { key: "id", value: scopedId },
-            { key: "scope", value: scope },
             { key: "packageName", value: pkgName },
+            { key: "scope", value: scope },
+            { key: "id", value: scopedId },
+            { key: "package", value: displayName },
         ];
 
         for (const { key, value } of fields) {
@@ -218,7 +247,7 @@ function writeWidgetIds(widgetDirName, scope) {
                 // Update existing field
                 content = content.replace(existingPattern, replacement);
             } else {
-                // Insert after "const widgetDefinition = {" line
+                // Insert after "const widgetDefinition = {" or "const widgetDefinition = {\n"
                 content = content.replace(
                     /(const widgetDefinition = \{)\n/,
                     `$1\n    ${key}: "${value}",\n`
@@ -533,12 +562,17 @@ async function main() {
     const scope = await getScope(REGISTRY_BASE_URL, token);
     console.log(`Authenticated as: ${scope}`);
 
-    // Write scoped IDs into .dash.js files
-    for (const { dirName } of packages) {
-        writeWidgetIds(dirName, scope);
+    // Write scoped IDs into .dash.js files BEFORE building
+    // so the injected fields are baked into the Rollup CJS bundle.
+    for (const { dirName, manifest } of packages) {
+        writeWidgetIds(
+            dirName,
+            scope,
+            manifest.displayName || toTitleCase(dirName)
+        );
     }
 
-    // Rebuild manifests with real scope
+    // Rebuild manifests with real scope (picks up injected fields)
     for (const pkg of packages) {
         pkg.manifest = buildManifest(pkg.dirName, scope);
     }
