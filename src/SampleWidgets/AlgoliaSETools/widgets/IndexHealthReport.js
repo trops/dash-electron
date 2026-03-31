@@ -32,33 +32,29 @@ function IndexHealthReportContent({ title }) {
     const [report, setReport] = useState(null);
     const [error, setError] = useState(null);
 
-    // Load index list
+    // Load index list via invoke (returns data directly)
     useEffect(() => {
         if (!pc?.providerHash) return;
+        let cancelled = false;
         setLoadingIndices(true);
 
-        const handleComplete = (_event, data) => {
-            setIndices(data || []);
-            setLoadingIndices(false);
-        };
-        const handleError = (_event, data) => {
-            setError(data?.error || "Failed to load indices");
-            setLoadingIndices(false);
-        };
-
-        window.mainApi.on("algolia-list-indices-complete", handleComplete);
-        window.mainApi.on("algolia-list-indices-error", handleError);
-        window.mainApi.algolia.listIndices({ ...pc, cache: true });
+        window.mainApi.algolia
+            .listIndices({ ...pc, cache: true })
+            .then((data) => {
+                if (!cancelled) {
+                    setIndices(Array.isArray(data) ? data : []);
+                    setLoadingIndices(false);
+                }
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    setError(err?.message || "Failed to load indices");
+                    setLoadingIndices(false);
+                }
+            });
 
         return () => {
-            window.mainApi.removeListener(
-                "algolia-list-indices-complete",
-                handleComplete
-            );
-            window.mainApi.removeListener(
-                "algolia-list-indices-error",
-                handleError
-            );
+            cancelled = true;
         };
     }, [pc?.providerHash]); // eslint-disable-line react-hooks/exhaustive-deps
 
