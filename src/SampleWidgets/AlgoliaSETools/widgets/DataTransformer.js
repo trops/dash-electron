@@ -7,7 +7,7 @@
  *
  * @package AlgoliaSETools
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Panel, SubHeading2 } from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 import { parseAny, detectFormat } from "../utils/dataParser";
@@ -69,35 +69,50 @@ function DataTransformerContent({ title }) {
         }
     }, [inputText]);
 
-    const handleFileUpload = useCallback(async () => {
-        try {
-            const result = await window.mainApi.dialog.showDialog({
-                allowFile: true,
-                extensions: ["csv", "tsv", "json", "jsonl", "ndjson", "txt"],
-            });
-            if (result?.path) {
-                const text = await window.mainApi.file.read(result.path);
-                if (text) {
-                    setInputText(text);
-                    // Auto-parse after loading
-                    setParseError(null);
-                    setExportOutput("");
-                    const parsed = parseAny(text);
-                    setDetectedFormat(parsed.format);
-                    setColumns(parsed.columns);
-                    setRows(parsed.rows);
-                    setTypeMap({});
-                    setColumnNames({});
-                    if (parsed.columns.length === 0 && text.trim()) {
-                        setParseError(
-                            "Could not detect format. Supported: CSV, TSV, JSON, NDJSON."
-                        );
-                    }
+    const fileInputRef = useRef(null);
+
+    const handleFileUpload = useCallback(() => {
+        fileInputRef.current?.click();
+    }, []);
+
+    const handleFileSelected = useCallback((e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target.result;
+            if (!text) return;
+
+            setInputText(text);
+            setParseError(null);
+            setExportOutput("");
+            setCopied(false);
+            try {
+                const parsed = parseAny(text);
+                setDetectedFormat(parsed.format);
+                setColumns(parsed.columns);
+                setRows(parsed.rows);
+                setTypeMap({});
+                setColumnNames({});
+                if (parsed.columns.length === 0 && text.trim()) {
+                    setParseError(
+                        "Could not detect format. Supported: CSV, TSV, JSON, NDJSON."
+                    );
                 }
+            } catch (err) {
+                setParseError(err.message);
+                setColumns([]);
+                setRows([]);
             }
-        } catch (err) {
-            setParseError("File read error: " + err.message);
-        }
+        };
+        reader.onerror = () => {
+            setParseError("Failed to read file.");
+        };
+        reader.readAsText(file);
+
+        // Reset input so the same file can be re-selected
+        e.target.value = "";
     }, []);
 
     const handleTypeChange = useCallback((col, type) => {
@@ -169,6 +184,15 @@ function DataTransformerContent({ title }) {
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
             <SubHeading2 title={title} />
+
+            {/* Hidden file input */}
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.tsv,.json,.jsonl,.ndjson,.txt"
+                onChange={handleFileSelected}
+                className="hidden"
+            />
 
             {/* Input Section */}
             <div className="space-y-2">
