@@ -7,7 +7,7 @@
  *
  * @package AlgoliaSETools
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Panel, SubHeading2 } from "@trops/dash-react";
 import {
     Widget,
@@ -37,6 +37,7 @@ function ConfigRecommenderContent({ title, sampleSize = "100" }) {
     const [analyzing, setAnalyzing] = useState(false);
     const [recommendations, setRecommendations] = useState(null);
     const [error, setError] = useState(null);
+    const fromEventRef = useRef(false);
 
     // Load index list via invoke (returns data directly)
     useEffect(() => {
@@ -73,7 +74,10 @@ function ConfigRecommenderContent({ title, sampleSize = "100" }) {
             listen(listeners, {
                 indexSelected: (data) => {
                     const payload = data.message || data;
-                    if (payload.name) setSelectedIndex(payload.name);
+                    if (payload.name) {
+                        fromEventRef.current = true;
+                        setSelectedIndex(payload.name);
+                    }
                 },
             });
         }
@@ -115,6 +119,14 @@ function ConfigRecommenderContent({ title, sampleSize = "100" }) {
             setAnalyzing(false);
         }
     }, [pc, selectedIndex, sampleSize]);
+
+    // Auto-trigger analysis when index is set via indexSelected event
+    useEffect(() => {
+        if (fromEventRef.current && selectedIndex) {
+            fromEventRef.current = false;
+            handleAnalyze();
+        }
+    }, [selectedIndex, handleAnalyze]);
 
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
