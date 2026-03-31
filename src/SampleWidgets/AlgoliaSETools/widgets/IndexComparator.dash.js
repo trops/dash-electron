@@ -1,6 +1,9 @@
 import { IndexComparator } from "./IndexComparator";
 
-export default {
+const widgetDefinition = {
+    packageName: "algolia-se-tools",
+    scope: "trops",
+    id: "trops.algolia-se-tools.IndexComparator",
     name: "IndexComparator",
     displayName: "Index Comparator",
     description:
@@ -8,6 +11,7 @@ export default {
     component: IndexComparator,
     canHaveChildren: false,
     workspace: "algolia-se-tools-workspace",
+    package: "Algolia SE Tools",
     author: "Dash Team",
     icon: "code-compare",
     type: "widget",
@@ -30,3 +34,4 @@ export default {
         },
     },
 };
+export default widgetDefinition;

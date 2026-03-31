@@ -1,6 +1,9 @@
 import { SearchPlayground } from "./SearchPlayground";
 
-export default {
+const widgetDefinition = {
+    packageName: "algolia-se-tools",
+    scope: "trops",
+    id: "trops.algolia-se-tools.SearchPlayground",
     name: "SearchPlayground",
     displayName: "Search Playground",
     description:
@@ -8,6 +11,7 @@ export default {
     component: SearchPlayground,
     canHaveChildren: false,
     workspace: "algolia-se-tools-workspace",
+    package: "Algolia SE Tools",
     author: "Dash Team",
     icon: "flask-vial",
     type: "widget",
@@ -30,3 +34,4 @@ export default {
         },
     },
 };
+export default widgetDefinition;

@@ -1,6 +1,9 @@
 import { IndexHealthReport } from "./IndexHealthReport";
 
-export default {
+const widgetDefinition = {
+    packageName: "algolia-se-tools",
+    scope: "trops",
+    id: "trops.algolia-se-tools.IndexHealthReport",
     name: "IndexHealthReport",
     displayName: "Index Health Report",
     description:
@@ -8,6 +11,7 @@ export default {
     component: IndexHealthReport,
     canHaveChildren: false,
     workspace: "algolia-se-tools-workspace",
+    package: "Algolia SE Tools",
     author: "Dash Team",
     icon: "clipboard-check",
     type: "widget",
@@ -30,3 +34,4 @@ export default {
         },
     },
 };
+export default widgetDefinition;

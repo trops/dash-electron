@@ -1,6 +1,9 @@
 import { DataTransformer } from "./DataTransformer";
 
-export default {
+const widgetDefinition = {
+    packageName: "algolia-se-tools",
+    scope: "trops",
+    id: "trops.algolia-se-tools.DataTransformer",
     name: "DataTransformer",
     displayName: "Data Transformer",
     description:
@@ -8,6 +11,7 @@ export default {
     component: DataTransformer,
     canHaveChildren: false,
     workspace: "algolia-se-tools-workspace",
+    package: "Algolia SE Tools",
     author: "Dash Team",
     icon: "shuffle",
     type: "widget",
@@ -27,3 +31,4 @@ export default {
         },
     },
 };
+export default widgetDefinition;

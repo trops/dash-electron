@@ -1,6 +1,9 @@
 import { RelevanceTester } from "./RelevanceTester";
 
-export default {
+const widgetDefinition = {
+    packageName: "algolia-se-tools",
+    scope: "trops",
+    id: "trops.algolia-se-tools.RelevanceTester",
     name: "RelevanceTester",
     displayName: "Relevance Tester",
     description:
@@ -8,6 +11,7 @@ export default {
     component: RelevanceTester,
     canHaveChildren: false,
     workspace: "algolia-se-tools-workspace",
+    package: "Algolia SE Tools",
     author: "Dash Team",
     icon: "bullseye",
     type: "widget",
@@ -30,3 +34,4 @@ export default {
         },
     },
 };
+export default widgetDefinition;
