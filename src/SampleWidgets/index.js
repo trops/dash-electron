@@ -11,3 +11,4 @@ export * from "./Algolia";
 export * from "./AlgoliaSearch";
 export * from "./Filesystem";
 export * from "./Clock";
+export * from "./AlgoliaSETools";
