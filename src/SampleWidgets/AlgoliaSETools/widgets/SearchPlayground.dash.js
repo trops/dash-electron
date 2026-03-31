@@ -16,7 +16,7 @@ const widgetDefinition = {
     icon: "flask-vial",
     type: "widget",
     events: [],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },

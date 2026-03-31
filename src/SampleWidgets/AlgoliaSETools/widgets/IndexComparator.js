@@ -11,6 +11,7 @@ import { Panel, SubHeading2 } from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
+    useWidgetEvents,
     useProviderClient,
 } from "@trops/dash-core";
 import { diffSettings } from "../utils/settingsDiff";
@@ -18,6 +19,7 @@ import { SettingsDiffTable } from "./components/SettingsDiffTable";
 
 function IndexComparatorContent({ title }) {
     const { hasProvider, getProvider } = useWidgetProviders();
+    const { listen, listeners } = useWidgetEvents();
     const hasCredentials = hasProvider("algolia");
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
@@ -55,6 +57,21 @@ function IndexComparatorContent({ title }) {
             cancelled = true;
         };
     }, [pc?.providerHash]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Listen for indexSelected events from IndexSelector widget
+    useEffect(() => {
+        if (!listeners || !listen) return;
+        const hasListeners =
+            typeof listeners === "object" && Object.keys(listeners).length > 0;
+        if (hasListeners) {
+            listen(listeners, {
+                indexSelected: (data) => {
+                    const payload = data.message || data;
+                    if (payload.name) setIndexA(payload.name);
+                },
+            });
+        }
+    }, [listeners, listen]);
 
     const handleCompare = useCallback(async () => {
         if (!pc?.providerHash || !indexA || !indexB) return;

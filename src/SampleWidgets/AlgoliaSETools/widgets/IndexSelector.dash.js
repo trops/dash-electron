@@ -1,22 +1,22 @@
-import { IndexComparator } from "./IndexComparator";
+import { IndexSelector } from "./IndexSelector";
 
 const widgetDefinition = {
     packageName: "algolia-se-tools",
     scope: "trops",
-    id: "trops.algolia-se-tools.IndexComparator",
-    name: "IndexComparator",
-    displayName: "Index Comparator",
+    id: "trops.algolia-se-tools.IndexSelector",
+    name: "IndexSelector",
+    displayName: "Index Selector",
     description:
-        "Side-by-side comparison of two Algolia indices' settings. Highlights differences for prod vs staging, before vs after audits.",
-    component: IndexComparator,
+        "Compact index picker that broadcasts an indexSelected event. Other widgets can listen for this event to sync their active index without loading indices independently.",
+    component: IndexSelector,
     canHaveChildren: false,
     workspace: "algolia-se-tools-workspace",
     package: "Algolia SE Tools",
     author: "Dash Team",
-    icon: "code-compare",
+    icon: "database",
     type: "widget",
-    events: [],
-    eventHandlers: ["indexSelected"],
+    events: ["indexSelected"],
+    eventHandlers: [],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },
@@ -28,7 +28,7 @@ const widgetDefinition = {
     userConfig: {
         title: {
             type: "text",
-            defaultValue: "Index Comparator",
+            defaultValue: "Index Selector",
             displayName: "Title",
             required: false,
         },
