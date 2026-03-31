@@ -242,13 +242,17 @@ function writeWidgetIds(widgetDirName, scope, displayName) {
             const existingPattern = new RegExp(
                 `(\\s+)${key}:\\s*["'][^"']*["'],?\\s*\\n`
             );
-            const replacement = `$1${key}: "${value}",\n`;
 
             if (existingPattern.test(content)) {
-                // Update existing field
-                content = content.replace(existingPattern, replacement);
+                // Field exists — only update id/scope/packageName (always authoritative).
+                // Preserve manually-set fields like "package" (display name).
+                if (key === "id" || key === "scope" || key === "packageName") {
+                    const replacement = `$1${key}: "${value}",\n`;
+                    content = content.replace(existingPattern, replacement);
+                }
+                // else: field exists, keep the existing value
             } else {
-                // Insert after "const widgetDefinition = {" or "const widgetDefinition = {\n"
+                // Field missing — inject it
                 content = content.replace(
                     /(const widgetDefinition = \{)\n/,
                     `$1\n    ${key}: "${value}",\n`
