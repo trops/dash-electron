@@ -74,6 +74,7 @@ function toHex(name) {
 function toKebabCase(str) {
     return str
         .trim()
+        .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
         .replace(/([a-z])([A-Z])/g, "$1-$2")
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
