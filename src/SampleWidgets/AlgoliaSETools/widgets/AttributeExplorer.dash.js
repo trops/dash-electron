@@ -1,0 +1,45 @@
+import { AttributeExplorer } from "./AttributeExplorer";
+
+export default {
+    name: "AttributeExplorer",
+    displayName: "Attribute Explorer",
+    description:
+        "Scan Algolia index records to discover all attributes, their types, cardinality, fill rates, and sample values. Helps SEs understand customer data before configuring.",
+    component: AttributeExplorer,
+    canHaveChildren: false,
+    workspace: "algolia-se-tools-workspace",
+    author: "Dash Team",
+    icon: "table-cells",
+    type: "widget",
+    events: [],
+    eventHandlers: [],
+    providers: [
+        { type: "algolia", providerClass: "credential", required: true },
+        { type: "algolia", providerClass: "api", required: true },
+    ],
+    styles: {
+        backgroundColor: "bg-gray-900",
+        borderColor: "border-indigo-600",
+    },
+    userConfig: {
+        title: {
+            type: "text",
+            defaultValue: "Attribute Explorer",
+            displayName: "Title",
+            required: false,
+        },
+        sampleSize: {
+            type: "select",
+            defaultValue: "100",
+            displayName: "Sample Size",
+            instructions: "Number of records to sample for analysis",
+            options: [
+                { label: "50 records", value: "50" },
+                { label: "100 records", value: "100" },
+                { label: "250 records", value: "250" },
+                { label: "500 records", value: "500" },
+                { label: "1000 records", value: "1000" },
+            ],
+        },
+    },
+};
