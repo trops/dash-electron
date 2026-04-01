@@ -59,40 +59,34 @@ function AlgoliaAnalyticsContent({ id, title, defaultIndex, defaultDays = 7 }) {
     const [topCountries, setTopCountries] = useState([]);
     const [topFilters, setTopFilters] = useState([]);
 
-    // Load indices via event-based IPC (same pattern as AlgoliaIndexDashboardWidget)
+    // Load indices via invoke-based IPC
     useEffect(() => {
         if (!pc?.providerHash) return;
-
+        let cancelled = false;
         setIndicesLoading(true);
 
-        const handleComplete = (_event, data) => {
-            const items = Array.isArray(data) ? data : [];
-            setIndices(items);
-            if (!selectedIndex && items.length > 0) {
-                const firstName = items[0]?.name || items[0];
-                setSelectedIndex(firstName);
-            }
-            setIndicesLoading(false);
-        };
-
-        const handleError = (_event, data) => {
-            setErrorMsg(data?.error || "Failed to load indices");
-            setIndicesLoading(false);
-        };
-
-        window.mainApi.on("algolia-list-indices-complete", handleComplete);
-        window.mainApi.on("algolia-list-indices-error", handleError);
-        window.mainApi.algolia.listIndices({ ...pc, cache: true });
+        window.mainApi.algolia
+            .listIndices({ ...pc, cache: true })
+            .then((data) => {
+                if (!cancelled) {
+                    const items = Array.isArray(data) ? data : [];
+                    setIndices(items);
+                    if (!selectedIndex && items.length > 0) {
+                        const firstName = items[0]?.name || items[0];
+                        setSelectedIndex(firstName);
+                    }
+                    setIndicesLoading(false);
+                }
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    setErrorMsg(err?.message || "Failed to load indices");
+                    setIndicesLoading(false);
+                }
+            });
 
         return () => {
-            window.mainApi.removeListener(
-                "algolia-list-indices-complete",
-                handleComplete
-            );
-            window.mainApi.removeListener(
-                "algolia-list-indices-error",
-                handleError
-            );
+            cancelled = true;
         };
     }, [pc?.providerHash]); // eslint-disable-line react-hooks/exhaustive-deps
 
