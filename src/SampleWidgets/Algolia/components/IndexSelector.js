@@ -13,32 +13,26 @@ export function IndexSelector({ pc, selectedIndex, onSelect }) {
 
     useEffect(() => {
         if (!pc?.providerHash) return;
+        let cancelled = false;
         setLoading(true);
 
-        const handleComplete = (_event, data) => {
-            setIndices(data || []);
-            setLoading(false);
-            if (data?.length > 0 && !selectedIndex) {
-                onSelect(data[0].name);
-            }
-        };
-        const handleError = () => {
-            setLoading(false);
-        };
-
-        window.mainApi.on("algolia-list-indices-complete", handleComplete);
-        window.mainApi.on("algolia-list-indices-error", handleError);
-        window.mainApi.algolia.listIndices({ ...pc, cache: true });
+        window.mainApi.algolia
+            .listIndices({ ...pc, cache: true })
+            .then((data) => {
+                if (cancelled) return;
+                const list = Array.isArray(data) ? data : [];
+                setIndices(list);
+                setLoading(false);
+                if (list.length > 0 && !selectedIndex) {
+                    onSelect(list[0].name);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setLoading(false);
+            });
 
         return () => {
-            window.mainApi.removeListener(
-                "algolia-list-indices-complete",
-                handleComplete
-            );
-            window.mainApi.removeListener(
-                "algolia-list-indices-error",
-                handleError
-            );
+            cancelled = true;
         };
     }, [pc?.providerHash]); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -34,40 +34,38 @@ function AlgoliaDirectSearchContent({ title, defaultIndex, hitsPerPage = 10 }) {
     // Load index list on mount
     useEffect(() => {
         if (!pc?.providerHash) return;
+        let cancelled = false;
         setLoadingIndices(true);
 
-        const handleComplete = (_event, data) => {
-            setIndices(data || []);
-            setLoadingIndices(false);
-            if (data?.length > 0 && !selectedIndex) {
-                if (defaultIndex) {
-                    const found = data.find((idx) => idx.name === defaultIndex);
-                    if (found) {
-                        setSelectedIndex(defaultIndex);
-                        return;
+        window.mainApi.algolia
+            .listIndices({ ...pc })
+            .then((data) => {
+                if (!cancelled) {
+                    setIndices(Array.isArray(data) ? data : []);
+                    setLoadingIndices(false);
+                    if (data?.length > 0 && !selectedIndex) {
+                        if (defaultIndex) {
+                            const found = data.find(
+                                (idx) => idx.name === defaultIndex
+                            );
+                            if (found) {
+                                setSelectedIndex(defaultIndex);
+                                return;
+                            }
+                        }
+                        setSelectedIndex(data[0].name);
                     }
                 }
-                setSelectedIndex(data[0].name);
-            }
-        };
-        const handleError = (_event, data) => {
-            setError(data?.error || "Failed to load indices");
-            setLoadingIndices(false);
-        };
-
-        window.mainApi.on("algolia-list-indices-complete", handleComplete);
-        window.mainApi.on("algolia-list-indices-error", handleError);
-        window.mainApi.algolia.listIndices({ ...pc });
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    setError(err?.message || "Failed to load indices");
+                    setLoadingIndices(false);
+                }
+            });
 
         return () => {
-            window.mainApi.removeListener(
-                "algolia-list-indices-complete",
-                handleComplete
-            );
-            window.mainApi.removeListener(
-                "algolia-list-indices-error",
-                handleError
-            );
+            cancelled = true;
         };
     }, [pc?.providerHash]); // eslint-disable-line react-hooks/exhaustive-deps
 

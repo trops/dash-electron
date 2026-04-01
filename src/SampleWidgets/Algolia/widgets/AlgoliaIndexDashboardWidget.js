@@ -34,40 +34,26 @@ function AlgoliaIndexDashboardContent({ title }) {
             setLoading(true);
             setError(null);
 
-            const handleComplete = (_event, data) => {
-                setIndices(data || []);
-                setLoading(false);
-            };
-            const handleError = (_event, data) => {
-                setError(data?.error || "Failed to load indices");
-                setLoading(false);
-            };
-
-            window.mainApi.on("algolia-list-indices-complete", handleComplete);
-            window.mainApi.on("algolia-list-indices-error", handleError);
-            window.mainApi.algolia.listIndices({
-                ...pc,
-                cache: true,
-                forceRefresh,
-            });
-
-            return () => {
-                window.mainApi.removeListener(
-                    "algolia-list-indices-complete",
-                    handleComplete
-                );
-                window.mainApi.removeListener(
-                    "algolia-list-indices-error",
-                    handleError
-                );
-            };
+            window.mainApi.algolia
+                .listIndices({
+                    ...pc,
+                    cache: true,
+                    forceRefresh,
+                })
+                .then((data) => {
+                    setIndices(Array.isArray(data) ? data : []);
+                    setLoading(false);
+                })
+                .catch((err) => {
+                    setError(err?.message || "Failed to load indices");
+                    setLoading(false);
+                });
         },
         [pc?.providerHash] // eslint-disable-line react-hooks/exhaustive-deps
     );
 
     useEffect(() => {
-        const cleanup = loadIndices();
-        return cleanup;
+        loadIndices();
     }, [loadIndices]);
 
     const handleSort = (field) => {
