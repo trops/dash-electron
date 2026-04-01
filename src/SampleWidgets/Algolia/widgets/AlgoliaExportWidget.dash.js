@@ -16,7 +16,7 @@ const widgetDefinition = {
         "Export Algolia index records to a JSON file with progress tracking.",
     type: "widget",
     events: [],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },

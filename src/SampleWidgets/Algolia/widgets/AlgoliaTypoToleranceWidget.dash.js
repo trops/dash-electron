@@ -16,7 +16,7 @@ const widgetDefinition = {
         "Configure typo tolerance — tolerance mode, minimum word sizes, numeric tokens, and per-attribute disabling.",
     type: "widget",
     events: [],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },

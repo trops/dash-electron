@@ -16,7 +16,7 @@ const widgetDefinition = {
         "Configure de-duplication — group results by attribute to avoid showing duplicates.",
     type: "widget",
     events: [],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },

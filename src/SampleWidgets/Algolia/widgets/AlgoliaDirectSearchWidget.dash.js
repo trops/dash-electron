@@ -16,7 +16,7 @@ const widgetDefinition = {
         "Search Algolia indices directly via IPC with paginated results and expandable records.",
     type: "widget",
     events: [],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },

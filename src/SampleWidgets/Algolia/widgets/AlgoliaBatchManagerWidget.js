@@ -14,6 +14,7 @@ import {
     Widget,
     useWidgetProviders,
     useProviderClient,
+    useWidgetEvents,
 } from "@trops/dash-core";
 
 function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
@@ -36,6 +37,22 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
     const hasCredentials = hasProvider("algolia");
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
+    const { listen, listeners } = useWidgetEvents();
+
+    // Listen for indexSelected events from IndexSelector widget
+    useEffect(() => {
+        if (!listeners || !listen) return;
+        const hasListeners =
+            typeof listeners === "object" && Object.keys(listeners).length > 0;
+        if (hasListeners) {
+            listen(listeners, {
+                indexSelected: (data) => {
+                    const payload = data.message || data;
+                    if (payload.name) setSelectedIndex(payload.name);
+                },
+            });
+        }
+    }, [listeners, listen]);
 
     // Load index list
     useEffect(() => {

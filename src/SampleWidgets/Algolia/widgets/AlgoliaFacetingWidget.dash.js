@@ -16,7 +16,7 @@ const widgetDefinition = {
         "Configure faceting attributes — plain, filterOnly(), or searchable() modifiers for each attribute.",
     type: "widget",
     events: [],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },

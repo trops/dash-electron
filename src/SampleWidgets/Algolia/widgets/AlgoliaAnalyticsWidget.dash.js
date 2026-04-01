@@ -16,7 +16,7 @@ const widgetDefinition = {
         "Search analytics and monitoring — top searches, no-results, click positions, geographic distribution.",
     type: "widget",
     events: ["algolia-index-selected"],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },

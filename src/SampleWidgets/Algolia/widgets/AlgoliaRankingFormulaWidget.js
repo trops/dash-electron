@@ -13,6 +13,7 @@ import {
     Widget,
     useWidgetProviders,
     useProviderClient,
+    useWidgetEvents,
 } from "@trops/dash-core";
 import { useAlgoliaSettings } from "../hooks/useAlgoliaSettings";
 import { IndexSelector } from "../components/IndexSelector";
@@ -38,6 +39,7 @@ function AlgoliaRankingFormulaContent({ title }) {
     const hasCredentials = hasProvider("algolia");
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
+    const { listen, listeners } = useWidgetEvents();
 
     const [selectedIndex, setSelectedIndex] = useState("");
     const { settings, loading, saving, error, updateSettings } =
@@ -48,6 +50,21 @@ function AlgoliaRankingFormulaContent({ title }) {
     const [saveSuccess, setSaveSuccess] = useState(false);
     const dragItem = useRef(null);
     const dragOverItem = useRef(null);
+
+    // Listen for indexSelected events from IndexSelector widget
+    useEffect(() => {
+        if (!listeners || !listen) return;
+        const hasListeners =
+            typeof listeners === "object" && Object.keys(listeners).length > 0;
+        if (hasListeners) {
+            listen(listeners, {
+                indexSelected: (data) => {
+                    const payload = data.message || data;
+                    if (payload.name) setSelectedIndex(payload.name);
+                },
+            });
+        }
+    }, [listeners, listen]);
 
     useEffect(() => {
         if (!settings) return;

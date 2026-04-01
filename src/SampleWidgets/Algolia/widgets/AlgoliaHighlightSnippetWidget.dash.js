@@ -16,7 +16,7 @@ const widgetDefinition = {
         "Configure search highlighting and snippeting — highlight tags, snippet attributes, ellipsis text, and live preview.",
     type: "widget",
     events: [],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },
