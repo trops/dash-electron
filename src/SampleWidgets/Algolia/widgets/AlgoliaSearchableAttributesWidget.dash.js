@@ -16,7 +16,7 @@ const widgetDefinition = {
         "Configure searchable attributes — drag-to-reorder priority and toggle unordered() modifier.",
     type: "widget",
     events: [],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },

@@ -16,7 +16,7 @@ const widgetDefinition = {
         "Configure pagination limits — hits per page, max pagination depth, and facet value counts.",
     type: "widget",
     events: [],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },

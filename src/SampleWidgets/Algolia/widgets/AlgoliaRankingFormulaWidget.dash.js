@@ -16,7 +16,7 @@ const widgetDefinition = {
         "Configure the ranking formula — drag-to-reorder the 8 ranking criteria that determine result order.",
     type: "widget",
     events: [],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },

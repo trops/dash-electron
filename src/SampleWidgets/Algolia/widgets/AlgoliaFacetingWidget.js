@@ -13,6 +13,7 @@ import {
     Widget,
     useWidgetProviders,
     useProviderClient,
+    useWidgetEvents,
 } from "@trops/dash-core";
 import { useAlgoliaSettings } from "../hooks/useAlgoliaSettings";
 import { IndexSelector } from "../components/IndexSelector";
@@ -46,6 +47,7 @@ function AlgoliaFacetingContent({ title }) {
     const hasCredentials = hasProvider("algolia");
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
+    const { listen, listeners } = useWidgetEvents();
 
     const [selectedIndex, setSelectedIndex] = useState("");
     const { settings, loading, saving, error, updateSettings } =
@@ -56,6 +58,21 @@ function AlgoliaFacetingContent({ title }) {
     const [newModifier, setNewModifier] = useState("plain");
     const [dirty, setDirty] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
+
+    // Listen for indexSelected events from IndexSelector widget
+    useEffect(() => {
+        if (!listeners || !listen) return;
+        const hasListeners =
+            typeof listeners === "object" && Object.keys(listeners).length > 0;
+        if (hasListeners) {
+            listen(listeners, {
+                indexSelected: (data) => {
+                    const payload = data.message || data;
+                    if (payload.name) setSelectedIndex(payload.name);
+                },
+            });
+        }
+    }, [listeners, listen]);
 
     useEffect(() => {
         if (!settings) return;

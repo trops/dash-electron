@@ -16,7 +16,7 @@ const widgetDefinition = {
         "Configure custom ranking — drag-to-reorder business metrics with asc/desc modifiers.",
     type: "widget",
     events: [],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },

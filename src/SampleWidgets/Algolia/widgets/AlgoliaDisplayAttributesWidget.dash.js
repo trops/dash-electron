@@ -16,7 +16,7 @@ const widgetDefinition = {
         "Configure which attributes are returned in results and which are hidden from the API.",
     type: "widget",
     events: [],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },

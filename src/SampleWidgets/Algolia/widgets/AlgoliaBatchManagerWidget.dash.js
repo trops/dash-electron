@@ -16,7 +16,7 @@ const widgetDefinition = {
         "Bulk upload and update Algolia records from JSON files with batch splitting and progress tracking.",
     type: "widget",
     events: [],
-    eventHandlers: [],
+    eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
         { type: "algolia", providerClass: "api", required: true },
