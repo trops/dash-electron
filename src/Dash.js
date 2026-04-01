@@ -509,6 +509,9 @@ class App extends React.Component {
         }
 
         window.dispatchEvent(new Event("dash:widgets-updated"));
+
+        // Force dashboard to remount with updated widget components
+        this.setState((prev) => ({ stageKey: prev.stageKey + 1 }));
     };
 
     handleWidgetUninstalled = ({ widgetName }) => {
