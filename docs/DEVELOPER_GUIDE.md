@@ -424,6 +424,34 @@ Dashboards use a grid-based layout system. In edit mode:
 -   Add/remove rows and columns
 -   Nest containers for complex layouts
 
+#### Multi-Page Dashboards
+
+Dashboards can have multiple pages, each with its own independent grid layout:
+
+-   In **edit mode**, a page tab bar appears below the dashboard header
+-   Click **"+ Add Page"** to create a new page (starts with a 1x1 grid)
+-   Each page has its own rows, columns, and widgets
+-   **Switch pages** by clicking tabs; **rename** by double-clicking; **reorder** by dragging
+-   All widgets across all pages stay mounted, so event pub/sub works cross-page
+-   Single-page dashboards (default) show no tabs until a page is added
+
+**Workspace data model with pages:**
+
+```json
+{
+    "id": 123,
+    "name": "My Dashboard",
+    "pages": [
+        { "id": "page-1", "name": "Overview", "order": 0, "layout": [...] },
+        { "id": "page-2", "name": "Config", "order": 1, "layout": [...] }
+    ],
+    "activePageId": "page-1",
+    "layout": []
+}
+```
+
+When `pages` is empty, the workspace uses the root `layout` array (backward compatible). When a user adds their first page, the existing layout migrates to `pages[0]`.
+
 #### Event Wiring
 
 Connect widgets through the pub/sub system:

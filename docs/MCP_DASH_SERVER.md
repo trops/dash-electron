@@ -663,6 +663,32 @@ Resources provide read-only snapshots of application state. MCP clients can read
 11. apply_theme("theme-name")                             → apply the theme
 ```
 
+### Multi-Page Dashboards
+
+Dashboards support multiple pages, each with its own grid layout. Pages are navigated via tabs in the UI. Currently, pages are managed through the layout builder UI (edit mode):
+
+-   **Add Page**: Click "+" in the page tab bar (edit mode)
+-   **Switch Page**: Click a tab
+-   **Rename Page**: Double-click a tab
+-   **Reorder Pages**: Drag tabs
+-   **Delete Page**: Click "x" on a tab (minimum 1 page)
+
+When adding a page to a single-page dashboard, the existing layout becomes Page 1 and a new empty Page 2 is created. All widgets across pages stay mounted, so event pub/sub works across pages (e.g., IndexSelector on Page 1 drives widgets on Page 2).
+
+**Data model:**
+
+```json
+{
+    "pages": [
+        { "id": "page-1", "name": "Overview", "order": 0, "layout": [...] },
+        { "id": "page-2", "name": "Config", "order": 1, "layout": [...] }
+    ],
+    "activePageId": "page-1"
+}
+```
+
+> MCP tool support for `create_dashboard` with `pages` parameter and `add_widget` with `page` parameter is planned for a future release.
+
 ### Layout Management
 
 ```
