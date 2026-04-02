@@ -19,7 +19,6 @@ const widgetDefinition = {
     eventHandlers: ["indexSelected"],
     providers: [
         { type: "algolia", providerClass: "credential", required: true },
-        { type: "algolia", providerClass: "api", required: true },
     ],
     styles: {
         backgroundColor: "bg-orange-900",
