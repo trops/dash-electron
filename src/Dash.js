@@ -22,6 +22,9 @@ import * as myWidgets from "./Widgets";
 // Debug Console (standalone window)
 import { DebugConsole } from "./DebugConsole";
 
+// AI Assistant panel (app shell)
+import { AiAssistantPanel } from "./AiAssistant/AiAssistantPanel";
+
 // Inject dash-core module reference for the widget require shim.
 // This avoids the self-referential import in widgetBundleLoader.js that
 // breaks under webpack scope hoisting in production builds.
@@ -548,6 +551,7 @@ class App extends React.Component {
                                     credentials={{ appId }}
                                     height="h-full"
                                     grow={true}
+                                    renderAiAssistant={<AiAssistantPanel />}
                                 />
                             </ErrorBoundary>
                         }
