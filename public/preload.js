@@ -47,6 +47,15 @@ const extendedApi = {
         clear: () => ipcRenderer.invoke("response-cache-clear"),
         stats: () => ipcRenderer.invoke("response-cache-stats"),
     },
+    widgetBuilder: {
+        aiBuild: (widgetName, componentCode, configCode, description) =>
+            ipcRenderer.invoke("widget:ai-build", {
+                widgetName,
+                componentCode,
+                configCode,
+                description,
+            }),
+    },
     debug: {
         open: () => ipcRenderer.invoke("debug-window-open"),
         close: () => ipcRenderer.invoke("debug-window-close"),

@@ -1680,6 +1680,117 @@ function createWindow() {
                 }
             }
         });
+        // --- AI Widget Builder ---
+        // Compiles AI-generated widget code and installs to @ai-built/ scope.
+        // Called from the Widget Builder modal UI — the LLM never touches the filesystem.
+        logger.loggedHandle("widget:ai-build", async (e, message) => {
+            const { widgetName, componentCode, configCode, description } =
+                message;
+
+            const path = require("path");
+            const fs = require("fs");
+            const os = require("os");
+
+            const buildDir = path.join(
+                os.tmpdir(),
+                `dash-ai-build-${widgetName}-${Date.now()}`
+            );
+
+            try {
+                // Create temp directory structure
+                const widgetsDir = path.join(buildDir, "widgets");
+                fs.mkdirSync(widgetsDir, { recursive: true });
+
+                // Write component file
+                fs.writeFileSync(
+                    path.join(widgetsDir, `${widgetName}.js`),
+                    componentCode,
+                    "utf8"
+                );
+
+                // Write config file
+                fs.writeFileSync(
+                    path.join(widgetsDir, `${widgetName}.dash.js`),
+                    configCode,
+                    "utf8"
+                );
+
+                // Write dash.json manifest
+                fs.writeFileSync(
+                    path.join(buildDir, "dash.json"),
+                    JSON.stringify(
+                        {
+                            name: `@ai-built/${widgetName.toLowerCase()}`,
+                            displayName: widgetName
+                                .replace(/([A-Z])/g, " $1")
+                                .trim(),
+                            version: "1.0.0",
+                            description:
+                                description ||
+                                `AI-generated widget: ${widgetName}`,
+                            author: "AI Assistant",
+                            widgets: [
+                                {
+                                    name: widgetName,
+                                    displayName: widgetName
+                                        .replace(/([A-Z])/g, " $1")
+                                        .trim(),
+                                    description: description || "",
+                                },
+                            ],
+                            createdAt: new Date().toISOString(),
+                        },
+                        null,
+                        2
+                    ),
+                    "utf8"
+                );
+
+                // Compile via widgetCompiler (from dash-core)
+                const dashCore = require("@trops/dash-core/electron");
+                await dashCore.widgetCompiler.compileWidget(buildDir);
+
+                // Verify output
+                const outputPath = path.join(buildDir, "dist", "index.cjs.js");
+                if (!fs.existsSync(outputPath)) {
+                    return {
+                        success: false,
+                        error: "Compilation produced no output. Check for syntax errors.",
+                    };
+                }
+
+                // Install to @ai-built/ scope
+                const scopedName = `@ai-built/${widgetName.toLowerCase()}`;
+                const registry = dashCore.widgetRegistry.getWidgetRegistry();
+                const config = await registry.installFromLocalPath(
+                    scopedName,
+                    buildDir,
+                    true,
+                    path.join(buildDir, "dash.json")
+                );
+
+                // Broadcast to all windows
+                for (const win of windows) {
+                    if (!win.isDestroyed()) {
+                        win.webContents.send("widget:installed", {
+                            widgetName: scopedName,
+                            config,
+                        });
+                    }
+                }
+
+                return {
+                    success: true,
+                    widgetName: scopedName,
+                };
+            } catch (err) {
+                console.error("[widget:ai-build] Error:", err);
+                return {
+                    success: false,
+                    error: err.message,
+                };
+            }
+        });
     } // end ipcHandlersRegistered guard
 
     windows.add(mainWindow);
