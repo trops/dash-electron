@@ -86,7 +86,14 @@ RULES:
 - Config MUST include: component (matching function name), name (display name with spaces), type: "widget", canHaveChildren: false, workspace: "ai-built"
 - Example config: export default { component: "CounterWidget", name: "Counter Widget", type: "widget", canHaveChildren: false, workspace: "ai-built", userConfig: { title: { type: "text", defaultValue: "Counter", displayName: "Title" } } }
 
-Do NOT create files or run commands. Just output the code blocks. The user will see a live preview automatically.`;
+CRITICAL FILE LOCATION RULES:
+- Output code as markdown code blocks in your response for live preview
+- If you create any files, they MUST go in: {WIDGET_STORAGE_PATH}/@ai-built/{widgetname}/widgets/
+- The directory structure must be: {WIDGET_STORAGE_PATH}/@ai-built/{widgetname}/widgets/{WidgetName}.js and {WidgetName}.dash.js
+- Also create {WIDGET_STORAGE_PATH}/@ai-built/{widgetname}/dash.json with package metadata
+- NEVER create files in src/Widgets/ — that directory is for manually coded widgets only
+- NEVER use the widgetize script or any scaffolding scripts
+- The @ai-built directory is the ONLY approved location for AI-generated widgets`;
 
 function extractCodeBlocks(messages) {
     let componentCode = null;
@@ -141,6 +148,17 @@ export const WidgetBuilderModal = ({ isOpen, setIsOpen }) => {
         configCode: null,
     });
     const lastCompiledCode = useRef(null);
+    const [widgetStoragePath, setWidgetStoragePath] = useState(null);
+
+    // Get the widget storage path for the system prompt
+    useEffect(() => {
+        if (isOpen && window.mainApi?.widgets?.getStoragePath) {
+            window.mainApi.widgets
+                .getStoragePath()
+                .then((p) => setWidgetStoragePath(p))
+                .catch(() => {});
+        }
+    }, [isOpen]);
 
     const settings = appContext?.settings || {};
     const providers = appContext?.providers || {};
@@ -206,6 +224,8 @@ export const WidgetBuilderModal = ({ isOpen, setIsOpen }) => {
 
         setIsCompiling(true);
         setPreviewError(null);
+        setPreviewComponent(null);
+        setInstallStatus(null);
         lastCompiledCode.current = code.componentCode;
 
         try {
@@ -524,12 +544,21 @@ export const WidgetBuilderModal = ({ isOpen, setIsOpen }) => {
                     <ChatCore
                         title=""
                         model={model}
-                        systemPrompt={SYSTEM_PROMPT}
+                        systemPrompt={SYSTEM_PROMPT.replace(
+                            "{WIDGET_STORAGE_PATH}",
+                            widgetStoragePath ||
+                                "~/Library/Application Support/Dash/widgets"
+                        )}
                         maxToolRounds="10"
                         apiKey={apiKey}
                         backend={preferredBackend}
                         persistKey="dash-widget-builder"
                         hideToolsBanner={true}
+                        cwd={
+                            widgetStoragePath
+                                ? `${widgetStoragePath}/@ai-built`
+                                : null
+                        }
                     />
                 </div>
             </div>
