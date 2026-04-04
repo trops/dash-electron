@@ -48,6 +48,12 @@ const extendedApi = {
         stats: () => ipcRenderer.invoke("response-cache-stats"),
     },
     widgetBuilder: {
+        compilePreview: (widgetName, componentCode, configCode) =>
+            ipcRenderer.invoke("widget:ai-compile-preview", {
+                widgetName,
+                componentCode,
+                configCode,
+            }),
         aiBuild: (widgetName, componentCode, configCode, description) =>
             ipcRenderer.invoke("widget:ai-build", {
                 widgetName,

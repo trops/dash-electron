@@ -1680,7 +1680,66 @@ function createWindow() {
                 }
             }
         });
-        // --- AI Widget Builder ---
+        // --- AI Widget Builder: Preview Compile ---
+        // Compiles widget code and returns the bundle source for live preview.
+        // Does NOT install — just compile and return.
+        logger.loggedHandle("widget:ai-compile-preview", async (e, message) => {
+            const { widgetName, componentCode, configCode } = message;
+            const path = require("path");
+            const fs = require("fs");
+            const os = require("os");
+
+            const buildDir = path.join(
+                os.tmpdir(),
+                `dash-ai-preview-${widgetName}-${Date.now()}`
+            );
+
+            try {
+                const widgetsDir = path.join(buildDir, "widgets");
+                fs.mkdirSync(widgetsDir, { recursive: true });
+                fs.writeFileSync(
+                    path.join(widgetsDir, `${widgetName}.js`),
+                    componentCode,
+                    "utf8"
+                );
+                fs.writeFileSync(
+                    path.join(widgetsDir, `${widgetName}.dash.js`),
+                    configCode,
+                    "utf8"
+                );
+
+                const dashCore = require("@trops/dash-core/electron");
+                await dashCore.widgetCompiler.compileWidget(buildDir);
+
+                const outputPath = path.join(buildDir, "dist", "index.cjs.js");
+                if (!fs.existsSync(outputPath)) {
+                    return {
+                        success: false,
+                        error: "Compilation produced no output.",
+                    };
+                }
+
+                const bundleSource = fs.readFileSync(outputPath, "utf8");
+
+                // Clean up temp dir
+                fs.rmSync(buildDir, { recursive: true, force: true });
+
+                return {
+                    success: true,
+                    bundleSource,
+                    widgetName,
+                };
+            } catch (err) {
+                try {
+                    fs.rmSync(buildDir, { recursive: true, force: true });
+                } catch (e) {
+                    /* ignore cleanup errors */
+                }
+                return { success: false, error: err.message };
+            }
+        });
+
+        // --- AI Widget Builder: Install ---
         // Compiles AI-generated widget code and installs to @ai-built/ scope.
         // Called from the Widget Builder modal UI — the LLM never touches the filesystem.
         logger.loggedHandle("widget:ai-build", async (e, message) => {
