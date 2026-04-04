@@ -12,9 +12,11 @@ import React, { useState, useContext, useEffect, useCallback } from "react";
 import { FontAwesomeIcon, ThemeContext } from "@trops/dash-react";
 import { ChatCore, AppContext } from "@trops/dash-core";
 
-const DEFAULT_SYSTEM_PROMPT = `You are the Dash AI Assistant — a helpful assistant built into the Dash desktop application. You help users manage dashboards, configure widgets, set up providers, troubleshoot issues, and build custom widgets.
+const DEFAULT_SYSTEM_PROMPT = `You are the Dash AI Assistant — a helpful assistant built into the Dash desktop application. You help users manage dashboards, configure widgets, set up providers, and troubleshoot issues.
 
 You have access to MCP tools that let you create and modify dashboards, add widgets, manage themes, and configure providers. Use these tools when the user asks you to perform dashboard operations.
+
+IMPORTANT: If the user asks you to BUILD or CREATE a new custom widget, respond with exactly this text on its own line: [OPEN_WIDGET_BUILDER] — this will automatically open the Widget Builder for them. Do NOT create widget files yourself. The Widget Builder has a dedicated compile and install pipeline. You can help with adding EXISTING widgets to dashboards, configuring them, and managing layouts.
 
 Be concise and helpful. When performing actions, explain what you're doing briefly.`;
 
@@ -190,6 +192,55 @@ export const AiAssistantPanel = () => {
     const providers = appContext?.providers || {};
     const aiSettings = settings.aiAssistant || {};
 
+    // Watch for [OPEN_WIDGET_BUILDER] marker in assistant messages
+    useEffect(() => {
+        if (collapsed) return;
+        const interval = setInterval(() => {
+            try {
+                const raw = localStorage.getItem("dash-ai-assistant");
+                if (raw) {
+                    const data = JSON.parse(raw);
+                    const msgs = data?.messages || [];
+                    for (let i = msgs.length - 1; i >= 0; i--) {
+                        if (msgs[i].role !== "assistant") continue;
+                        const text =
+                            typeof msgs[i].content === "string"
+                                ? msgs[i].content
+                                : Array.isArray(msgs[i].content)
+                                ? msgs[i].content
+                                      .filter((c) => c.type === "text")
+                                      .map((c) => c.text)
+                                      .join("")
+                                : "";
+                        if (text.includes("[OPEN_WIDGET_BUILDER]")) {
+                            window.dispatchEvent(
+                                new Event("dash:open-widget-builder")
+                            );
+                            // Remove the marker so it doesn't trigger again
+                            msgs[i].content =
+                                typeof msgs[i].content === "string"
+                                    ? msgs[i].content.replace(
+                                          "[OPEN_WIDGET_BUILDER]",
+                                          "Opening Widget Builder..."
+                                      )
+                                    : msgs[i].content;
+                            localStorage.setItem(
+                                "dash-ai-assistant",
+                                JSON.stringify(data)
+                            );
+                            clearInterval(interval);
+                            return;
+                        }
+                        break; // only check the last assistant message
+                    }
+                }
+            } catch (e) {
+                /* ignore */
+            }
+        }, 2000);
+        return () => clearInterval(interval);
+    }, [collapsed]);
+
     // Resolve backend and API key from settings
     const preferredBackend = aiSettings.preferredBackend || "claude-code";
     const model = aiSettings.model || "claude-sonnet-4-20250514";
@@ -284,16 +335,29 @@ export const AiAssistantPanel = () => {
                             AI Assistant
                         </span>
                     </div>
-                    <button
-                        onClick={() => setCollapsed(true)}
-                        className="p-1 rounded hover:bg-white/10 transition-colors text-gray-500 hover:text-gray-300"
-                        title="Collapse"
-                    >
-                        <FontAwesomeIcon
-                            icon="chevron-right"
-                            className="h-3 w-3"
-                        />
-                    </button>
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() =>
+                                window.dispatchEvent(
+                                    new Event("dash:open-widget-builder")
+                                )
+                            }
+                            className="p-1 rounded hover:bg-white/10 transition-colors text-gray-500 hover:text-gray-300"
+                            title="Build Widget with AI"
+                        >
+                            <FontAwesomeIcon icon="cube" className="h-3 w-3" />
+                        </button>
+                        <button
+                            onClick={() => setCollapsed(true)}
+                            className="p-1 rounded hover:bg-white/10 transition-colors text-gray-500 hover:text-gray-300"
+                            title="Collapse"
+                        >
+                            <FontAwesomeIcon
+                                icon="chevron-right"
+                                className="h-3 w-3"
+                            />
+                        </button>
+                    </div>
                 </div>
 
                 {/* MCP setup banner for CLI backend */}
@@ -309,6 +373,7 @@ export const AiAssistantPanel = () => {
                         apiKey={apiKey}
                         backend={preferredBackend}
                         persistKey="dash-ai-assistant"
+                        hideToolsBanner={true}
                     />
                 </div>
             </div>

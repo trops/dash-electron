@@ -24,6 +24,7 @@ import { DebugConsole } from "./DebugConsole";
 
 // AI Assistant panel (app shell)
 import { AiAssistantPanel } from "./AiAssistant/AiAssistantPanel";
+import { WidgetBuilderModal } from "./AiAssistant/WidgetBuilderModal";
 
 // Inject dash-core module reference for the widget require shim.
 // This avoids the self-referential import in widgetBundleLoader.js that
@@ -371,10 +372,17 @@ class App extends React.Component {
 
     state = {
         stageKey: 0,
+        isWidgetBuilderOpen: false,
     };
 
     async componentDidMount() {
         console.log("[Dash App] componentDidMount called");
+
+        // Listen for widget builder open event
+        window.addEventListener("dash:open-widget-builder", () => {
+            this.setState({ isWidgetBuilderOpen: true });
+        });
+
         // Listen for widget installation events (hot reload)
         if (window.mainApi) {
             window.mainApi.widgets.onInstalled(this.handleWidgetInstalled);
@@ -553,6 +561,16 @@ class App extends React.Component {
                                     grow={true}
                                     renderAiAssistant={<AiAssistantPanel />}
                                 />
+                                {this.state.isWidgetBuilderOpen && (
+                                    <WidgetBuilderModal
+                                        isOpen={this.state.isWidgetBuilderOpen}
+                                        setIsOpen={(open) =>
+                                            this.setState({
+                                                isWidgetBuilderOpen: open,
+                                            })
+                                        }
+                                    />
+                                )}
                             </ErrorBoundary>
                         }
                     />
