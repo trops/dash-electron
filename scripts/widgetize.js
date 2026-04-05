@@ -9,6 +9,14 @@ const path = require("path");
 // The first argument will be the project name.
 const projectName = process.argv[2];
 
+// Optional: --output-dir <path> to override default src/Widgets/ target
+// Used by the AI widget builder skill to target the @ai-built/ directory
+let outputDirOverride = null;
+const outputDirIdx = process.argv.indexOf("--output-dir");
+if (outputDirIdx !== -1 && process.argv[outputDirIdx + 1]) {
+    outputDirOverride = process.argv[outputDirIdx + 1];
+}
+
 console.log("=================================");
 console.log("Widgetizing... ", projectName);
 console.log("=================================");
@@ -83,14 +91,16 @@ function replaceStringInFile(filepath, needle, replacement) {
 const currentDir = process.cwd();
 
 /**
- * Project Directory is the src/Widgets directory
+ * Project Directory
+ * Default: src/Widgets/  |  Override: --output-dir <path>
  */
-const projectDir = path.resolve(
-    path.join(currentDir, "src", "Widgets"),
-    projectName
-);
+const projectDir = outputDirOverride
+    ? path.resolve(outputDirOverride, projectName)
+    : path.resolve(path.join(currentDir, "src", "Widgets"), projectName);
 
-const projectRoot = path.resolve(path.join(currentDir, "src", "Widgets"));
+const projectRoot = outputDirOverride
+    ? path.resolve(outputDirOverride)
+    : path.resolve(path.join(currentDir, "src", "Widgets"));
 
 // A common approach to building a starter template is to
 // create a `template` folder which will house the template
@@ -156,7 +166,56 @@ function appendExport(dir, componentName) {
     }
 }
 
-appendExport(projectRoot, projectName);
+// Only append export when targeting the default src/Widgets/ directory.
+// @ai-built/ widgets are loaded by the widget registry at runtime.
+if (!outputDirOverride) {
+    appendExport(projectRoot, projectName);
+}
+
+// Generate dash.json when using --output-dir (for widget registry)
+if (outputDirOverride) {
+    const dashJson = {
+        name: `@ai-built/${projectName.toLowerCase()}`,
+        displayName: projectName.replace(/([A-Z])/g, " $1").trim(),
+        version: "1.0.0",
+        description: `Widget: ${projectName}`,
+        author: "AI Assistant",
+        widgets: [
+            {
+                name: projectName,
+                displayName: projectName.replace(/([A-Z])/g, " $1").trim(),
+                description: "",
+            },
+        ],
+        createdAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(
+        path.join(projectDir, "dash.json"),
+        JSON.stringify(dashJson, null, 2)
+    );
+    console.log("4. Generated dash.json");
+
+    // Replace workspace value with "ai-built" for @ai-built/ widgets.
+    // Uses setImmediate to run after the async replaceStringInFile callbacks
+    // from renameFilesRecursive have completed their I/O.
+    setImmediate(() => {
+        const widgetsDir = path.join(projectDir, "widgets");
+        if (fs.existsSync(widgetsDir)) {
+            fs.readdirSync(widgetsDir).forEach((f) => {
+                if (f.endsWith(".dash.js")) {
+                    const fp = path.join(widgetsDir, f);
+                    let content = fs.readFileSync(fp, "utf8");
+                    content = content.replace(
+                        /workspace:\s*"[^"]*"/,
+                        'workspace: "ai-built"'
+                    );
+                    fs.writeFileSync(fp, content);
+                }
+            });
+            console.log("5. Set workspace to ai-built");
+        }
+    });
+}
 
 /*
 

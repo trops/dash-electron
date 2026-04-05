@@ -23,18 +23,21 @@ The **widget file is the only required component**. There are no workspace wrapp
 components — widgets connect to MCP providers directly through the app-level provider
 system.
 
-When you run `widgetize`, it generates:
+When you run `widgetize --output-dir`, it generates widgets in the `@ai-built/` directory:
 
 ```
-src/Widgets/MyWidget/
+~/Library/Application Support/Dash/widgets/@ai-built/MyWidget/
 ├── contexts/
-│   ├── MyWidgetContext.js     # ← React context for intra-widget state
+│   ├── MyWidgetContext.js     # ← React context for intra-widget state (optional)
 │   └── index.js               # Context exports
 ├── widgets/
 │   ├── MyWidget.js            # ← THE CORE FILE — your React component
 │   └── MyWidget.dash.js       # ← Configuration — metadata + userConfig
-└── index.js                    # Barrel exports
+├── index.js                    # Barrel exports
+└── dash.json                   # Package manifest for widget registry
 ```
+
+Without `--output-dir`, `widgetize` defaults to `src/Widgets/` for built-in widget development.
 
 For most widgets, you work on these files:
 
@@ -65,7 +68,7 @@ import { MyWidget } from "./MyWidget";
 export default {
     component: MyWidget,
     canHaveChildren: false,
-    workspace: "my-widget-workspace",
+    workspace: "ai-built",
     type: "widget",
     userConfig: {
         title: {
@@ -676,7 +679,7 @@ Verify using `AppContext.providers` (not `DashboardContext.providers`).
 
 ## 12. Existing Widget Examples
 
-The `src/Widgets/` directory in dash-electron contains reference implementations.
+The `src/SampleWidgets/` directory in dash-electron contains reference implementations.
 When building a new widget, review these for patterns around:
 
 -   How `.dash.js` files are configured

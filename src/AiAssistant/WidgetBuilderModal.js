@@ -152,9 +152,9 @@ export const WidgetBuilderModal = ({ isOpen, setIsOpen }) => {
 
     // Get the widget storage path for the system prompt
     useEffect(() => {
-        if (isOpen && window.mainApi?.widgets?.getStoragePath) {
+        if (isOpen && window.mainApi?.widgets?.getCachePath) {
             window.mainApi.widgets
-                .getStoragePath()
+                .getCachePath()
                 .then((p) => setWidgetStoragePath(p))
                 .catch(() => {});
         }
