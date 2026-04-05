@@ -153,7 +153,7 @@ function extractWidgetName(code) {
     return match ? match[1] : null;
 }
 
-export const WidgetBuilderModal = ({ isOpen, setIsOpen }) => {
+export const WidgetBuilderModal = ({ isOpen, setIsOpen, onInstalled }) => {
     const { currentTheme } = useContext(ThemeContext);
     const appContext = useContext(AppContext);
 
@@ -291,15 +291,23 @@ export const WidgetBuilderModal = ({ isOpen, setIsOpen }) => {
                         .trim()}", type: "widget", canHaveChildren: false, workspace: "ai-built" };`,
                 `AI-generated widget: ${widgetName}`
             );
-            setInstallStatus(
-                result?.success
-                    ? { success: true, widgetName: result.widgetName }
-                    : { error: result?.error || "Install failed" }
-            );
+            if (result?.success) {
+                setInstallStatus({
+                    success: true,
+                    widgetName: result.widgetName,
+                });
+                if (onInstalled) {
+                    onInstalled(result.widgetName);
+                }
+            } else {
+                setInstallStatus({
+                    error: result?.error || "Install failed",
+                });
+            }
         } catch (err) {
             setInstallStatus({ error: err.message });
         }
-    }, [detectedCode, widgetName]);
+    }, [detectedCode, widgetName, onInstalled]);
 
     if (!isOpen) return null;
 
