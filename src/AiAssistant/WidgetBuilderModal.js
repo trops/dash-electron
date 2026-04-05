@@ -86,14 +86,13 @@ RULES:
 - Config MUST include: component (matching function name), name (display name with spaces), type: "widget", canHaveChildren: false, workspace: "ai-built"
 - Example config: export default { component: "CounterWidget", name: "Counter Widget", type: "widget", canHaveChildren: false, workspace: "ai-built", userConfig: { title: { type: "text", defaultValue: "Counter", displayName: "Title" } } }
 
-CRITICAL FILE LOCATION RULES:
-- Output code as markdown code blocks in your response for live preview
-- If you create any files, they MUST go in: {WIDGET_STORAGE_PATH}/@ai-built/{widgetname}/widgets/
-- The directory structure must be: {WIDGET_STORAGE_PATH}/@ai-built/{widgetname}/widgets/{WidgetName}.js and {WidgetName}.dash.js
-- Also create {WIDGET_STORAGE_PATH}/@ai-built/{widgetname}/dash.json with package metadata
-- NEVER create files in src/Widgets/ — that directory is for manually coded widgets only
-- NEVER use the widgetize script or any scaffolding scripts
-- The @ai-built directory is the ONLY approved location for AI-generated widgets`;
+CRITICAL RULES:
+- ONLY output code as markdown code blocks in your response — the app handles file creation and compilation automatically
+- Do NOT create, write, or save any files — you do not have file write permissions
+- Do NOT use the Write tool, Edit tool, Bash tool, or any file system tools
+- Do NOT run the widgetize script or any scaffolding scripts
+- Do NOT attempt to create directories or files in src/Widgets/ or anywhere else
+- Simply output the two code blocks (jsx component + javascript config) and the app will handle the rest`;
 
 function extractCodeBlocks(messages) {
     let componentCode = null;
