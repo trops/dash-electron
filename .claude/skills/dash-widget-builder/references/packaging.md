@@ -13,14 +13,21 @@
 
 ## 1. Bundling Widgets
 
-When your widget is ready for distribution, bundle it:
+There are two packaging paths depending on widget type:
+
+**Built-in widgets** (`src/Widgets/` or `src/SampleWidgets/`):
 
 ```bash
 npm run package-widgets
 ```
 
-This compiles your widgets from `src/Widgets/` into distributable bundles that can
-be consumed by other Dash projects as npm packages.
+This compiles built-in widgets into distributable bundles for npm packages.
+
+**AI-built widgets** (`@ai-built/`):
+
+`@ai-built/` widgets are compiled automatically by the widget registry at runtime.
+To promote an AI-built widget for registry distribution, use Settings > Widgets
+in the Dash app.
 
 ---
 
