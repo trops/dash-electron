@@ -569,6 +569,16 @@ class App extends React.Component {
                                                 isWidgetBuilderOpen: open,
                                             })
                                         }
+                                        onInstalled={(widgetName) => {
+                                            console.log(
+                                                `[App] AI widget installed: ${widgetName}`
+                                            );
+                                            window.dispatchEvent(
+                                                new Event(
+                                                    "dash:widgets-updated"
+                                                )
+                                            );
+                                        }}
                                     />
                                 )}
                             </ErrorBoundary>
