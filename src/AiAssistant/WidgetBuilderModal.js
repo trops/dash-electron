@@ -86,13 +86,13 @@ RULES:
 - Config MUST include: component (matching function name), name (display name with spaces), type: "widget", canHaveChildren: false, workspace: "ai-built"
 - Example config: export default { component: "CounterWidget", name: "Counter Widget", type: "widget", canHaveChildren: false, workspace: "ai-built", userConfig: { title: { type: "text", defaultValue: "Counter", displayName: "Title" } } }
 
-CRITICAL RULES:
-- ONLY output code as markdown code blocks in your response — the app handles file creation and compilation automatically
-- Do NOT create, write, or save any files — you do not have file write permissions
-- Do NOT use the Write tool, Edit tool, Bash tool, or any file system tools
-- Do NOT run the widgetize script or any scaffolding scripts
-- Do NOT attempt to create directories or files in src/Widgets/ or anywhere else
-- Simply output the two code blocks (jsx component + javascript config) and the app will handle the rest`;
+CRITICAL RULES — YOU ARE RUNNING INSIDE AN EMBEDDED UI, NOT AN INTERACTIVE TERMINAL:
+- Do NOT use ANY tools — no Skill, Read, Write, Edit, Bash, Glob, Grep, or any other tool
+- Do NOT invoke the dash-widget-builder skill or any other skill
+- Do NOT read files, scan directories, or run commands
+- ONLY output text and code blocks in your response — the app handles file creation and compilation automatically
+- Simply output the two code blocks (jsx component + javascript config) and the app will handle the rest
+- Respond immediately with the code — do not plan, research, or scaffold first`;
 
 function extractCodeBlocks(messages) {
     let componentCode = null;
