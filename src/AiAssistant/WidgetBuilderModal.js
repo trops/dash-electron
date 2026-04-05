@@ -91,7 +91,7 @@ CRITICAL RULES — YOU ARE RUNNING INSIDE AN EMBEDDED UI, NOT AN INTERACTIVE TER
 - Do NOT invoke the dash-widget-builder skill or any other skill
 - Do NOT read files, scan directories, or run commands
 - ONLY output text and code blocks in your response — the app handles file creation and compilation automatically
-- Simply output the two code blocks (jsx component + javascript config) and the app will handle the rest
+- ALWAYS output BOTH complete code blocks (jsx component + javascript config) in every response, even for small changes — never output partial diffs or snippets
 - Respond immediately with the code — do not plan, research, or scaffold first`;
 
 function extractCodeBlocks(messages) {
@@ -121,10 +121,29 @@ function extractCodeBlocks(messages) {
         }
 
         if (blocks.length >= 2 && !componentCode) {
+            // Full response with both component + config
             componentCode = blocks[0];
             configCode = blocks[1];
             break;
+        } else if (blocks.length === 1) {
+            // Single block — likely a fix. Detect if it's component or config.
+            const block = blocks[0];
+            if (
+                !componentCode &&
+                (block.includes("export default function") ||
+                    block.includes("import React"))
+            ) {
+                componentCode = block;
+            } else if (
+                !configCode &&
+                (block.includes("workspace:") ||
+                    block.includes("canHaveChildren"))
+            ) {
+                configCode = block;
+            }
         }
+
+        if (componentCode && configCode) break;
     }
     return { componentCode, configCode };
 }
@@ -242,18 +261,7 @@ export const WidgetBuilderModal = ({ isOpen, setIsOpen }) => {
             const match = configs.find((c) => c.key === name);
 
             if (match && typeof match.config.component === "function") {
-                // Sanity check — call the component to catch import errors
-                // (e.g., useState not found) BEFORE React tries to render it
-                try {
-                    match.config.component({ title: "test" });
-                } catch (renderErr) {
-                    setPreviewError(
-                        `Widget code error: ${renderErr.message}\n\nAsk the AI to fix the error. Common issue: importing React hooks from '@trops/dash-react' instead of 'react'.`
-                    );
-                    setPreviewComponent(null);
-                    setIsCompiling(false);
-                    return;
-                }
+                // Let PreviewErrorBoundary catch runtime errors in React's context
                 setPreviewComponent(() => match.config.component);
                 setPreviewError(null);
             } else {
@@ -410,9 +418,38 @@ export const WidgetBuilderModal = ({ isOpen, setIsOpen }) => {
                                     <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto max-h-32">
                                         {previewError}
                                     </pre>
-                                    <p className="text-xs text-gray-500">
-                                        Ask the AI to fix the error in the chat.
-                                    </p>
+                                    <button
+                                        onClick={() => {
+                                            try {
+                                                const raw =
+                                                    localStorage.getItem(
+                                                        "dash-widget-builder"
+                                                    );
+                                                if (raw) {
+                                                    const data =
+                                                        JSON.parse(raw);
+                                                    const msgs =
+                                                        data?.messages || [];
+                                                    msgs.push({
+                                                        role: "user",
+                                                        content: `Fix this compilation error:\n\n${previewError}\n\nPlease output both the corrected jsx component code block and the javascript config code block.`,
+                                                    });
+                                                    localStorage.setItem(
+                                                        "dash-widget-builder",
+                                                        JSON.stringify({
+                                                            ...data,
+                                                            messages: msgs,
+                                                        })
+                                                    );
+                                                }
+                                            } catch (_) {
+                                                /* ignore */
+                                            }
+                                        }}
+                                        className="text-xs text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                                    >
+                                        Send error to AI
+                                    </button>
                                 </div>
                             </div>
                         )}
