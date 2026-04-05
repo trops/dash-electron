@@ -147,17 +147,6 @@ export const WidgetBuilderModal = ({ isOpen, setIsOpen }) => {
         configCode: null,
     });
     const lastCompiledCode = useRef(null);
-    const [widgetStoragePath, setWidgetStoragePath] = useState(null);
-
-    // Get the widget storage path for the system prompt
-    useEffect(() => {
-        if (isOpen && window.mainApi?.widgets?.getCachePath) {
-            window.mainApi.widgets
-                .getCachePath()
-                .then((p) => setWidgetStoragePath(p))
-                .catch(() => {});
-        }
-    }, [isOpen]);
 
     const settings = appContext?.settings || {};
     const providers = appContext?.providers || {};
@@ -543,21 +532,12 @@ export const WidgetBuilderModal = ({ isOpen, setIsOpen }) => {
                     <ChatCore
                         title=""
                         model={model}
-                        systemPrompt={SYSTEM_PROMPT.replace(
-                            "{WIDGET_STORAGE_PATH}",
-                            widgetStoragePath ||
-                                "~/Library/Application Support/Dash/widgets"
-                        )}
+                        systemPrompt={SYSTEM_PROMPT}
                         maxToolRounds="10"
                         apiKey={apiKey}
                         backend={preferredBackend}
                         persistKey="dash-widget-builder"
                         hideToolsBanner={true}
-                        cwd={
-                            widgetStoragePath
-                                ? `${widgetStoragePath}/@ai-built`
-                                : null
-                        }
                     />
                 </div>
             </div>
