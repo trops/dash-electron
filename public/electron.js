@@ -1572,6 +1572,16 @@ function createWindow() {
         // --- Widget System ---
         setupWidgetRegistryHandlers();
 
+        // Ensure @ai-built/ directory exists for the widget builder CLI
+        try {
+            const registry = widgetRegistry.getWidgetRegistry();
+            const cachePath = registry.getCachePath();
+            const aiBuiltDir = path.join(cachePath, "@ai-built");
+            require("fs").mkdirSync(aiBuiltDir, { recursive: true });
+        } catch (_) {
+            // Non-fatal — directory will be created on first widget build
+        }
+
         // --- Cache Management ---
         setupCacheHandlers();
 
