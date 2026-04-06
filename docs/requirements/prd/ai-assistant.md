@@ -1,7 +1,7 @@
 # PRD: In-App AI Assistant & Widget Builder
 
-**Status:** Draft
-**Last Updated:** 2026-04-03
+**Status:** In Progress (Phase 3 complete, Phases 1-2 partial)
+**Last Updated:** 2026-04-05
 **Owner:** John Giatropoulos
 **Related PRDs:** None
 
@@ -174,16 +174,16 @@ Build on `ChatCore.js` engine. Pre-configure system prompt with Dash capabilitie
 
 **Acceptance Criteria:**
 
--   [ ] AC1: Grid cell "+" menu includes "Build with AI" option
--   [ ] AC2: Opens a modal with split pane: chat (left) + live preview (right)
--   [ ] AC3: AI generates `.js` component + `.dash.js` config from natural language description
--   [ ] AC4: Each iteration compiles via esbuild and renders in the preview pane
--   [ ] AC5: User can iterate conversationally ("make the chart blue", "add a date picker")
--   [ ] AC6: "Add to Grid" installs widget to `@ai-built/` scope and places it in the selected cell
--   [ ] AC7: Widget uses `@trops/dash-react` components and `@trops/dash-core` hooks (externalized in esbuild)
+-   [x] AC1: Grid cell "+" menu includes "Build with AI" option (v0.0.338, dash-core 0.1.318)
+-   [x] AC2: Opens a modal with split pane: live preview (left 2/3) + chat (right 1/3) (v0.0.338)
+-   [x] AC3: AI generates `.js` component + `.dash.js` config from natural language description (v0.0.342)
+-   [x] AC4: Each iteration compiles via esbuild and renders in the preview pane (v0.0.343)
+-   [x] AC5: User can iterate conversationally — single-block fixes supported (v0.0.343)
+-   [x] AC6: "Install Widget" installs to `@ai-built/` scope, "Done" places it in the selected cell (v0.0.345)
+-   [x] AC7: Widget uses `@trops/dash-react` components and `@trops/dash-core` hooks (externalized in esbuild)
 
 **Technical Notes:**
-Widget files go to `{userData}/widgets/@ai-built/{widget-name}/`. Use existing `widgetRegistry.installFromLocalPath()` for installation. esbuild compilation uses same pipeline as registry widgets. Preview uses `renderComponent()` from `dash-core/utils/layout.js`.
+Widget files go to `{userData}/widgets/@ai-built/{widget-name}/`. Use existing `widgetRegistry.installFromLocalPath()` for installation. esbuild compilation uses same pipeline as registry widgets. Preview uses `evaluateBundle()` + `extractWidgetConfigs()` from `dash-core`.
 
 ---
 
@@ -341,14 +341,63 @@ Build (modal) → Install locally → Test & iterate → Publish (optional)
 
 ## Decisions Made
 
-| Date       | Decision                                   | Rationale                                                                                                          |
-| ---------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| 2026-04-03 | Anthropic + Claude Code CLI only for v1    | Both already work end-to-end. Add OpenAI/others later.                                                             |
-| 2026-04-03 | Full esbuild pipeline for widget builds    | Same as registry widgets. ~1-2s per iteration. Production-ready output. No new eval system.                        |
-| 2026-04-03 | `@ai-built/` scope in existing widgets dir | Leverages all existing registry infrastructure. No new storage system.                                             |
-| 2026-04-03 | Right-side panel (not left sidebar)        | Left sidebar = navigation. Right side = helpers (widget picker, assistant). Clear separation.                      |
-| 2026-04-03 | Publishing is a separate promotion step    | Users should test AI-built widgets before sharing. Publish from Settings > Widgets when ready.                     |
-| 2026-04-03 | Remix attribution in dash.json             | `remixedFrom` field tracks original author/widget. Registry displays credit. Similar to 3D printing remix culture. |
+| Date       | Decision                                         | Rationale                                                                                                                                                                                                                                                                                                |
+| ---------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-04-03 | Anthropic + Claude Code CLI only for v1          | Both already work end-to-end. Add OpenAI/others later.                                                                                                                                                                                                                                                   |
+| 2026-04-03 | Full esbuild pipeline for widget builds          | Same as registry widgets. ~1-2s per iteration. Production-ready output. No new eval system.                                                                                                                                                                                                              |
+| 2026-04-03 | `@ai-built/` scope in existing widgets dir       | Leverages all existing registry infrastructure. No new storage system.                                                                                                                                                                                                                                   |
+| 2026-04-03 | Right-side panel (not left sidebar)              | Left sidebar = navigation. Right side = helpers (widget picker, assistant). Clear separation.                                                                                                                                                                                                            |
+| 2026-04-03 | Publishing is a separate promotion step          | Users should test AI-built widgets before sharing. Publish from Settings > Widgets when ready.                                                                                                                                                                                                           |
+| 2026-04-03 | Remix attribution in dash.json                   | `remixedFrom` field tracks original author/widget. Registry displays credit. Similar to 3D printing remix culture.                                                                                                                                                                                       |
+| 2026-04-04 | CLI tool-free mode for widget builder            | System prompt prohibits all tools (Skill, Read, Write, Bash). CLI outputs code blocks only; modal handles compilation. Prevents permission dialogs and blank responses in embedded UI.                                                                                                                   |
+| 2026-04-04 | No cwd sandbox for CLI                           | Attempted sandboxing CLI to `@ai-built/` directory but it broke project context (blank responses). CLI runs in project directory with tool-free prompt instead.                                                                                                                                          |
+| 2026-04-05 | LayoutBuilder event for cell placement           | Widget placed via `dash:place-widget-in-cell` CustomEvent. LayoutBuilder modifies its own React state directly using `addItemToItemLayout`. No stageKey++, no workspace file save, no app refresh.                                                                                                       |
+| 2026-04-05 | Tailwind dev exclusion                           | Widget cache path excluded from tailwind content in dev mode (`NODE_ENV !== 'production'`) to prevent webpack rebuilds when AI widgets are installed at runtime.                                                                                                                                         |
+| 2026-04-05 | Skip widget:installed broadcast for cell context | When installing with cell context, the `widget:installed` IPC broadcast is skipped entirely. The broadcast triggers `handleWidgetInstalled` → `stageKey++` → full app refresh, which is unacceptable UX. Widget component registered manually via `readBundle` + `registerBundleConfigs` on modal close. |
+
+---
+
+## Implementation Notes (Phase 3: Widget Builder)
+
+### Shipped Versions
+
+| Version  | Date       | Description                                                                        |
+| -------- | ---------- | ---------------------------------------------------------------------------------- |
+| v0.0.338 | 2026-04-04 | `widgetize --output-dir` flag, skill updated to target `@ai-built/`                |
+| v0.0.339 | 2026-04-04 | `@ai-built/` directory created on startup (fixed ENOENT)                           |
+| v0.0.340 | 2026-04-04 | System prompt prevents CLI file writes                                             |
+| v0.0.341 | 2026-04-04 | Removed cwd sandbox, restored project context                                      |
+| v0.0.342 | 2026-04-04 | Prevented CLI from using tools/skills (fixed blank responses)                      |
+| v0.0.343 | 2026-04-04 | Removed broken sanity check, single-block recompilation, "Send error to AI" button |
+| v0.0.344 | 2026-04-05 | Pre-install cleanup of stale builds, `onInstalled` callback                        |
+| v0.0.345 | 2026-04-05 | Auto-place widget in cell without app refresh (cross-repo: dash-core v0.1.321)     |
+
+### Architecture Decisions
+
+**1. Tool-Free CLI Mode**
+The Claude Code CLI, when invoked from the widget builder modal, runs with `--append-system-prompt` that explicitly prohibits all tool use. The CLI generates code blocks as text; the modal's `extractCodeBlocks` function parses them and the `compilePreview` IPC handler compiles them. This avoids permission dialogs (Write/Bash tools) and skill invocations (dash-widget-builder) that cause blank responses in the embedded UI.
+
+**2. Widget Placement via LayoutBuilder Event**
+The `dash:place-widget-in-cell` CustomEvent is dispatched from `Dash.js` when the modal closes. LayoutBuilder in dash-core listens for this event and uses `addItemToItemLayout` (the same function used by the normal "Add widget" button) to modify its own `currentWorkspace` React state. This triggers a re-render that shows the widget in the cell. No workspace file save, no stageKey remount, no IPC broadcasts.
+
+**3. Widget Registration on Modal Close**
+When the modal closes after a successful install:
+
+1. `readBundle(scopedName)` reads the compiled CJS bundle from `@ai-built/`
+2. `registerBundleConfigs(scopedName, source)` registers the widget component in the renderer's `ComponentManager`
+3. `dash:place-widget-in-cell` event places it in the grid cell
+4. LayoutBuilder auto-saves the workspace on its own schedule
+
+**4. Tailwind Dev Exclusion**
+The `tailwind.config.js` content array conditionally excludes the widget cache path in dev mode (`process.env.NODE_ENV !== 'production'`). Installing AI widgets writes new `.js` files to the cache directory; without this exclusion, webpack's file watcher detects them and triggers a full page rebuild.
+
+### Lessons Learned
+
+1. **Don't fight the framework's state management.** Multiple attempts to modify workspace files directly and then reload failed because LayoutBuilder manages its own React state. The working solution uses LayoutBuilder's existing `addItemToItemLayout` function via an event — working WITH the framework, not around it.
+
+2. **IPC broadcasts are nuclear.** `widget:installed` and `workspace:saved` broadcasts trigger cascading re-renders (themes, settings, providers, workspaces all reload). Any operation that happens while the widget builder modal is open must avoid these broadcasts entirely.
+
+3. **The tailwind content watcher causes webpack rebuilds.** Writing files to any directory in the tailwind `content` array triggers a full webpack rebuild in dev mode, which reloads the Electron window. This is invisible in the terminal (`[0] Rebuilding...` is easy to miss).
 
 ---
 
@@ -397,19 +446,22 @@ Build (modal) → Install locally → Test & iterate → Publish (optional)
 
 **Dependencies:** Phase 1
 
-### Phase 3: Inline Widget Builder (P0)
+### Phase 3: Inline Widget Builder (P0) — ✅ Implemented
 
 **Deliverables:**
 
--   [ ] US-003: `WidgetBuilderModal` component
--   [ ] Split-pane: chat + live preview
--   [ ] Code generation → esbuild → preview render loop
--   [ ] "Add to Grid" installs to `@ai-built/` scope
--   [ ] "Build with AI" option in grid cell "+" menu
+-   [x] US-003: `WidgetBuilderModal` component (v0.0.338)
+-   [x] Split-pane: live preview (2/3) + chat (1/3)
+-   [x] Code generation → esbuild → preview render loop (v0.0.343)
+-   [x] "Install Widget" installs to `@ai-built/` scope (v0.0.344)
+-   [x] "Build with AI" button in empty grid cells (dash-core 0.1.318)
+-   [x] Auto-place widget in cell on modal close (v0.0.345, dash-core 0.1.321)
+-   [x] "Send error to AI" button for compilation errors (v0.0.343)
+-   [x] Single-block fix detection for iterative development (v0.0.343)
 
-**Success Criteria:** User describes a widget in natural language → working widget added to dashboard.
+**Success Criteria:** ✅ User describes a widget in natural language → working widget added to dashboard cell without app refresh.
 
-**Dependencies:** Phase 1, Phase 2 (shared ChatCore infrastructure)
+**Dependencies:** Phase 1 (partial — Claude Code CLI auto-detect works, settings UI not yet built)
 
 ### Phase 4: Remix + Publish + Troubleshooting (P1)
 
@@ -427,6 +479,7 @@ Build (modal) → Install locally → Test & iterate → Publish (optional)
 
 ## Revision History
 
-| Version | Date       | Author            | Changes                                |
-| ------- | ---------- | ----------------- | -------------------------------------- |
-| 1.0     | 2026-04-03 | John Giatropoulos | Initial draft from design conversation |
+| Version | Date       | Author            | Changes                                                                                                                               |
+| ------- | ---------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-04-03 | John Giatropoulos | Initial draft from design conversation                                                                                                |
+| 1.1     | 2026-04-05 | John Giatropoulos | Phase 3 implemented (v0.0.338–v0.0.345, dash-core v0.1.321). Added implementation notes, architecture decisions, and lessons learned. |
