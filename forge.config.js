@@ -14,6 +14,10 @@ module.exports = {
         asar: {
             unpack: "{**/node_modules/@esbuild/**,**/node_modules/esbuild/**}",
         },
+        // Tell the universal (x64+arm64) stitcher which unpacked files are x64-only
+        // so it keeps both arch binaries side by side instead of failing on merge
+        x64ArchFiles:
+            "Contents/Resources/app.asar.unpacked/node_modules/@esbuild/**",
         name: process.env.REACT_APP_PACKAGE_NAME,
         icon: "./assets/icons/icon",
         ...(process.env.REACT_APP_APPLE_CERT_ID
