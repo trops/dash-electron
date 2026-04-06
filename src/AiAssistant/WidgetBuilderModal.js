@@ -288,7 +288,7 @@ export const WidgetBuilderModal = ({
             };
             setDetectedCode(code);
             lastCompiledCode.current = code.componentCode;
-            setActiveTab("code");
+            setActiveTab("preview");
             compilePreview(code);
 
             // Clear previous chat so the user starts fresh
