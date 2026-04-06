@@ -212,8 +212,13 @@ export const WidgetBuilderModal = ({
                     const data = JSON.parse(raw);
                     const msgs = data?.messages || [];
 
-                    // Detect New Chat (messages cleared)
-                    if (msgs.length === 0 && lastCompiledCode.current) {
+                    // Detect New Chat (messages cleared) — but not in remix mode
+                    // where we intentionally start with empty messages
+                    if (
+                        msgs.length === 0 &&
+                        lastCompiledCode.current &&
+                        !editContext?.componentCode
+                    ) {
                         setPreviewComponent(null);
                         setPreviewError(null);
                         setDetectedCode({
