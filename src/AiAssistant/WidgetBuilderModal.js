@@ -652,9 +652,9 @@ export const WidgetBuilderModal = ({
                             {/* Live widget preview */}
                             {PreviewComponent && !installStatus && (
                                 <div className="flex flex-col h-full">
-                                    {/* Widget preview — centered */}
-                                    <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
-                                        <div className="w-full max-w-2xl rounded-lg border border-gray-700/30 bg-gray-800/30 overflow-hidden shadow-lg">
+                                    {/* Widget preview — fills available space */}
+                                    <div className="flex-1 p-4 overflow-auto">
+                                        <div className="h-full rounded-lg border border-gray-700/30 bg-gray-800/30 overflow-hidden shadow-lg">
                                             <PreviewErrorBoundary
                                                 key={lastCompiledCode.current}
                                             >
