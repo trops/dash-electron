@@ -1,15 +1,21 @@
 const path = require("path");
 const os = require("os");
 
-const widgetCachePath = path.join(
-    os.homedir(),
-    "Library",
-    "Application Support",
-    "Dash",
-    "widgets",
-    "**",
-    "*.{js,jsx,ts,tsx}"
-);
+// Include installed widget source for Tailwind class scanning at build time.
+// Skip in dev mode to prevent webpack file watcher from triggering rebuilds
+// when AI-generated widgets are installed at runtime.
+const isDev = process.env.NODE_ENV !== "production";
+const widgetCachePath = isDev
+    ? null
+    : path.join(
+          os.homedir(),
+          "Library",
+          "Application Support",
+          "Dash",
+          "widgets",
+          "**",
+          "*.{js,jsx,ts,tsx}"
+      );
 
 module.exports = {
     important: true,
@@ -18,7 +24,7 @@ module.exports = {
         "./src/**/*.js",
         "./node_modules/@trops/dash-react/dist/**/*.js",
         "./node_modules/@trops/dash-core/dist/**/*.js",
-        widgetCachePath,
+        ...(widgetCachePath ? [widgetCachePath] : []),
     ],
     theme: {
         extend: {
