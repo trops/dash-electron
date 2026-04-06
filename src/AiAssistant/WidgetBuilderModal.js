@@ -18,7 +18,12 @@ import React, {
     useEffect,
     useRef,
 } from "react";
-import { Modal, FontAwesomeIcon, ThemeContext } from "@trops/dash-react";
+import {
+    Modal,
+    FontAwesomeIcon,
+    ThemeContext,
+    CodeEditorVS,
+} from "@trops/dash-react";
 import {
     ChatCore,
     AppContext,
@@ -171,6 +176,10 @@ export const WidgetBuilderModal = ({
         configCode: null,
     });
     const lastCompiledCode = useRef(null);
+    const [activeTab, setActiveTab] = useState("preview");
+    const [activeFile, setActiveFile] = useState("component");
+    const manualEditRef = useRef(false);
+    const lastMsgCount = useRef(0);
 
     const settings = appContext?.settings || {};
     const providers = appContext?.providers || {};
@@ -212,6 +221,16 @@ export const WidgetBuilderModal = ({
                         lastCompiledCode.current = null;
                         return;
                     }
+
+                    // Reset manualEdit when user sends a new message
+                    if (msgs.length !== lastMsgCount.current) {
+                        lastMsgCount.current = msgs.length;
+                        if (manualEditRef.current)
+                            manualEditRef.current = false;
+                    }
+
+                    // Skip polling if user is manually editing code
+                    if (manualEditRef.current) return;
 
                     const extracted = extractCodeBlocks(msgs);
                     if (
@@ -281,6 +300,44 @@ export const WidgetBuilderModal = ({
         } finally {
             setIsCompiling(false);
         }
+    }, []);
+
+    // Track in-progress edits (not yet saved/compiled)
+    const [editBuffer, setEditBuffer] = useState({
+        component: null,
+        config: null,
+    });
+    const hasUnsavedEdits =
+        editBuffer.component !== null || editBuffer.config !== null;
+
+    // Handle manual code edits from the Code tab (buffers only, no compile)
+    const handleCodeEdit = useCallback(
+        (newCode) => {
+            manualEditRef.current = true;
+            setEditBuffer((prev) => ({
+                ...prev,
+                [activeFile]: newCode,
+            }));
+        },
+        [activeFile]
+    );
+
+    // Save: apply buffered edits and recompile
+    const handleSaveEdits = useCallback(() => {
+        const updated = {
+            componentCode: editBuffer.component ?? detectedCode.componentCode,
+            configCode: editBuffer.config ?? detectedCode.configCode,
+        };
+        setDetectedCode(updated);
+        setEditBuffer({ component: null, config: null });
+        lastCompiledCode.current = null;
+        compilePreview(updated);
+    }, [editBuffer, detectedCode, compilePreview]);
+
+    // Cancel: discard buffered edits
+    const handleCancelEdits = useCallback(() => {
+        setEditBuffer({ component: null, config: null });
+        manualEditRef.current = false;
     }, []);
 
     const handleInstall = useCallback(async () => {
@@ -353,18 +410,45 @@ export const WidgetBuilderModal = ({
             {/* Split pane */}
             <div className={`flex flex-row flex-1 min-h-0 ${bgDark}`}>
                 {/* Left: Live Preview (2/3) */}
-                <div className="flex flex-col flex-[2] min-w-0 overflow-hidden">
-                    {/* Preview header bar */}
+                <div className="flex flex-col flex-[2] min-w-0 min-h-0 overflow-hidden">
+                    {/* Tab bar */}
                     <div
-                        className={`flex items-center justify-between px-4 py-2 border-b ${borderColor} shrink-0`}
+                        className={`flex items-center justify-between px-2 py-1.5 border-b ${borderColor} shrink-0`}
                     >
-                        <div className="flex items-center gap-2 text-xs text-gray-400">
-                            <FontAwesomeIcon icon="eye" className="h-3 w-3" />
-                            <span>
-                                {previewComponent
-                                    ? `Preview: ${displayName}`
-                                    : "Preview"}
-                            </span>
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => setActiveTab("preview")}
+                                className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
+                                    activeTab === "preview"
+                                        ? "bg-indigo-600/20 text-indigo-300"
+                                        : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
+                                }`}
+                            >
+                                <FontAwesomeIcon
+                                    icon="eye"
+                                    className="h-2.5 w-2.5"
+                                />
+                                Preview
+                            </button>
+                            <button
+                                onClick={() => setActiveTab("code")}
+                                disabled={!detectedCode.componentCode}
+                                className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
+                                    activeTab === "code"
+                                        ? "bg-indigo-600/20 text-indigo-300"
+                                        : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
+                                } ${
+                                    !detectedCode.componentCode
+                                        ? "opacity-30 cursor-not-allowed"
+                                        : ""
+                                }`}
+                            >
+                                <FontAwesomeIcon
+                                    icon="code"
+                                    className="h-2.5 w-2.5"
+                                />
+                                Code
+                            </button>
                         </div>
                         {isCompiling && (
                             <div className="flex items-center gap-1.5 text-xs text-indigo-400">
@@ -396,185 +480,308 @@ export const WidgetBuilderModal = ({
                         )}
                     </div>
 
-                    {/* Preview content */}
-                    <div className="flex-1 overflow-auto p-4">
-                        {/* Empty state */}
-                        {!previewComponent && !previewError && !isCompiling && (
-                            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                                <div className="w-16 h-16 rounded-2xl bg-gray-800/80 border border-gray-700/30 flex items-center justify-center">
-                                    <FontAwesomeIcon
-                                        icon="wand-magic-sparkles"
-                                        className="h-7 w-7 text-indigo-400/40"
-                                    />
-                                </div>
-                                <div className="space-y-2 max-w-sm">
-                                    <p className="text-sm font-medium text-gray-300">
-                                        Describe your widget
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                        The AI will generate code and a live
-                                        preview will appear here automatically.
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Compile error */}
-                        {previewError && (
-                            <div className="flex flex-col items-center justify-center h-full space-y-4">
-                                <div className="w-full max-w-lg rounded-lg border border-red-700/30 bg-red-900/10 p-4 space-y-2">
-                                    <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
-                                        <FontAwesomeIcon
-                                            icon="exclamation-circle"
-                                            className="h-4 w-4"
-                                        />
-                                        Compilation Error
+                    {/* Preview content (visible when Preview tab is active) */}
+                    {activeTab === "preview" && (
+                        <div className="flex-1 overflow-auto p-4">
+                            {/* Empty state */}
+                            {!previewComponent &&
+                                !previewError &&
+                                !isCompiling && (
+                                    <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+                                        <div className="w-16 h-16 rounded-2xl bg-gray-800/80 border border-gray-700/30 flex items-center justify-center">
+                                            <FontAwesomeIcon
+                                                icon="wand-magic-sparkles"
+                                                className="h-7 w-7 text-indigo-400/40"
+                                            />
+                                        </div>
+                                        <div className="space-y-2 max-w-sm">
+                                            <p className="text-sm font-medium text-gray-300">
+                                                Describe your widget
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                                The AI will generate code and a
+                                                live preview will appear here
+                                                automatically.
+                                            </p>
+                                        </div>
                                     </div>
-                                    <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto max-h-32">
-                                        {previewError}
-                                    </pre>
-                                    <button
-                                        onClick={() => {
-                                            try {
-                                                const raw =
-                                                    localStorage.getItem(
-                                                        "dash-widget-builder"
-                                                    );
-                                                if (raw) {
-                                                    const data =
-                                                        JSON.parse(raw);
-                                                    const msgs =
-                                                        data?.messages || [];
-                                                    msgs.push({
-                                                        role: "user",
-                                                        content: `Fix this compilation error:\n\n${previewError}\n\nPlease output both the corrected jsx component code block and the javascript config code block.`,
-                                                    });
-                                                    localStorage.setItem(
-                                                        "dash-widget-builder",
-                                                        JSON.stringify({
-                                                            ...data,
-                                                            messages: msgs,
-                                                        })
-                                                    );
-                                                }
-                                            } catch (_) {
-                                                /* ignore */
-                                            }
-                                        }}
-                                        className="text-xs text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
-                                    >
-                                        Send error to AI
-                                    </button>
-                                </div>
-                            </div>
-                        )}
+                                )}
 
-                        {/* Live widget preview */}
-                        {PreviewComponent && !installStatus && (
-                            <div className="flex flex-col h-full">
-                                {/* Widget preview — centered */}
-                                <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
-                                    <div className="w-full max-w-2xl rounded-lg border border-gray-700/30 bg-gray-800/30 overflow-hidden shadow-lg">
-                                        <PreviewErrorBoundary
-                                            key={lastCompiledCode.current}
+                            {/* Compile error */}
+                            {previewError && (
+                                <div className="flex flex-col items-center justify-center h-full space-y-4">
+                                    <div className="w-full max-w-lg rounded-lg border border-red-700/30 bg-red-900/10 p-4 space-y-2">
+                                        <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
+                                            <FontAwesomeIcon
+                                                icon="exclamation-circle"
+                                                className="h-4 w-4"
+                                            />
+                                            Compilation Error
+                                        </div>
+                                        <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto max-h-32">
+                                            {previewError}
+                                        </pre>
+                                        <button
+                                            onClick={() => {
+                                                try {
+                                                    const raw =
+                                                        localStorage.getItem(
+                                                            "dash-widget-builder"
+                                                        );
+                                                    if (raw) {
+                                                        const data =
+                                                            JSON.parse(raw);
+                                                        const msgs =
+                                                            data?.messages ||
+                                                            [];
+                                                        msgs.push({
+                                                            role: "user",
+                                                            content: `Fix this compilation error:\n\n${previewError}\n\nPlease output both the corrected jsx component code block and the javascript config code block.`,
+                                                        });
+                                                        localStorage.setItem(
+                                                            "dash-widget-builder",
+                                                            JSON.stringify({
+                                                                ...data,
+                                                                messages: msgs,
+                                                            })
+                                                        );
+                                                    }
+                                                } catch (_) {
+                                                    /* ignore */
+                                                }
+                                            }}
+                                            className="text-xs text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
                                         >
-                                            <React.Suspense
-                                                fallback={
-                                                    <div className="p-8 text-center text-gray-500 text-sm">
-                                                        Loading preview...
-                                                    </div>
-                                                }
-                                            >
-                                                <PreviewComponent
-                                                    title={displayName}
-                                                />
-                                            </React.Suspense>
-                                        </PreviewErrorBoundary>
+                                            Send error to AI
+                                        </button>
                                     </div>
                                 </div>
-                                {/* Footer — Install button */}
-                                <div
-                                    className={`flex items-center justify-between px-6 py-3 border-t ${borderColor} shrink-0`}
-                                >
-                                    <span className="text-xs text-gray-500">
-                                        Installs to @ai-built/
-                                        {widgetName?.toLowerCase()}
-                                    </span>
-                                    <button
-                                        onClick={handleInstall}
-                                        className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
-                                    >
-                                        Install Widget
-                                    </button>
-                                </div>
-                            </div>
-                        )}
+                            )}
 
-                        {/* Installed success */}
-                        {installStatus?.success && (
-                            <div className="flex flex-col items-center justify-center h-full gap-4">
-                                <div className="w-12 h-12 rounded-xl bg-green-600/20 flex items-center justify-center">
-                                    <FontAwesomeIcon
-                                        icon="check-circle"
-                                        className="h-6 w-6 text-green-400"
-                                    />
-                                </div>
-                                <div className="text-center space-y-1">
-                                    <p className="text-base font-semibold text-green-300">
-                                        Widget Installed!
-                                    </p>
-                                    <p className="text-sm text-gray-400">
-                                        <span className="font-mono text-gray-300">
-                                            {installStatus.widgetName}
-                                        </span>{" "}
-                                        is now in the widget selector.
-                                    </p>
-                                </div>
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => setIsOpen(false)}
-                                        className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+                            {/* Live widget preview */}
+                            {PreviewComponent && !installStatus && (
+                                <div className="flex flex-col h-full">
+                                    {/* Widget preview — centered */}
+                                    <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
+                                        <div className="w-full max-w-2xl rounded-lg border border-gray-700/30 bg-gray-800/30 overflow-hidden shadow-lg">
+                                            <PreviewErrorBoundary
+                                                key={lastCompiledCode.current}
+                                            >
+                                                <React.Suspense
+                                                    fallback={
+                                                        <div className="p-8 text-center text-gray-500 text-sm">
+                                                            Loading preview...
+                                                        </div>
+                                                    }
+                                                >
+                                                    <PreviewComponent
+                                                        title={displayName}
+                                                    />
+                                                </React.Suspense>
+                                            </PreviewErrorBoundary>
+                                        </div>
+                                    </div>
+                                    {/* Footer — Install button */}
+                                    <div
+                                        className={`flex items-center justify-between px-6 py-3 border-t ${borderColor} shrink-0`}
                                     >
-                                        Done
-                                    </button>
+                                        <span className="text-xs text-gray-500">
+                                            Installs to @ai-built/
+                                            {widgetName?.toLowerCase()}
+                                        </span>
+                                        <button
+                                            onClick={handleInstall}
+                                            className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+                                        >
+                                            Install Widget
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Installed success */}
+                            {installStatus?.success && (
+                                <div className="flex flex-col items-center justify-center h-full gap-4">
+                                    <div className="w-12 h-12 rounded-xl bg-green-600/20 flex items-center justify-center">
+                                        <FontAwesomeIcon
+                                            icon="check-circle"
+                                            className="h-6 w-6 text-green-400"
+                                        />
+                                    </div>
+                                    <div className="text-center space-y-1">
+                                        <p className="text-base font-semibold text-green-300">
+                                            Widget Installed!
+                                        </p>
+                                        <p className="text-sm text-gray-400">
+                                            <span className="font-mono text-gray-300">
+                                                {installStatus.widgetName}
+                                            </span>{" "}
+                                            is now in the widget selector.
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => setIsOpen(false)}
+                                            className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+                                        >
+                                            Done
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setInstallStatus(null);
+                                                setPreviewComponent(null);
+                                                setDetectedCode({
+                                                    componentCode: null,
+                                                    configCode: null,
+                                                });
+                                                lastCompiledCode.current = null;
+                                            }}
+                                            className="px-5 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
+                                        >
+                                            Build Another
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Install error */}
+                            {installStatus?.error && (
+                                <div className="flex flex-col items-center justify-center h-full gap-4">
+                                    <div className="text-center space-y-2">
+                                        <p className="text-red-400 font-medium">
+                                            Installation failed
+                                        </p>
+                                        <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 max-w-md overflow-auto">
+                                            {installStatus.error}
+                                        </pre>
+                                    </div>
                                     <button
-                                        onClick={() => {
-                                            setInstallStatus(null);
-                                            setPreviewComponent(null);
-                                            setDetectedCode({
-                                                componentCode: null,
-                                                configCode: null,
-                                            });
-                                            lastCompiledCode.current = null;
-                                        }}
+                                        onClick={() => setInstallStatus(null)}
                                         className="px-5 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
                                     >
-                                        Build Another
+                                        Try Again
                                     </button>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
+                    )}
 
-                        {/* Install error */}
-                        {installStatus?.error && (
-                            <div className="flex flex-col items-center justify-center h-full gap-4">
-                                <div className="text-center space-y-2">
-                                    <p className="text-red-400 font-medium">
-                                        Installation failed
-                                    </p>
-                                    <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 max-w-md overflow-auto">
-                                        {installStatus.error}
-                                    </pre>
+                    {/* Code editor (visible when Code tab is active) */}
+                    {activeTab === "code" && detectedCode.componentCode && (
+                        <div className="flex flex-1 min-h-0 overflow-hidden">
+                            {/* File explorer sidebar */}
+                            <div
+                                className={`w-48 border-r ${borderColor} shrink-0 overflow-auto py-1`}
+                            >
+                                <div className="px-2 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                                    Files
                                 </div>
                                 <button
-                                    onClick={() => setInstallStatus(null)}
-                                    className="px-5 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
+                                    onClick={() => setActiveFile("component")}
+                                    className={`w-full text-left px-3 py-1.5 text-xs font-mono truncate transition-colors ${
+                                        activeFile === "component"
+                                            ? "bg-indigo-600/15 text-indigo-300"
+                                            : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
+                                    }`}
                                 >
-                                    Try Again
+                                    <FontAwesomeIcon
+                                        icon="file-code"
+                                        className="h-2.5 w-2.5 mr-1.5"
+                                    />
+                                    {widgetName || "Widget"}.js
+                                </button>
+                                <button
+                                    onClick={() => setActiveFile("config")}
+                                    className={`w-full text-left px-3 py-1.5 text-xs font-mono truncate transition-colors ${
+                                        activeFile === "config"
+                                            ? "bg-indigo-600/15 text-indigo-300"
+                                            : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
+                                    }`}
+                                >
+                                    <FontAwesomeIcon
+                                        icon="cog"
+                                        className="h-2.5 w-2.5 mr-1.5"
+                                    />
+                                    {widgetName || "Widget"}.dash.js
                                 </button>
                             </div>
-                        )}
-                    </div>
+                            {/* Editor pane with breadcrumb header */}
+                            <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
+                                {/* Breadcrumb path */}
+                                <div
+                                    className={`flex items-center gap-1 px-3 py-1.5 border-b ${borderColor} shrink-0 text-xs`}
+                                >
+                                    <span className="text-gray-600">
+                                        @ai-built
+                                    </span>
+                                    <span className="text-gray-700">/</span>
+                                    <span className="text-gray-600">
+                                        {(widgetName || "widget").toLowerCase()}
+                                    </span>
+                                    <span className="text-gray-700">/</span>
+                                    <span className="text-gray-600">
+                                        widgets
+                                    </span>
+                                    <span className="text-gray-700">/</span>
+                                    <span className="text-gray-300 font-medium">
+                                        {widgetName || "Widget"}
+                                        {activeFile === "config"
+                                            ? ".dash.js"
+                                            : ".js"}
+                                    </span>
+                                </div>
+                                <div className="flex-1 min-h-0 overflow-hidden relative">
+                                    <div className="absolute inset-0">
+                                        <CodeEditorVS
+                                            key={activeFile}
+                                            code={
+                                                editBuffer[activeFile] ??
+                                                (activeFile === "component"
+                                                    ? detectedCode.componentCode
+                                                    : detectedCode.configCode ||
+                                                      "")
+                                            }
+                                            language="javascript"
+                                            onChange={handleCodeEdit}
+                                            readOnly={false}
+                                            minimapEnabled={false}
+                                            padding="p-0"
+                                        />
+                                    </div>
+                                </div>
+                                {/* Footer bar — always visible */}
+                                <div
+                                    className={`flex items-center justify-between px-3 py-2 border-t ${borderColor} shrink-0`}
+                                >
+                                    <span className="text-[10px] text-gray-600">
+                                        {hasUnsavedEdits
+                                            ? "Unsaved changes"
+                                            : ""}
+                                    </span>
+                                    {hasUnsavedEdits ? (
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={handleCancelEdits}
+                                                className="px-3 py-1 rounded text-xs text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={handleSaveEdits}
+                                                className="px-3 py-1 rounded text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
+                                            >
+                                                Save &amp; Compile
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <span className="text-[10px] text-gray-600">
+                                            JavaScript
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Right: Chat (1/3) */}
