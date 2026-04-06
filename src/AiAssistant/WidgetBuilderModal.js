@@ -30,6 +30,7 @@ import {
     evaluateBundle,
     extractWidgetConfigs,
 } from "@trops/dash-core";
+import { WidgetConfigureTab } from "./WidgetConfigureTab";
 
 /**
  * Error boundary for the live widget preview.
@@ -449,6 +450,25 @@ export const WidgetBuilderModal = ({
                                 />
                                 Code
                             </button>
+                            <button
+                                onClick={() => setActiveTab("configure")}
+                                disabled={!detectedCode.componentCode}
+                                className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
+                                    activeTab === "configure"
+                                        ? "bg-indigo-600/20 text-indigo-300"
+                                        : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
+                                } ${
+                                    !detectedCode.componentCode
+                                        ? "opacity-30 cursor-not-allowed"
+                                        : ""
+                                }`}
+                            >
+                                <FontAwesomeIcon
+                                    icon="cog"
+                                    className="h-2.5 w-2.5"
+                                />
+                                Configure
+                            </button>
                         </div>
                         {isCompiling && (
                             <div className="flex items-center gap-1.5 text-xs text-indigo-400">
@@ -782,6 +802,25 @@ export const WidgetBuilderModal = ({
                             </div>
                         </div>
                     )}
+
+                    {/* Configure tab */}
+                    {activeTab === "configure" &&
+                        detectedCode.componentCode && (
+                            <WidgetConfigureTab
+                                configCode={detectedCode.configCode || ""}
+                                componentName={widgetName}
+                                borderColor={borderColor}
+                                onSave={(newConfigCode) => {
+                                    const updated = {
+                                        ...detectedCode,
+                                        configCode: newConfigCode,
+                                    };
+                                    setDetectedCode(updated);
+                                    lastCompiledCode.current = null;
+                                    compilePreview(updated);
+                                }}
+                            />
+                        )}
                 </div>
 
                 {/* Right: Chat (1/3) */}
