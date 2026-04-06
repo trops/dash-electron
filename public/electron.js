@@ -40,23 +40,54 @@ const {
 if (require("electron-squirrel-startup")) app.quit();
 
 // Fix esbuild binary path in packaged app (asar archive).
-// esbuild's require.resolve() returns an asar-internal path that spawn() can't
-// execute. Set ESBUILD_BINARY_PATH to the unpacked binary before esbuild loads.
+// In a universal macOS build, @electron/universal splits the app into
+// app-arm64.asar + app-x64.asar with a bootstrap app.asar that calls
+// app.setAppPath() to the arch-specific asar. The unpacked native binaries
+// live at {asar}.unpacked/ (e.g., app-arm64.asar.unpacked/).
+// esbuild's require.resolve() returns an asar-internal path that spawn()
+// can't execute, so we point ESBUILD_BINARY_PATH to the unpacked binary.
 if (!process.env.ESBUILD_BINARY_PATH) {
     const appPath = app.getAppPath();
-    if (appPath.includes("app.asar")) {
+    if (appPath.endsWith(".asar")) {
+        const fs = require("fs");
         const platform =
             process.platform === "win32"
                 ? `win32-${process.arch}`
                 : `${process.platform}-${process.arch}`;
-        process.env.ESBUILD_BINARY_PATH = path.join(
-            appPath.replace("app.asar", "app.asar.unpacked"),
+        const unpackedDir = appPath + ".unpacked";
+        const binPath = path.join(
+            unpackedDir,
             "node_modules",
             "@esbuild",
             platform,
             "bin",
             process.platform === "win32" ? "esbuild.exe" : "esbuild"
         );
+        process.env.ESBUILD_BINARY_PATH = binPath;
+        // Diagnostic logging for packaged app debugging
+        const exists = fs.existsSync(binPath);
+        console.log(`[esbuild] appPath: ${appPath}`);
+        console.log(`[esbuild] Binary path: ${binPath}`);
+        console.log(`[esbuild] Binary exists: ${exists}`);
+        if (!exists) {
+            try {
+                const esbuildDir = path.join(
+                    unpackedDir,
+                    "node_modules",
+                    "@esbuild"
+                );
+                if (fs.existsSync(esbuildDir)) {
+                    const contents = fs.readdirSync(esbuildDir);
+                    console.log(`[esbuild] @esbuild contents:`, contents);
+                } else {
+                    console.log(
+                        `[esbuild] @esbuild dir not found at: ${esbuildDir}`
+                    );
+                }
+            } catch (e) {
+                console.log(`[esbuild] Diagnostic error:`, e.message);
+            }
+        }
     }
 }
 
