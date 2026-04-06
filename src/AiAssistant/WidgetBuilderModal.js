@@ -260,30 +260,22 @@ export const WidgetBuilderModal = ({
                 configCode: editContext.configCode || "",
             };
             setDetectedCode(code);
+            lastCompiledCode.current = code.componentCode;
             setActiveTab("code");
             compilePreview(code);
 
-            // Seed chat with existing source code (only when empty)
+            // Clear previous chat and seed with widget source code
             try {
-                const existingRaw = localStorage.getItem("dash-widget-builder");
-                const existingData = existingRaw ? JSON.parse(existingRaw) : {};
-                const existingMsgs = existingData?.messages || [];
-
-                if (existingMsgs.length === 0) {
-                    const seedMessages = [
-                        {
-                            role: "user",
-                            content: `I want to edit this existing widget. Here is the current source code:\n\n\`\`\`jsx\n${editContext.componentCode}\n\`\`\`\n\n\`\`\`javascript\n${editContext.configCode}\n\`\`\`\n\nPlease make the following changes:`,
-                        },
-                    ];
-                    localStorage.setItem(
-                        "dash-widget-builder",
-                        JSON.stringify({
-                            ...existingData,
-                            messages: seedMessages,
-                        })
-                    );
-                }
+                const seedMessages = [
+                    {
+                        role: "user",
+                        content: `I want to edit this existing widget. Here is the current source code:\n\n\`\`\`jsx\n${editContext.componentCode}\n\`\`\`\n\n\`\`\`javascript\n${editContext.configCode}\n\`\`\`\n\nPlease make the following changes:`,
+                    },
+                ];
+                localStorage.setItem(
+                    "dash-widget-builder",
+                    JSON.stringify({ messages: seedMessages })
+                );
             } catch (_) {
                 /* ignore */
             }
