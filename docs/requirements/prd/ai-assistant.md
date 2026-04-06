@@ -196,18 +196,18 @@ Widget files go to `{userData}/widgets/@ai-built/{widget-name}/`. Use existing `
 > so that I can adapt it to my specific needs without starting from scratch.
 
 **Priority:** P1
-**Status:** Backlog
+**Status:** Implemented
 
 **Acceptance Criteria:**
 
--   [ ] AC1: Right-click widget → "Remix with AI" opens the widget builder modal
--   [ ] AC2: Original widget source is pre-loaded as AI context
--   [ ] AC3: AI generates a forked version under `@ai-built/` scope
--   [ ] AC4: Original widget is untouched — remix is a separate installation
--   [ ] AC5: Remix metadata tracks attribution (`remixedFrom` in `dash.json`)
+-   [x] AC1: "Edit with AI" button on widget cell header in layout edit mode opens the widget builder modal
+-   [x] AC2: Original widget source is pre-loaded as AI context (Code tab + chat seed)
+-   [x] AC3: AI generates a forked version under `@ai-built/` scope
+-   [x] AC4: Original widget is untouched — remix is a separate installation under `@ai-built/`
+-   [x] AC5: Remix metadata tracks attribution (`remixedFrom` in `dash.json`) for non-AI-built widgets
 
 **Technical Notes:**
-Installed widgets already include source files (`widgets/*.js` + `widgets/*.dash.js`). The AI reads these as context. Fork naming: `@ai-built/{original-name}-custom`.
+Uses `widget:read-sources` IPC (dash-core 0.1.322+) to read `.js` + `.dash.js` source files. "Edit with AI" wand button added to `WidgetCardHeader` in layout edit mode. On remix, widget is installed to `@ai-built/` and the cell's widget is swapped in-place via `dash:swap-widget-in-cell` event (no page refresh). Attribution is only added when remixing a non-`@ai-built/` widget.
 
 ---
 
@@ -467,7 +467,7 @@ The `tailwind.config.js` content array conditionally excludes the widget cache p
 
 **Deliverables:**
 
--   [ ] US-004: Remix existing widgets
+-   [x] US-004: Remix existing widgets
 -   [ ] US-005: Publish AI-built widgets to registry
 -   [ ] US-006: AI troubleshooting for widget errors
 

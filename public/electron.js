@@ -1775,6 +1775,7 @@ function createWindow() {
                 configCode,
                 description,
                 cellContext,
+                remixMeta,
             } = message;
 
             const path = require("path");
@@ -1829,6 +1830,11 @@ function createWindow() {
                                 },
                             ],
                             createdAt: new Date().toISOString(),
+                            ...(remixMeta?.remixedFrom
+                                ? {
+                                      remixedFrom: remixMeta.remixedFrom,
+                                  }
+                                : {}),
                         },
                         null,
                         2
