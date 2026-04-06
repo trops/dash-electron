@@ -18,7 +18,7 @@ module.exports = {
         // so the x64+arm64 stitcher keeps both esbuild binaries
         osxUniversal: {
             x64ArchFiles:
-                "Contents/Resources/app.asar.unpacked/node_modules/@esbuild/**",
+                "{Contents/Resources/app.asar.unpacked/node_modules/@esbuild/**,Contents/Resources/app.asar.unpacked/node_modules/esbuild/**}",
         },
         name: process.env.REACT_APP_PACKAGE_NAME,
         icon: "./assets/icons/icon",
