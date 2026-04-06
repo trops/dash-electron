@@ -264,17 +264,11 @@ export const WidgetBuilderModal = ({
             setActiveTab("code");
             compilePreview(code);
 
-            // Clear previous chat and seed with widget source code
+            // Clear previous chat so the user starts fresh
             try {
-                const seedMessages = [
-                    {
-                        role: "user",
-                        content: `I want to edit this existing widget. Here is the current source code:\n\n\`\`\`jsx\n${editContext.componentCode}\n\`\`\`\n\n\`\`\`javascript\n${editContext.configCode}\n\`\`\`\n\nPlease make the following changes:`,
-                    },
-                ];
                 localStorage.setItem(
                     "dash-widget-builder",
-                    JSON.stringify({ messages: seedMessages })
+                    JSON.stringify({ messages: [] })
                 );
             } catch (_) {
                 /* ignore */
@@ -889,7 +883,15 @@ export const WidgetBuilderModal = ({
                     <ChatCore
                         title=""
                         model={model}
-                        systemPrompt={SYSTEM_PROMPT}
+                        systemPrompt={
+                            editContext?.componentCode
+                                ? `${SYSTEM_PROMPT}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
+                                      editContext.componentCode
+                                  }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
+                                      editContext.configCode || ""
+                                  }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.`
+                                : SYSTEM_PROMPT
+                        }
                         maxToolRounds="10"
                         apiKey={apiKey}
                         backend={preferredBackend}
