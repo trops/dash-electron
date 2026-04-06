@@ -11,7 +11,9 @@ require("dotenv").config();
 
 module.exports = {
     packagerConfig: {
-        asar: true,
+        asar: {
+            unpack: "{**/node_modules/@esbuild/**,**/node_modules/esbuild/**}",
+        },
         name: process.env.REACT_APP_PACKAGE_NAME,
         icon: "./assets/icons/icon",
         ...(process.env.REACT_APP_APPLE_CERT_ID
