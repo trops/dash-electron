@@ -153,7 +153,12 @@ function extractWidgetName(code) {
     return match ? match[1] : null;
 }
 
-export const WidgetBuilderModal = ({ isOpen, setIsOpen, onInstalled }) => {
+export const WidgetBuilderModal = ({
+    isOpen,
+    setIsOpen,
+    onInstalled,
+    cellContext,
+}) => {
     const { currentTheme } = useContext(ThemeContext);
     const appContext = useContext(AppContext);
 
@@ -289,7 +294,9 @@ export const WidgetBuilderModal = ({ isOpen, setIsOpen, onInstalled }) => {
                     `export default { component: "${widgetName}", name: "${widgetName
                         .replace(/([A-Z])/g, " $1")
                         .trim()}", type: "widget", canHaveChildren: false, workspace: "ai-built" };`,
-                `AI-generated widget: ${widgetName}`
+                `AI-generated widget: ${widgetName}`,
+                cellContext || null,
+                process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron"
             );
             if (result?.success) {
                 setInstallStatus({
@@ -297,7 +304,7 @@ export const WidgetBuilderModal = ({ isOpen, setIsOpen, onInstalled }) => {
                     widgetName: result.widgetName,
                 });
                 if (onInstalled) {
-                    onInstalled(result.widgetName);
+                    onInstalled(widgetName, result.widgetName);
                 }
             } else {
                 setInstallStatus({
@@ -307,7 +314,7 @@ export const WidgetBuilderModal = ({ isOpen, setIsOpen, onInstalled }) => {
         } catch (err) {
             setInstallStatus({ error: err.message });
         }
-    }, [detectedCode, widgetName, onInstalled]);
+    }, [detectedCode, widgetName, onInstalled, cellContext]);
 
     if (!isOpen) return null;
 

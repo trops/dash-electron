@@ -47,6 +47,11 @@ const extendedApi = {
         clear: () => ipcRenderer.invoke("response-cache-clear"),
         stats: () => ipcRenderer.invoke("response-cache-stats"),
     },
+    workspaceSilent: {
+        save: (appId, data) =>
+            ipcRenderer.invoke("workspace-save-silent", { appId, data }),
+        notifySaved: () => ipcRenderer.invoke("workspace:notify-saved"),
+    },
     widgetBuilder: {
         compilePreview: (widgetName, componentCode, configCode) =>
             ipcRenderer.invoke("widget:ai-compile-preview", {
@@ -54,12 +59,21 @@ const extendedApi = {
                 componentCode,
                 configCode,
             }),
-        aiBuild: (widgetName, componentCode, configCode, description) =>
+        aiBuild: (
+            widgetName,
+            componentCode,
+            configCode,
+            description,
+            cellContext,
+            appId
+        ) =>
             ipcRenderer.invoke("widget:ai-build", {
                 widgetName,
                 componentCode,
                 configCode,
                 description,
+                cellContext,
+                appId,
             }),
     },
     debug: {

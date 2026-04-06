@@ -852,6 +852,22 @@ function createWindow() {
             }
             return result;
         });
+
+        // Silent workspace save — no broadcast (used by widget builder)
+        logger.loggedHandle("workspace-save-silent", async (e, message) => {
+            return await saveWorkspaceForApplication(
+                getSenderWindow(e),
+                message.appId,
+                message.data
+            );
+        });
+        // Notify ONLY the sender window that workspace was saved
+        logger.loggedHandle("workspace:notify-saved", (e) => {
+            const senderWin = getSenderWindow(e);
+            if (senderWin && !senderWin.isDestroyed()) {
+                senderWin.webContents.send("workspace:saved");
+            }
+        });
         logger.loggedHandle(WORKSPACE_DELETE, (e, message) =>
             deleteWorkspaceForApplication(
                 getSenderWindow(e),
@@ -1753,8 +1769,13 @@ function createWindow() {
         // Compiles AI-generated widget code and installs to @ai-built/ scope.
         // Called from the Widget Builder modal UI — the LLM never touches the filesystem.
         logger.loggedHandle("widget:ai-build", async (e, message) => {
-            const { widgetName, componentCode, configCode, description } =
-                message;
+            const {
+                widgetName,
+                componentCode,
+                configCode,
+                description,
+                cellContext,
+            } = message;
 
             const path = require("path");
             const fs = require("fs");
@@ -1846,15 +1867,19 @@ function createWindow() {
                     path.join(buildDir, "dash.json")
                 );
 
-                // Broadcast to all windows
-                for (const win of windows) {
-                    if (!win.isDestroyed()) {
-                        win.webContents.send("widget:installed", {
-                            widgetName: scopedName,
-                            config,
-                        });
+                if (!cellContext) {
+                    // No cell context: broadcast normally for widget picker
+                    for (const win of windows) {
+                        if (!win.isDestroyed()) {
+                            win.webContents.send("widget:installed", {
+                                widgetName: scopedName,
+                                config,
+                            });
+                        }
                     }
                 }
+                // With cell context: NO broadcast, NO workspace save.
+                // Everything deferred to modal close to prevent app reload.
 
                 return {
                     success: true,

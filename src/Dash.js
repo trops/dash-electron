@@ -378,9 +378,12 @@ class App extends React.Component {
     async componentDidMount() {
         console.log("[Dash App] componentDidMount called");
 
-        // Listen for widget builder open event
-        window.addEventListener("dash:open-widget-builder", () => {
-            this.setState({ isWidgetBuilderOpen: true });
+        // Listen for widget builder open event (with optional cell context)
+        window.addEventListener("dash:open-widget-builder", (e) => {
+            this.setState({
+                isWidgetBuilderOpen: true,
+                widgetBuilderCellContext: e.detail || null,
+            });
         });
 
         // Listen for widget installation events (hot reload)
@@ -521,8 +524,11 @@ class App extends React.Component {
 
         window.dispatchEvent(new Event("dash:widgets-updated"));
 
-        // Force dashboard to remount with updated widget components
-        this.setState((prev) => ({ stageKey: prev.stageKey + 1 }));
+        // Force dashboard to remount with updated widget components.
+        // Skip when widget builder is open — deferred to modal close.
+        if (!this.state.isWidgetBuilderOpen) {
+            this.setState((prev) => ({ stageKey: prev.stageKey + 1 }));
+        }
     };
 
     handleWidgetUninstalled = ({ widgetName }) => {
@@ -564,21 +570,86 @@ class App extends React.Component {
                                 {this.state.isWidgetBuilderOpen && (
                                     <WidgetBuilderModal
                                         isOpen={this.state.isWidgetBuilderOpen}
-                                        setIsOpen={(open) =>
-                                            this.setState({
-                                                isWidgetBuilderOpen: open,
-                                            })
-                                        }
-                                        onInstalled={(widgetName) => {
-                                            console.log(
-                                                `[App] AI widget installed: ${widgetName}`
-                                            );
-                                            window.dispatchEvent(
-                                                new Event(
-                                                    "dash:widgets-updated"
-                                                )
-                                            );
+                                        setIsOpen={async (open) => {
+                                            if (!open) {
+                                                // Modal closing — do all deferred work NOW
+                                                const installed =
+                                                    this.state
+                                                        .installedWidgetInfo;
+                                                const ctx =
+                                                    this.state
+                                                        .widgetBuilderCellContext;
+
+                                                // Close modal first
+                                                this.setState({
+                                                    isWidgetBuilderOpen: false,
+                                                });
+
+                                                if (installed) {
+                                                    // Register widget in renderer's ComponentManager
+                                                    try {
+                                                        const bundleResult =
+                                                            await window.mainApi.widgets.readBundle(
+                                                                installed.scopedName
+                                                            );
+                                                        if (
+                                                            bundleResult?.success
+                                                        ) {
+                                                            registerBundleConfigs(
+                                                                installed.scopedName,
+                                                                bundleResult.source
+                                                            );
+                                                        }
+                                                    } catch (regErr) {
+                                                        console.warn(
+                                                            "[App] Widget registration:",
+                                                            regErr
+                                                        );
+                                                    }
+
+                                                    // Place widget in cell via LayoutBuilder's event listener
+                                                    // (modifies LayoutBuilder's in-memory state directly — no reload needed)
+                                                    if (
+                                                        ctx?.cellNumber &&
+                                                        ctx?.gridItemId
+                                                    ) {
+                                                        window.dispatchEvent(
+                                                            new CustomEvent(
+                                                                "dash:place-widget-in-cell",
+                                                                {
+                                                                    detail: {
+                                                                        widgetComponentName:
+                                                                            installed.componentName,
+                                                                        cellNumber:
+                                                                            ctx.cellNumber,
+                                                                        gridItemId:
+                                                                            ctx.gridItemId,
+                                                                    },
+                                                                }
+                                                            )
+                                                        );
+                                                    }
+                                                }
+                                            } else {
+                                                this.setState({
+                                                    isWidgetBuilderOpen: true,
+                                                });
+                                            }
                                         }}
+                                        onInstalled={(
+                                            componentName,
+                                            scopedName
+                                        ) => {
+                                            this.setState({
+                                                installedWidgetInfo: {
+                                                    componentName,
+                                                    scopedName,
+                                                },
+                                            });
+                                        }}
+                                        cellContext={
+                                            this.state.widgetBuilderCellContext
+                                        }
                                     />
                                 )}
                             </ErrorBoundary>
