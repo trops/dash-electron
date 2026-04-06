@@ -65,7 +65,8 @@ const extendedApi = {
             configCode,
             description,
             cellContext,
-            appId
+            appId,
+            remixMeta
         ) =>
             ipcRenderer.invoke("widget:ai-build", {
                 widgetName,
@@ -74,6 +75,12 @@ const extendedApi = {
                 description,
                 cellContext,
                 appId,
+                remixMeta,
+            }),
+        readSources: (widgetName, componentName) =>
+            ipcRenderer.invoke("widget:read-sources", {
+                widgetName,
+                componentName,
             }),
     },
     debug: {

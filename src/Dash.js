@@ -383,6 +383,54 @@ class App extends React.Component {
             this.setState({
                 isWidgetBuilderOpen: true,
                 widgetBuilderCellContext: e.detail || null,
+                widgetBuilderEditContext: null,
+            });
+        });
+
+        // Listen for "Edit with AI" — reads source and opens builder in remix mode
+        window.addEventListener("dash:edit-widget-with-ai", async (e) => {
+            const detail = e.detail || {};
+            const {
+                widgetComponentName,
+                sourcePackage,
+                cellNumber,
+                gridItemId,
+                workspaceId,
+                widgetId,
+            } = detail;
+
+            const packageName =
+                sourcePackage ||
+                `@ai-built/${widgetComponentName?.toLowerCase()}`;
+
+            let editContext = null;
+            try {
+                const result = await window.mainApi.widgetBuilder.readSources(
+                    packageName,
+                    widgetComponentName
+                );
+                if (result?.success) {
+                    editContext = {
+                        componentCode: result.componentCode,
+                        configCode: result.configCode,
+                        manifest: result.manifest,
+                        originalWidgetId: widgetId,
+                        originalComponentName: widgetComponentName,
+                        originalPackage: packageName,
+                    };
+                }
+            } catch (err) {
+                console.warn("[Dash] Could not read widget sources:", err);
+            }
+
+            this.setState({
+                isWidgetBuilderOpen: true,
+                widgetBuilderCellContext: {
+                    cellNumber,
+                    gridItemId,
+                    workspaceId,
+                },
+                widgetBuilderEditContext: editContext,
             });
         });
 
@@ -579,10 +627,15 @@ class App extends React.Component {
                                                 const ctx =
                                                     this.state
                                                         .widgetBuilderCellContext;
+                                                const editCtx =
+                                                    this.state
+                                                        .widgetBuilderEditContext;
 
-                                                // Close modal first
+                                                // Close modal and clear edit context
                                                 this.setState({
                                                     isWidgetBuilderOpen: false,
+                                                    widgetBuilderEditContext:
+                                                        null,
                                                 });
 
                                                 if (installed) {
@@ -607,12 +660,33 @@ class App extends React.Component {
                                                         );
                                                     }
 
-                                                    // Place widget in cell via LayoutBuilder's event listener
-                                                    // (modifies LayoutBuilder's in-memory state directly — no reload needed)
                                                     if (
+                                                        editCtx?.originalWidgetId &&
+                                                        ctx?.gridItemId
+                                                    ) {
+                                                        // REMIX mode: swap existing widget in-place
+                                                        window.dispatchEvent(
+                                                            new CustomEvent(
+                                                                "dash:swap-widget-in-cell",
+                                                                {
+                                                                    detail: {
+                                                                        widgetComponentName:
+                                                                            installed.componentName,
+                                                                        widgetId:
+                                                                            editCtx.originalWidgetId,
+                                                                        cellNumber:
+                                                                            ctx.cellNumber,
+                                                                        gridItemId:
+                                                                            ctx.gridItemId,
+                                                                    },
+                                                                }
+                                                            )
+                                                        );
+                                                    } else if (
                                                         ctx?.cellNumber &&
                                                         ctx?.gridItemId
                                                     ) {
+                                                        // NEW mode: place in empty cell
                                                         window.dispatchEvent(
                                                             new CustomEvent(
                                                                 "dash:place-widget-in-cell",
@@ -649,6 +723,11 @@ class App extends React.Component {
                                         }}
                                         cellContext={
                                             this.state.widgetBuilderCellContext
+                                        }
+                                        editContext={
+                                            this.state
+                                                .widgetBuilderEditContext ||
+                                            null
                                         }
                                     />
                                 )}

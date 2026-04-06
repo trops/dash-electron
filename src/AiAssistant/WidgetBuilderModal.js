@@ -164,6 +164,7 @@ export const WidgetBuilderModal = ({
     setIsOpen,
     onInstalled,
     cellContext,
+    editContext,
 }) => {
     const { currentTheme } = useContext(ThemeContext);
     const appContext = useContext(AppContext);
@@ -181,6 +182,7 @@ export const WidgetBuilderModal = ({
     const [activeFile, setActiveFile] = useState("component");
     const manualEditRef = useRef(false);
     const lastMsgCount = useRef(0);
+    const isRemixMode = !!editContext?.originalWidgetId;
 
     const settings = appContext?.settings || {};
     const providers = appContext?.providers || {};
@@ -249,6 +251,45 @@ export const WidgetBuilderModal = ({
         return () => clearInterval(interval);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
+
+    // Pre-load source code for remix/edit mode
+    useEffect(() => {
+        if (editContext?.componentCode && isOpen) {
+            const code = {
+                componentCode: editContext.componentCode,
+                configCode: editContext.configCode || "",
+            };
+            setDetectedCode(code);
+            setActiveTab("code");
+            compilePreview(code);
+
+            // Seed chat with existing source code (only when empty)
+            try {
+                const existingRaw = localStorage.getItem("dash-widget-builder");
+                const existingData = existingRaw ? JSON.parse(existingRaw) : {};
+                const existingMsgs = existingData?.messages || [];
+
+                if (existingMsgs.length === 0) {
+                    const seedMessages = [
+                        {
+                            role: "user",
+                            content: `I want to edit this existing widget. Here is the current source code:\n\n\`\`\`jsx\n${editContext.componentCode}\n\`\`\`\n\n\`\`\`javascript\n${editContext.configCode}\n\`\`\`\n\nPlease make the following changes:`,
+                        },
+                    ];
+                    localStorage.setItem(
+                        "dash-widget-builder",
+                        JSON.stringify({
+                            ...existingData,
+                            messages: seedMessages,
+                        })
+                    );
+                }
+            } catch (_) {
+                /* ignore */
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editContext, isOpen]);
 
     const compilePreview = useCallback(async (code) => {
         const name = extractWidgetName(code.componentCode);
@@ -345,6 +386,19 @@ export const WidgetBuilderModal = ({
         if (!detectedCode.componentCode || !widgetName) return;
         setInstallStatus("installing");
         try {
+            // Build remix metadata when editing an existing widget
+            const remixMeta =
+                editContext &&
+                !editContext.originalPackage?.startsWith("@ai-built/")
+                    ? {
+                          remixedFrom: {
+                              widgetName: editContext.originalPackage,
+                              author: editContext.manifest?.author || "Unknown",
+                              version: editContext.manifest?.version || "1.0.0",
+                          },
+                      }
+                    : null;
+
             const result = await window.mainApi?.widgetBuilder?.aiBuild(
                 widgetName,
                 detectedCode.componentCode,
@@ -354,7 +408,8 @@ export const WidgetBuilderModal = ({
                         .trim()}", type: "widget", canHaveChildren: false, workspace: "ai-built" };`,
                 `AI-generated widget: ${widgetName}`,
                 cellContext || null,
-                process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron"
+                process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron",
+                remixMeta
             );
             if (result?.success) {
                 setInstallStatus({
@@ -372,7 +427,7 @@ export const WidgetBuilderModal = ({
         } catch (err) {
             setInstallStatus({ error: err.message });
         }
-    }, [detectedCode, widgetName, onInstalled, cellContext]);
+    }, [detectedCode, widgetName, onInstalled, cellContext, editContext]);
 
     if (!isOpen) return null;
 
@@ -397,7 +452,9 @@ export const WidgetBuilderModal = ({
                         className="h-4 w-4 text-indigo-400"
                     />
                     <span className="text-base font-semibold text-gray-100">
-                        Build Widget with AI
+                        {isRemixMode
+                            ? "Edit Widget with AI"
+                            : "Build Widget with AI"}
                     </span>
                 </div>
                 <button
@@ -495,7 +552,8 @@ export const WidgetBuilderModal = ({
                                     icon="check-circle"
                                     className="h-3 w-3"
                                 />
-                                Installed as {installStatus.widgetName}
+                                {isRemixMode ? "Remixed as" : "Installed as"}{" "}
+                                {installStatus.widgetName}
                             </span>
                         )}
                     </div>
@@ -606,14 +664,19 @@ export const WidgetBuilderModal = ({
                                         className={`flex items-center justify-between px-6 py-3 border-t ${borderColor} shrink-0`}
                                     >
                                         <span className="text-xs text-gray-500">
-                                            Installs to @ai-built/
-                                            {widgetName?.toLowerCase()}
+                                            {isRemixMode
+                                                ? `Remixes ${
+                                                      editContext.originalComponentName
+                                                  } → @ai-built/${widgetName?.toLowerCase()}`
+                                                : `Installs to @ai-built/${widgetName?.toLowerCase()}`}
                                         </span>
                                         <button
                                             onClick={handleInstall}
                                             className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
                                         >
-                                            Install Widget
+                                            {isRemixMode
+                                                ? "Remix Widget"
+                                                : "Install Widget"}
                                         </button>
                                     </div>
                                 </div>
@@ -630,13 +693,17 @@ export const WidgetBuilderModal = ({
                                     </div>
                                     <div className="text-center space-y-1">
                                         <p className="text-base font-semibold text-green-300">
-                                            Widget Installed!
+                                            {isRemixMode
+                                                ? "Widget Remixed!"
+                                                : "Widget Installed!"}
                                         </p>
                                         <p className="text-sm text-gray-400">
                                             <span className="font-mono text-gray-300">
                                                 {installStatus.widgetName}
                                             </span>{" "}
-                                            is now in the widget selector.
+                                            {isRemixMode
+                                                ? "has been swapped into your dashboard."
+                                                : "is now in the widget selector."}
                                         </p>
                                     </div>
                                     <div className="flex gap-3">
