@@ -39,6 +39,27 @@ const {
 // Handle Squirrel install/uninstall/update events on Windows
 if (require("electron-squirrel-startup")) app.quit();
 
+// Fix esbuild binary path in packaged app (asar archive).
+// esbuild's require.resolve() returns an asar-internal path that spawn() can't
+// execute. Set ESBUILD_BINARY_PATH to the unpacked binary before esbuild loads.
+if (!process.env.ESBUILD_BINARY_PATH) {
+    const appPath = app.getAppPath();
+    if (appPath.includes("app.asar")) {
+        const platform =
+            process.platform === "win32"
+                ? `win32-${process.arch}`
+                : `${process.platform}-${process.arch}`;
+        process.env.ESBUILD_BINARY_PATH = path.join(
+            appPath.replace("app.asar", "app.asar.unpacked"),
+            "node_modules",
+            "@esbuild",
+            platform,
+            "bin",
+            process.platform === "win32" ? "esbuild.exe" : "esbuild"
+        );
+    }
+}
+
 // Use process.defaultApp or NODE_ENV check which are available before app is ready
 const isDev = process.defaultApp || process.env.NODE_ENV === "development";
 const pe = require("pluggable-electron/main");
