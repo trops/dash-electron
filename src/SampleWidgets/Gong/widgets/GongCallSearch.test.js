@@ -135,3 +135,214 @@ describe("GongCallSearch: callSelected payload construction", () => {
         expect(payload.duration).toBe(100);
     });
 });
+
+// ===========================================================================
+// End-to-end: MCP response → parse → event payload → listener handler
+// ===========================================================================
+
+const { parseMcpResponse, parseGongTextEntries } = require("../utils/mcpUtils");
+
+/**
+ * Simulate the full pipeline:
+ * 1. MCP callTool returns raw response
+ * 2. parseMcpResponse extracts call list
+ * 3. User clicks a call → buildCallSelectedPayload
+ * 4. DashboardPublisher wraps in { message, event, uuid }
+ * 5. Listener handler unwraps and extracts id
+ */
+function simulateFullPipeline(mcpResponse) {
+    // Step 1-2: Parse MCP response (same as GongCallSearch.handleLoadCalls)
+    const { data, error } = parseMcpResponse(mcpResponse, {
+        arrayKeys: ["calls", "records"],
+        textParser: parseGongTextEntries,
+    });
+
+    if (error || !Array.isArray(data) || data.length === 0) {
+        return { error: error || "no calls parsed", calls: data };
+    }
+
+    // Step 3: Build payload from first call (same as handleSelectCall)
+    const call = data[0];
+    const payload = buildCallSelectedPayload(call);
+
+    // Step 4: DashboardPublisher.emit wraps in envelope
+    const envelope = {
+        message: payload,
+        event: "GongCallSearch[1].callSelected",
+        uuid: "listener-uuid",
+    };
+
+    // Step 5: Listener handler unwraps (same as GongCallDetail line 53)
+    const received = envelope.message || envelope;
+    const extractedId = received.id;
+
+    return {
+        parsedCalls: data,
+        firstCall: call,
+        eventPayload: payload,
+        envelope,
+        receivedByListener: received,
+        extractedId,
+        listenerWouldAct: !!extractedId,
+    };
+}
+
+describe("End-to-end: MCP response → event → listener", () => {
+    test("standard markdown table response from list_calls", () => {
+        const mcpResponse = {
+            content: [
+                {
+                    type: "text",
+                    text: [
+                        "| ID | Title | Date | Duration | Scope |",
+                        "|---|---|---|---|---|",
+                        "| 7890123456 | Q4 Strategy Review | 3/24/2026 | 64m | External |",
+                        "| 1234567890 | Sprint Retro | 3/25/2026 | 30m | Internal |",
+                    ].join("\n"),
+                },
+            ],
+        };
+
+        const result = simulateFullPipeline(mcpResponse);
+        expect(result.parsedCalls).toHaveLength(2);
+        expect(result.extractedId).toBe("7890123456");
+        expect(result.listenerWouldAct).toBe(true);
+    });
+
+    test("response with numeric call IDs (Gong uses large numbers)", () => {
+        const mcpResponse = {
+            content: [
+                {
+                    type: "text",
+                    text: [
+                        "| ID | Title | Date | Duration |",
+                        "|---|---|---|---|",
+                        "| 8527419630 | Customer Demo | 4/1/2026 | 45m |",
+                    ].join("\n"),
+                },
+            ],
+        };
+
+        const result = simulateFullPipeline(mcpResponse);
+        expect(result.extractedId).toBe("8527419630");
+        expect(result.listenerWouldAct).toBe(true);
+    });
+
+    test("response with 'Call ID' column header (space in name)", () => {
+        const mcpResponse = {
+            content: [
+                {
+                    type: "text",
+                    text: [
+                        "| Call ID | Title | Date | Duration |",
+                        "|---|---|---|---|",
+                        "| abc-123 | Test Call | 4/1/2026 | 15m |",
+                    ].join("\n"),
+                },
+            ],
+        };
+
+        const result = simulateFullPipeline(mcpResponse);
+        expect(result.extractedId).toBe("abc-123");
+        expect(result.listenerWouldAct).toBe(true);
+    });
+
+    test("JSON array response (some MCP servers return JSON)", () => {
+        const mcpResponse = {
+            content: [
+                {
+                    type: "text",
+                    text: JSON.stringify({
+                        calls: [
+                            {
+                                id: "call-999",
+                                title: "JSON Call",
+                                started: "2026-04-01T10:00:00Z",
+                                duration: 1800,
+                            },
+                        ],
+                    }),
+                },
+            ],
+        };
+
+        const result = simulateFullPipeline(mcpResponse);
+        expect(result.extractedId).toBe("call-999");
+        expect(result.listenerWouldAct).toBe(true);
+    });
+
+    test("response with metaData wrapper (Gong v2 API format)", () => {
+        const mcpResponse = {
+            content: [
+                {
+                    type: "text",
+                    text: JSON.stringify({
+                        calls: [
+                            {
+                                metaData: {
+                                    id: "gong-meta-id",
+                                    title: "Meta Call",
+                                    started: "2026-04-01",
+                                    duration: 900,
+                                },
+                            },
+                        ],
+                    }),
+                },
+            ],
+        };
+
+        const result = simulateFullPipeline(mcpResponse);
+        // Call object from JSON won't go through parseMarkdownTable
+        // It goes through parseMcpResponse → findArray("calls")
+        // The call object has metaData but no top-level id
+        expect(result.firstCall.metaData.id).toBe("gong-meta-id");
+        expect(result.extractedId).toBe("gong-meta-id");
+        expect(result.listenerWouldAct).toBe(true);
+    });
+
+    test("CRITICAL: response where ID column is missing entirely", () => {
+        const mcpResponse = {
+            content: [
+                {
+                    type: "text",
+                    text: [
+                        "| Title | Date | Duration | Scope |",
+                        "|---|---|---|---|",
+                        "| No ID Call | 4/1/2026 | 30m | Internal |",
+                    ].join("\n"),
+                },
+            ],
+        };
+
+        const result = simulateFullPipeline(mcpResponse);
+        // Without an ID column, the parser can't extract an ID
+        expect(result.extractedId).toBe("");
+        expect(result.listenerWouldAct).toBe(false);
+    });
+
+    test("envelope unwrapping: data.message path", () => {
+        const payload = { id: "test-id", title: "Test" };
+        const envelope = {
+            message: payload,
+            event: "GongCallSearch[1].callSelected",
+            uuid: "uuid-1",
+        };
+
+        const received = envelope.message || envelope;
+        expect(received.id).toBe("test-id");
+    });
+
+    test("envelope unwrapping: direct data path (no message wrapper)", () => {
+        const payload = { id: "direct-id", title: "Direct" };
+        const received = payload.message || payload;
+        expect(received.id).toBe("direct-id");
+    });
+
+    test("empty id in envelope should NOT trigger listener action", () => {
+        const payload = { id: "", title: "No ID" };
+        const envelope = { message: payload, event: "test", uuid: "u" };
+        const received = envelope.message || envelope;
+        expect(!!received.id).toBe(false);
+    });
+});

@@ -57,7 +57,9 @@ function GongCallSearchContent({ title, defaultDaysBack }) {
 
     const handleSelectCall = useCallback(
         (call) => {
+            console.log("[GongCallSearch] Selected call:", call);
             const id = call.id || call.metaData?.id || call.callId || "";
+            console.log("[GongCallSearch] Extracted ID:", id || "(empty)");
             setSelectedCallId(id);
             const payload = {
                 id,
