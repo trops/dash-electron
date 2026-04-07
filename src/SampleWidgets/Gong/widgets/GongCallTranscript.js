@@ -25,7 +25,13 @@ function GongCallTranscriptContent({ title }) {
 
     const loadTranscript = useCallback(
         async (id) => {
-            if (!id || !isConnected) return;
+            if (!id) return;
+            if (!isConnected) {
+                setErrorMsg(
+                    "Gong provider not connected. Assign the Gong MCP provider to this widget."
+                );
+                return;
+            }
             setLoading(true);
             setErrorMsg(null);
             setTranscript(null);

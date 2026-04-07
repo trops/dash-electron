@@ -24,7 +24,13 @@ function GongCallSummaryContent({ title }) {
 
     const loadSummary = useCallback(
         async (callId) => {
-            if (!callId || !isConnected) return;
+            if (!callId) return;
+            if (!isConnected) {
+                setErrorMsg(
+                    "Gong provider not connected. Assign the Gong MCP provider to this widget."
+                );
+                return;
+            }
             setLoading(true);
             setErrorMsg(null);
             setSummary(null);

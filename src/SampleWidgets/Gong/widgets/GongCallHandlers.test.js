@@ -119,3 +119,40 @@ describe("Gong receiver handler: payload extraction", () => {
         expect(payload.title).toBe("Sales Demo");
     });
 });
+
+// ===========================================================================
+// loadCall guard conditions (mirrors GongCallDetail/Transcript/Summary)
+// ===========================================================================
+
+// Simulates the loadCall guard: if (!callId || !isConnected) return;
+function wouldLoadCall(callId, isConnected) {
+    if (!callId || !isConnected) return false;
+    return true;
+}
+
+describe("loadCall guard conditions", () => {
+    test("valid callId + connected → calls API", () => {
+        expect(wouldLoadCall("call-123", true)).toBe(true);
+    });
+
+    test("valid callId + disconnected → SILENTLY SKIPS", () => {
+        // This is likely the production bug — provider not connected
+        expect(wouldLoadCall("call-123", false)).toBe(false);
+    });
+
+    test("empty callId + connected → skips", () => {
+        expect(wouldLoadCall("", true)).toBe(false);
+    });
+
+    test("null callId + connected → skips", () => {
+        expect(wouldLoadCall(null, true)).toBe(false);
+    });
+
+    test("undefined callId + connected → skips", () => {
+        expect(wouldLoadCall(undefined, true)).toBe(false);
+    });
+
+    test("numeric callId as string + connected → calls API", () => {
+        expect(wouldLoadCall("8527419630", true)).toBe(true);
+    });
+});
