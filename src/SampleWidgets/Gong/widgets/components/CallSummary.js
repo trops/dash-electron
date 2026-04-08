@@ -11,6 +11,15 @@ export function CallSummary({ summary, loading }) {
 
     if (!summary) return null;
 
+    // gongio-mcp returns markdown text, not structured JSON
+    if (typeof summary === "string") {
+        return (
+            <pre className="whitespace-pre-wrap text-gray-300 overflow-auto max-h-[60vh] text-xs leading-relaxed">
+                {summary}
+            </pre>
+        );
+    }
+
     if (summary.error) {
         return (
             <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
