@@ -19,9 +19,15 @@ function GongCallDetailContent({ title }) {
     const [call, setCall] = useState(null);
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState(null);
+    const [debugPayloads, setDebugPayloads] = useState({});
 
     const loadCall = useCallback(
         async (callId) => {
+            setDebugPayloads((prev) => ({
+                ...prev,
+                loadCallId: callId,
+                isConnected,
+            }));
             if (!callId) return;
             if (!isConnected) {
                 setErrorMsg(
@@ -35,6 +41,13 @@ function GongCallDetailContent({ title }) {
             try {
                 const res = await callTool("get_call", { callId });
                 const { data, error: mcpError } = parseMcpResponse(res);
+                setDebugPayloads((prev) => ({
+                    ...prev,
+                    rawApiResponse: res,
+                    parsedData: data,
+                    parsedDataType: typeof data,
+                    parseError: mcpError,
+                }));
                 if (mcpError) {
                     setErrorMsg(mcpError);
                 } else {
@@ -43,6 +56,10 @@ function GongCallDetailContent({ title }) {
                     );
                 }
             } catch (err) {
+                setDebugPayloads((prev) => ({
+                    ...prev,
+                    apiError: err.message,
+                }));
                 setErrorMsg(err.message);
             } finally {
                 setLoading(false);
@@ -57,6 +74,13 @@ function GongCallDetailContent({ title }) {
     handlerRef.current = useCallback(
         (data) => {
             const payload = data.message || data;
+            setDebugPayloads((prev) => ({
+                ...prev,
+                eventReceived: data,
+                eventPayload: payload,
+                eventPayloadId: payload?.id,
+                eventPayloadKeys: payload ? Object.keys(payload) : [],
+            }));
             if (payload.id) loadCall(payload.id);
         },
         [loadCall]
@@ -214,6 +238,18 @@ function GongCallDetailContent({ title }) {
                 <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
                     {errorMsg}
                 </div>
+            )}
+
+            {/* Debug: payload inspector */}
+            {Object.keys(debugPayloads).length > 0 && (
+                <details className="mt-2 border border-yellow-700/30 rounded bg-yellow-900/10 text-[10px]">
+                    <summary className="px-2 py-1 text-yellow-400 cursor-pointer">
+                        Debug: Payload Inspector
+                    </summary>
+                    <pre className="p-2 overflow-auto max-h-60 text-yellow-300/70 whitespace-pre-wrap">
+                        {JSON.stringify(debugPayloads, null, 2)}
+                    </pre>
+                </details>
             )}
         </div>
     );
