@@ -23,6 +23,7 @@ function GongCallSearchContent({ title, defaultDaysBack }) {
     const [searchQuery, setSearchQuery] = useState("");
     const [fromDate, setFromDate] = useState("");
     const [toDate, setToDate] = useState("");
+    const [debugPayloads, setDebugPayloads] = useState({});
 
     const handleLoadCalls = useCallback(async () => {
         setLoading(true);
@@ -39,10 +40,20 @@ function GongCallSearchContent({ title, defaultDaysBack }) {
             if (searchQuery.trim()) args.query = searchQuery.trim();
 
             const res = await callTool(toolName, args);
+            setDebugPayloads((prev) => ({
+                ...prev,
+                rawMcpResponse: res,
+            }));
             const { data, error: mcpError } = parseMcpResponse(res, {
                 arrayKeys: ["calls", "records"],
                 textParser: parseGongTextEntries,
             });
+            setDebugPayloads((prev) => ({
+                ...prev,
+                parsedData: data,
+                parseError: mcpError,
+                firstCall: Array.isArray(data) ? data[0] : null,
+            }));
             if (mcpError) {
                 setErrorMsg(mcpError);
                 return;
@@ -57,9 +68,7 @@ function GongCallSearchContent({ title, defaultDaysBack }) {
 
     const handleSelectCall = useCallback(
         (call) => {
-            console.log("[GongCallSearch] Selected call:", call);
             const id = call.id || call.metaData?.id || call.callId || "";
-            console.log("[GongCallSearch] Extracted ID:", id || "(empty)");
             setSelectedCallId(id);
             const payload = {
                 id,
@@ -73,15 +82,19 @@ function GongCallSearchContent({ title, defaultDaysBack }) {
                 duration: call.duration ?? call.metaData?.duration ?? null,
                 scope: call.scope || "",
             };
+            setDebugPayloads((prev) => ({
+                ...prev,
+                selectedCallRaw: call,
+                selectedCallKeys: Object.keys(call),
+                publishedPayload: payload,
+            }));
             try {
                 publishEvent("callSelected", payload);
             } catch (err) {
-                console.error(
-                    "[GongCallSearch] Failed to publish callSelected event:",
-                    err,
-                    "Payload:",
-                    payload
-                );
+                setDebugPayloads((prev) => ({
+                    ...prev,
+                    publishError: err.message,
+                }));
             }
         },
         [publishEvent]
@@ -172,6 +185,18 @@ function GongCallSearchContent({ title, defaultDaysBack }) {
                 <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
                     {errorMsg}
                 </div>
+            )}
+
+            {/* Debug: payload inspector */}
+            {Object.keys(debugPayloads).length > 0 && (
+                <details className="mt-2 border border-yellow-700/30 rounded bg-yellow-900/10 text-[10px]">
+                    <summary className="px-2 py-1 text-yellow-400 cursor-pointer">
+                        Debug: Payload Inspector
+                    </summary>
+                    <pre className="p-2 overflow-auto max-h-60 text-yellow-300/70 whitespace-pre-wrap">
+                        {JSON.stringify(debugPayloads, null, 2)}
+                    </pre>
+                </details>
             )}
         </div>
     );
