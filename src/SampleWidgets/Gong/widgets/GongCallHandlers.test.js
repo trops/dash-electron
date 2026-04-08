@@ -156,3 +156,80 @@ describe("loadCall guard conditions", () => {
         expect(wouldLoadCall("8527419630", true)).toBe(true);
     });
 });
+
+// ===========================================================================
+// MCP response format handling
+// The gongio-mcp returns MARKDOWN TEXT for get_call, get_call_summary,
+// get_call_transcript — NOT structured JSON. Widgets must handle this.
+// ===========================================================================
+
+describe("gongio-mcp response format handling", () => {
+    const { parseMcpResponse } = require("../utils/mcpUtils");
+
+    test("get_call returns markdown, parseMcpResponse returns string", () => {
+        const mcpResponse = {
+            content: [
+                {
+                    type: "text",
+                    text: "## Q4 Strategy Review\n\n**ID:** 123456 | **Date:** 4/1/2026 | **Duration:** 45m\n**URL:** https://gong.io/call/123456\n\n### Participants\n\nJohn Doe (Internal), Jane Smith (External)",
+                },
+            ],
+        };
+        const { data } = parseMcpResponse(mcpResponse);
+        // parseMcpResponse returns the string since it's not JSON/table
+        expect(typeof data).toBe("string");
+        expect(data).toContain("Q4 Strategy Review");
+    });
+
+    test("get_call_transcript returns markdown, parseMcpResponse returns string", () => {
+        const mcpResponse = {
+            content: [
+                {
+                    type: "text",
+                    text: "## Transcript (Call 123456)\n\n[John Doe]: Hello everyone, thanks for joining.\n\n[Jane Smith]: Thanks for having me.",
+                },
+            ],
+        };
+        const { data } = parseMcpResponse(mcpResponse);
+        expect(typeof data).toBe("string");
+        expect(data).toContain("Transcript");
+    });
+
+    test("get_call_summary returns markdown, parseMcpResponse returns string", () => {
+        const mcpResponse = {
+            content: [
+                {
+                    type: "text",
+                    text: "## Q4 Strategy Review\n\n**ID:** 123456\n\n### Summary\n\nDiscussion about quarterly targets.\n\n### Key Points\n\n- Revenue target: $5M\n- Hiring 3 new reps",
+                },
+            ],
+        };
+        const { data } = parseMcpResponse(mcpResponse);
+        expect(typeof data).toBe("string");
+        expect(data).toContain("Summary");
+    });
+
+    test("CallTranscript component receives markdown string — segments should handle it", () => {
+        // Simulating what happens when transcript is a string
+        const transcript =
+            "## Transcript (Call 123)\n\n[John]: Hello\n\n[Jane]: Hi";
+        const segments = Array.isArray(transcript)
+            ? transcript
+            : transcript.segments || transcript.transcript || [];
+        // With current code, segments is empty → nothing renders
+        expect(segments).toEqual([]);
+        // This is the BUG — markdown strings should be rendered as text
+    });
+
+    test("GongCallDetail receives markdown string — should display it", () => {
+        // Simulating GongCallDetail line 35-36
+        const data =
+            "## Q4 Strategy Review\n\n**ID:** 123456 | **Date:** 4/1/2026";
+        const call = typeof data === "string" ? { description: data } : data;
+        // call = { description: "## Q4 Strategy Review\n..." }
+        // The render checks call.title — which is undefined
+        expect(call.title).toBeUndefined();
+        expect(call.description).toContain("Q4 Strategy Review");
+        // The widget should fall back to displaying call.description
+    });
+});

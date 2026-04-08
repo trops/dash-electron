@@ -129,69 +129,74 @@ function GongCallDetailContent({ title }) {
 
             {call ? (
                 <div className="space-y-3 text-xs">
-                    {(call.title || call.metaData?.title) && (
-                        <SubHeading3
-                            title={call.title || call.metaData?.title}
-                        />
-                    )}
-
-                    {/* Metadata fields */}
-                    <div className="space-y-1.5 text-gray-400">
-                        {renderField("URL", call.url || call.metaData?.url)}
-                        {renderField("Direction", call.direction)}
-                        {renderField("Scope", call.scope)}
-                        {renderField("System", call.system)}
-                        {renderField(
-                            "Duration",
-                            formatDuration(
-                                call.duration ?? call.metaData?.duration
-                            )
-                        )}
-                        {renderField(
-                            "Date",
-                            call.started || call.metaData?.started
-                        )}
-                        {renderField("Language", call.language)}
-                    </div>
-
-                    {/* Participants */}
-                    {call.parties?.length > 0 && (
-                        <div>
-                            <div className="text-gray-400 font-medium mb-1">
-                                Participants ({call.parties.length})
-                            </div>
-                            <div className="space-y-1">
-                                {call.parties.map((p, i) => (
-                                    <div
-                                        key={i}
-                                        className="flex items-center gap-2 px-2 py-1 bg-white/5 rounded"
-                                    >
-                                        <span className="text-gray-300 font-medium">
-                                            {p.name ||
-                                                p.emailAddress ||
-                                                "Unknown"}
-                                        </span>
-                                        {p.title && (
-                                            <span className="text-gray-500">
-                                                {p.title}
-                                            </span>
-                                        )}
-                                        {p.affiliation && (
-                                            <span className="text-emerald-500 text-[10px]">
-                                                {p.affiliation}
-                                            </span>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Raw fallback for unexpected structures */}
-                    {typeof call.description === "string" && (
-                        <pre className="whitespace-pre-wrap text-gray-300 overflow-auto max-h-48 bg-gray-800/50 rounded p-2">
+                    {/* Markdown text response from gongio-mcp */}
+                    {typeof call.description === "string" ? (
+                        <pre className="whitespace-pre-wrap text-gray-300 overflow-auto max-h-[60vh] text-xs leading-relaxed">
                             {call.description}
                         </pre>
+                    ) : (
+                        <>
+                            {(call.title || call.metaData?.title) && (
+                                <SubHeading3
+                                    title={call.title || call.metaData?.title}
+                                />
+                            )}
+
+                            {/* Metadata fields */}
+                            <div className="space-y-1.5 text-gray-400">
+                                {renderField(
+                                    "URL",
+                                    call.url || call.metaData?.url
+                                )}
+                                {renderField("Direction", call.direction)}
+                                {renderField("Scope", call.scope)}
+                                {renderField("System", call.system)}
+                                {renderField(
+                                    "Duration",
+                                    formatDuration(
+                                        call.duration ?? call.metaData?.duration
+                                    )
+                                )}
+                                {renderField(
+                                    "Date",
+                                    call.started || call.metaData?.started
+                                )}
+                                {renderField("Language", call.language)}
+                            </div>
+
+                            {/* Participants */}
+                            {call.parties?.length > 0 && (
+                                <div>
+                                    <div className="text-gray-400 font-medium mb-1">
+                                        Participants ({call.parties.length})
+                                    </div>
+                                    <div className="space-y-1">
+                                        {call.parties.map((p, i) => (
+                                            <div
+                                                key={i}
+                                                className="flex items-center gap-2 px-2 py-1 bg-white/5 rounded"
+                                            >
+                                                <span className="text-gray-300 font-medium">
+                                                    {p.name ||
+                                                        p.emailAddress ||
+                                                        "Unknown"}
+                                                </span>
+                                                {p.title && (
+                                                    <span className="text-gray-500">
+                                                        {p.title}
+                                                    </span>
+                                                )}
+                                                {p.affiliation && (
+                                                    <span className="text-emerald-500 text-[10px]">
+                                                        {p.affiliation}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             ) : (

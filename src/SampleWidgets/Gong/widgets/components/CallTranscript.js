@@ -22,6 +22,15 @@ export function CallTranscript({ transcript, loading, onLoadMore }) {
 
     if (!transcript) return null;
 
+    // gongio-mcp returns markdown text, not structured segments
+    if (typeof transcript === "string") {
+        return (
+            <pre className="whitespace-pre-wrap text-gray-300 overflow-auto max-h-[60vh] text-xs leading-relaxed">
+                {transcript}
+            </pre>
+        );
+    }
+
     const segments = Array.isArray(transcript)
         ? transcript
         : transcript.segments || transcript.transcript || [];
