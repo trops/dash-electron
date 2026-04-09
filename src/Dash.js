@@ -199,6 +199,24 @@ async function loadInstalledWidgets() {
 
     const bundleLoadedWidgets = new Set();
 
+    // Fetch registry metadata once so we can enrich each registered widget
+    // with its package's displayName / author. This is what makes ai-built
+    // widgets group under their package name (e.g. "Sales Pipeline") instead
+    // of falling through to "Other" in the widget sidebar / Settings.
+    const regByName = {};
+    try {
+        const list = (await window.mainApi.widgets.list?.()) || [];
+        list.forEach((w) => {
+            if (w?.name) regByName[w.name] = w;
+            if (w?.packageId) regByName[w.packageId] = w;
+        });
+    } catch (err) {
+        console.warn(
+            "[Dash.js] Could not fetch registry list for widget enrichment:",
+            err
+        );
+    }
+
     // Phase 1: Try loading CJS bundles
     if (window.mainApi.widgets.readAllBundles) {
         try {
@@ -209,7 +227,11 @@ async function loadInstalledWidgets() {
 
             for (const { widgetName, source } of bundles) {
                 try {
-                    registerBundleConfigs(widgetName, source);
+                    registerBundleConfigs(
+                        widgetName,
+                        source,
+                        regByName[widgetName]
+                    );
                     bundleLoadedWidgets.add(widgetName);
                 } catch (err) {
                     console.warn(
@@ -245,7 +267,10 @@ async function loadInstalledWidgets() {
                     continue;
                 }
 
-                // Register with lazy-loaded component
+                // Register with lazy-loaded component, enriching with package
+                // metadata from the registry when the widget config didn't
+                // supply its own package/author (typical for ai-built widgets).
+                const reg = regByName[widgetPackage] || {};
                 ComponentManager.registerWidget(
                     {
                         ...config,
@@ -256,6 +281,12 @@ async function loadInstalledWidgets() {
                         _sourcePackage: widgetPackage,
                         type: config.type || "widget",
                         canHaveChildren: config.canHaveChildren || false,
+                        package:
+                            config.package ||
+                            reg.displayName ||
+                            reg.name ||
+                            null,
+                        author: config.author || reg.author || null,
                         userConfig: config.userConfig || {
                             title: {
                                 type: "text",
@@ -283,8 +314,14 @@ async function loadInstalledWidgets() {
 /**
  * Evaluate a single widget's CJS bundle and register its configs.
  * Falls back to ExternalWidget if evaluation fails.
+ *
+ * @param {string} widgetName  Scoped package name (e.g. "@ai-built/pipeline").
+ * @param {string} source      CJS bundle source.
+ * @param {object} [regEntry]  Registry metadata for the package, used to
+ *                             enrich configs that didn't supply their own
+ *                             package/author fields.
  */
-function registerBundleConfigs(widgetName, source) {
+function registerBundleConfigs(widgetName, source, regEntry = null) {
     try {
         const { configs } = loadWidgetBundle(source, widgetName);
         console.log(
@@ -299,6 +336,11 @@ function registerBundleConfigs(widgetName, source) {
             }
 
             config._sourcePackage = widgetName;
+            if (regEntry) {
+                if (!config.package)
+                    config.package = regEntry.displayName || regEntry.name;
+                if (!config.author) config.author = regEntry.author;
+            }
             ComponentManager.registerWidget(config, key);
             console.log(
                 `[Dash.js] Registered external widget: ${key} (${config.type})`
@@ -319,6 +361,8 @@ function registerBundleConfigs(widgetName, source) {
                     _sourcePackage: widgetName,
                     type: "widget",
                     canHaveChildren: false,
+                    package: regEntry?.displayName || regEntry?.name || null,
+                    author: regEntry?.author || null,
                     userConfig: {
                         title: {
                             type: "text",
