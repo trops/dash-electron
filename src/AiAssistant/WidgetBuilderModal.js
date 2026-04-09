@@ -319,9 +319,12 @@ export const WidgetBuilderModal = ({
                 name,
                 code.componentCode,
                 code.configCode ||
-                    `export default { component: "${name}", name: "${name
-                        .replace(/([A-Z])/g, " $1")
-                        .trim()}", type: "widget", canHaveChildren: false, workspace: "ai-built" };`
+                    (() => {
+                        const displayName = name
+                            .replace(/([A-Z])/g, " $1")
+                            .trim();
+                        return `export default { component: "${name}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
+                    })()
             );
 
             if (!result?.success) {
@@ -416,9 +419,12 @@ export const WidgetBuilderModal = ({
                 widgetName,
                 detectedCode.componentCode,
                 detectedCode.configCode ||
-                    `export default { component: "${widgetName}", name: "${widgetName
-                        .replace(/([A-Z])/g, " $1")
-                        .trim()}", type: "widget", canHaveChildren: false, workspace: "ai-built" };`,
+                    (() => {
+                        const displayName = widgetName
+                            .replace(/([A-Z])/g, " $1")
+                            .trim();
+                        return `export default { component: "${widgetName}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
+                    })(),
                 `AI-generated widget: ${widgetName}`,
                 cellContext || null,
                 process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron",
