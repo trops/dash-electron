@@ -443,7 +443,11 @@ function buildManifest(widgetDirName, scope) {
         widgetName: rest.name,
     }));
 
-    const category = CATEGORY_MAP[widgetDirName] || "general";
+    // Prefer the widget's self-declared category from its .dash.js config.
+    // Falls back to the legacy CATEGORY_MAP for existing @trops/* widgets that
+    // don't yet declare it, then to "general" as a last resort.
+    const category =
+        widgets[0]?.category || CATEGORY_MAP[widgetDirName] || "general";
 
     // Derive description from widget configs instead of app package.json
     const widgetDescriptions = widgets

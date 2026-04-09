@@ -181,6 +181,50 @@ function extractWidgetName(code) {
     return match ? match[1] : null;
 }
 
+// Mirrors validateWidget.cjs::VALID_CATEGORIES — kept in sync manually
+// (small enum, rarely changes). Used to populate the install-footer picker.
+const VALID_CATEGORIES = [
+    "general",
+    "utilities",
+    "productivity",
+    "development",
+    "social",
+    "media",
+    "finance",
+    "health",
+    "education",
+    "entertainment",
+];
+
+/**
+ * Inject (or replace) a `category: "..."` field on an `export default { ... }`
+ * config literal. The aiBuild IPC handler writes configCode verbatim to disk
+ * with no parsing, so any string transform here lands directly in the saved
+ * .dash.js file.
+ */
+function injectCategoryIntoConfigCode(configCode, category) {
+    if (!configCode || !category) return configCode;
+    // Replace existing category field if present
+    if (/category:\s*["'][^"']*["']/.test(configCode)) {
+        return configCode.replace(
+            /category:\s*["'][^"']*["']/,
+            `category: "${category}"`
+        );
+    }
+    // Otherwise insert before the closing brace of `export default { ... }`
+    return configCode.replace(
+        /(export\s+default\s*\{[\s\S]*?)(\s*\}\s*;?\s*)$/,
+        `$1, category: "${category}"$2`
+    );
+}
+
+/** Try to extract an existing category from a configCode string. */
+function extractCategoryFromConfigCode(configCode) {
+    if (!configCode) return null;
+    const match = configCode.match(/category:\s*["']([^"']+)["']/);
+    return match ? match[1] : null;
+}
+
 export const WidgetBuilderModal = ({
     isOpen,
     setIsOpen,
@@ -199,6 +243,9 @@ export const WidgetBuilderModal = ({
         componentCode: null,
         configCode: null,
     });
+    // Required category for the install — user must pick before Install enables.
+    // Pre-filled in remix mode if the original config already declares one.
+    const [selectedCategory, setSelectedCategory] = useState(null);
     const lastCompiledCode = useRef(null);
     const [activeTab, setActiveTab] = useState("preview");
     const [activeFile, setActiveFile] = useState("component");
@@ -291,6 +338,16 @@ export const WidgetBuilderModal = ({
             setActiveTab("preview");
             compilePreview(code);
 
+            // Pre-fill the category picker from the original config so the user
+            // can install the remix without re-picking. Falls through to null
+            // (forcing a pick) if the original widget had no category declared.
+            const existing = extractCategoryFromConfigCode(
+                editContext.configCode
+            );
+            if (existing && VALID_CATEGORIES.includes(existing)) {
+                setSelectedCategory(existing);
+            }
+
             // Clear previous chat so the user starts fresh
             try {
                 localStorage.setItem(
@@ -323,7 +380,10 @@ export const WidgetBuilderModal = ({
                         const displayName = name
                             .replace(/([A-Z])/g, " $1")
                             .trim();
-                        return `export default { component: "${name}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
+                        // Preview-only template — category is a placeholder
+                        // here; the user-selected value gets injected at
+                        // install time in handleInstall.
+                        return `export default { component: "${name}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", category: "general", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
                     })()
             );
 
@@ -400,6 +460,9 @@ export const WidgetBuilderModal = ({
 
     const handleInstall = useCallback(async () => {
         if (!detectedCode.componentCode || !widgetName) return;
+        // Category is required — install button is disabled until picked, but
+        // guard here too in case this is invoked programmatically.
+        if (!selectedCategory) return;
         setInstallStatus("installing");
         try {
             // Build remix metadata when editing an existing widget
@@ -415,16 +478,27 @@ export const WidgetBuilderModal = ({
                       }
                     : null;
 
+            // Build the final configCode with the user-selected category baked in.
+            // Two paths:
+            //  - AI generated its own config → inject/replace `category` via regex
+            //  - No config from AI → use the default template, interpolating category
+            let finalConfigCode;
+            if (detectedCode.configCode) {
+                finalConfigCode = injectCategoryIntoConfigCode(
+                    detectedCode.configCode,
+                    selectedCategory
+                );
+            } else {
+                const displayName = widgetName
+                    .replace(/([A-Z])/g, " $1")
+                    .trim();
+                finalConfigCode = `export default { component: "${widgetName}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", category: "${selectedCategory}", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
+            }
+
             const result = await window.mainApi?.widgetBuilder?.aiBuild(
                 widgetName,
                 detectedCode.componentCode,
-                detectedCode.configCode ||
-                    (() => {
-                        const displayName = widgetName
-                            .replace(/([A-Z])/g, " $1")
-                            .trim();
-                        return `export default { component: "${widgetName}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
-                    })(),
+                finalConfigCode,
                 `AI-generated widget: ${widgetName}`,
                 cellContext || null,
                 process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron",
@@ -446,7 +520,14 @@ export const WidgetBuilderModal = ({
         } catch (err) {
             setInstallStatus({ error: err.message });
         }
-    }, [detectedCode, widgetName, onInstalled, cellContext, editContext]);
+    }, [
+        detectedCode,
+        widgetName,
+        selectedCategory,
+        onInstalled,
+        cellContext,
+        editContext,
+    ]);
 
     if (!isOpen) return null;
 
@@ -678,25 +759,52 @@ export const WidgetBuilderModal = ({
                                             </PreviewErrorBoundary>
                                         </div>
                                     </div>
-                                    {/* Footer — Install button */}
+                                    {/* Footer — category picker + Install button */}
                                     <div
-                                        className={`flex items-center justify-between px-6 py-3 border-t ${borderColor} shrink-0`}
+                                        className={`flex items-center justify-between px-6 py-3 border-t ${borderColor} shrink-0 gap-3`}
                                     >
-                                        <span className="text-xs text-gray-500">
+                                        <span className="text-xs text-gray-500 truncate">
                                             {isRemixMode
                                                 ? `Remixes ${
                                                       editContext.originalComponentName
                                                   } → @ai-built/${widgetName?.toLowerCase()}`
                                                 : `Installs to @ai-built/${widgetName?.toLowerCase()}`}
                                         </span>
-                                        <button
-                                            onClick={handleInstall}
-                                            className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
-                                        >
-                                            {isRemixMode
-                                                ? "Remix Widget"
-                                                : "Install Widget"}
-                                        </button>
+                                        <div className="flex items-center gap-3 shrink-0">
+                                            <select
+                                                value={selectedCategory || ""}
+                                                onChange={(e) =>
+                                                    setSelectedCategory(
+                                                        e.target.value || null
+                                                    )
+                                                }
+                                                className="px-2 py-1.5 text-xs bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
+                                                title="Pick a category before installing"
+                                            >
+                                                <option value="" disabled>
+                                                    Pick a category…
+                                                </option>
+                                                {VALID_CATEGORIES.map((c) => (
+                                                    <option key={c} value={c}>
+                                                        {c}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                onClick={handleInstall}
+                                                disabled={!selectedCategory}
+                                                className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                                                title={
+                                                    !selectedCategory
+                                                        ? "Pick a category first"
+                                                        : undefined
+                                                }
+                                            >
+                                                {isRemixMode
+                                                    ? "Remix Widget"
+                                                    : "Install Widget"}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             )}
