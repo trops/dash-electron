@@ -51,6 +51,10 @@ if [[ "$ACTION" == "link" ]]; then
     rm -rf "$PKG_DIR"
     ln -s "$PKG_PATH" "$PKG_DIR"
 
+    # Clear webpack/babel cache so linked changes are picked up
+    rm -rf "$PROJECT_DIR/node_modules/.cache"
+    echo "Cleared node_modules/.cache"
+
     echo "Done. Verify: ls -la $PKG_DIR"
 
 elif [[ "$ACTION" == "unlink" ]]; then
