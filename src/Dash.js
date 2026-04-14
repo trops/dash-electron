@@ -395,7 +395,12 @@ function PopoutDashboard() {
     );
 }
 
-// Widget popout window: renders a single widget in its own window
+// Widget popout window: renders a single widget in its own window.
+//
+// widgetId is passed as a STRING — it can be a uuid like
+// `${dashboardId}-${component}-${id}` or a legacy numeric id. Do NOT
+// Number()-coerce it; uuid strings become NaN and the popout matcher
+// then fails to find anything. WidgetPopoutStage handles both shapes.
 function WidgetPopoutDashboard() {
     const { workspaceId, widgetId } = useParams();
     return (
@@ -404,7 +409,7 @@ function WidgetPopoutDashboard() {
                 dashApi={electronApi}
                 credentials={{ appId }}
                 workspaceId={Number(workspaceId)}
-                widgetId={Number(widgetId)}
+                widgetId={widgetId}
             />
         </ErrorBoundary>
     );
