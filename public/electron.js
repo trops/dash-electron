@@ -1750,13 +1750,30 @@ function createWindow() {
         );
 
         // --- Widget Event IPC Bridge ---
-        // Broadcasts widget pub/sub events to all windows except the sender
+        // Broadcasts widget pub/sub events to all windows except the sender.
+        // Also caches the most recent payload for each eventType so that
+        // windows opened later (e.g. widget popouts) can replay the last
+        // known state on subscription.
+        const lastWidgetEvents = new Map();
         ipcMain.on("widget-event:publish", (e, message) => {
+            if (message && message.eventType) {
+                lastWidgetEvents.set(message.eventType, {
+                    content: message.content,
+                    timestamp: Date.now(),
+                });
+            }
             for (const win of windows) {
                 if (!win.isDestroyed() && win.webContents !== e.sender) {
                     win.webContents.send("widget-event:broadcast", message);
                 }
             }
+        });
+        ipcMain.handle("widget-event:get-last-events", () => {
+            const out = {};
+            for (const [eventType, entry] of lastWidgetEvents.entries()) {
+                out[eventType] = entry;
+            }
+            return out;
         });
         // --- AI Widget Builder: Preview Compile ---
         // Compiles widget code and returns the bundle source for live preview.
