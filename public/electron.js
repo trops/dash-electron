@@ -434,6 +434,7 @@ const {
     getThemePublishPreview,
     // Widget registry publish
     prepareWidgetForPublish,
+    inspectWidgetPackage,
     // Namespaced controllers
     mcpController,
     llmController,
@@ -509,6 +510,7 @@ const {
     REGISTRY_SEARCH_DASHBOARDS,
     REGISTRY_SEARCH_THEMES,
     REGISTRY_PUBLISH_WIDGET,
+    REGISTRY_INSPECT_WIDGET_PACKAGE,
     THEME_PUBLISH,
     THEME_INSTALL_FROM_REGISTRY,
     THEME_PUBLISH_PREVIEW,
@@ -1483,6 +1485,9 @@ function createWindow() {
         );
         logger.loggedHandle(REGISTRY_PUBLISH_WIDGET, (e, msg) =>
             prepareWidgetForPublish(msg.appId, msg.packageId, msg.options)
+        );
+        logger.loggedHandle(REGISTRY_INSPECT_WIDGET_PACKAGE, (e, msg) =>
+            inspectWidgetPackage(msg.packageId)
         );
 
         // --- Theme Registry ---
