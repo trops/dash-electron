@@ -388,6 +388,7 @@ const {
     installDashboardFromRegistry,
     checkCompatibility,
     prepareDashboardForPublish,
+    collectDashboardDependencies,
     getDashboardPreview,
     checkDashboardUpdatesForApp,
     getProviderSetupManifest,
@@ -529,6 +530,7 @@ const {
     DASHBOARD_CONFIG_INSTALL,
     DASHBOARD_CONFIG_COMPATIBILITY,
     DASHBOARD_CONFIG_PUBLISH,
+    DASHBOARD_CONFIG_COLLECT_DEPENDENCIES,
     DASHBOARD_CONFIG_PREVIEW,
     DASHBOARD_CONFIG_CHECK_UPDATES,
     DASHBOARD_CONFIG_PROVIDER_SETUP,
@@ -1546,6 +1548,16 @@ function createWindow() {
                 message.options,
                 widgetRegistry.getWidgetRegistry()
             )
+        );
+        logger.loggedHandle(
+            DASHBOARD_CONFIG_COLLECT_DEPENDENCIES,
+            (e, message) =>
+                collectDashboardDependencies(
+                    message.appId,
+                    message.workspaceId,
+                    widgetRegistry.getWidgetRegistry(),
+                    message.options
+                )
         );
         logger.loggedHandle(DASHBOARD_CONFIG_PREVIEW, (e, message) =>
             getDashboardPreview(
