@@ -27,10 +27,86 @@ import {
 import {
     ChatCore,
     AppContext,
+    WidgetContext,
     evaluateBundle,
     extractWidgetConfigs,
 } from "@trops/dash-core";
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
+
+/**
+ * Wraps the preview widget in the full context stack (AppContext,
+ * ThemeContext, WidgetContext) so hooks like useMcpProvider work.
+ * Auto-selects the first matching provider for each type declared
+ * in the widget config.
+ */
+function PreviewContextWrapper({ appCtx, themeCtx, editContext, children }) {
+    const widgetData = React.useMemo(() => {
+        // Extract provider declarations from the config code
+        const configCode = editContext?.configCode || "";
+        const providers = [];
+        const providerMatch = configCode.match(
+            /providers\s*:\s*\[([\s\S]*?)\]/
+        );
+        if (providerMatch) {
+            const typeMatches = providerMatch[1].matchAll(
+                /type\s*:\s*["']([^"']+)["']/g
+            );
+            const classMatches = providerMatch[1].matchAll(
+                /providerClass\s*:\s*["']([^"']+)["']/g
+            );
+            const classes = [...classMatches].map((m) => m[1]);
+            let i = 0;
+            for (const m of typeMatches) {
+                providers.push({
+                    type: m[1],
+                    providerClass: classes[i] || "mcp",
+                });
+                i++;
+            }
+        }
+
+        // Use the widget's actual selectedProviders from the dashboard.
+        // Fall back to auto-selection only for new (non-remix) widgets.
+        const selectedProviders = editContext?.selectedProviders || {};
+        if (Object.keys(selectedProviders).length === 0 && appCtx?.providers) {
+            for (const decl of providers) {
+                const match =
+                    Object.values(appCtx.providers).find(
+                        (p) =>
+                            p.type === decl.type &&
+                            (p.providerClass || "credential") ===
+                                decl.providerClass
+                    ) ||
+                    Object.values(appCtx.providers).find(
+                        (p) => p.type === decl.type
+                    );
+                if (match) {
+                    selectedProviders[decl.type] = match.name;
+                }
+            }
+        }
+
+        return {
+            providers,
+            selectedProviders,
+            uuidString: "preview-widget",
+        };
+    }, [
+        appCtx?.providers,
+        editContext?.configCode,
+        editContext?.selectedProviders,
+    ]);
+
+    return (
+        <AppContext.Provider value={appCtx}>
+            <ThemeContext.Provider value={themeCtx}>
+                <WidgetContext.Provider value={{ widgetData }}>
+                    {children}
+                </WidgetContext.Provider>
+            </ThemeContext.Provider>
+        </AppContext.Provider>
+    );
+}
 
 /**
  * Error boundary for the live widget preview.
@@ -248,22 +324,44 @@ export const WidgetBuilderModal = ({
     cellContext,
     editContext,
 }) => {
-    // The modal renders outside DashboardStage's ThemeWrapper, so
-    // ThemeContext.currentTheme is null here. We use:
-    //   - Fixed dark colors for the modal CHROME (header, tabs, footer)
-    //   - The dashboard theme (from ThemeBroadcast) for the widget PREVIEW
+    // The modal renders outside DashboardStage's context tree, so
+    // ThemeContext and AppContext are empty here. We bridge them via
+    // window broadcasts from inside the tree:
+    //   - previewThemeCtx → dashboard theme for the widget PREVIEW
+    //   - previewAppCtx   → providers/settings for MCP provider access
+    //   - currentTheme    → null (modal chrome uses fixed dark colors)
     const localThemeCtx = useContext(ThemeContext);
     const [previewTheme, setPreviewTheme] = useState(
         () => window.__dashThemeContext || null
     );
+    const [previewApp, setPreviewApp] = useState(
+        () => window.__dashAppContext || null
+    );
     useEffect(() => {
-        const handler = () => setPreviewTheme({ ...window.__dashThemeContext });
-        window.addEventListener("dash:theme-changed", handler);
-        return () => window.removeEventListener("dash:theme-changed", handler);
+        const themeHandler = () =>
+            setPreviewTheme({ ...window.__dashThemeContext });
+        const appHandler = () => setPreviewApp({ ...window.__dashAppContext });
+        window.addEventListener("dash:theme-changed", themeHandler);
+        window.addEventListener("dash:app-context-changed", appHandler);
+        return () => {
+            window.removeEventListener("dash:theme-changed", themeHandler);
+            window.removeEventListener("dash:app-context-changed", appHandler);
+        };
     }, []);
-    // previewThemeCtx is ONLY for the widget preview, not the modal chrome
     const previewThemeCtx = previewTheme || localThemeCtx;
+    const previewAppCtx = previewApp || null;
     const currentTheme = localThemeCtx?.currentTheme;
+    if (previewAppCtx) {
+        console.log("[WidgetBuilder] AppContext bridge:", {
+            hasProviders: !!previewAppCtx.providers,
+            providerCount: previewAppCtx.providers
+                ? Object.keys(previewAppCtx.providers).length
+                : 0,
+            hasCredentials: !!previewAppCtx.credentials,
+            appId: previewAppCtx.credentials?.appId,
+            hasDashApi: !!previewAppCtx.dashApi,
+        });
+    }
     const appContext = useContext(AppContext);
 
     const [previewComponent, setPreviewComponent] = useState(null);
@@ -963,8 +1061,12 @@ export const WidgetBuilderModal = ({
                                                 ] || "bg-gray-800/30"
                                             }`}
                                         >
-                                            <ThemeContext.Provider
-                                                value={previewThemeCtx}
+                                            <PreviewContextWrapper
+                                                appCtx={
+                                                    previewAppCtx || appContext
+                                                }
+                                                themeCtx={previewThemeCtx}
+                                                editContext={editContext}
                                             >
                                                 <PreviewErrorBoundary
                                                     key={
@@ -984,7 +1086,7 @@ export const WidgetBuilderModal = ({
                                                         />
                                                     </React.Suspense>
                                                 </PreviewErrorBoundary>
-                                            </ThemeContext.Provider>
+                                            </PreviewContextWrapper>
                                         </div>
                                     </div>
                                     {/* Footer — mode toggle, name (remix), category + Install */}

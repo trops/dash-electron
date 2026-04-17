@@ -1818,15 +1818,69 @@ function createWindow() {
             const fs = require("fs");
             const os = require("os");
 
-            const buildDir = path.join(
-                os.tmpdir(),
-                `dash-ai-preview-${widgetName}-${Date.now()}`
-            );
-
             try {
-                // If sourcePackage is provided, copy the full package
-                // directory so multi-file widgets can resolve relative
-                // imports (shared utils, contexts, hooks, etc.).
+                // ── Fast path: use the existing pre-built bundle ────────
+                // If sourcePackage is provided AND the source code matches
+                // the original on disk, skip recompilation entirely and
+                // return the existing bundle. This is instant and avoids
+                // all compilation issues with multi-file packages.
+                if (sourcePackage) {
+                    const dashCore = require("@trops/dash-core/electron");
+                    const registry =
+                        dashCore.widgetRegistry.getWidgetRegistry();
+                    const widget = registry.getWidget(sourcePackage);
+                    if (widget?.path) {
+                        const existingBundle = path.join(
+                            widget.path,
+                            "index.cjs.js"
+                        );
+                        if (fs.existsSync(existingBundle)) {
+                            // Check if source code matches the original
+                            // (user hasn't modified it yet via AI)
+                            const { findWidgetsDir } =
+                                require("@trops/dash-core/electron").widgetCompiler;
+                            const widgetsDir = findWidgetsDir(widget.path);
+                            let sourceUnmodified = false;
+                            if (widgetsDir) {
+                                const origPath = path.join(
+                                    widgetsDir,
+                                    `${widgetName}.js`
+                                );
+                                if (fs.existsSync(origPath)) {
+                                    const origCode = fs.readFileSync(
+                                        origPath,
+                                        "utf8"
+                                    );
+                                    sourceUnmodified =
+                                        origCode.trim() ===
+                                        componentCode.trim();
+                                }
+                            }
+
+                            if (sourceUnmodified) {
+                                console.log(
+                                    `[ai-compile-preview] Using existing bundle for ${sourcePackage}`
+                                );
+                                const bundleSource = fs.readFileSync(
+                                    existingBundle,
+                                    "utf8"
+                                );
+                                return {
+                                    success: true,
+                                    bundleSource,
+                                    widgetName,
+                                };
+                            }
+                        }
+                    }
+                }
+
+                // ── Slow path: recompile (AI modified the code) ─────────
+                const buildDir = path.join(
+                    os.tmpdir(),
+                    `dash-ai-preview-${widgetName}-${Date.now()}`
+                );
+
                 let packageDir = null;
                 if (sourcePackage) {
                     const dashCore = require("@trops/dash-core/electron");
@@ -1839,9 +1893,7 @@ function createWindow() {
                 }
 
                 if (packageDir) {
-                    // Copy entire package to temp build dir
                     fs.cpSync(packageDir, buildDir, { recursive: true });
-                    // Remove old dist so it's rebuilt fresh
                     const oldDist = path.join(buildDir, "dist");
                     if (fs.existsSync(oldDist)) {
                         fs.rmSync(oldDist, { recursive: true, force: true });
@@ -1850,7 +1902,6 @@ function createWindow() {
                     fs.mkdirSync(buildDir, { recursive: true });
                 }
 
-                // Write the (possibly modified) component + config into widgets/
                 const widgetsDir = path.join(buildDir, "widgets");
                 fs.mkdirSync(widgetsDir, { recursive: true });
                 fs.writeFileSync(
@@ -1876,8 +1927,6 @@ function createWindow() {
                 }
 
                 const bundleSource = fs.readFileSync(outputPath, "utf8");
-
-                // Clean up temp dir
                 fs.rmSync(buildDir, { recursive: true, force: true });
 
                 return {
@@ -1886,11 +1935,6 @@ function createWindow() {
                     widgetName,
                 };
             } catch (err) {
-                try {
-                    fs.rmSync(buildDir, { recursive: true, force: true });
-                } catch (e) {
-                    /* ignore cleanup errors */
-                }
                 return { success: false, error: err.message };
             }
         });
