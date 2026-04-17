@@ -465,9 +465,20 @@ class App extends React.Component {
                 widgetId,
             } = detail;
 
-            const packageName =
-                sourcePackage ||
-                `@ai-built/${widgetComponentName?.toLowerCase()}`;
+            // Resolve the package name. Priority:
+            //   1. _sourcePackage from ComponentManager config
+            //   2. Derive from scoped component ID (trops.algolia.Widget → @trops/algolia)
+            //   3. Fall back to @ai-built/<name>
+            let packageName = sourcePackage;
+            if (!packageName && widgetComponentName?.includes(".")) {
+                const parts = widgetComponentName.split(".");
+                if (parts.length >= 3) {
+                    packageName = `@${parts[0]}/${parts[1]}`;
+                }
+            }
+            if (!packageName) {
+                packageName = `@ai-built/${widgetComponentName?.toLowerCase()}`;
+            }
 
             let editContext = null;
             try {

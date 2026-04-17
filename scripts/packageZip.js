@@ -256,32 +256,37 @@ function main() {
         zip.addFile(`configs/${relativePath}`, fs.readFileSync(configPath));
     }
 
-    // Add widget source files (.js + .dash.js) for "Edit with AI" remix.
-    // For each .dash.js config, include the matching .js component file
-    // (and the config itself) under widgets/ so readSources can find them.
+    // Add ALL source files for "Edit with AI" remix support.
+    // Includes widgets, contexts, hooks, utils, components — everything
+    // the widget compiler needs to resolve relative imports.
+    const SOURCE_EXCLUDE = new Set([
+        "node_modules",
+        "dist",
+        ".git",
+        "configs",
+        "package-lock.json",
+    ]);
     let sourceCount = 0;
-    for (const configPath of dashConfigPaths) {
-        const dir = path.dirname(configPath);
-        const baseName = path.basename(configPath, ".dash.js");
-        const componentPath = path.join(dir, `${baseName}.js`);
-        const relativePath = path.relative(effectiveWidgetsDir, dir);
-        const zipDir = relativePath ? `widgets/${relativePath}` : "widgets";
-
-        // Always include the config in widgets/ too
-        zip.addFile(
-            `${zipDir}/${baseName}.dash.js`,
-            fs.readFileSync(configPath)
-        );
-
-        // Include the component source if it exists
-        if (fs.existsSync(componentPath)) {
-            zip.addFile(
-                `${zipDir}/${baseName}.js`,
-                fs.readFileSync(componentPath)
-            );
-            sourceCount++;
+    function addSourceDir(absDir, zipPrefix) {
+        if (!fs.existsSync(absDir)) return;
+        const entries = fs.readdirSync(absDir, { withFileTypes: true });
+        for (const entry of entries) {
+            if (SOURCE_EXCLUDE.has(entry.name)) continue;
+            if (entry.name.startsWith(".")) continue;
+            const abs = path.join(absDir, entry.name);
+            const rel = zipPrefix ? `${zipPrefix}/${entry.name}` : entry.name;
+            if (entry.isDirectory()) {
+                addSourceDir(abs, rel);
+            } else if (
+                entry.isFile() &&
+                (entry.name.endsWith(".js") || entry.name.endsWith(".jsx"))
+            ) {
+                zip.addFile(rel, fs.readFileSync(abs));
+                sourceCount++;
+            }
         }
     }
+    addSourceDir(effectiveWidgetsDir, "");
     if (sourceCount > 0) {
         console.log(
             `  Source files included: ${sourceCount} (for Edit with AI)`
