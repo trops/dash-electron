@@ -351,7 +351,7 @@ export const WidgetBuilderModal = ({
     const previewThemeCtx = previewTheme || localThemeCtx;
     const previewAppCtx = previewApp || null;
     const currentTheme = localThemeCtx?.currentTheme;
-    if (previewAppCtx) {
+    if (false && previewAppCtx) {
         console.log("[WidgetBuilder] AppContext bridge:", {
             hasProviders: !!previewAppCtx.providers,
             providerCount: previewAppCtx.providers
