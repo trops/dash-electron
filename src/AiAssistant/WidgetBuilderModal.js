@@ -248,7 +248,22 @@ export const WidgetBuilderModal = ({
     cellContext,
     editContext,
 }) => {
-    const { currentTheme } = useContext(ThemeContext);
+    // The modal renders outside DashboardStage's ThemeWrapper, so
+    // ThemeContext.currentTheme is null here. We use:
+    //   - Fixed dark colors for the modal CHROME (header, tabs, footer)
+    //   - The dashboard theme (from ThemeBroadcast) for the widget PREVIEW
+    const localThemeCtx = useContext(ThemeContext);
+    const [previewTheme, setPreviewTheme] = useState(
+        () => window.__dashThemeContext || null
+    );
+    useEffect(() => {
+        const handler = () => setPreviewTheme({ ...window.__dashThemeContext });
+        window.addEventListener("dash:theme-changed", handler);
+        return () => window.removeEventListener("dash:theme-changed", handler);
+    }, []);
+    // previewThemeCtx is ONLY for the widget preview, not the modal chrome
+    const previewThemeCtx = previewTheme || localThemeCtx;
+    const currentTheme = localThemeCtx?.currentTheme;
     const appContext = useContext(AppContext);
 
     const [previewComponent, setPreviewComponent] = useState(null);
@@ -440,10 +455,14 @@ export const WidgetBuilderModal = ({
                 setSelectedCategory(existing);
             }
 
-            // Default remix name: strip trailing "Remix" to avoid stacking,
-            // then re-append. User can edit before installing.
+            // Default remix name: use the bare component name (strip scope
+            // prefix like "trops.algolia."), strip trailing "Remix" to
+            // avoid stacking, then re-append.
             const origName = editContext.originalComponentName || "";
-            const base = origName.replace(/Remix\d*$/, "");
+            const bareName = origName.includes(".")
+                ? origName.split(".").pop()
+                : origName;
+            const base = bareName.replace(/Remix\d*$/, "");
             setRemixName(base ? base + "Remix" : "");
 
             // Default mode based on ownership — set once registry check completes.
@@ -933,22 +952,39 @@ export const WidgetBuilderModal = ({
                                 <div className="flex flex-col h-full">
                                     {/* Widget preview — fills available space */}
                                     <div className="flex-1 p-4 overflow-auto">
-                                        <div className="h-full rounded-lg border border-gray-700/30 bg-gray-800/30 overflow-hidden shadow-lg">
-                                            <PreviewErrorBoundary
-                                                key={lastCompiledCode.current}
+                                        <div
+                                            className={`h-full rounded-lg border overflow-hidden shadow-lg ${
+                                                previewThemeCtx?.currentTheme?.[
+                                                    "border-primary-dark"
+                                                ] || "border-gray-700/30"
+                                            } ${
+                                                previewThemeCtx?.currentTheme?.[
+                                                    "bg-primary-dark"
+                                                ] || "bg-gray-800/30"
+                                            }`}
+                                        >
+                                            <ThemeContext.Provider
+                                                value={previewThemeCtx}
                                             >
-                                                <React.Suspense
-                                                    fallback={
-                                                        <div className="p-8 text-center text-gray-500 text-sm">
-                                                            Loading preview...
-                                                        </div>
+                                                <PreviewErrorBoundary
+                                                    key={
+                                                        lastCompiledCode.current
                                                     }
                                                 >
-                                                    <PreviewComponent
-                                                        title={displayName}
-                                                    />
-                                                </React.Suspense>
-                                            </PreviewErrorBoundary>
+                                                    <React.Suspense
+                                                        fallback={
+                                                            <div className="p-8 text-center text-gray-500 text-sm">
+                                                                Loading
+                                                                preview...
+                                                            </div>
+                                                        }
+                                                    >
+                                                        <PreviewComponent
+                                                            title={displayName}
+                                                        />
+                                                    </React.Suspense>
+                                                </PreviewErrorBoundary>
+                                            </ThemeContext.Provider>
                                         </div>
                                     </div>
                                     {/* Footer — mode toggle, name (remix), category + Install */}
