@@ -142,7 +142,8 @@ function extractCodeBlocks(messages) {
         if (!text) continue;
 
         const blocks = [];
-        const regex = /```(?:jsx|javascript|js)?\s*\n([\s\S]*?)```/g;
+        const regex =
+            /```(?:jsx|javascript|js|react|tsx|typescript)?\s*\n([\s\S]*?)```/g;
         let match;
         while ((match = regex.exec(text)) !== null) {
             blocks.push(match[1].trim());
@@ -246,6 +247,8 @@ export const WidgetBuilderModal = ({
     // Required category for the install — user must pick before Install enables.
     // Pre-filled in remix mode if the original config already declares one.
     const [selectedCategory, setSelectedCategory] = useState(null);
+    // Editable widget name for remixes — defaults to <Original>Remix
+    const [remixName, setRemixName] = useState("");
     const lastCompiledCode = useRef(null);
     const [activeTab, setActiveTab] = useState("preview");
     const [activeFile, setActiveFile] = useState("component");
@@ -329,12 +332,37 @@ export const WidgetBuilderModal = ({
                     if (manualEditRef.current) return;
 
                     const extracted = extractCodeBlocks(msgs);
-                    if (
-                        extracted.componentCode &&
-                        extracted.componentCode !== lastCompiledCode.current
-                    ) {
-                        setDetectedCode(extracted);
-                        compilePreview(extracted);
+                    if (extracted.componentCode) {
+                        if (
+                            extracted.componentCode !== lastCompiledCode.current
+                        ) {
+                            console.log(
+                                "[WidgetBuilder] New code detected, compiling preview..."
+                            );
+                            setDetectedCode(extracted);
+                            compilePreview(extracted);
+                        }
+                    } else if (msgs.length > 0) {
+                        // Check if assistant responded but no code blocks found
+                        const lastAssistant = [...msgs]
+                            .reverse()
+                            .find((m) => m.role === "assistant");
+                        if (lastAssistant) {
+                            const text =
+                                typeof lastAssistant.content === "string"
+                                    ? lastAssistant.content
+                                    : Array.isArray(lastAssistant.content)
+                                    ? lastAssistant.content
+                                          .filter((c) => c.type === "text")
+                                          .map((c) => c.text)
+                                          .join("\n")
+                                    : "";
+                            if (text.includes("```")) {
+                                console.warn(
+                                    "[WidgetBuilder] Code fences found but extractCodeBlocks returned null. Check fence language tags."
+                                );
+                            }
+                        }
                     }
                 }
             } catch (e) {
@@ -366,6 +394,12 @@ export const WidgetBuilderModal = ({
             if (existing && VALID_CATEGORIES.includes(existing)) {
                 setSelectedCategory(existing);
             }
+
+            // Default remix name: strip trailing "Remix" to avoid stacking,
+            // then re-append. User can edit before installing.
+            const origName = editContext.originalComponentName || "";
+            const base = origName.replace(/Remix\d*$/, "");
+            setRemixName(base ? base + "Remix" : "");
 
             // Clear previous chat so the user starts fresh
             try {
@@ -484,18 +518,33 @@ export const WidgetBuilderModal = ({
         if (!selectedCategory) return;
         setInstallStatus("installing");
         try {
+            // In remix mode, use the user-chosen remix name so the widget
+            // installs as a NEW package instead of overwriting the original.
+            let installName = widgetName;
+            let installComponentCode = detectedCode.componentCode;
+            if (isRemixMode && remixName && remixName !== widgetName) {
+                installName = remixName;
+                // Rename the export in the source code
+                installComponentCode = installComponentCode.replace(
+                    new RegExp(
+                        `(export\\s+default\\s+function\\s+)${widgetName}\\b`
+                    ),
+                    `$1${installName}`
+                );
+            }
+
             // Build remix metadata when editing an existing widget
-            const remixMeta =
-                editContext &&
-                !editContext.originalPackage?.startsWith("@ai-built/")
-                    ? {
-                          remixedFrom: {
-                              widgetName: editContext.originalPackage,
-                              author: editContext.manifest?.author || "Unknown",
-                              version: editContext.manifest?.version || "1.0.0",
-                          },
-                      }
-                    : null;
+            const remixMeta = isRemixMode
+                ? {
+                      remixedFrom: {
+                          package: editContext.originalPackage || "unknown",
+                          component:
+                              editContext.originalComponentName || "unknown",
+                          author: editContext.manifest?.author || "Unknown",
+                          version: editContext.manifest?.version || "1.0.0",
+                      },
+                  }
+                : null;
 
             // Build the final configCode with the user-selected category baked in.
             // Two paths:
@@ -507,18 +556,28 @@ export const WidgetBuilderModal = ({
                     detectedCode.configCode,
                     selectedCategory
                 );
+                // Update the component reference in config to match the rename
+                if (installName !== widgetName) {
+                    finalConfigCode = finalConfigCode.replace(
+                        new RegExp(
+                            `(component\\s*:\\s*["'])${widgetName}(["'])`,
+                            "g"
+                        ),
+                        `$1${installName}$2`
+                    );
+                }
             } else {
-                const displayName = widgetName
+                const displayName = installName
                     .replace(/([A-Z])/g, " $1")
                     .trim();
-                finalConfigCode = `export default { component: "${widgetName}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", category: "${selectedCategory}", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
+                finalConfigCode = `export default { component: "${installName}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", category: "${selectedCategory}", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
             }
 
             const result = await window.mainApi?.widgetBuilder?.aiBuild(
-                widgetName,
-                detectedCode.componentCode,
+                installName,
+                installComponentCode,
                 finalConfigCode,
-                `AI-generated widget: ${widgetName}`,
+                `AI-generated widget: ${installName}`,
                 cellContext || null,
                 process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron",
                 remixMeta
@@ -529,7 +588,7 @@ export const WidgetBuilderModal = ({
                     widgetName: result.widgetName,
                 });
                 if (onInstalled) {
-                    onInstalled(widgetName, result.widgetName);
+                    onInstalled(installName, result.widgetName);
                 }
             } else {
                 setInstallStatus({
@@ -546,6 +605,8 @@ export const WidgetBuilderModal = ({
         onInstalled,
         cellContext,
         editContext,
+        isRemixMode,
+        remixName,
     ]);
 
     if (!isOpen) return null;
@@ -680,10 +741,44 @@ export const WidgetBuilderModal = ({
                     {/* Preview content (visible when Preview tab is active) */}
                     {activeTab === "preview" && (
                         <div className="flex-1 overflow-auto p-4">
+                            {/* Source unavailable error (widget needs re-publish) */}
+                            {editContext?.sourceError &&
+                                !previewComponent &&
+                                !previewError &&
+                                !isCompiling && (
+                                    <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+                                        <div className="w-16 h-16 rounded-2xl bg-amber-900/30 border border-amber-700/30 flex items-center justify-center">
+                                            <FontAwesomeIcon
+                                                icon="exclamation-triangle"
+                                                className="h-7 w-7 text-amber-400/60"
+                                            />
+                                        </div>
+                                        <div className="space-y-2 max-w-md">
+                                            <p className="text-sm font-medium text-gray-300">
+                                                Source code not available
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                                {editContext.originalComponentName
+                                                    ? `"${editContext.originalComponentName}" `
+                                                    : "This widget "}
+                                                was published without source
+                                                files. Re-publish the widget
+                                                package to include source files
+                                                for remixing.
+                                            </p>
+                                            <p className="text-xs text-gray-600 mt-2">
+                                                You can still describe a new
+                                                widget from scratch using the
+                                                chat.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
                             {/* Empty state */}
                             {!previewComponent &&
                                 !previewError &&
-                                !isCompiling && (
+                                !isCompiling &&
+                                !editContext?.sourceError && (
                                     <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
                                         <div className="w-16 h-16 rounded-2xl bg-gray-800/80 border border-gray-700/30 flex items-center justify-center">
                                             <FontAwesomeIcon
@@ -778,51 +873,94 @@ export const WidgetBuilderModal = ({
                                             </PreviewErrorBoundary>
                                         </div>
                                     </div>
-                                    {/* Footer — category picker + Install button */}
+                                    {/* Footer — name (remix), category picker + Install button */}
                                     <div
-                                        className={`flex items-center justify-between px-6 py-3 border-t ${borderColor} shrink-0 gap-3`}
+                                        className={`px-6 py-3 border-t ${borderColor} shrink-0`}
                                     >
-                                        <span className="text-xs text-gray-500 truncate">
-                                            {isRemixMode
-                                                ? `Remixes ${
-                                                      editContext.originalComponentName
-                                                  } → @ai-built/${widgetName?.toLowerCase()}`
-                                                : `Installs to @ai-built/${widgetName?.toLowerCase()}`}
-                                        </span>
-                                        <div className="flex items-center gap-3 shrink-0">
-                                            <select
-                                                value={selectedCategory || ""}
-                                                onChange={(e) =>
-                                                    setSelectedCategory(
-                                                        e.target.value || null
-                                                    )
-                                                }
-                                                className="px-2 py-1.5 text-xs bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
-                                                title="Pick a category before installing"
-                                            >
-                                                <option value="" disabled>
-                                                    Pick a category…
-                                                </option>
-                                                {VALID_CATEGORIES.map((c) => (
-                                                    <option key={c} value={c}>
-                                                        {c}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <button
-                                                onClick={handleInstall}
-                                                disabled={!selectedCategory}
-                                                className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
-                                                title={
-                                                    !selectedCategory
-                                                        ? "Pick a category first"
-                                                        : undefined
-                                                }
-                                            >
+                                        {isRemixMode && (
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <input
+                                                    type="text"
+                                                    value={remixName}
+                                                    onChange={(e) => {
+                                                        const raw =
+                                                            e.target.value.replace(
+                                                                /[^a-zA-Z0-9]/g,
+                                                                ""
+                                                            );
+                                                        setRemixName(
+                                                            raw
+                                                                .charAt(0)
+                                                                .toUpperCase() +
+                                                                raw.slice(1)
+                                                        );
+                                                    }}
+                                                    placeholder="RemixWidgetName"
+                                                    className="flex-1 px-3 py-1.5 text-sm bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
+                                                    title="Name for the remixed widget (PascalCase)"
+                                                />
+                                            </div>
+                                        )}
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-xs text-gray-500 truncate">
                                                 {isRemixMode
-                                                    ? "Remix Widget"
-                                                    : "Install Widget"}
-                                            </button>
+                                                    ? `Remixes ${
+                                                          editContext.originalComponentName
+                                                      } → @ai-built/${(
+                                                          remixName ||
+                                                          widgetName
+                                                      )?.toLowerCase()}`
+                                                    : `Installs to @ai-built/${widgetName?.toLowerCase()}`}
+                                            </span>
+                                            <div className="flex items-center gap-3 shrink-0">
+                                                <select
+                                                    value={
+                                                        selectedCategory || ""
+                                                    }
+                                                    onChange={(e) =>
+                                                        setSelectedCategory(
+                                                            e.target.value ||
+                                                                null
+                                                        )
+                                                    }
+                                                    className="px-2 py-1.5 text-xs bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
+                                                    title="Pick a category before installing"
+                                                >
+                                                    <option value="" disabled>
+                                                        Pick a category…
+                                                    </option>
+                                                    {VALID_CATEGORIES.map(
+                                                        (c) => (
+                                                            <option
+                                                                key={c}
+                                                                value={c}
+                                                            >
+                                                                {c}
+                                                            </option>
+                                                        )
+                                                    )}
+                                                </select>
+                                                <button
+                                                    onClick={handleInstall}
+                                                    disabled={
+                                                        !selectedCategory ||
+                                                        (isRemixMode &&
+                                                            !remixName)
+                                                    }
+                                                    className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                                                    title={
+                                                        !selectedCategory
+                                                            ? "Pick a category first"
+                                                            : !remixName
+                                                            ? "Enter a name for the remix"
+                                                            : undefined
+                                                    }
+                                                >
+                                                    {isRemixMode
+                                                        ? "Remix Widget"
+                                                        : "Install Widget"}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

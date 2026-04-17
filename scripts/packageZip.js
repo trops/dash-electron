@@ -256,6 +256,38 @@ function main() {
         zip.addFile(`configs/${relativePath}`, fs.readFileSync(configPath));
     }
 
+    // Add widget source files (.js + .dash.js) for "Edit with AI" remix.
+    // For each .dash.js config, include the matching .js component file
+    // (and the config itself) under widgets/ so readSources can find them.
+    let sourceCount = 0;
+    for (const configPath of dashConfigPaths) {
+        const dir = path.dirname(configPath);
+        const baseName = path.basename(configPath, ".dash.js");
+        const componentPath = path.join(dir, `${baseName}.js`);
+        const relativePath = path.relative(effectiveWidgetsDir, dir);
+        const zipDir = relativePath ? `widgets/${relativePath}` : "widgets";
+
+        // Always include the config in widgets/ too
+        zip.addFile(
+            `${zipDir}/${baseName}.dash.js`,
+            fs.readFileSync(configPath)
+        );
+
+        // Include the component source if it exists
+        if (fs.existsSync(componentPath)) {
+            zip.addFile(
+                `${zipDir}/${baseName}.js`,
+                fs.readFileSync(componentPath)
+            );
+            sourceCount++;
+        }
+    }
+    if (sourceCount > 0) {
+        console.log(
+            `  Source files included: ${sourceCount} (for Edit with AI)`
+        );
+    }
+
     // Add dash.json
     zip.addFile("dash.json", Buffer.from(JSON.stringify(dashJson, null, 2)));
 

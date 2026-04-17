@@ -418,6 +418,10 @@ function WidgetPopoutDashboard() {
 // Main App
 class App extends React.Component {
     _removeNotificationClickListener = null;
+    // Suppress stageKey bump briefly after the widget builder closes
+    // so a late-arriving IPC widget:installed event doesn't remount
+    // the dashboard and discard unsaved layout edits.
+    _suppressStageKeyUntil = 0;
 
     state = {
         stageKey: 0,
@@ -480,9 +484,23 @@ class App extends React.Component {
                         originalComponentName: widgetComponentName,
                         originalPackage: packageName,
                     };
+                } else {
+                    // Source unavailable — pass error so the modal can explain
+                    editContext = {
+                        sourceError: result?.error || "Source files not found",
+                        originalWidgetId: widgetId,
+                        originalComponentName: widgetComponentName,
+                        originalPackage: packageName,
+                    };
                 }
             } catch (err) {
                 console.warn("[Dash] Could not read widget sources:", err);
+                editContext = {
+                    sourceError: err.message || "Failed to read widget sources",
+                    originalWidgetId: widgetId,
+                    originalComponentName: widgetComponentName,
+                    originalPackage: packageName,
+                };
             }
 
             this.setState({
@@ -636,7 +654,12 @@ class App extends React.Component {
 
         // Force dashboard to remount with updated widget components.
         // Skip when widget builder is open — deferred to modal close.
-        if (!this.state.isWidgetBuilderOpen) {
+        // Also skip if the builder just closed (suppression window) to
+        // prevent a late IPC event from discarding unsaved layout edits.
+        if (
+            !this.state.isWidgetBuilderOpen &&
+            Date.now() > this._suppressStageKeyUntil
+        ) {
             this.setState((prev) => ({ stageKey: prev.stageKey + 1 }));
         }
     };
@@ -693,7 +716,12 @@ class App extends React.Component {
                                                     this.state
                                                         .widgetBuilderEditContext;
 
-                                                // Close modal and clear edit context
+                                                // Close modal and clear edit context.
+                                                // Suppress stageKey bumps for 3s so
+                                                // a late IPC event doesn't remount
+                                                // the dashboard and lose dirty edits.
+                                                this._suppressStageKeyUntil =
+                                                    Date.now() + 3000;
                                                 this.setState({
                                                     isWidgetBuilderOpen: false,
                                                     widgetBuilderEditContext:
