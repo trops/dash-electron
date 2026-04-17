@@ -1898,6 +1898,20 @@ function createWindow() {
                     if (fs.existsSync(oldDist)) {
                         fs.rmSync(oldDist, { recursive: true, force: true });
                     }
+                    // Remove all OTHER widget .dash.js files so
+                    // compileWidget only builds the target widget.
+                    // Keeps shared files (utils, contexts, hooks) intact.
+                    const wDir = path.join(buildDir, "widgets");
+                    if (fs.existsSync(wDir)) {
+                        for (const f of fs.readdirSync(wDir)) {
+                            if (
+                                f.endsWith(".dash.js") &&
+                                f !== `${widgetName}.dash.js`
+                            ) {
+                                fs.unlinkSync(path.join(wDir, f));
+                            }
+                        }
+                    }
                 } else {
                     fs.mkdirSync(buildDir, { recursive: true });
                 }
