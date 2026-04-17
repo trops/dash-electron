@@ -429,6 +429,19 @@ class App extends React.Component {
 
         // Listen for widget builder open event (with optional cell context)
         window.addEventListener("dash:open-widget-builder", (e) => {
+            // Clear stale chat BEFORE mounting the modal so ChatCore
+            // loads an empty conversation on its first render.
+            try {
+                localStorage.setItem(
+                    "dash-widget-builder",
+                    JSON.stringify({ messages: [] })
+                );
+            } catch (_) {
+                /* ignore */
+            }
+            if (window.mainApi?.llm?.endCliSession) {
+                window.mainApi.llm.endCliSession("dash-widget-builder");
+            }
             this.setState({
                 isWidgetBuilderOpen: true,
                 widgetBuilderCellContext: e.detail || null,

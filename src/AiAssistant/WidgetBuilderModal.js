@@ -271,6 +271,25 @@ export const WidgetBuilderModal = ({
 
     const widgetName = extractWidgetName(detectedCode.componentCode);
 
+    // End session + clear chat on unmount (modal close) so the next
+    // open starts fresh. The open-side clear happens in Dash.js before
+    // this component mounts (avoids race with ChatCore loading stale data).
+    useEffect(() => {
+        return () => {
+            try {
+                localStorage.setItem(
+                    "dash-widget-builder",
+                    JSON.stringify({ messages: [] })
+                );
+            } catch (_) {
+                /* ignore */
+            }
+            if (window.mainApi?.llm?.endCliSession) {
+                window.mainApi.llm.endCliSession("dash-widget-builder");
+            }
+        };
+    }, []);
+
     // Poll for code blocks and auto-compile for preview
     useEffect(() => {
         if (!isOpen) return;
