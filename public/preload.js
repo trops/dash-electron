@@ -53,11 +53,17 @@ const extendedApi = {
         notifySaved: () => ipcRenderer.invoke("workspace:notify-saved"),
     },
     widgetBuilder: {
-        compilePreview: (widgetName, componentCode, configCode) =>
+        compilePreview: (
+            widgetName,
+            componentCode,
+            configCode,
+            sourcePackage
+        ) =>
             ipcRenderer.invoke("widget:ai-compile-preview", {
                 widgetName,
                 componentCode,
                 configCode,
+                sourcePackage,
             }),
         aiBuild: (
             widgetName,

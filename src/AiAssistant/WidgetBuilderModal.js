@@ -178,8 +178,23 @@ function extractCodeBlocks(messages) {
 }
 
 function extractWidgetName(code) {
-    const match = code?.match(/export\s+default\s+function\s+(\w+)/);
-    return match ? match[1] : null;
+    if (!code) return null;
+    // Match common React component export patterns:
+    //   export default function WidgetName
+    //   export const WidgetName = (
+    //   export function WidgetName(
+    //   function WidgetName ... export default WidgetName
+    const patterns = [
+        /export\s+default\s+function\s+(\w+)/,
+        /export\s+(?:const|let|var)\s+(\w+)\s*=/,
+        /export\s+function\s+(\w+)/,
+        /export\s+default\s+(\w+)\s*;/,
+    ];
+    for (const re of patterns) {
+        const match = code.match(re);
+        if (match) return match[1];
+    }
+    return null;
 }
 
 // Mirrors validateWidget.cjs::VALID_CATEGORIES — kept in sync manually
@@ -249,6 +264,11 @@ export const WidgetBuilderModal = ({
     const [selectedCategory, setSelectedCategory] = useState(null);
     // Editable widget name for remixes — defaults to <Original>Remix
     const [remixName, setRemixName] = useState("");
+    // "update" = overwrite original in-place, "remix" = create new copy
+    const [editMode, setEditMode] = useState("remix");
+    // Registry auth — used to determine ownership for update vs remix
+    const [registryUsername, setRegistryUsername] = useState(null);
+    const [registryChecked, setRegistryChecked] = useState(false);
     const lastCompiledCode = useRef(null);
     const [activeTab, setActiveTab] = useState("preview");
     const [activeFile, setActiveFile] = useState("component");
@@ -273,6 +293,29 @@ export const WidgetBuilderModal = ({
         currentTheme?.["border-primary-dark"] || "border-gray-700";
 
     const widgetName = extractWidgetName(detectedCode.componentCode);
+
+    // Check registry auth to determine widget ownership
+    useEffect(() => {
+        (async () => {
+            try {
+                const status = await window.mainApi?.registryAuth?.getStatus();
+                if (status?.authenticated) {
+                    const profile =
+                        await window.mainApi?.registryAuth?.getProfile();
+                    setRegistryUsername(profile?.username || null);
+                }
+            } catch {
+                /* ignore */
+            }
+            setRegistryChecked(true);
+        })();
+    }, []);
+
+    // Derive ownership: @ai-built = always owner, else scope must match username
+    const widgetScope = editContext?.originalPackage?.match(/^@([^/]+)\//)?.[1];
+    const isOwner =
+        widgetScope === "ai-built" ||
+        (registryUsername && widgetScope === registryUsername);
 
     // End session + clear chat on unmount (modal close) so the next
     // open starts fresh. The open-side clear happens in Dash.js before
@@ -342,8 +385,8 @@ export const WidgetBuilderModal = ({
                             setDetectedCode(extracted);
                             compilePreview(extracted);
                         }
-                    } else if (msgs.length > 0) {
-                        // Check if assistant responded but no code blocks found
+                    } else if (msgs.length > 0 && false) {
+                        // Debug: check if assistant responded but no code blocks found
                         const lastAssistant = [...msgs]
                             .reverse()
                             .find((m) => m.role === "assistant");
@@ -382,8 +425,10 @@ export const WidgetBuilderModal = ({
             };
             setDetectedCode(code);
             lastCompiledCode.current = code.componentCode;
+            // Try to compile a preview — if it fails (e.g. multi-file
+            // widget with unresolvable imports), fall back to Code tab.
             setActiveTab("preview");
-            compilePreview(code);
+            compilePreview(code).catch(() => {});
 
             // Pre-fill the category picker from the original config so the user
             // can install the remix without re-picking. Falls through to null
@@ -401,6 +446,9 @@ export const WidgetBuilderModal = ({
             const base = origName.replace(/Remix\d*$/, "");
             setRemixName(base ? base + "Remix" : "");
 
+            // Default mode based on ownership — set once registry check completes.
+            // @ai-built is always "update"; for others, wait for ownership check.
+
             // Clear previous chat so the user starts fresh
             try {
                 localStorage.setItem(
@@ -414,64 +462,85 @@ export const WidgetBuilderModal = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editContext, isOpen]);
 
-    const compilePreview = useCallback(async (code) => {
-        const name = extractWidgetName(code.componentCode);
-        if (!name || !code.componentCode) return;
+    // Set default edit mode once ownership is determined
+    useEffect(() => {
+        if (!isRemixMode || !registryChecked) return;
+        setEditMode(isOwner ? "update" : "remix");
+    }, [isRemixMode, isOwner, registryChecked]);
 
-        setIsCompiling(true);
-        setPreviewError(null);
-        setPreviewComponent(null);
-        setInstallStatus(null);
-        lastCompiledCode.current = code.componentCode;
+    const compilePreview = useCallback(
+        async (code) => {
+            const name = extractWidgetName(code.componentCode);
+            if (!name || !code.componentCode) return;
 
-        try {
-            const result = await window.mainApi?.widgetBuilder?.compilePreview(
-                name,
-                code.componentCode,
-                code.configCode ||
-                    (() => {
-                        const displayName = name
-                            .replace(/([A-Z])/g, " $1")
-                            .trim();
-                        // Preview-only template — category is a placeholder
-                        // here; the user-selected value gets injected at
-                        // install time in handleInstall.
-                        return `export default { component: "${name}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", category: "general", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
-                    })()
-            );
-
-            if (!result?.success) {
-                setPreviewError(result?.error || "Compilation failed");
-                setPreviewComponent(null);
-                setIsCompiling(false);
-                return;
-            }
-
-            // Evaluate the bundle to get the React component
-            const bundleExports = evaluateBundle(
-                result.bundleSource,
-                `@ai-built/${name.toLowerCase()}`
-            );
-            const configs = extractWidgetConfigs(bundleExports);
-            const match = configs.find((c) => c.key === name);
-
-            if (match && typeof match.config.component === "function") {
-                // Let PreviewErrorBoundary catch runtime errors in React's context
-                setPreviewComponent(() => match.config.component);
-                setPreviewError(null);
-            } else {
-                setPreviewError(
-                    "Could not resolve widget component from bundle."
-                );
-                setPreviewComponent(null);
-            }
-        } catch (err) {
-            setPreviewError(err.message);
+            setIsCompiling(true);
+            setPreviewError(null);
             setPreviewComponent(null);
-        } finally {
-            setIsCompiling(false);
-        }
-    }, []);
+            setInstallStatus(null);
+            lastCompiledCode.current = code.componentCode;
+
+            try {
+                const result =
+                    await window.mainApi?.widgetBuilder?.compilePreview(
+                        name,
+                        code.componentCode,
+                        code.configCode ||
+                            (() => {
+                                const displayName = name
+                                    .replace(/([A-Z])/g, " $1")
+                                    .trim();
+                                // Preview-only template — category is a placeholder
+                                // here; the user-selected value gets injected at
+                                // install time in handleInstall.
+                                return `export default { component: "${name}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", category: "general", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
+                            })(),
+                        // Pass the source package so multi-file widgets can
+                        // resolve relative imports from the installed package.
+                        editContext?.originalPackage || null
+                    );
+
+                if (!result?.success) {
+                    setPreviewError(result?.error || "Compilation failed");
+                    setPreviewComponent(null);
+                    setIsCompiling(false);
+                    return;
+                }
+
+                // Evaluate the bundle to get the React component
+                const bundleExports = evaluateBundle(
+                    result.bundleSource,
+                    `@ai-built/${name.toLowerCase()}`
+                );
+                const configs = extractWidgetConfigs(bundleExports);
+                // Match by exact key OR by bare name suffix (scoped IDs
+                // like "trops.algolia.AlgoliaSearchWidget" end with the
+                // bare component name).
+                const match =
+                    configs.find((c) => c.key === name) ||
+                    configs.find((c) => c.key.endsWith(`.${name}`)) ||
+                    configs.find(
+                        (c) => c.key === name || c.config?.name === name
+                    );
+
+                if (match && typeof match.config.component === "function") {
+                    // Let PreviewErrorBoundary catch runtime errors in React's context
+                    setPreviewComponent(() => match.config.component);
+                    setPreviewError(null);
+                } else {
+                    setPreviewError(
+                        "Could not resolve widget component from bundle."
+                    );
+                    setPreviewComponent(null);
+                }
+            } catch (err) {
+                setPreviewError(err.message);
+                setPreviewComponent(null);
+            } finally {
+                setIsCompiling(false);
+            }
+        },
+        [editContext?.originalPackage]
+    );
 
     // Track in-progress edits (not yet saved/compiled)
     const [editBuffer, setEditBuffer] = useState({
@@ -518,11 +587,17 @@ export const WidgetBuilderModal = ({
         if (!selectedCategory) return;
         setInstallStatus("installing");
         try {
-            // In remix mode, use the user-chosen remix name so the widget
-            // installs as a NEW package instead of overwriting the original.
+            // Determine install name based on edit mode:
+            //   "update" → keep original name (overwrites source in-place)
+            //   "remix"  → use the user-chosen remix name (new package)
             let installName = widgetName;
             let installComponentCode = detectedCode.componentCode;
-            if (isRemixMode && remixName && remixName !== widgetName) {
+            if (
+                isRemixMode &&
+                editMode === "remix" &&
+                remixName &&
+                remixName !== widgetName
+            ) {
                 installName = remixName;
                 // Rename the export in the source code
                 installComponentCode = installComponentCode.replace(
@@ -533,18 +608,20 @@ export const WidgetBuilderModal = ({
                 );
             }
 
-            // Build remix metadata when editing an existing widget
-            const remixMeta = isRemixMode
-                ? {
-                      remixedFrom: {
-                          package: editContext.originalPackage || "unknown",
-                          component:
-                              editContext.originalComponentName || "unknown",
-                          author: editContext.manifest?.author || "Unknown",
-                          version: editContext.manifest?.version || "1.0.0",
-                      },
-                  }
-                : null;
+            // Build remix metadata when creating a new copy
+            const remixMeta =
+                isRemixMode && editMode === "remix"
+                    ? {
+                          remixedFrom: {
+                              package: editContext.originalPackage || "unknown",
+                              component:
+                                  editContext.originalComponentName ||
+                                  "unknown",
+                              author: editContext.manifest?.author || "Unknown",
+                              version: editContext.manifest?.version || "1.0.0",
+                          },
+                      }
+                    : null;
 
             // Build the final configCode with the user-selected category baked in.
             // Two paths:
@@ -606,6 +683,7 @@ export const WidgetBuilderModal = ({
         cellContext,
         editContext,
         isRemixMode,
+        editMode,
         remixName,
     ]);
 
@@ -873,44 +951,118 @@ export const WidgetBuilderModal = ({
                                             </PreviewErrorBoundary>
                                         </div>
                                     </div>
-                                    {/* Footer — name (remix), category picker + Install button */}
+                                    {/* Footer — mode toggle, name (remix), category + Install */}
                                     <div
                                         className={`px-6 py-3 border-t ${borderColor} shrink-0`}
                                     >
                                         {isRemixMode && (
-                                            <div className="flex items-center gap-3 mb-2">
-                                                <input
-                                                    type="text"
-                                                    value={remixName}
-                                                    onChange={(e) => {
-                                                        const raw =
-                                                            e.target.value.replace(
-                                                                /[^a-zA-Z0-9]/g,
-                                                                ""
+                                            <div className="mb-2 space-y-2">
+                                                {/* Sign-in nudge for non-ai-built widgets when not authenticated */}
+                                                {!isOwner &&
+                                                    registryChecked &&
+                                                    !registryUsername &&
+                                                    widgetScope !==
+                                                        "ai-built" && (
+                                                        <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-amber-900/15 border border-amber-700/30">
+                                                            <p className="flex-1 text-xs text-amber-200 leading-snug">
+                                                                Sign in to the
+                                                                registry to
+                                                                update your own
+                                                                widgets in place
+                                                                instead of
+                                                                duplicating.
+                                                            </p>
+                                                            <button
+                                                                type="button"
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        await window.mainApi?.registryAuth?.initiateLogin();
+                                                                    } catch {
+                                                                        /* ignore */
+                                                                    }
+                                                                }}
+                                                                className="px-3 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 transition-colors"
+                                                            >
+                                                                Sign in
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                {/* Update / Remix toggle — only when user is the owner */}
+                                                {isOwner && (
+                                                    <div className="flex items-center gap-1 bg-gray-800/50 rounded-md border border-gray-700/50 p-0.5 w-fit">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setEditMode(
+                                                                    "update"
+                                                                )
+                                                            }
+                                                            className={`px-3 py-1 text-xs rounded transition-colors ${
+                                                                editMode ===
+                                                                "update"
+                                                                    ? "bg-indigo-600/30 text-indigo-300 font-medium"
+                                                                    : "text-gray-500 hover:text-gray-300"
+                                                            }`}
+                                                        >
+                                                            Update Original
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setEditMode(
+                                                                    "remix"
+                                                                )
+                                                            }
+                                                            className={`px-3 py-1 text-xs rounded transition-colors ${
+                                                                editMode ===
+                                                                "remix"
+                                                                    ? "bg-indigo-600/30 text-indigo-300 font-medium"
+                                                                    : "text-gray-500 hover:text-gray-300"
+                                                            }`}
+                                                        >
+                                                            Remix as New
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {editMode === "remix" && (
+                                                    <input
+                                                        type="text"
+                                                        value={remixName}
+                                                        onChange={(e) => {
+                                                            const raw =
+                                                                e.target.value.replace(
+                                                                    /[^a-zA-Z0-9]/g,
+                                                                    ""
+                                                                );
+                                                            setRemixName(
+                                                                raw
+                                                                    .charAt(0)
+                                                                    .toUpperCase() +
+                                                                    raw.slice(1)
                                                             );
-                                                        setRemixName(
-                                                            raw
-                                                                .charAt(0)
-                                                                .toUpperCase() +
-                                                                raw.slice(1)
-                                                        );
-                                                    }}
-                                                    placeholder="RemixWidgetName"
-                                                    className="flex-1 px-3 py-1.5 text-sm bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
-                                                    title="Name for the remixed widget (PascalCase)"
-                                                />
+                                                        }}
+                                                        placeholder="RemixWidgetName"
+                                                        className="w-full px-3 py-1.5 text-sm bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
+                                                        title="Name for the remixed widget (PascalCase)"
+                                                    />
+                                                )}
                                             </div>
                                         )}
                                         <div className="flex items-center justify-between gap-3">
                                             <span className="text-xs text-gray-500 truncate">
-                                                {isRemixMode
-                                                    ? `Remixes ${
+                                                {!isRemixMode
+                                                    ? `Installs to @ai-built/${widgetName?.toLowerCase()}`
+                                                    : editMode === "update"
+                                                    ? `Updates ${
+                                                          editContext.originalPackage ||
+                                                          `@ai-built/${widgetName?.toLowerCase()}`
+                                                      }`
+                                                    : `Remixes ${
                                                           editContext.originalComponentName
                                                       } → @ai-built/${(
                                                           remixName ||
                                                           widgetName
-                                                      )?.toLowerCase()}`
-                                                    : `Installs to @ai-built/${widgetName?.toLowerCase()}`}
+                                                      )?.toLowerCase()}`}
                                             </span>
                                             <div className="flex items-center gap-3 shrink-0">
                                                 <select
@@ -945,20 +1097,26 @@ export const WidgetBuilderModal = ({
                                                     disabled={
                                                         !selectedCategory ||
                                                         (isRemixMode &&
+                                                            editMode ===
+                                                                "remix" &&
                                                             !remixName)
                                                     }
                                                     className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
                                                     title={
                                                         !selectedCategory
                                                             ? "Pick a category first"
-                                                            : !remixName
+                                                            : editMode ===
+                                                                  "remix" &&
+                                                              !remixName
                                                             ? "Enter a name for the remix"
                                                             : undefined
                                                     }
                                                 >
-                                                    {isRemixMode
-                                                        ? "Remix Widget"
-                                                        : "Install Widget"}
+                                                    {!isRemixMode
+                                                        ? "Install Widget"
+                                                        : editMode === "update"
+                                                        ? "Update Widget"
+                                                        : "Remix Widget"}
                                                 </button>
                                             </div>
                                         </div>
@@ -977,17 +1135,21 @@ export const WidgetBuilderModal = ({
                                     </div>
                                     <div className="text-center space-y-1">
                                         <p className="text-base font-semibold text-green-300">
-                                            {isRemixMode
-                                                ? "Widget Remixed!"
-                                                : "Widget Installed!"}
+                                            {!isRemixMode
+                                                ? "Widget Installed!"
+                                                : editMode === "update"
+                                                ? "Widget Updated!"
+                                                : "Widget Remixed!"}
                                         </p>
                                         <p className="text-sm text-gray-400">
                                             <span className="font-mono text-gray-300">
                                                 {installStatus.widgetName}
                                             </span>{" "}
-                                            {isRemixMode
-                                                ? "has been swapped into your dashboard."
-                                                : "is now in the widget selector."}
+                                            {!isRemixMode
+                                                ? "is now in the widget selector."
+                                                : editMode === "update"
+                                                ? "has been updated in place."
+                                                : "has been swapped into your dashboard."}
                                         </p>
                                     </div>
                                     <div className="flex gap-3">

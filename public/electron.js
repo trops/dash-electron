@@ -1812,7 +1812,8 @@ function createWindow() {
         // Compiles widget code and returns the bundle source for live preview.
         // Does NOT install — just compile and return.
         logger.loggedHandle("widget:ai-compile-preview", async (e, message) => {
-            const { widgetName, componentCode, configCode } = message;
+            const { widgetName, componentCode, configCode, sourcePackage } =
+                message;
             const path = require("path");
             const fs = require("fs");
             const os = require("os");
@@ -1823,6 +1824,33 @@ function createWindow() {
             );
 
             try {
+                // If sourcePackage is provided, copy the full package
+                // directory so multi-file widgets can resolve relative
+                // imports (shared utils, contexts, hooks, etc.).
+                let packageDir = null;
+                if (sourcePackage) {
+                    const dashCore = require("@trops/dash-core/electron");
+                    const registry =
+                        dashCore.widgetRegistry.getWidgetRegistry();
+                    const widget = registry.getWidget(sourcePackage);
+                    if (widget?.path && fs.existsSync(widget.path)) {
+                        packageDir = widget.path;
+                    }
+                }
+
+                if (packageDir) {
+                    // Copy entire package to temp build dir
+                    fs.cpSync(packageDir, buildDir, { recursive: true });
+                    // Remove old dist so it's rebuilt fresh
+                    const oldDist = path.join(buildDir, "dist");
+                    if (fs.existsSync(oldDist)) {
+                        fs.rmSync(oldDist, { recursive: true, force: true });
+                    }
+                } else {
+                    fs.mkdirSync(buildDir, { recursive: true });
+                }
+
+                // Write the (possibly modified) component + config into widgets/
                 const widgetsDir = path.join(buildDir, "widgets");
                 fs.mkdirSync(widgetsDir, { recursive: true });
                 fs.writeFileSync(
@@ -1836,8 +1864,8 @@ function createWindow() {
                     "utf8"
                 );
 
-                const dashCore = require("@trops/dash-core/electron");
-                await dashCore.widgetCompiler.compileWidget(buildDir);
+                const dashCoreCompiler = require("@trops/dash-core/electron");
+                await dashCoreCompiler.widgetCompiler.compileWidget(buildDir);
 
                 const outputPath = path.join(buildDir, "dist", "index.cjs.js");
                 if (!fs.existsSync(outputPath)) {
