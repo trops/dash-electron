@@ -111,6 +111,7 @@ function PreviewContextWrapper({ appCtx, themeCtx, editContext, children }) {
 /**
  * Error boundary for the live widget preview.
  * Catches runtime errors in the rendered widget without crashing the modal.
+ * Shows the error with a "Send error to AI" action to auto-fix.
  */
 class PreviewErrorBoundary extends React.Component {
     constructor(props) {
@@ -122,30 +123,61 @@ class PreviewErrorBoundary extends React.Component {
         return { error: error.message || "Widget render error" };
     }
 
-    componentDidCatch(err) {
-        console.error("[WidgetBuilderModal] Preview render error:", err);
+    componentDidCatch(err, info) {
+        console.error(
+            "[WidgetBuilderModal] Preview render error:",
+            err,
+            info?.componentStack
+        );
     }
 
-    // Reset when children change (new preview compiled)
+    // Reset when key changes (new preview compiled via key prop)
     componentDidUpdate(prevProps) {
-        if (prevProps.children !== this.props.children && this.state.error) {
+        if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
             this.setState({ error: null });
         }
     }
 
+    sendErrorToAI = () => {
+        const error = this.state.error;
+        if (!error) return;
+        try {
+            const raw = localStorage.getItem("dash-widget-builder");
+            if (raw) {
+                const data = JSON.parse(raw);
+                const msgs = data?.messages || [];
+                msgs.push({
+                    role: "user",
+                    content: `The widget crashed with this runtime error:\n\n${error}\n\nPlease fix the code and output both the corrected jsx component code block and the javascript config code block.`,
+                });
+                localStorage.setItem(
+                    "dash-widget-builder",
+                    JSON.stringify({ ...data, messages: msgs })
+                );
+            }
+        } catch {
+            /* ignore */
+        }
+    };
+
     render() {
         if (this.state.error) {
             return (
-                <div className="p-4 space-y-2">
-                    <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
-                        <span>Widget render error</span>
+                <div className="flex flex-col items-center justify-center h-full space-y-4">
+                    <div className="w-full max-w-lg rounded-lg border border-red-700/30 bg-red-900/10 p-4 space-y-2">
+                        <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
+                            <span>Runtime Error</span>
+                        </div>
+                        <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto max-h-32">
+                            {this.state.error}
+                        </pre>
+                        <button
+                            onClick={this.sendErrorToAI}
+                            className="text-xs text-indigo-400 hover:text-indigo-300 underline"
+                        >
+                            Send error to AI
+                        </button>
                     </div>
-                    <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto max-h-24">
-                        {this.state.error}
-                    </pre>
-                    <p className="text-xs text-gray-500">
-                        Ask the AI to fix the error in the chat.
-                    </p>
                 </div>
             );
         }
@@ -1070,6 +1102,9 @@ export const WidgetBuilderModal = ({
                                             >
                                                 <PreviewErrorBoundary
                                                     key={
+                                                        lastCompiledCode.current
+                                                    }
+                                                    resetKey={
                                                         lastCompiledCode.current
                                                     }
                                                 >
