@@ -459,6 +459,7 @@ class App extends React.Component {
             const {
                 widgetComponentName,
                 sourcePackage,
+                selectedProviders,
                 cellNumber,
                 gridItemId,
                 workspaceId,
@@ -494,6 +495,7 @@ class App extends React.Component {
                         originalWidgetId: widgetId,
                         originalComponentName: widgetComponentName,
                         originalPackage: packageName,
+                        selectedProviders: selectedProviders || null,
                     };
                 } else {
                     // Source unavailable — pass error so the modal can explain
@@ -502,6 +504,7 @@ class App extends React.Component {
                         originalWidgetId: widgetId,
                         originalComponentName: widgetComponentName,
                         originalPackage: packageName,
+                        selectedProviders: selectedProviders || null,
                     };
                 }
             } catch (err) {
