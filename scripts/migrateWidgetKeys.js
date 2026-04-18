@@ -16,14 +16,16 @@
 
 const fs = require("fs");
 const path = require("path");
+const { getUserDataDir } = require("./lib/userDataDir");
 
-const WIDGETS_DIR = path.join(
-    process.env.HOME,
-    "Library/Application Support/Dash/widgets"
-);
+const USER_DATA = getUserDataDir();
+const WIDGETS_DIR = path.join(USER_DATA, "widgets");
 const WORKSPACES_FILE = path.join(
-    process.env.HOME,
-    "Library/Application Support/Dash/Dashboard/@trops/dash-electron/workspaces.json"
+    USER_DATA,
+    "Dashboard",
+    "@trops",
+    "dash-electron",
+    "workspaces.json"
 );
 
 const isDryRun = process.argv.includes("--dry-run");

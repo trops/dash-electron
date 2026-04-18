@@ -16,6 +16,7 @@ const fs = require("fs");
 const path = require("path");
 const AdmZip = require("adm-zip");
 const { authenticate } = require("./lib/registryAuth");
+const { getUserDataDir } = require("./lib/userDataDir");
 
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
@@ -23,10 +24,7 @@ const REGISTRY_BASE_URL =
     process.env.DASH_REGISTRY_API_URL ||
     "https://main.d919rwhuzp7rj.amplifyapp.com";
 
-const WIDGETS_DIR = path.join(
-    process.env.HOME,
-    "Library/Application Support/Dash/widgets"
-);
+const WIDGETS_DIR = path.join(getUserDataDir(), "widgets");
 const REGISTRY_FILE = path.join(WIDGETS_DIR, "registry.json");
 
 const isDryRun = process.argv.includes("--dry-run");
