@@ -1588,14 +1588,19 @@ export const WidgetBuilderModal = ({
                                       editContext.componentCode
                                   }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
                                       editContext.configCode || ""
-                                  }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.`
-                                : SYSTEM_PROMPT
+                                  }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`
+                                : `${SYSTEM_PROMPT}\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences inviting the user to describe the widget they want to build (what it should show, what data source it pulls from, what interactions it needs). No lists, no bullet points, no examples — keep it under 30 words total.`
                         }
                         maxToolRounds="10"
                         apiKey={apiKey}
                         backend={preferredBackend}
                         persistKey="dash-widget-builder"
                         hideToolsBanner={true}
+                        initialMessage={
+                            editContext?.componentCode
+                                ? "Hello, let's make some edits to this widget."
+                                : "Hi, I'd like to build a new widget."
+                        }
                     />
                 </div>
             </div>
