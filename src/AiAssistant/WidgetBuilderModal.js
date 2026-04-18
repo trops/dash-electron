@@ -481,6 +481,72 @@ export const WidgetBuilderModal = ({
         };
     }, []);
 
+    // Isolate widget-preview runtime errors so buggy user code (event
+    // handlers, async effects) can't crash the rest of the app. React's
+    // PreviewErrorBoundary catches RENDER errors only; event-handler and
+    // async errors bypass it. We catch them here and surface via
+    // previewError so the user sees the error inside the preview pane.
+    useEffect(() => {
+        if (!isOpen) return;
+
+        // Match errors that originated in the evaluated widget bundle.
+        // V8 stacks show "eval at evaluateBundle (...), <anonymous>:L:C"
+        // for errors inside the sandboxed bundle. We also treat errors
+        // whose filename is empty/"<anonymous>" as bundle-origin, since
+        // `new Function()` eval produces no filename.
+        const fromWidgetBundle = (err, event) => {
+            const stack = err?.stack || "";
+            if (stack.includes("evaluateBundle")) return true;
+            if (stack.includes("<anonymous>")) return true;
+            const filename = event?.filename;
+            if (!filename || filename === "<anonymous>") return true;
+            return false;
+        };
+
+        const errorHandler = (event) => {
+            if (!fromWidgetBundle(event.error, event)) return;
+            console.warn(
+                "[WidgetBuilderModal] caught widget bundle error:",
+                event.error?.message || event.message
+            );
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            setPreviewError(
+                event.error?.message || event.message || "Widget runtime error"
+            );
+            setPreviewComponent(null);
+        };
+
+        const rejectionHandler = (event) => {
+            if (!fromWidgetBundle(event.reason, event)) return;
+            console.warn(
+                "[WidgetBuilderModal] caught widget bundle rejection:",
+                event.reason?.message || String(event.reason)
+            );
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            setPreviewError(
+                event.reason?.message ||
+                    String(event.reason || "Widget async error")
+            );
+            setPreviewComponent(null);
+        };
+
+        // Capture phase so we run BEFORE index.html's bubble-phase
+        // logger and can stopImmediatePropagation to silence its
+        // "Global error:" noise for widget-originated errors.
+        window.addEventListener("error", errorHandler, true);
+        window.addEventListener("unhandledrejection", rejectionHandler, true);
+        return () => {
+            window.removeEventListener("error", errorHandler, true);
+            window.removeEventListener(
+                "unhandledrejection",
+                rejectionHandler,
+                true
+            );
+        };
+    }, [isOpen]);
+
     // Poll for code blocks and auto-compile for preview
     useEffect(() => {
         if (!isOpen) return;
