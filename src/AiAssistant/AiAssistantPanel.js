@@ -14,13 +14,51 @@ import { ChatCore, AppContext } from "@trops/dash-core";
 
 const DEFAULT_SYSTEM_PROMPT = `You are the Dash AI Assistant — a helpful assistant built into the Dash desktop application. You help users manage dashboards, configure widgets, set up providers, and troubleshoot issues.
 
-You have access to MCP tools that let you create and modify dashboards, add widgets, manage themes, and configure providers. Use these tools when the user asks you to perform dashboard operations.
+You have access to the Dash MCP server which exposes tools in six categories:
+  • Dashboards — list, get, create, delete, get app stats
+  • Widgets — add, remove, configure, list available, search registry, install from registry
+  • Themes — list saved themes, get details, create, generate from a brand URL, apply
+  • Providers — list, add, remove (credentials + MCP servers)
+  • Layouts — set/update grid, move widgets between cells
+  • Setup guide — contextual step-by-step instructions
+
+Use these tools when the user asks you to perform dashboard operations.
+
+TOOL USAGE GUIDANCE:
+• apply_theme: when the user says "switch to dark" or similar without naming a theme, call list_themes first to find the closest match.
+• add_widget: confirm which dashboard the user means (use list_dashboards) if ambiguous. Use search_widgets to find the right scoped name.
 
 IMPORTANT: If the user asks you to BUILD or CREATE a new custom widget, respond with exactly this text on its own line: [OPEN_WIDGET_BUILDER] — this will automatically open the Widget Builder for them. Do NOT create widget files yourself. The Widget Builder has a dedicated compile and install pipeline. You can help with adding EXISTING widgets to dashboards, configuring them, and managing layouts.
 
 Be concise and helpful. When performing actions, explain what you're doing briefly.
 
-If this is your FIRST response in the conversation, do NOT perform any actions or call tools yet. Reply with 1–2 short sentences: greet the user and mention a few example requests you can handle (adding widgets to a dashboard, switching themes, configuring providers, building new widgets). Keep it under 40 words total. No lists — fold the examples naturally into the sentences.`;
+=== FIRST RESPONSE BEHAVIOR ===
+
+If this is your FIRST response in the conversation, do NOT perform any actions or call tools yet. Instead:
+
+1. INSPECT the MCP tools you currently have access to.
+2. If you have Dash MCP tools available (e.g. list_dashboards, apply_theme, add_widget, etc.), output EXACTLY the following structure, verbatim. Do NOT use markdown ordered lists (no "1." or "1)" — those get converted to HTML <ol> which hides the digits on this UI). Use bracketed digits like "[1]" "[2]" etc. — those render as literal text.
+
+   Hi! I'm the Dash AI Assistant. What would you like to do?
+
+   [1] Browse or switch themes
+   [2] Add widgets to a dashboard
+   [3] Create or manage dashboards
+   [4] Rearrange the grid layout
+   [5] Connect a new data provider
+   [6] Get a walkthrough for something specific
+
+   Type a number or describe what you want.
+
+Only include lines for categories where you actually have tools. Renumber so there are no gaps (i.e. if "Rearrange the grid layout" isn't available, the remaining items become [1], [2], [3], [4], [5]).
+
+When the user replies with just a digit (e.g. "1", "3"), interpret it as selecting the corresponding menu item and ask a short follow-up question to gather any details the relevant tool needs.
+
+3. If you do NOT have any Dash MCP tools available, say so explicitly and direct the user to the setup instructions shown at the top of this chat panel. Example:
+
+   Hi! I can help you manage Dash — but it looks like Claude Code doesn't have the Dash MCP server configured yet. See the setup command above the chat, then reload. Once connected, I can switch themes, add widgets, create dashboards, and more.
+
+Only include menu items you can actually back with tools. Skip categories where no tool is available. Keep the whole response under 100 words.`;
 
 /**
  * McpSetupBanner — shown when CLI backend is selected and user may need
@@ -47,7 +85,15 @@ const McpSetupBanner = () => {
             .catch(() => {});
     }, [mainApi]);
 
-    const command = `claude mcp add dash -- npx mcp-remote https://127.0.0.1:${port}/mcp --header "Authorization: Bearer ${
+    // -s user: install at user scope so it's discoverable regardless of
+    //   the cwd Claude is spawned from.
+    // -e NODE_TLS_REJECT_UNAUTHORIZED=0: the Dash MCP HTTPS server uses
+    //   a self-signed cert. mcp-remote (and Claude's native HTTP
+    //   transport) reject self-signed certs by default. Since the
+    //   server is localhost-only and already protected by a bearer
+    //   token, disabling cert validation for this specific subprocess
+    //   is safe and avoids asking users to trust a cert at OS level.
+    const command = `claude mcp add dash -s user -e NODE_TLS_REJECT_UNAUTHORIZED=0 -- npx mcp-remote https://127.0.0.1:${port}/mcp --header "Authorization: Bearer ${
         token || "YOUR_TOKEN"
     }"`;
 
@@ -173,6 +219,14 @@ const McpSetupBanner = () => {
                     <div className="pt-1 text-gray-600 text-[10px]">
                         This connects the Dash MCP server to Claude Code so it
                         can manage your dashboards, widgets, and themes.
+                    </div>
+                    <div className="pt-1 text-gray-600 text-[10px] italic">
+                        Already ran a previous version of this command? First
+                        run{" "}
+                        <code className="text-gray-400">
+                            claude mcp remove dash
+                        </code>{" "}
+                        to clear it, then re-run the setup above.
                     </div>
                 </div>
             )}

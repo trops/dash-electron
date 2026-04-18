@@ -557,6 +557,68 @@ class App extends React.Component {
         // Load installed widgets (bundles first, then config fallback)
         await loadInstalledWidgets();
         window.dispatchEvent(new Event("dash:widgets-updated"));
+
+        // Subscribe to Dash MCP state-change broadcasts so assistant-driven
+        // mutations (apply_theme, add_widget, create_dashboard, etc.)
+        // refresh the UI automatically. Uses the existing stageKey bump
+        // pattern — DashboardStage remounts and re-bootstraps.
+        if (window.mainApi?.mcpDashServer?.onStateChanged) {
+            // Tools whose changes the renderer can pick up via other
+            // mechanisms (workspace:saved → DashboardStage.loadWorkspaces,
+            // dash:navigate-workspace, etc). Skipping the stageKey bump
+            // for these avoids the visible full-remount while keeping
+            // the UI in sync.
+            const NO_REMOUNT_TOOLS = new Set([
+                "create_dashboard",
+                "delete_dashboard",
+                "add_widget",
+                "remove_widget",
+                "configure_widget",
+                "move_widget",
+                "set_layout",
+                "update_layout",
+            ]);
+
+            this._unsubMcpStateChanged =
+                window.mainApi.mcpDashServer.onStateChanged(
+                    async ({ toolName, result }) => {
+                        console.log(
+                            "[Dash App] MCP state changed via:",
+                            toolName,
+                            result
+                        );
+                        // Reload widgets so install_widget takes effect.
+                        await loadInstalledWidgets();
+                        window.dispatchEvent(new Event("dash:widgets-updated"));
+                        // Full-remount only for tools that mutate global
+                        // state without their own propagation path (e.g.
+                        // apply_theme — ThemeContext needs a rebootstrap).
+                        if (
+                            !NO_REMOUNT_TOOLS.has(toolName) &&
+                            !this.state.isWidgetBuilderOpen &&
+                            Date.now() > this._suppressStageKeyUntil
+                        ) {
+                            this.setState((prev) => ({
+                                stageKey: prev.stageKey + 1,
+                            }));
+                        }
+                        // Auto-navigate to the new dashboard after
+                        // create_dashboard — workspace:saved triggers
+                        // the list reload, then DashboardStage's
+                        // navigate listener opens the tab once the ID
+                        // appears in its config.
+                        if (toolName === "create_dashboard" && result?.id) {
+                            window.dispatchEvent(
+                                new CustomEvent("dash:navigate-workspace", {
+                                    detail: {
+                                        workspaceId: Number(result.id),
+                                    },
+                                })
+                            );
+                        }
+                    }
+                );
+        }
     }
 
     componentWillUnmount() {
@@ -576,6 +638,10 @@ class App extends React.Component {
         }
         if (this._removeNotificationClickListener) {
             this._removeNotificationClickListener();
+        }
+        if (this._unsubMcpStateChanged) {
+            this._unsubMcpStateChanged();
+            this._unsubMcpStateChanged = null;
         }
     }
 
