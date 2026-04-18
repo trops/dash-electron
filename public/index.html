@@ -35,14 +35,15 @@
                 }
             });
 
+            // Early-boot error logger. Does NOT inject DOM — widget
+            // preview errors are isolated by WidgetBuilderModal's
+            // scoped handler; everything else falls through to React
+            // error boundaries and DevTools. Appending error divs to
+            // body was blocking clicks whenever any widget threw.
             window.addEventListener(
                 "error",
                 function (e) {
                     console.error("Global error:", e.error || e.message);
-                    document.body.innerHTML +=
-                        '<div style="color: red; padding: 20px; font-size: 18px;">ERROR: ' +
-                        (e.message || e.error) +
-                        "</div>";
                 },
                 true
             );
