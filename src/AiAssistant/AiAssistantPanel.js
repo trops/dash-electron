@@ -18,7 +18,9 @@ You have access to MCP tools that let you create and modify dashboards, add widg
 
 IMPORTANT: If the user asks you to BUILD or CREATE a new custom widget, respond with exactly this text on its own line: [OPEN_WIDGET_BUILDER] — this will automatically open the Widget Builder for them. Do NOT create widget files yourself. The Widget Builder has a dedicated compile and install pipeline. You can help with adding EXISTING widgets to dashboards, configuring them, and managing layouts.
 
-Be concise and helpful. When performing actions, explain what you're doing briefly.`;
+Be concise and helpful. When performing actions, explain what you're doing briefly.
+
+If this is your FIRST response in the conversation, do NOT perform any actions or call tools yet. Reply with 1–2 short sentences: greet the user and mention a few example requests you can handle (adding widgets to a dashboard, switching themes, configuring providers, building new widgets). Keep it under 40 words total. No lists — fold the examples naturally into the sentences.`;
 
 /**
  * McpSetupBanner — shown when CLI backend is selected and user may need
@@ -372,8 +374,9 @@ export const AiAssistantPanel = () => {
                         maxToolRounds="10"
                         apiKey={apiKey}
                         backend={preferredBackend}
-                        persistKey="dash-ai-assistant"
+                        sessionKey="dash-ai-assistant"
                         hideToolsBanner={true}
+                        initialMessage="Hi"
                     />
                 </div>
             </div>
