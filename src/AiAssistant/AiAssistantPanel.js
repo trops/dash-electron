@@ -70,6 +70,20 @@ const McpSetupBanner = () => {
     const [expanded, setExpanded] = useState(false);
     const [copied, setCopied] = useState(false);
 
+    const { currentTheme } = useContext(ThemeContext) || {};
+    const panelBg =
+        currentTheme?.["bg-secondary-dark"] ||
+        currentTheme?.["bg-primary-dark"] ||
+        "bg-gray-800/80";
+    const panelBorder =
+        currentTheme?.["border-primary-dark"] || "border-gray-700/50";
+    // Text tints for the setup banner. When the panel is theme-tinted
+    // (e.g. red, bluish), hardcoded text-gray-500 etc. loses contrast.
+    // Use theme-provided text colors and fall back to neutral white
+    // opacities that stay readable on any dark background.
+    const textStrong = currentTheme?.["text-primary-bright"] || "text-white/95";
+    const textMuted = currentTheme?.["text-primary-dark"] || "text-white/60";
+
     const mainApi = window.mainApi;
     const port = mcpStatus?.port || 3141;
 
@@ -142,14 +156,18 @@ const McpSetupBanner = () => {
             </button>
 
             {expanded && (
-                <div className="mt-2 p-3 rounded-lg bg-gray-800/80 border border-gray-700/50 text-xs space-y-3">
+                <div
+                    className={`mt-2 p-3 rounded-lg text-xs space-y-3 border ${panelBg} ${panelBorder}`}
+                >
                     {/* Step 1: MCP Server */}
                     <div className="flex items-start gap-2">
-                        <span className="shrink-0 w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-gray-300 font-bold">
+                        <span
+                            className={`shrink-0 w-5 h-5 rounded-full bg-black/30 flex items-center justify-center font-bold ${textStrong}`}
+                        >
                             1
                         </span>
                         <div className="flex-1">
-                            <div className="text-gray-300 font-medium">
+                            <div className={`font-medium ${textStrong}`}>
                                 Enable the MCP Server
                             </div>
                             {mcpStatus?.running ? (
@@ -159,16 +177,16 @@ const McpSetupBanner = () => {
                                 </div>
                             ) : (
                                 <div className="mt-1">
-                                    <span className="text-gray-500">
+                                    <span className={textMuted}>
                                         Server is not running.{" "}
                                     </span>
                                     <button
                                         onClick={handleStartServer}
-                                        className="text-indigo-400 hover:text-indigo-300 underline"
+                                        className="text-indigo-300 hover:text-indigo-200 underline"
                                     >
                                         Start now
                                     </button>
-                                    <span className="text-gray-500">
+                                    <span className={textMuted}>
                                         {" "}
                                         or enable in Settings &gt; MCP Server.
                                     </span>
@@ -179,20 +197,24 @@ const McpSetupBanner = () => {
 
                     {/* Step 2: Run command */}
                     <div className="flex items-start gap-2">
-                        <span className="shrink-0 w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-gray-300 font-bold">
+                        <span
+                            className={`shrink-0 w-5 h-5 rounded-full bg-black/30 flex items-center justify-center font-bold ${textStrong}`}
+                        >
                             2
                         </span>
                         <div className="flex-1">
-                            <div className="text-gray-300 font-medium">
+                            <div className={`font-medium ${textStrong}`}>
                                 Run this in your terminal
                             </div>
                             <div className="mt-1.5 relative">
-                                <pre className="p-2 rounded bg-black/40 text-gray-400 overflow-x-auto whitespace-pre-wrap break-all text-[10px] leading-relaxed">
+                                <pre
+                                    className={`p-2 rounded bg-black/40 overflow-x-auto whitespace-pre-wrap break-all text-[10px] leading-relaxed ${textStrong}`}
+                                >
                                     {command}
                                 </pre>
                                 <button
                                     onClick={handleCopy}
-                                    className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 text-[10px] transition-colors"
+                                    className={`absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/40 hover:bg-black/60 text-[10px] transition-colors ${textStrong}`}
                                 >
                                     {copied ? "Copied!" : "Copy"}
                                 </button>
@@ -202,28 +224,30 @@ const McpSetupBanner = () => {
 
                     {/* Step 3: Restart */}
                     <div className="flex items-start gap-2">
-                        <span className="shrink-0 w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-gray-300 font-bold">
+                        <span
+                            className={`shrink-0 w-5 h-5 rounded-full bg-black/30 flex items-center justify-center font-bold ${textStrong}`}
+                        >
                             3
                         </span>
                         <div className="flex-1">
-                            <div className="text-gray-300 font-medium">
+                            <div className={`font-medium ${textStrong}`}>
                                 Restart the AI Assistant
                             </div>
-                            <div className="text-gray-500 mt-0.5">
+                            <div className={`mt-0.5 ${textMuted}`}>
                                 Click &quot;New Chat&quot; to start a fresh
                                 session with Dash tools available.
                             </div>
                         </div>
                     </div>
 
-                    <div className="pt-1 text-gray-600 text-[10px]">
+                    <div className={`pt-1 text-[10px] ${textMuted}`}>
                         This connects the Dash MCP server to Claude Code so it
                         can manage your dashboards, widgets, and themes.
                     </div>
-                    <div className="pt-1 text-gray-600 text-[10px] italic">
+                    <div className={`pt-1 text-[10px] italic ${textMuted}`}>
                         Already ran a previous version of this command? First
                         run{" "}
-                        <code className="text-gray-400">
+                        <code className={textStrong}>
                             claude mcp remove dash
                         </code>{" "}
                         to clear it, then re-run the setup above.

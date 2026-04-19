@@ -577,6 +577,10 @@ class App extends React.Component {
                 "move_widget",
                 "set_layout",
                 "update_layout",
+                // apply_theme: DashboardStage listens for
+                // "dash:apply-theme" and calls changeCurrentTheme in
+                // place, avoiding a full remount.
+                "apply_theme",
             ]);
 
             this._unsubMcpStateChanged =
@@ -613,6 +617,17 @@ class App extends React.Component {
                                     detail: {
                                         workspaceId: Number(result.id),
                                     },
+                                })
+                            );
+                        }
+                        // Update the active theme in place (no remount)
+                        // after apply_theme. DashboardStage consumes
+                        // this and calls changeCurrentTheme via
+                        // ThemeContext.
+                        if (toolName === "apply_theme" && result?.name) {
+                            window.dispatchEvent(
+                                new CustomEvent("dash:apply-theme", {
+                                    detail: { themeKey: result.name },
                                 })
                             );
                         }
