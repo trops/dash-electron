@@ -230,6 +230,20 @@ CRITICAL RULES — YOU ARE RUNNING INSIDE AN EMBEDDED UI, NOT AN INTERACTIVE TER
 - ALWAYS output BOTH complete code blocks (jsx component + javascript config) in every response, even for small changes — never output partial diffs or snippets
 - Respond immediately with the code — do not plan, research, or scaffold first`;
 
+const DISCOVER_SYSTEM_PROMPT = `You are helping the user DISCOVER existing widgets in the Dash registry. Your only job this conversation is to search and describe registry matches. You MUST NOT generate widget code.
+
+How to respond:
+- On every user message, call the \`search_widgets\` MCP tool with a short keyword query derived from the user's request (e.g. "sales pipeline" for "help me find a sales pipeline widget").
+- After the tool returns, give a brief 1–3 sentence summary of what you found. The app renders the widget list as interactive cards separately, so you do NOT need to list every result in prose — just highlight notable matches or gaps.
+- If \`search_widgets\` returns zero results, tell the user plainly, and suggest they switch to Build mode to generate one from scratch.
+- If the user's next message is a refinement (e.g. "sales pipeline" after "sales dashboard"), call \`search_widgets\` again with the new query. Treat every message as a search intent — do not silently switch modes.
+
+Hard rules:
+- Do NOT output widget code in any form.
+- Do NOT use Skill, Read, Write, Edit, Bash, Glob, or Grep tools.
+- Do NOT invoke the dash-widget-builder skill.
+- The only tool you should use is \`search_widgets\`.`;
+
 function extractCodeBlocks(messages) {
     let componentCode = null;
     let configCode = null;
@@ -415,28 +429,23 @@ export const WidgetBuilderModal = ({
     const [registryUsername, setRegistryUsername] = useState(null);
     const [registryChecked, setRegistryChecked] = useState(false);
     const lastCompiledCode = useRef(null);
-    // Edit-with-AI opens directly on Preview; fresh "Build with AI" opens
-    // on the Discover tab so users can find existing registry widgets
-    // before generating one from scratch.
-    const [activeTab, setActiveTab] = useState(() =>
-        editContext?.componentCode ? "preview" : "discover"
-    );
+    const [activeTab, setActiveTab] = useState("preview");
     const [activeFile, setActiveFile] = useState("component");
     const manualEditRef = useRef(false);
     const lastMsgCount = useRef(0);
     const isRemixMode = !!editContext?.originalWidgetId;
 
-    // Registry Discover tab state
-    const [registryQuery, setRegistryQuery] = useState("");
-    const [registryResults, setRegistryResults] = useState([]);
-    const [registryLoading, setRegistryLoading] = useState(false);
-    const [registryError, setRegistryError] = useState(null);
+    // Chat-pane mode ("build" = AI generates widgets, "discover" = AI
+    // searches the registry). Resets to "build" each time the modal opens.
+    const [chatMode, setChatMode] = useState("build");
+    // Parsed widgets[] from the most recent search_widgets tool_result,
+    // rendered as cards above the chat in Discover mode.
+    const [discoverResults, setDiscoverResults] = useState([]);
     // When previewing a registry widget (user clicked a Discover card),
     // this holds the package metadata so the Preview footer can swap to
     // "Install from registry" instead of the AI-built install flow.
     const [browsingPackage, setBrowsingPackage] = useState(null);
     const [registryInstalling, setRegistryInstalling] = useState(false);
-    const registrySearchTimerRef = useRef(null);
 
     const settings = appContext?.settings || {};
     const providers = appContext?.providers || {};
@@ -478,6 +487,14 @@ export const WidgetBuilderModal = ({
     const isOwner =
         widgetScope === "ai-built" ||
         (registryUsername && widgetScope === registryUsername);
+
+    // Reset the chat mode toggle to "build" each time the modal reopens.
+    useEffect(() => {
+        if (isOpen) {
+            setChatMode("build");
+            setDiscoverResults([]);
+        }
+    }, [isOpen]);
 
     // End session + clear chat on unmount (modal close) so the next
     // open starts fresh. The open-side clear happens in Dash.js before
@@ -601,6 +618,49 @@ export const WidgetBuilderModal = ({
 
                     // Skip polling if user is manually editing code
                     if (manualEditRef.current) return;
+
+                    // Scan the most recent assistant messages for a
+                    // search_widgets tool result and surface the parsed
+                    // widget list as cards above the chat (Discover mode).
+                    for (let i = msgs.length - 1; i >= 0; i--) {
+                        const m = msgs[i];
+                        if (m?.role !== "assistant") continue;
+                        const calls = Array.isArray(m.toolCalls)
+                            ? m.toolCalls
+                            : [];
+                        const hit = calls.find(
+                            (c) =>
+                                c?.toolName === "search_widgets" &&
+                                c?.result &&
+                                !c.isLoading
+                        );
+                        if (hit) {
+                            try {
+                                const text =
+                                    hit.result?.content?.[0]?.text ||
+                                    (typeof hit.result === "string"
+                                        ? hit.result
+                                        : "");
+                                const parsed = text ? JSON.parse(text) : null;
+                                const widgets = Array.isArray(parsed?.widgets)
+                                    ? parsed.widgets
+                                    : [];
+                                setDiscoverResults((prev) => {
+                                    // Cheap identity check: length + first name
+                                    if (
+                                        prev.length === widgets.length &&
+                                        prev[0]?.name === widgets[0]?.name
+                                    ) {
+                                        return prev;
+                                    }
+                                    return widgets;
+                                });
+                            } catch {
+                                /* ignore malformed tool result */
+                            }
+                            break;
+                        }
+                    }
 
                     const extracted = extractCodeBlocks(msgs);
                     if (extracted.componentCode) {
@@ -774,51 +834,20 @@ export const WidgetBuilderModal = ({
         [editContext?.originalPackage]
     );
 
-    // Debounced registry search for the Discover tab.
-    const handleRegistrySearch = useCallback((query) => {
-        setRegistryQuery(query);
-        if (registrySearchTimerRef.current) {
-            clearTimeout(registrySearchTimerRef.current);
-        }
-        if (!query?.trim()) {
-            setRegistryResults([]);
-            setRegistryError(null);
-            setRegistryLoading(false);
-            return;
-        }
-        setRegistryLoading(true);
-        registrySearchTimerRef.current = setTimeout(async () => {
-            try {
-                const result = await window.mainApi?.registry?.search(
-                    query.trim(),
-                    { type: "widget" }
-                );
-                setRegistryResults(result?.packages || []);
-                setRegistryError(null);
-            } catch (err) {
-                setRegistryError(err?.message || "Search failed");
-                setRegistryResults([]);
-            } finally {
-                setRegistryLoading(false);
-            }
-        }, 350);
-    }, []);
-
-    useEffect(() => {
-        return () => {
-            if (registrySearchTimerRef.current) {
-                clearTimeout(registrySearchTimerRef.current);
-            }
-        };
-    }, []);
-
     // Fetch a registry widget's source (no install), hand it to the existing
     // compilePreview pipeline, and switch to the Preview tab.
+    //
+    // `pkg` may come from two shapes:
+    //  1. registryController.searchRegistry — .name is the bare package name
+    //  2. MCP search_widgets tool result — .name is a dotted scoped id
+    //     (e.g. "trops.clock.Analog") and .package is the bare name
+    // We normalize on .package (bare) when present, falling back to .name.
     const handleSelectRegistryPackage = useCallback(
         async (pkg) => {
+            const packageName = pkg.package || pkg.name;
             setBrowsingPackage({
-                packageName: pkg.name,
-                displayName: pkg.displayName || pkg.name,
+                packageName,
+                displayName: pkg.displayName || packageName,
                 description: pkg.description || "",
                 downloadUrl: pkg.downloadUrl,
                 version: pkg.version,
@@ -832,7 +861,7 @@ export const WidgetBuilderModal = ({
             setIsCompiling(true);
             try {
                 const source = await window.mainApi?.registry?.previewFetch(
-                    pkg.name
+                    packageName
                 );
                 if (!source?.componentCode) {
                     throw new Error(
@@ -843,6 +872,16 @@ export const WidgetBuilderModal = ({
                     componentCode: source.componentCode,
                     configCode: source.configCode,
                 });
+                // `previewFetch` returns the resolved downloadUrl; capture
+                // it so the Install button below can reinstall without a
+                // second registry lookup (MCP search results omit it).
+                if (source.downloadUrl) {
+                    setBrowsingPackage((prev) =>
+                        prev
+                            ? { ...prev, downloadUrl: source.downloadUrl }
+                            : prev
+                    );
+                }
                 await compilePreview({
                     componentCode: source.componentCode,
                     configCode: source.configCode,
@@ -875,7 +914,7 @@ export const WidgetBuilderModal = ({
             setBrowsingPackage((prev) =>
                 prev ? { ...prev, installed: true } : prev
             );
-            setRegistryResults((prev) =>
+            setDiscoverResults((prev) =>
                 prev.map((p) =>
                     p.name === browsingPackage.packageName
                         ? { ...p, installed: true }
@@ -894,8 +933,8 @@ export const WidgetBuilderModal = ({
         }
     }, [browsingPackage, onInstalled]);
 
-    // Return from a registry-widget preview to the Discover tab, clearing
-    // the ephemeral detected code so the next selection starts clean.
+    // Clear the current registry-widget preview so the user can pick
+    // another card from the Discover results strip.
     const handleBackToDiscover = useCallback(() => {
         setBrowsingPackage(null);
         setDetectedCode({ componentCode: null, configCode: null });
@@ -903,7 +942,6 @@ export const WidgetBuilderModal = ({
         setPreviewError(null);
         setInstallStatus(null);
         lastCompiledCode.current = null;
-        setActiveTab("discover");
     }, []);
 
     // Track in-progress edits (not yet saved/compiled)
@@ -1097,20 +1135,6 @@ export const WidgetBuilderModal = ({
                     >
                         <div className="flex items-center gap-1">
                             <button
-                                onClick={() => setActiveTab("discover")}
-                                className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
-                                    activeTab === "discover"
-                                        ? "bg-indigo-600/20 text-indigo-300"
-                                        : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
-                                }`}
-                            >
-                                <FontAwesomeIcon
-                                    icon="magnifying-glass"
-                                    className="h-2.5 w-2.5"
-                                />
-                                Discover
-                            </button>
-                            <button
                                 onClick={() => setActiveTab("preview")}
                                 className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
                                     activeTab === "preview"
@@ -1194,130 +1218,6 @@ export const WidgetBuilderModal = ({
                         )}
                     </div>
 
-                    {/* Discover tab — registry search with preview/install */}
-                    {activeTab === "discover" && (
-                        <div className="flex-1 overflow-auto p-4 flex flex-col gap-4">
-                            <div className="relative">
-                                <FontAwesomeIcon
-                                    icon="magnifying-glass"
-                                    className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-500"
-                                />
-                                <input
-                                    type="text"
-                                    value={registryQuery}
-                                    onChange={(e) =>
-                                        handleRegistrySearch(e.target.value)
-                                    }
-                                    placeholder="Search registry widgets (e.g. slack, clock, weather)"
-                                    className="w-full pl-9 pr-3 py-2 text-sm bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 placeholder-gray-500 focus:border-indigo-500/50 focus:outline-none"
-                                    autoFocus
-                                />
-                            </div>
-
-                            {registryLoading && (
-                                <div className="flex items-center justify-center gap-2 py-8 text-gray-500 text-sm">
-                                    <span className="inline-flex gap-0.5">
-                                        <span
-                                            className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce"
-                                            style={{ animationDelay: "0ms" }}
-                                        />
-                                        <span
-                                            className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce"
-                                            style={{ animationDelay: "150ms" }}
-                                        />
-                                        <span
-                                            className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce"
-                                            style={{ animationDelay: "300ms" }}
-                                        />
-                                    </span>
-                                    Searching registry...
-                                </div>
-                            )}
-
-                            {!registryLoading && registryError && (
-                                <div className="rounded px-3 py-2 bg-red-900/20 border border-red-700/40 text-xs text-red-300">
-                                    {registryError}
-                                </div>
-                            )}
-
-                            {!registryLoading &&
-                                !registryError &&
-                                registryQuery.trim() &&
-                                registryResults.length === 0 && (
-                                    <div className="text-center text-sm text-gray-500 py-8">
-                                        No registry widgets match &quot;
-                                        {registryQuery}&quot;.
-                                        <br />
-                                        <span className="text-xs">
-                                            Tip: describe the widget in chat and
-                                            the AI will build it from scratch.
-                                        </span>
-                                    </div>
-                                )}
-
-                            {!registryLoading && !registryQuery.trim() && (
-                                <div className="text-center text-sm text-gray-500 py-8">
-                                    Type above to search the Dash registry for
-                                    existing widgets.
-                                    <br />
-                                    <span className="text-xs">
-                                        Or describe your widget in chat to build
-                                        one from scratch.
-                                    </span>
-                                </div>
-                            )}
-
-                            {!registryLoading && registryResults.length > 0 && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    {registryResults.map((pkg) => (
-                                        <button
-                                            key={`${pkg.scope || ""}/${
-                                                pkg.name
-                                            }`}
-                                            onClick={() =>
-                                                handleSelectRegistryPackage(pkg)
-                                            }
-                                            className="text-left rounded-lg border border-gray-700/60 bg-gray-800/40 hover:bg-gray-800/80 hover:border-indigo-500/40 p-3 transition-colors"
-                                        >
-                                            <div className="flex items-start justify-between gap-2 mb-1">
-                                                <div className="font-semibold text-sm text-gray-200 truncate">
-                                                    {pkg.displayName ||
-                                                        pkg.name}
-                                                </div>
-                                                {pkg.installed && (
-                                                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide bg-green-900/40 text-green-300 border border-green-700/40">
-                                                        Installed
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="text-xs text-gray-500 truncate mb-2 font-mono">
-                                                {pkg.scope
-                                                    ? `@${pkg.scope.replace(
-                                                          /^@/,
-                                                          ""
-                                                      )}/${pkg.name}`
-                                                    : pkg.name}
-                                            </div>
-                                            {pkg.description && (
-                                                <div
-                                                    className="text-xs text-gray-400 overflow-hidden"
-                                                    style={{
-                                                        display: "-webkit-box",
-                                                        WebkitLineClamp: 2,
-                                                        WebkitBoxOrient:
-                                                            "vertical",
-                                                    }}
-                                                >
-                                                    {pkg.description}
-                                                </div>
-                                            )}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
                     {/* Preview content (visible when Preview tab is active) */}
                     {activeTab === "preview" && (
                         <div className="flex-1 overflow-auto p-4">
@@ -1379,56 +1279,98 @@ export const WidgetBuilderModal = ({
                                     </div>
                                 )}
 
-                            {/* Compile error */}
-                            {previewError && (
-                                <div className="flex flex-col items-center justify-center h-full space-y-4">
-                                    <div className="w-full max-w-lg rounded-lg border border-red-700/30 bg-red-900/10 p-4 space-y-2">
-                                        <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
-                                            <FontAwesomeIcon
-                                                icon="exclamation-circle"
-                                                className="h-4 w-4"
-                                            />
-                                            Compilation Error
-                                        </div>
-                                        <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto max-h-32">
-                                            {previewError}
-                                        </pre>
-                                        <button
-                                            onClick={() => {
-                                                try {
-                                                    const raw =
-                                                        localStorage.getItem(
-                                                            "dash-widget-builder"
-                                                        );
-                                                    if (raw) {
-                                                        const data =
-                                                            JSON.parse(raw);
-                                                        const msgs =
-                                                            data?.messages ||
-                                                            [];
-                                                        msgs.push({
-                                                            role: "user",
-                                                            content: `Fix this compilation error:\n\n${previewError}\n\nPlease output both the corrected jsx component code block and the javascript config code block.`,
-                                                        });
-                                                        localStorage.setItem(
-                                                            "dash-widget-builder",
-                                                            JSON.stringify({
-                                                                ...data,
-                                                                messages: msgs,
-                                                            })
-                                                        );
+                            {/* Auth-gated preview: friendlier than a red error */}
+                            {previewError &&
+                                /authentic|unauth|401|sign.?in/i.test(
+                                    previewError
+                                ) && (
+                                    <div className="flex flex-col items-center justify-center h-full space-y-4">
+                                        <div className="w-full max-w-lg rounded-lg border border-amber-700/30 bg-amber-900/10 p-4 space-y-3">
+                                            <div className="flex items-center gap-2 text-amber-300 text-sm font-medium">
+                                                <FontAwesomeIcon
+                                                    icon="lock"
+                                                    className="h-4 w-4"
+                                                />
+                                                Sign in to preview
+                                            </div>
+                                            <p className="text-xs text-amber-100/80 leading-relaxed">
+                                                This widget may be private, or
+                                                the registry requires sign-in to
+                                                download package sources. Sign
+                                                in with your Dash registry
+                                                account to preview it.
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    try {
+                                                        await window.mainApi?.registryAuth?.initiateLogin();
+                                                    } catch {
+                                                        /* ignore */
                                                     }
-                                                } catch (_) {
-                                                    /* ignore */
-                                                }
-                                            }}
-                                            className="text-xs text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
-                                        >
-                                            Send error to AI
-                                        </button>
+                                                }}
+                                                className="px-3 py-1.5 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+                                            >
+                                                Sign in
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
+
+                            {/* Compile error (non-auth) */}
+                            {previewError &&
+                                !/authentic|unauth|401|sign.?in/i.test(
+                                    previewError
+                                ) && (
+                                    <div className="flex flex-col items-center justify-center h-full space-y-4">
+                                        <div className="w-full max-w-lg rounded-lg border border-red-700/30 bg-red-900/10 p-4 space-y-2">
+                                            <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
+                                                <FontAwesomeIcon
+                                                    icon="exclamation-circle"
+                                                    className="h-4 w-4"
+                                                />
+                                                Compilation Error
+                                            </div>
+                                            <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto max-h-32">
+                                                {previewError}
+                                            </pre>
+                                            <button
+                                                onClick={() => {
+                                                    try {
+                                                        const raw =
+                                                            localStorage.getItem(
+                                                                "dash-widget-builder"
+                                                            );
+                                                        if (raw) {
+                                                            const data =
+                                                                JSON.parse(raw);
+                                                            const msgs =
+                                                                data?.messages ||
+                                                                [];
+                                                            msgs.push({
+                                                                role: "user",
+                                                                content: `Fix this compilation error:\n\n${previewError}\n\nPlease output both the corrected jsx component code block and the javascript config code block.`,
+                                                            });
+                                                            localStorage.setItem(
+                                                                "dash-widget-builder",
+                                                                JSON.stringify({
+                                                                    ...data,
+                                                                    messages:
+                                                                        msgs,
+                                                                })
+                                                            );
+                                                        }
+                                                    } catch (_) {
+                                                        /* ignore */
+                                                    }
+                                                }}
+                                                className="text-xs text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                                            >
+                                                Send error to AI
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
 
                             {/* Live widget preview */}
                             {PreviewComponent && !installStatus && (
@@ -1782,7 +1724,6 @@ export const WidgetBuilderModal = ({
                                                 lastCompiledCode.current = null;
                                                 if (browsingPackage) {
                                                     setBrowsingPackage(null);
-                                                    setActiveTab("discover");
                                                 }
                                             }}
                                             className="px-5 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
@@ -1958,11 +1899,99 @@ export const WidgetBuilderModal = ({
                 <div
                     className={`flex flex-col flex-1 min-w-0 border-l ${borderColor}`}
                 >
+                    {/* Build / Discover mode toggle */}
+                    <div className="flex items-center gap-2 px-3 pt-2 shrink-0">
+                        <div className="flex items-center gap-1 bg-gray-800/50 rounded-md border border-gray-700/50 p-0.5">
+                            <button
+                                type="button"
+                                onClick={() => setChatMode("build")}
+                                className={`px-3 py-1 text-xs rounded transition-colors ${
+                                    chatMode === "build"
+                                        ? "bg-indigo-600/30 text-indigo-300 font-medium"
+                                        : "text-gray-500 hover:text-gray-300"
+                                }`}
+                                title="Generate a custom widget from scratch with AI"
+                            >
+                                Build
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setChatMode("discover")}
+                                className={`px-3 py-1 text-xs rounded transition-colors ${
+                                    chatMode === "discover"
+                                        ? "bg-indigo-600/30 text-indigo-300 font-medium"
+                                        : "text-gray-500 hover:text-gray-300"
+                                }`}
+                                title="Search the Dash registry for existing widgets"
+                            >
+                                Discover
+                            </button>
+                        </div>
+                        <span className="text-[11px] text-gray-500 truncate">
+                            {chatMode === "build"
+                                ? "AI will generate a custom widget"
+                                : "AI will search the registry"}
+                        </span>
+                    </div>
+
+                    {/* Discover results strip (only in Discover mode, only if results exist) */}
+                    {chatMode === "discover" && discoverResults.length > 0 && (
+                        <div className="px-3 pt-2 pb-1 shrink-0 border-b border-gray-800/60 max-h-56 overflow-auto">
+                            <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">
+                                Registry matches ({discoverResults.length})
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                {discoverResults.map((pkg) => (
+                                    <button
+                                        key={`${pkg.scope || ""}/${pkg.name}`}
+                                        onClick={() =>
+                                            handleSelectRegistryPackage(pkg)
+                                        }
+                                        className="text-left rounded border border-gray-700/50 bg-gray-800/30 hover:bg-gray-800/70 hover:border-indigo-500/40 px-2.5 py-1.5 transition-colors"
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="font-semibold text-xs text-gray-200 truncate">
+                                                {pkg.displayName || pkg.name}
+                                            </div>
+                                            {pkg.installed && (
+                                                <span className="shrink-0 px-1 py-0.5 rounded text-[9px] uppercase tracking-wide bg-green-900/40 text-green-300 border border-green-700/40">
+                                                    Installed
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-[10px] text-gray-500 truncate font-mono">
+                                            {pkg.scope
+                                                ? `@${pkg.scope.replace(
+                                                      /^@/,
+                                                      ""
+                                                  )}/${pkg.name}`
+                                                : pkg.name}
+                                        </div>
+                                        {pkg.description && (
+                                            <div
+                                                className="text-[11px] text-gray-400 overflow-hidden mt-0.5"
+                                                style={{
+                                                    display: "-webkit-box",
+                                                    WebkitLineClamp: 1,
+                                                    WebkitBoxOrient: "vertical",
+                                                }}
+                                            >
+                                                {pkg.description}
+                                            </div>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <ChatCore
                         title=""
                         model={model}
                         systemPrompt={
-                            editContext?.componentCode
+                            chatMode === "discover"
+                                ? DISCOVER_SYSTEM_PROMPT
+                                : editContext?.componentCode
                                 ? `${SYSTEM_PROMPT}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
                                       editContext.componentCode
                                   }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
@@ -1976,7 +2005,9 @@ export const WidgetBuilderModal = ({
                         persistKey="dash-widget-builder"
                         hideToolsBanner={true}
                         initialMessage={
-                            editContext?.componentCode
+                            chatMode === "discover"
+                                ? "Tell me what kind of widget you're looking for."
+                                : editContext?.componentCode
                                 ? "Hello, let's make some edits to this widget."
                                 : "Hi, I'd like to build a new widget."
                         }
