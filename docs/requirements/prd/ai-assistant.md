@@ -1,7 +1,7 @@
 # PRD: In-App AI Assistant & Widget Builder
 
-**Status:** In Progress (Phase 3 complete, Phases 1-2 partial)
-**Last Updated:** 2026-04-05
+**Status:** In Progress (Phase 3 complete, Phases 1-2 partial; Discover tab shipped 2026-04-19)
+**Last Updated:** 2026-04-19
 **Owner:** John Giatropoulos
 **Related PRDs:** None
 
@@ -208,6 +208,31 @@ Widget files go to `{userData}/widgets/@ai-built/{widget-name}/`. Use existing `
 
 **Technical Notes:**
 Uses `widget:read-sources` IPC (dash-core 0.1.322+) to read `.js` + `.dash.js` source files. "Edit with AI" wand button added to `WidgetCardHeader` in layout edit mode. On remix, widget is installed to `@ai-built/` and the cell's widget is swapped in-place via `dash:swap-widget-in-cell` event (no page refresh). Attribution is only added when remixing a non-`@ai-built/` widget.
+
+---
+
+**US-007: Discover Registry Widgets Before Building**
+
+> As a user opening the Widget Builder,
+> I want to search the Dash registry for existing widgets and preview them inline,
+> so that I can install a battle-tested widget instead of re-generating one from scratch.
+
+**Priority:** P1
+**Status:** Implemented (read-only preview + install)
+
+**Acceptance Criteria:**
+
+-   [x] AC1: Widget Builder modal opens on a new **Discover** tab by default (existing Edit-with-AI flow still opens on Preview)
+-   [x] AC2: Discover tab has a search input that queries the registry via `mainApi.registry.search(query, { type: "widget" })`
+-   [x] AC3: Search results render as cards (displayName, scoped ID, description, "Installed" badge when applicable)
+-   [x] AC4: Clicking a card fetches the package source via a new `mainApi.registry.previewFetch` IPC and renders the live widget in the Preview tab (no installation)
+-   [x] AC5: Preview footer shows an Install button that calls existing `mainApi.widgets.install` and surfaces the standard success screen
+-   [x] AC6: A disabled **Remix** button is rendered next to Install with tooltip "Remix is coming in a follow-up release" (wiring deferred)
+-   [x] AC7: A "Back to Discover" link is visible while previewing a registry widget
+-   [ ] AC8: Remix button wired — hand off registry source to the existing Edit-with-AI flow, fork to `@ai-built/` with attribution (follow-up PR)
+
+**Technical Notes:**
+Added `fetchPackageSource(packageName)` in dash-core `electron/controller/registryController.js` (shipped v0.1.388). Downloads package ZIP to a temp dir with `validateZipEntries()`, reads `widgets/*.js`, `widgets/*.dash.js`, and optionally `dist/index.cjs.js`, then cleans up. Exposed via `mainApi.registry.previewFetch`. The dash-electron `WidgetBuilderModal` compiles the returned source through the existing `compilePreview` pipeline so the registry widget renders exactly the same way an AI-built one does.
 
 ---
 
@@ -479,7 +504,8 @@ The `tailwind.config.js` content array conditionally excludes the widget cache p
 
 ## Revision History
 
-| Version | Date       | Author            | Changes                                                                                                                               |
-| ------- | ---------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 1.0     | 2026-04-03 | John Giatropoulos | Initial draft from design conversation                                                                                                |
-| 1.1     | 2026-04-05 | John Giatropoulos | Phase 3 implemented (v0.0.338–v0.0.345, dash-core v0.1.321). Added implementation notes, architecture decisions, and lessons learned. |
+| Version | Date       | Author            | Changes                                                                                                                                                       |
+| ------- | ---------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-04-03 | John Giatropoulos | Initial draft from design conversation                                                                                                                        |
+| 1.1     | 2026-04-05 | John Giatropoulos | Phase 3 implemented (v0.0.338–v0.0.345, dash-core v0.1.321). Added implementation notes, architecture decisions, and lessons learned.                         |
+| 1.2     | 2026-04-19 | John Giatropoulos | Added US-007: Discover tab in Widget Builder. Ships read-only preview + install; remix wiring deferred. Depends on dash-core v0.1.388 (`fetchPackageSource`). |

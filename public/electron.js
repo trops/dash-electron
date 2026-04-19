@@ -511,6 +511,7 @@ const {
     REGISTRY_SEARCH_THEMES,
     REGISTRY_PUBLISH_WIDGET,
     REGISTRY_INSPECT_WIDGET_PACKAGE,
+    REGISTRY_PREVIEW_FETCH,
     THEME_PUBLISH,
     THEME_INSTALL_FROM_REGISTRY,
     THEME_PUBLISH_PREVIEW,
@@ -1488,6 +1489,9 @@ function createWindow() {
         );
         logger.loggedHandle(REGISTRY_INSPECT_WIDGET_PACKAGE, (e, msg) =>
             inspectWidgetPackage(msg.packageId)
+        );
+        logger.loggedHandle(REGISTRY_PREVIEW_FETCH, (e, packageName) =>
+            registryController.fetchPackageSource(packageName)
         );
 
         // --- Theme Registry ---

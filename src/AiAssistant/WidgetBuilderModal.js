@@ -415,11 +415,28 @@ export const WidgetBuilderModal = ({
     const [registryUsername, setRegistryUsername] = useState(null);
     const [registryChecked, setRegistryChecked] = useState(false);
     const lastCompiledCode = useRef(null);
-    const [activeTab, setActiveTab] = useState("preview");
+    // Edit-with-AI opens directly on Preview; fresh "Build with AI" opens
+    // on the Discover tab so users can find existing registry widgets
+    // before generating one from scratch.
+    const [activeTab, setActiveTab] = useState(() =>
+        editContext?.componentCode ? "preview" : "discover"
+    );
     const [activeFile, setActiveFile] = useState("component");
     const manualEditRef = useRef(false);
     const lastMsgCount = useRef(0);
     const isRemixMode = !!editContext?.originalWidgetId;
+
+    // Registry Discover tab state
+    const [registryQuery, setRegistryQuery] = useState("");
+    const [registryResults, setRegistryResults] = useState([]);
+    const [registryLoading, setRegistryLoading] = useState(false);
+    const [registryError, setRegistryError] = useState(null);
+    // When previewing a registry widget (user clicked a Discover card),
+    // this holds the package metadata so the Preview footer can swap to
+    // "Install from registry" instead of the AI-built install flow.
+    const [browsingPackage, setBrowsingPackage] = useState(null);
+    const [registryInstalling, setRegistryInstalling] = useState(false);
+    const registrySearchTimerRef = useRef(null);
 
     const settings = appContext?.settings || {};
     const providers = appContext?.providers || {};
@@ -757,6 +774,138 @@ export const WidgetBuilderModal = ({
         [editContext?.originalPackage]
     );
 
+    // Debounced registry search for the Discover tab.
+    const handleRegistrySearch = useCallback((query) => {
+        setRegistryQuery(query);
+        if (registrySearchTimerRef.current) {
+            clearTimeout(registrySearchTimerRef.current);
+        }
+        if (!query?.trim()) {
+            setRegistryResults([]);
+            setRegistryError(null);
+            setRegistryLoading(false);
+            return;
+        }
+        setRegistryLoading(true);
+        registrySearchTimerRef.current = setTimeout(async () => {
+            try {
+                const result = await window.mainApi?.registry?.search(
+                    query.trim(),
+                    { type: "widget" }
+                );
+                setRegistryResults(result?.packages || []);
+                setRegistryError(null);
+            } catch (err) {
+                setRegistryError(err?.message || "Search failed");
+                setRegistryResults([]);
+            } finally {
+                setRegistryLoading(false);
+            }
+        }, 350);
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (registrySearchTimerRef.current) {
+                clearTimeout(registrySearchTimerRef.current);
+            }
+        };
+    }, []);
+
+    // Fetch a registry widget's source (no install), hand it to the existing
+    // compilePreview pipeline, and switch to the Preview tab.
+    const handleSelectRegistryPackage = useCallback(
+        async (pkg) => {
+            setBrowsingPackage({
+                packageName: pkg.name,
+                displayName: pkg.displayName || pkg.name,
+                description: pkg.description || "",
+                downloadUrl: pkg.downloadUrl,
+                version: pkg.version,
+                installed: !!pkg.installed,
+                scope: pkg.scope,
+            });
+            setActiveTab("preview");
+            setPreviewError(null);
+            setPreviewComponent(null);
+            setInstallStatus(null);
+            setIsCompiling(true);
+            try {
+                const source = await window.mainApi?.registry?.previewFetch(
+                    pkg.name
+                );
+                if (!source?.componentCode) {
+                    throw new Error(
+                        "This package has no previewable component source."
+                    );
+                }
+                setDetectedCode({
+                    componentCode: source.componentCode,
+                    configCode: source.configCode,
+                });
+                await compilePreview({
+                    componentCode: source.componentCode,
+                    configCode: source.configCode,
+                });
+            } catch (err) {
+                setPreviewError(err?.message || "Failed to load preview");
+                setIsCompiling(false);
+            }
+        },
+        [compilePreview]
+    );
+
+    // Install the currently-previewed registry package through the existing
+    // widget install IPC. Uses the scoped ID (@scope/name) as the install
+    // key and resolves {version}/{name} placeholders in the downloadUrl.
+    const handleInstallRegistryPackage = useCallback(async () => {
+        if (!browsingPackage || browsingPackage.installed) return;
+        const scopedId = browsingPackage.scope
+            ? `@${browsingPackage.scope.replace(/^@/, "")}/${
+                  browsingPackage.packageName
+              }`
+            : browsingPackage.packageName;
+        const resolvedUrl = (browsingPackage.downloadUrl || "")
+            .replace(/\{version\}/g, browsingPackage.version || "")
+            .replace(/\{name\}/g, browsingPackage.packageName);
+        setRegistryInstalling(true);
+        try {
+            await window.mainApi?.widgets?.install(scopedId, resolvedUrl);
+            setInstallStatus({ success: true, widgetName: scopedId });
+            setBrowsingPackage((prev) =>
+                prev ? { ...prev, installed: true } : prev
+            );
+            setRegistryResults((prev) =>
+                prev.map((p) =>
+                    p.name === browsingPackage.packageName
+                        ? { ...p, installed: true }
+                        : p
+                )
+            );
+            if (typeof onInstalled === "function") {
+                onInstalled(browsingPackage.packageName, scopedId);
+            }
+        } catch (err) {
+            setInstallStatus({
+                error: err?.message || "Install failed",
+            });
+        } finally {
+            setRegistryInstalling(false);
+        }
+    }, [browsingPackage, onInstalled]);
+
+    // Return from a registry-widget preview to the Discover tab, clearing
+    // the ephemeral detected code so the next selection starts clean.
+    const handleBackToDiscover = useCallback(() => {
+        setBrowsingPackage(null);
+        setDetectedCode({ componentCode: null, configCode: null });
+        setPreviewComponent(null);
+        setPreviewError(null);
+        setInstallStatus(null);
+        lastCompiledCode.current = null;
+        setActiveTab("discover");
+    }, []);
+
     // Track in-progress edits (not yet saved/compiled)
     const [editBuffer, setEditBuffer] = useState({
         component: null,
@@ -948,6 +1097,20 @@ export const WidgetBuilderModal = ({
                     >
                         <div className="flex items-center gap-1">
                             <button
+                                onClick={() => setActiveTab("discover")}
+                                className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
+                                    activeTab === "discover"
+                                        ? "bg-indigo-600/20 text-indigo-300"
+                                        : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
+                                }`}
+                            >
+                                <FontAwesomeIcon
+                                    icon="magnifying-glass"
+                                    className="h-2.5 w-2.5"
+                                />
+                                Discover
+                            </button>
+                            <button
                                 onClick={() => setActiveTab("preview")}
                                 className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
                                     activeTab === "preview"
@@ -1030,6 +1193,130 @@ export const WidgetBuilderModal = ({
                             </span>
                         )}
                     </div>
+
+                    {/* Discover tab — registry search with preview/install */}
+                    {activeTab === "discover" && (
+                        <div className="flex-1 overflow-auto p-4 flex flex-col gap-4">
+                            <div className="relative">
+                                <FontAwesomeIcon
+                                    icon="magnifying-glass"
+                                    className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-500"
+                                />
+                                <input
+                                    type="text"
+                                    value={registryQuery}
+                                    onChange={(e) =>
+                                        handleRegistrySearch(e.target.value)
+                                    }
+                                    placeholder="Search registry widgets (e.g. slack, clock, weather)"
+                                    className="w-full pl-9 pr-3 py-2 text-sm bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 placeholder-gray-500 focus:border-indigo-500/50 focus:outline-none"
+                                    autoFocus
+                                />
+                            </div>
+
+                            {registryLoading && (
+                                <div className="flex items-center justify-center gap-2 py-8 text-gray-500 text-sm">
+                                    <span className="inline-flex gap-0.5">
+                                        <span
+                                            className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce"
+                                            style={{ animationDelay: "0ms" }}
+                                        />
+                                        <span
+                                            className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce"
+                                            style={{ animationDelay: "150ms" }}
+                                        />
+                                        <span
+                                            className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce"
+                                            style={{ animationDelay: "300ms" }}
+                                        />
+                                    </span>
+                                    Searching registry...
+                                </div>
+                            )}
+
+                            {!registryLoading && registryError && (
+                                <div className="rounded px-3 py-2 bg-red-900/20 border border-red-700/40 text-xs text-red-300">
+                                    {registryError}
+                                </div>
+                            )}
+
+                            {!registryLoading &&
+                                !registryError &&
+                                registryQuery.trim() &&
+                                registryResults.length === 0 && (
+                                    <div className="text-center text-sm text-gray-500 py-8">
+                                        No registry widgets match &quot;
+                                        {registryQuery}&quot;.
+                                        <br />
+                                        <span className="text-xs">
+                                            Tip: describe the widget in chat and
+                                            the AI will build it from scratch.
+                                        </span>
+                                    </div>
+                                )}
+
+                            {!registryLoading && !registryQuery.trim() && (
+                                <div className="text-center text-sm text-gray-500 py-8">
+                                    Type above to search the Dash registry for
+                                    existing widgets.
+                                    <br />
+                                    <span className="text-xs">
+                                        Or describe your widget in chat to build
+                                        one from scratch.
+                                    </span>
+                                </div>
+                            )}
+
+                            {!registryLoading && registryResults.length > 0 && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {registryResults.map((pkg) => (
+                                        <button
+                                            key={`${pkg.scope || ""}/${
+                                                pkg.name
+                                            }`}
+                                            onClick={() =>
+                                                handleSelectRegistryPackage(pkg)
+                                            }
+                                            className="text-left rounded-lg border border-gray-700/60 bg-gray-800/40 hover:bg-gray-800/80 hover:border-indigo-500/40 p-3 transition-colors"
+                                        >
+                                            <div className="flex items-start justify-between gap-2 mb-1">
+                                                <div className="font-semibold text-sm text-gray-200 truncate">
+                                                    {pkg.displayName ||
+                                                        pkg.name}
+                                                </div>
+                                                {pkg.installed && (
+                                                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide bg-green-900/40 text-green-300 border border-green-700/40">
+                                                        Installed
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="text-xs text-gray-500 truncate mb-2 font-mono">
+                                                {pkg.scope
+                                                    ? `@${pkg.scope.replace(
+                                                          /^@/,
+                                                          ""
+                                                      )}/${pkg.name}`
+                                                    : pkg.name}
+                                            </div>
+                                            {pkg.description && (
+                                                <div
+                                                    className="text-xs text-gray-400 overflow-hidden"
+                                                    style={{
+                                                        display: "-webkit-box",
+                                                        WebkitLineClamp: 2,
+                                                        WebkitBoxOrient:
+                                                            "vertical",
+                                                    }}
+                                                >
+                                                    {pkg.description}
+                                                </div>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Preview content (visible when Preview tab is active) */}
                     {activeTab === "preview" && (
@@ -1190,176 +1477,262 @@ export const WidgetBuilderModal = ({
                                             </PreviewContextWrapper>
                                         </div>
                                     </div>
+                                    {/* Registry-preview footer (shown when user is browsing a registry widget) */}
+                                    {browsingPackage && (
+                                        <div
+                                            className={`px-6 py-3 border-t ${borderColor} shrink-0 space-y-2`}
+                                        >
+                                            <div className="flex items-center justify-between gap-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={
+                                                        handleBackToDiscover
+                                                    }
+                                                    className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                                                >
+                                                    <FontAwesomeIcon
+                                                        icon="arrow-left"
+                                                        className="h-2.5 w-2.5"
+                                                    />
+                                                    Back to Discover
+                                                </button>
+                                                <div className="text-xs text-gray-400 truncate flex-1 text-right font-mono">
+                                                    {browsingPackage.scope
+                                                        ? `@${browsingPackage.scope.replace(
+                                                              /^@/,
+                                                              ""
+                                                          )}/${
+                                                              browsingPackage.packageName
+                                                          }`
+                                                        : browsingPackage.packageName}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-3">
+                                                <span className="text-xs text-gray-500 truncate">
+                                                    {browsingPackage.installed
+                                                        ? "Already installed in your widget library."
+                                                        : "Preview this widget, then install or remix."}
+                                                </span>
+                                                <div className="flex items-center gap-3 shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        disabled
+                                                        title="Remix is coming in a follow-up release"
+                                                        className="px-4 py-2 rounded-lg bg-gray-800 text-gray-500 text-sm font-medium cursor-not-allowed opacity-60"
+                                                    >
+                                                        Remix
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={
+                                                            handleInstallRegistryPackage
+                                                        }
+                                                        disabled={
+                                                            browsingPackage.installed ||
+                                                            registryInstalling
+                                                        }
+                                                        className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                                                    >
+                                                        {browsingPackage.installed
+                                                            ? "Installed ✓"
+                                                            : registryInstalling
+                                                            ? "Installing..."
+                                                            : "Install"}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            {installStatus?.error && (
+                                                <div className="text-xs text-red-400">
+                                                    {installStatus.error}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
                                     {/* Footer — mode toggle, name (remix), category + Install */}
-                                    <div
-                                        className={`px-6 py-3 border-t ${borderColor} shrink-0`}
-                                    >
-                                        {isRemixMode && (
-                                            <div className="mb-2 space-y-2">
-                                                {/* Sign-in nudge for non-ai-built widgets when not authenticated */}
-                                                {!isOwner &&
-                                                    registryChecked &&
-                                                    !registryUsername &&
-                                                    widgetScope !==
-                                                        "ai-built" && (
-                                                        <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-amber-900/15 border border-amber-700/30">
-                                                            <p className="flex-1 text-xs text-amber-200 leading-snug">
-                                                                Sign in to the
-                                                                registry to
-                                                                update your own
-                                                                widgets in place
-                                                                instead of
-                                                                duplicating.
-                                                            </p>
+                                    {!browsingPackage && (
+                                        <div
+                                            className={`px-6 py-3 border-t ${borderColor} shrink-0`}
+                                        >
+                                            {isRemixMode && (
+                                                <div className="mb-2 space-y-2">
+                                                    {/* Sign-in nudge for non-ai-built widgets when not authenticated */}
+                                                    {!isOwner &&
+                                                        registryChecked &&
+                                                        !registryUsername &&
+                                                        widgetScope !==
+                                                            "ai-built" && (
+                                                            <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-amber-900/15 border border-amber-700/30">
+                                                                <p className="flex-1 text-xs text-amber-200 leading-snug">
+                                                                    Sign in to
+                                                                    the registry
+                                                                    to update
+                                                                    your own
+                                                                    widgets in
+                                                                    place
+                                                                    instead of
+                                                                    duplicating.
+                                                                </p>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={async () => {
+                                                                        try {
+                                                                            await window.mainApi?.registryAuth?.initiateLogin();
+                                                                        } catch {
+                                                                            /* ignore */
+                                                                        }
+                                                                    }}
+                                                                    className="px-3 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 transition-colors"
+                                                                >
+                                                                    Sign in
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    {/* Update / Remix toggle — only when user is the owner */}
+                                                    {isOwner && (
+                                                        <div className="flex items-center gap-1 bg-gray-800/50 rounded-md border border-gray-700/50 p-0.5 w-fit">
                                                             <button
                                                                 type="button"
-                                                                onClick={async () => {
-                                                                    try {
-                                                                        await window.mainApi?.registryAuth?.initiateLogin();
-                                                                    } catch {
-                                                                        /* ignore */
-                                                                    }
-                                                                }}
-                                                                className="px-3 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 transition-colors"
+                                                                onClick={() =>
+                                                                    setEditMode(
+                                                                        "update"
+                                                                    )
+                                                                }
+                                                                className={`px-3 py-1 text-xs rounded transition-colors ${
+                                                                    editMode ===
+                                                                    "update"
+                                                                        ? "bg-indigo-600/30 text-indigo-300 font-medium"
+                                                                        : "text-gray-500 hover:text-gray-300"
+                                                                }`}
                                                             >
-                                                                Sign in
+                                                                Update Original
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    setEditMode(
+                                                                        "remix"
+                                                                    )
+                                                                }
+                                                                className={`px-3 py-1 text-xs rounded transition-colors ${
+                                                                    editMode ===
+                                                                    "remix"
+                                                                        ? "bg-indigo-600/30 text-indigo-300 font-medium"
+                                                                        : "text-gray-500 hover:text-gray-300"
+                                                                }`}
+                                                            >
+                                                                Remix as New
                                                             </button>
                                                         </div>
                                                     )}
-                                                {/* Update / Remix toggle — only when user is the owner */}
-                                                {isOwner && (
-                                                    <div className="flex items-center gap-1 bg-gray-800/50 rounded-md border border-gray-700/50 p-0.5 w-fit">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                setEditMode(
-                                                                    "update"
-                                                                )
-                                                            }
-                                                            className={`px-3 py-1 text-xs rounded transition-colors ${
-                                                                editMode ===
-                                                                "update"
-                                                                    ? "bg-indigo-600/30 text-indigo-300 font-medium"
-                                                                    : "text-gray-500 hover:text-gray-300"
-                                                            }`}
-                                                        >
-                                                            Update Original
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                setEditMode(
-                                                                    "remix"
-                                                                )
-                                                            }
-                                                            className={`px-3 py-1 text-xs rounded transition-colors ${
-                                                                editMode ===
-                                                                "remix"
-                                                                    ? "bg-indigo-600/30 text-indigo-300 font-medium"
-                                                                    : "text-gray-500 hover:text-gray-300"
-                                                            }`}
-                                                        >
-                                                            Remix as New
-                                                        </button>
-                                                    </div>
-                                                )}
-                                                {editMode === "remix" && (
-                                                    <input
-                                                        type="text"
-                                                        value={remixName}
-                                                        onChange={(e) => {
-                                                            const raw =
-                                                                e.target.value.replace(
-                                                                    /[^a-zA-Z0-9]/g,
-                                                                    ""
+                                                    {editMode === "remix" && (
+                                                        <input
+                                                            type="text"
+                                                            value={remixName}
+                                                            onChange={(e) => {
+                                                                const raw =
+                                                                    e.target.value.replace(
+                                                                        /[^a-zA-Z0-9]/g,
+                                                                        ""
+                                                                    );
+                                                                setRemixName(
+                                                                    raw
+                                                                        .charAt(
+                                                                            0
+                                                                        )
+                                                                        .toUpperCase() +
+                                                                        raw.slice(
+                                                                            1
+                                                                        )
                                                                 );
-                                                            setRemixName(
-                                                                raw
-                                                                    .charAt(0)
-                                                                    .toUpperCase() +
-                                                                    raw.slice(1)
-                                                            );
-                                                        }}
-                                                        placeholder="RemixWidgetName"
-                                                        className="w-full px-3 py-1.5 text-sm bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
-                                                        title="Name for the remixed widget (PascalCase)"
-                                                    />
-                                                )}
-                                            </div>
-                                        )}
-                                        <div className="flex items-center justify-between gap-3">
-                                            <span className="text-xs text-gray-500 truncate">
-                                                {!isRemixMode
-                                                    ? `Installs to @ai-built/${widgetName?.toLowerCase()}`
-                                                    : editMode === "update"
-                                                    ? `Updates ${
-                                                          editContext.originalPackage ||
-                                                          `@ai-built/${widgetName?.toLowerCase()}`
-                                                      }`
-                                                    : `Remixes ${
-                                                          editContext.originalComponentName
-                                                      } → @ai-built/${(
-                                                          remixName ||
-                                                          widgetName
-                                                      )?.toLowerCase()}`}
-                                            </span>
-                                            <div className="flex items-center gap-3 shrink-0">
-                                                <select
-                                                    value={
-                                                        selectedCategory || ""
-                                                    }
-                                                    onChange={(e) =>
-                                                        setSelectedCategory(
-                                                            e.target.value ||
-                                                                null
-                                                        )
-                                                    }
-                                                    className="px-2 py-1.5 text-xs bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
-                                                    title="Pick a category before installing"
-                                                >
-                                                    <option value="" disabled>
-                                                        Pick a category…
-                                                    </option>
-                                                    {VALID_CATEGORIES.map(
-                                                        (c) => (
-                                                            <option
-                                                                key={c}
-                                                                value={c}
-                                                            >
-                                                                {c}
-                                                            </option>
-                                                        )
+                                                            }}
+                                                            placeholder="RemixWidgetName"
+                                                            className="w-full px-3 py-1.5 text-sm bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
+                                                            title="Name for the remixed widget (PascalCase)"
+                                                        />
                                                     )}
-                                                </select>
-                                                <button
-                                                    onClick={handleInstall}
-                                                    disabled={
-                                                        !selectedCategory ||
-                                                        (isRemixMode &&
-                                                            editMode ===
-                                                                "remix" &&
-                                                            !remixName)
-                                                    }
-                                                    className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
-                                                    title={
-                                                        !selectedCategory
-                                                            ? "Pick a category first"
-                                                            : editMode ===
-                                                                  "remix" &&
-                                                              !remixName
-                                                            ? "Enter a name for the remix"
-                                                            : undefined
-                                                    }
-                                                >
+                                                </div>
+                                            )}
+                                            <div className="flex items-center justify-between gap-3">
+                                                <span className="text-xs text-gray-500 truncate">
                                                     {!isRemixMode
-                                                        ? "Install Widget"
+                                                        ? `Installs to @ai-built/${widgetName?.toLowerCase()}`
                                                         : editMode === "update"
-                                                        ? "Update Widget"
-                                                        : "Remix Widget"}
-                                                </button>
+                                                        ? `Updates ${
+                                                              editContext.originalPackage ||
+                                                              `@ai-built/${widgetName?.toLowerCase()}`
+                                                          }`
+                                                        : `Remixes ${
+                                                              editContext.originalComponentName
+                                                          } → @ai-built/${(
+                                                              remixName ||
+                                                              widgetName
+                                                          )?.toLowerCase()}`}
+                                                </span>
+                                                <div className="flex items-center gap-3 shrink-0">
+                                                    <select
+                                                        value={
+                                                            selectedCategory ||
+                                                            ""
+                                                        }
+                                                        onChange={(e) =>
+                                                            setSelectedCategory(
+                                                                e.target
+                                                                    .value ||
+                                                                    null
+                                                            )
+                                                        }
+                                                        className="px-2 py-1.5 text-xs bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
+                                                        title="Pick a category before installing"
+                                                    >
+                                                        <option
+                                                            value=""
+                                                            disabled
+                                                        >
+                                                            Pick a category…
+                                                        </option>
+                                                        {VALID_CATEGORIES.map(
+                                                            (c) => (
+                                                                <option
+                                                                    key={c}
+                                                                    value={c}
+                                                                >
+                                                                    {c}
+                                                                </option>
+                                                            )
+                                                        )}
+                                                    </select>
+                                                    <button
+                                                        onClick={handleInstall}
+                                                        disabled={
+                                                            !selectedCategory ||
+                                                            (isRemixMode &&
+                                                                editMode ===
+                                                                    "remix" &&
+                                                                !remixName)
+                                                        }
+                                                        className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                                                        title={
+                                                            !selectedCategory
+                                                                ? "Pick a category first"
+                                                                : editMode ===
+                                                                      "remix" &&
+                                                                  !remixName
+                                                                ? "Enter a name for the remix"
+                                                                : undefined
+                                                        }
+                                                    >
+                                                        {!isRemixMode
+                                                            ? "Install Widget"
+                                                            : editMode ===
+                                                              "update"
+                                                            ? "Update Widget"
+                                                            : "Remix Widget"}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             )}
 
@@ -1407,10 +1780,16 @@ export const WidgetBuilderModal = ({
                                                     configCode: null,
                                                 });
                                                 lastCompiledCode.current = null;
+                                                if (browsingPackage) {
+                                                    setBrowsingPackage(null);
+                                                    setActiveTab("discover");
+                                                }
                                             }}
                                             className="px-5 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
                                         >
-                                            Build Another
+                                            {browsingPackage
+                                                ? "Browse More"
+                                                : "Build Another"}
                                         </button>
                                     </div>
                                 </div>
