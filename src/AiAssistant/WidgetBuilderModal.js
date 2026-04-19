@@ -438,9 +438,13 @@ export const WidgetBuilderModal = ({
     // Chat-pane mode ("build" = AI generates widgets, "discover" = AI
     // searches the registry). Resets to "build" each time the modal opens.
     const [chatMode, setChatMode] = useState("build");
-    // Parsed widgets[] from the most recent search_widgets tool_result,
-    // rendered as cards above the chat in Discover mode.
+    // Widgets returned by registry.search for the most recent user message
+    // in Discover mode. Rendered as cards above the chat.
     const [discoverResults, setDiscoverResults] = useState([]);
+    const [discoverSearching, setDiscoverSearching] = useState(false);
+    // Remember the last query we searched for so we don't re-hit the
+    // registry on every poll tick for the same user message.
+    const lastDiscoverQueryRef = useRef("");
     // When previewing a registry widget (user clicked a Discover card),
     // this holds the package metadata so the Preview footer can swap to
     // "Install from registry" instead of the AI-built install flow.
@@ -493,8 +497,113 @@ export const WidgetBuilderModal = ({
         if (isOpen) {
             setChatMode("build");
             setDiscoverResults([]);
+            lastDiscoverQueryRef.current = "";
         }
     }, [isOpen]);
+
+    // Clear results when switching away from Discover so stale cards don't
+    // linger when the user goes back to Discover later; re-running a new
+    // search will repopulate them.
+    useEffect(() => {
+        if (chatMode !== "discover") {
+            lastDiscoverQueryRef.current = "";
+        }
+    }, [chatMode]);
+
+    // Populate the Discover results strip from the AI's own search_widgets
+    // call. We watch ChatCore's persisted toolCalls[] for the latest
+    // search_widgets entry, grab its input.query (the AI's extracted
+    // keyword — e.g. "clock" for "find some clock widgets"), then re-run
+    // registry.search ourselves so cards render reliably across both the
+    // Anthropic API and Claude Code CLI backends. (CLI does not forward
+    // MCP tool results to the renderer, so we can't parse the result —
+    // but we now get the finalized input, which is enough to re-run.)
+    // Requires dash-core v0.1.389+ so CLI emits tool input after streaming.
+    useEffect(() => {
+        if (!isOpen || chatMode !== "discover") return;
+        const interval = setInterval(async () => {
+            try {
+                const raw = localStorage.getItem("dash-widget-builder");
+                if (!raw) return;
+                const data = JSON.parse(raw);
+                const msgs = data?.messages || [];
+                let query = "";
+                outer: for (let i = msgs.length - 1; i >= 0; i--) {
+                    const m = msgs[i];
+                    const calls = Array.isArray(m?.toolCalls)
+                        ? m.toolCalls
+                        : [];
+                    for (let j = calls.length - 1; j >= 0; j--) {
+                        const c = calls[j];
+                        if (c?.toolName !== "search_widgets") continue;
+                        const q =
+                            c?.input?.query ??
+                            (typeof c?.input === "string" ? c.input : "");
+                        if (q && String(q).trim()) {
+                            query = String(q).trim();
+                            break outer;
+                        }
+                    }
+                }
+                if (!query) return;
+                if (query === lastDiscoverQueryRef.current) return;
+                lastDiscoverQueryRef.current = query;
+                setDiscoverSearching(true);
+                try {
+                    const result = await window.mainApi?.registry?.search(
+                        query,
+                        { type: "widget" }
+                    );
+                    // Flatten packages → widget cards (same shape our cards
+                    // expect: {name, displayName, description, package,
+                    // scope, installed, downloadUrl, version}).
+                    const widgets = [];
+                    for (const pkg of result?.packages || []) {
+                        const installed = !!pkg.installed;
+                        const base = {
+                            package: pkg.name,
+                            scope: pkg.scope || null,
+                            installed,
+                            downloadUrl: pkg.downloadUrl,
+                            version: pkg.version,
+                        };
+                        const sub = pkg.widgets || [];
+                        if (sub.length === 0) {
+                            widgets.push({
+                                ...base,
+                                name: pkg.name,
+                                displayName: pkg.displayName || pkg.name,
+                                description: pkg.description || "",
+                            });
+                        } else {
+                            for (const w of sub) {
+                                widgets.push({
+                                    ...base,
+                                    name:
+                                        pkg.scope && w.name
+                                            ? `${pkg.scope}.${pkg.name}.${w.name}`
+                                            : w.name || pkg.name,
+                                    displayName:
+                                        w.displayName ||
+                                        w.name ||
+                                        pkg.displayName ||
+                                        pkg.name,
+                                    description:
+                                        w.description || pkg.description || "",
+                                });
+                            }
+                        }
+                    }
+                    setDiscoverResults(widgets);
+                } finally {
+                    setDiscoverSearching(false);
+                }
+            } catch {
+                /* ignore — next tick will retry */
+            }
+        }, 1200);
+        return () => clearInterval(interval);
+    }, [isOpen, chatMode]);
 
     // End session + clear chat on unmount (modal close) so the next
     // open starts fresh. The open-side clear happens in Dash.js before
@@ -618,49 +727,6 @@ export const WidgetBuilderModal = ({
 
                     // Skip polling if user is manually editing code
                     if (manualEditRef.current) return;
-
-                    // Scan the most recent assistant messages for a
-                    // search_widgets tool result and surface the parsed
-                    // widget list as cards above the chat (Discover mode).
-                    for (let i = msgs.length - 1; i >= 0; i--) {
-                        const m = msgs[i];
-                        if (m?.role !== "assistant") continue;
-                        const calls = Array.isArray(m.toolCalls)
-                            ? m.toolCalls
-                            : [];
-                        const hit = calls.find(
-                            (c) =>
-                                c?.toolName === "search_widgets" &&
-                                c?.result &&
-                                !c.isLoading
-                        );
-                        if (hit) {
-                            try {
-                                const text =
-                                    hit.result?.content?.[0]?.text ||
-                                    (typeof hit.result === "string"
-                                        ? hit.result
-                                        : "");
-                                const parsed = text ? JSON.parse(text) : null;
-                                const widgets = Array.isArray(parsed?.widgets)
-                                    ? parsed.widgets
-                                    : [];
-                                setDiscoverResults((prev) => {
-                                    // Cheap identity check: length + first name
-                                    if (
-                                        prev.length === widgets.length &&
-                                        prev[0]?.name === widgets[0]?.name
-                                    ) {
-                                        return prev;
-                                    }
-                                    return widgets;
-                                });
-                            } catch {
-                                /* ignore malformed tool result */
-                            }
-                            break;
-                        }
-                    }
 
                     const extracted = extractCodeBlocks(msgs);
                     if (extracted.componentCode) {
@@ -1934,56 +2000,90 @@ export const WidgetBuilderModal = ({
                         </span>
                     </div>
 
-                    {/* Discover results strip (only in Discover mode, only if results exist) */}
-                    {chatMode === "discover" && discoverResults.length > 0 && (
-                        <div className="px-3 pt-2 pb-1 shrink-0 border-b border-gray-800/60 max-h-56 overflow-auto">
-                            <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">
-                                Registry matches ({discoverResults.length})
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                                {discoverResults.map((pkg) => (
-                                    <button
-                                        key={`${pkg.scope || ""}/${pkg.name}`}
-                                        onClick={() =>
-                                            handleSelectRegistryPackage(pkg)
-                                        }
-                                        className="text-left rounded border border-gray-700/50 bg-gray-800/30 hover:bg-gray-800/70 hover:border-indigo-500/40 px-2.5 py-1.5 transition-colors"
-                                    >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div className="font-semibold text-xs text-gray-200 truncate">
-                                                {pkg.displayName || pkg.name}
-                                            </div>
-                                            {pkg.installed && (
-                                                <span className="shrink-0 px-1 py-0.5 rounded text-[9px] uppercase tracking-wide bg-green-900/40 text-green-300 border border-green-700/40">
-                                                    Installed
-                                                </span>
-                                            )}
+                    {/* Discover results strip */}
+                    {chatMode === "discover" &&
+                        (discoverSearching ||
+                            discoverResults.length > 0 ||
+                            lastDiscoverQueryRef.current) && (
+                            <div className="px-3 pt-2 pb-1 shrink-0 border-b border-gray-800/60 max-h-56 overflow-auto">
+                                <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-gray-500 mb-1">
+                                    <span className="truncate">
+                                        {discoverSearching
+                                            ? "Searching registry..."
+                                            : `Registry matches (${discoverResults.length})`}
+                                    </span>
+                                    {lastDiscoverQueryRef.current && (
+                                        <span className="normal-case text-gray-400 truncate">
+                                            “{lastDiscoverQueryRef.current}”
+                                        </span>
+                                    )}
+                                </div>
+                                {!discoverSearching &&
+                                    discoverResults.length === 0 && (
+                                        <div className="text-[11px] text-gray-500 py-2">
+                                            No registry widgets matched your
+                                            last query. Try different keywords
+                                            or switch to Build mode to generate
+                                            one.
                                         </div>
-                                        <div className="text-[10px] text-gray-500 truncate font-mono">
-                                            {pkg.scope
-                                                ? `@${pkg.scope.replace(
-                                                      /^@/,
-                                                      ""
-                                                  )}/${pkg.name}`
-                                                : pkg.name}
-                                        </div>
-                                        {pkg.description && (
-                                            <div
-                                                className="text-[11px] text-gray-400 overflow-hidden mt-0.5"
-                                                style={{
-                                                    display: "-webkit-box",
-                                                    WebkitLineClamp: 1,
-                                                    WebkitBoxOrient: "vertical",
-                                                }}
+                                    )}
+                                {discoverResults.length > 0 && (
+                                    <div className="flex flex-col gap-1.5">
+                                        {discoverResults.map((pkg) => (
+                                            <button
+                                                key={`${pkg.scope || ""}/${
+                                                    pkg.name
+                                                }`}
+                                                onClick={() =>
+                                                    handleSelectRegistryPackage(
+                                                        pkg
+                                                    )
+                                                }
+                                                className="text-left rounded border border-gray-700/50 bg-gray-800/30 hover:bg-gray-800/70 hover:border-indigo-500/40 px-2.5 py-1.5 transition-colors"
                                             >
-                                                {pkg.description}
-                                            </div>
-                                        )}
-                                    </button>
-                                ))}
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="font-semibold text-xs text-gray-200 truncate">
+                                                        {pkg.displayName ||
+                                                            pkg.name}
+                                                    </div>
+                                                    {pkg.installed && (
+                                                        <span className="shrink-0 px-1 py-0.5 rounded text-[9px] uppercase tracking-wide bg-green-900/40 text-green-300 border border-green-700/40">
+                                                            Installed
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-[10px] text-gray-500 truncate font-mono">
+                                                    {pkg.scope
+                                                        ? `@${pkg.scope.replace(
+                                                              /^@/,
+                                                              ""
+                                                          )}/${
+                                                              pkg.package ||
+                                                              pkg.name
+                                                          }`
+                                                        : pkg.package ||
+                                                          pkg.name}
+                                                </div>
+                                                {pkg.description && (
+                                                    <div
+                                                        className="text-[11px] text-gray-400 overflow-hidden mt-0.5"
+                                                        style={{
+                                                            display:
+                                                                "-webkit-box",
+                                                            WebkitLineClamp: 1,
+                                                            WebkitBoxOrient:
+                                                                "vertical",
+                                                        }}
+                                                    >
+                                                        {pkg.description}
+                                                    </div>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
-                        </div>
-                    )}
+                        )}
 
                     <ChatCore
                         title=""
