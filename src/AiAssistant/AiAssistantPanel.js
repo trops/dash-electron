@@ -15,9 +15,9 @@ import { ChatCore, AppContext } from "@trops/dash-core";
 const DEFAULT_SYSTEM_PROMPT = `You are the Dash AI Assistant — a helpful assistant built into the Dash desktop application. You help users manage dashboards, configure widgets, set up providers, and troubleshoot issues.
 
 You have access to the Dash MCP server which exposes tools in six categories:
-  • Dashboards — list, get, create, delete, get app stats
+  • Dashboards — list, get, create, delete, get app stats, search online registry for pre-built dashboard templates
   • Widgets — add, remove, configure, list available, search registry, install from registry
-  • Themes — list saved themes, get details, create, generate from a brand URL, apply
+  • Themes — list saved themes, get details, create, generate from a brand URL, apply, search online registry for more themes
   • Providers — list, add, remove (credentials + MCP servers)
   • Layouts — set/update grid, move widgets between cells
   • Setup guide — contextual step-by-step instructions
@@ -25,8 +25,11 @@ You have access to the Dash MCP server which exposes tools in six categories:
 Use these tools when the user asks you to perform dashboard operations.
 
 TOOL USAGE GUIDANCE:
-• apply_theme: when the user says "switch to dark" or similar without naming a theme, call list_themes first to find the closest match.
+• apply_theme: when the user says "switch to dark" or similar without naming a theme, call list_themes first; if no good match locally, try search_registry_themes to find one in the online registry.
 • add_widget: confirm which dashboard the user means (use list_dashboards) if ambiguous. Use search_widgets to find the right scoped name.
+• "Build me a dashboard for X" (e.g. sales, observability): FIRST call search_registry_dashboards with a keyword — if a pre-built template matches, offer to install it. Only if nothing fits, fall back to composing one: create_dashboard, then search_widgets + add_widget for each piece. Don't start composing from scratch if a template exists.
+• "Fill/populate my X dashboard" / "add some widgets to my X dashboard": call search_widgets with a keyword derived from the dashboard's purpose (e.g. sales → "revenue pipeline leads"; observability → "logs metrics latency"). Offer 3–5 relevant widgets, then use add_widget to place the ones the user picks. Prefer widgets that are already installed; for ones that aren't, call install_widget first.
+• Combine naturally: "make a sales dashboard with a blue theme" → search_registry_dashboards("sales"), then either install that template OR create_dashboard + search_widgets, then apply a theme via apply_theme (look for bluish themes via list_themes, or search_registry_themes if nothing local fits).
 
 IMPORTANT: If the user asks you to BUILD or CREATE a new custom widget, respond with exactly this text on its own line: [OPEN_WIDGET_BUILDER] — this will automatically open the Widget Builder for them. Do NOT create widget files yourself. The Widget Builder has a dedicated compile and install pipeline. You can help with adding EXISTING widgets to dashboards, configuring them, and managing layouts.
 
@@ -61,31 +64,20 @@ When the user replies with just a digit (e.g. "1", "3"), interpret it as selecti
 Only include menu items you can actually back with tools. Skip categories where no tool is available. Keep the whole response under 100 words.`;
 
 /**
- * McpSetupBanner — shown when CLI backend is selected and user may need
- * to connect the Dash MCP server to Claude Code for full functionality.
+ * McpStatusChip — compact status indicator for the Dash MCP server.
+ *
+ * When running, shows a green "Dash tools ready" pill. When not running,
+ * shows an amber chip with an inline Start button (also directs to
+ * Settings > MCP Server for permanent enable).
+ *
+ * Note: the CLI backend auto-wires Dash MCP per-spawn via
+ * --mcp-config (see cliController.js) so no user setup is required
+ * here. External-client setup (Claude Desktop, terminal Claude CLI)
+ * lives in Settings > MCP Server.
  */
-const McpSetupBanner = () => {
+const McpStatusChip = () => {
     const [mcpStatus, setMcpStatus] = useState(null);
-    const [token, setToken] = useState(null);
-    const [expanded, setExpanded] = useState(false);
-    const [copied, setCopied] = useState(false);
-
-    const { currentTheme } = useContext(ThemeContext) || {};
-    const panelBg =
-        currentTheme?.["bg-secondary-dark"] ||
-        currentTheme?.["bg-primary-dark"] ||
-        "bg-gray-800/80";
-    const panelBorder =
-        currentTheme?.["border-primary-dark"] || "border-gray-700/50";
-    // Text tints for the setup banner. When the panel is theme-tinted
-    // (e.g. red, bluish), hardcoded text-gray-500 etc. loses contrast.
-    // Use theme-provided text colors and fall back to neutral white
-    // opacities that stay readable on any dark background.
-    const textStrong = currentTheme?.["text-primary-bright"] || "text-white/95";
-    const textMuted = currentTheme?.["text-primary-dark"] || "text-white/60";
-
     const mainApi = window.mainApi;
-    const port = mcpStatus?.port || 3141;
 
     useEffect(() => {
         if (!mainApi?.mcpDashServer) return;
@@ -93,30 +85,7 @@ const McpSetupBanner = () => {
             .getStatus()
             .then(setMcpStatus)
             .catch(() => {});
-        mainApi.mcpDashServer
-            .getToken()
-            .then(setToken)
-            .catch(() => {});
     }, [mainApi]);
-
-    // -s user: install at user scope so it's discoverable regardless of
-    //   the cwd Claude is spawned from.
-    // -e NODE_TLS_REJECT_UNAUTHORIZED=0: the Dash MCP HTTPS server uses
-    //   a self-signed cert. mcp-remote (and Claude's native HTTP
-    //   transport) reject self-signed certs by default. Since the
-    //   server is localhost-only and already protected by a bearer
-    //   token, disabling cert validation for this specific subprocess
-    //   is safe and avoids asking users to trust a cert at OS level.
-    const command = `claude mcp add dash -s user -e NODE_TLS_REJECT_UNAUTHORIZED=0 -- npx mcp-remote https://127.0.0.1:${port}/mcp --header "Authorization: Bearer ${
-        token || "YOUR_TOKEN"
-    }"`;
-
-    const handleCopy = useCallback(() => {
-        navigator.clipboard.writeText(command).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        });
-    }, [command]);
 
     const handleStartServer = useCallback(() => {
         if (!mainApi?.mcpDashServer) return;
@@ -127,133 +96,36 @@ const McpSetupBanner = () => {
             .catch(() => {});
     }, [mainApi]);
 
-    const isConnected = mcpStatus?.running;
+    const isRunning = !!mcpStatus?.running;
 
     return (
         <div className="mx-2 my-2 shrink-0">
-            <button
-                onClick={() => setExpanded(!expanded)}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${
-                    isConnected
-                        ? "bg-green-900/20 border border-green-700/40 text-green-400 hover:bg-green-900/30"
-                        : "bg-indigo-900/30 border border-indigo-700/50 text-indigo-300 hover:bg-indigo-900/40"
+            <div
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs border ${
+                    isRunning
+                        ? "bg-green-900/20 border-green-700/40 text-green-400"
+                        : "bg-amber-900/20 border-amber-700/40 text-amber-300"
                 }`}
             >
-                {isConnected ? (
-                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-400 shrink-0" />
-                ) : (
-                    <FontAwesomeIcon icon="plug" className="h-3 w-3" />
-                )}
-                <span className="flex-1 text-left">
-                    {isConnected
-                        ? "Connected to Dash MCP Server"
-                        : "Connect Dash tools to Claude Code"}
-                </span>
-                <FontAwesomeIcon
-                    icon={expanded ? "chevron-up" : "chevron-down"}
-                    className="h-2.5 w-2.5 opacity-50"
+                <span
+                    className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${
+                        isRunning ? "bg-green-400" : "bg-amber-400"
+                    }`}
                 />
-            </button>
-
-            {expanded && (
-                <div
-                    className={`mt-2 p-3 rounded-lg text-xs space-y-3 border ${panelBg} ${panelBorder}`}
-                >
-                    {/* Step 1: MCP Server */}
-                    <div className="flex items-start gap-2">
-                        <span
-                            className={`shrink-0 w-5 h-5 rounded-full bg-black/30 flex items-center justify-center font-bold ${textStrong}`}
-                        >
-                            1
-                        </span>
-                        <div className="flex-1">
-                            <div className={`font-medium ${textStrong}`}>
-                                Enable the MCP Server
-                            </div>
-                            {mcpStatus?.running ? (
-                                <div className="flex items-center gap-1.5 mt-1 text-green-400">
-                                    <span className="inline-block w-2 h-2 rounded-full bg-green-400" />
-                                    Running on port {port}
-                                </div>
-                            ) : (
-                                <div className="mt-1">
-                                    <span className={textMuted}>
-                                        Server is not running.{" "}
-                                    </span>
-                                    <button
-                                        onClick={handleStartServer}
-                                        className="text-indigo-300 hover:text-indigo-200 underline"
-                                    >
-                                        Start now
-                                    </button>
-                                    <span className={textMuted}>
-                                        {" "}
-                                        or enable in Settings &gt; MCP Server.
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Step 2: Run command */}
-                    <div className="flex items-start gap-2">
-                        <span
-                            className={`shrink-0 w-5 h-5 rounded-full bg-black/30 flex items-center justify-center font-bold ${textStrong}`}
-                        >
-                            2
-                        </span>
-                        <div className="flex-1">
-                            <div className={`font-medium ${textStrong}`}>
-                                Run this in your terminal
-                            </div>
-                            <div className="mt-1.5 relative">
-                                <pre
-                                    className={`p-2 rounded bg-black/40 overflow-x-auto whitespace-pre-wrap break-all text-[10px] leading-relaxed ${textStrong}`}
-                                >
-                                    {command}
-                                </pre>
-                                <button
-                                    onClick={handleCopy}
-                                    className={`absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/40 hover:bg-black/60 text-[10px] transition-colors ${textStrong}`}
-                                >
-                                    {copied ? "Copied!" : "Copy"}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Step 3: Restart */}
-                    <div className="flex items-start gap-2">
-                        <span
-                            className={`shrink-0 w-5 h-5 rounded-full bg-black/30 flex items-center justify-center font-bold ${textStrong}`}
-                        >
-                            3
-                        </span>
-                        <div className="flex-1">
-                            <div className={`font-medium ${textStrong}`}>
-                                Restart the AI Assistant
-                            </div>
-                            <div className={`mt-0.5 ${textMuted}`}>
-                                Click &quot;New Chat&quot; to start a fresh
-                                session with Dash tools available.
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className={`pt-1 text-[10px] ${textMuted}`}>
-                        This connects the Dash MCP server to Claude Code so it
-                        can manage your dashboards, widgets, and themes.
-                    </div>
-                    <div className={`pt-1 text-[10px] italic ${textMuted}`}>
-                        Already ran a previous version of this command? First
-                        run{" "}
-                        <code className={textStrong}>
-                            claude mcp remove dash
-                        </code>{" "}
-                        to clear it, then re-run the setup above.
-                    </div>
-                </div>
-            )}
+                <span className="flex-1">
+                    {isRunning
+                        ? "Dash tools ready"
+                        : "Dash MCP server not running"}
+                </span>
+                {!isRunning && (
+                    <button
+                        onClick={handleStartServer}
+                        className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[10px] font-medium transition-colors"
+                    >
+                        Start
+                    </button>
+                )}
+            </div>
         </div>
     );
 };
@@ -417,17 +289,6 @@ export const AiAssistantPanel = () => {
                     </div>
                     <div className="flex items-center gap-1">
                         <button
-                            onClick={() =>
-                                window.dispatchEvent(
-                                    new Event("dash:open-widget-builder")
-                                )
-                            }
-                            className="p-1 rounded hover:bg-white/10 transition-colors text-gray-500 hover:text-gray-300"
-                            title="Build Widget with AI"
-                        >
-                            <FontAwesomeIcon icon="cube" className="h-3 w-3" />
-                        </button>
-                        <button
                             onClick={() => setCollapsed(true)}
                             className="p-1 rounded hover:bg-white/10 transition-colors text-gray-500 hover:text-gray-300"
                             title="Collapse"
@@ -441,7 +302,7 @@ export const AiAssistantPanel = () => {
                 </div>
 
                 {/* MCP setup banner for CLI backend */}
-                {isCliBackend && <McpSetupBanner />}
+                {isCliBackend && <McpStatusChip />}
 
                 {/* ChatCore */}
                 <div className="flex-1 overflow-hidden flex flex-col">
