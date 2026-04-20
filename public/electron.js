@@ -1490,8 +1490,13 @@ function createWindow() {
         logger.loggedHandle(REGISTRY_INSPECT_WIDGET_PACKAGE, (e, msg) =>
             inspectWidgetPackage(msg.packageId)
         );
-        logger.loggedHandle(REGISTRY_PREVIEW_FETCH, (e, packageName) =>
-            registryController.fetchPackageSource(packageName)
+        logger.loggedHandle(
+            REGISTRY_PREVIEW_FETCH,
+            (e, packageName, componentName) =>
+                registryController.fetchPackageSource(
+                    packageName,
+                    componentName
+                )
         );
 
         // --- Theme Registry ---

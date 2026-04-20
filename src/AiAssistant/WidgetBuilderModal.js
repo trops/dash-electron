@@ -438,7 +438,13 @@ export const WidgetBuilderModal = ({
     const [activeFile, setActiveFile] = useState("component");
     const manualEditRef = useRef(false);
     const lastMsgCount = useRef(0);
-    const isRemixMode = !!editContext?.originalWidgetId;
+    // Local edit-context override, populated when the user clicks Remix
+    // on a registry-preview card. Mirrors the shape of the prop editContext
+    // so the rest of the modal (system prompt, install path, remix footer,
+    // compilePreview sourcePackage) reads a single "effective" context.
+    const [editContextOverride, setEditContextOverride] = useState(null);
+    const effectiveEditContext = editContextOverride || editContext;
+    const isRemixMode = !!effectiveEditContext?.originalWidgetId;
 
     // Chat-pane mode ("build" = AI generates widgets, "discover" = AI
     // searches the registry). Resets to "build" each time the modal opens.
@@ -447,6 +453,12 @@ export const WidgetBuilderModal = ({
     // in Discover mode. Rendered as cards above the chat.
     const [discoverResults, setDiscoverResults] = useState([]);
     const [discoverSearching, setDiscoverSearching] = useState(false);
+    // Set of locally-installed package IDs ("@scope/name"). Populated once
+    // when the modal opens so Discover cards can show an "Installed ✓"
+    // badge — the raw registry.search result doesn't carry this flag.
+    const [installedPackageIds, setInstalledPackageIds] = useState(
+        () => new Set()
+    );
     // Remember the last query we searched for so we don't re-hit the
     // registry on every poll tick for the same user message.
     const lastDiscoverQueryRef = useRef("");
@@ -497,7 +509,8 @@ export const WidgetBuilderModal = ({
     }, []);
 
     // Derive ownership: @ai-built = always owner, else scope must match username
-    const widgetScope = editContext?.originalPackage?.match(/^@([^/]+)\//)?.[1];
+    const widgetScope =
+        effectiveEditContext?.originalPackage?.match(/^@([^/]+)\//)?.[1];
     const isOwner =
         widgetScope === "ai-built" ||
         (registryUsername && widgetScope === registryUsername);
@@ -510,6 +523,50 @@ export const WidgetBuilderModal = ({
             lastDiscoverQueryRef.current = "";
         }
     }, [isOpen]);
+
+    // Fetch the set of installed package IDs whenever the modal opens so
+    // Discover cards can show accurate "Installed ✓" badges. Refreshed
+    // after a successful install so the badge updates in-place.
+    const refreshInstalledPackageIds = useCallback(async () => {
+        try {
+            const list = await window.mainApi?.widgets?.list();
+            const ids = new Set();
+            for (const w of list || []) {
+                const id = w?.packageId || w?.name;
+                if (id) ids.add(id);
+            }
+            setInstalledPackageIds(ids);
+        } catch {
+            /* ignore — cards just won't show badges */
+        }
+    }, []);
+
+    useEffect(() => {
+        if (isOpen) refreshInstalledPackageIds();
+    }, [isOpen, refreshInstalledPackageIds]);
+
+    // When the installed set changes (e.g. user just installed a package
+    // via this modal), re-compute the `installed` flag on already-rendered
+    // cards in-place so badges light up without re-running the AI search.
+    useEffect(() => {
+        setDiscoverResults((prev) => {
+            if (!prev.length) return prev;
+            let changed = false;
+            const next = prev.map((pkg) => {
+                const scopedId = pkg.scope
+                    ? `@${pkg.scope.replace(/^@/, "")}/${
+                          pkg.package || pkg.name
+                      }`
+                    : pkg.package || pkg.name;
+                const installed =
+                    !!pkg.installed || installedPackageIds.has(scopedId);
+                if (installed === pkg.installed) return pkg;
+                changed = true;
+                return { ...pkg, installed };
+            });
+            return changed ? next : prev;
+        });
+    }, [installedPackageIds]);
 
     // Clear results when switching away from Discover so stale cards don't
     // linger when the user goes back to Discover later; re-running a new
@@ -600,7 +657,14 @@ export const WidgetBuilderModal = ({
                     // scope, installed, downloadUrl, version}).
                     const widgets = [];
                     for (const pkg of result?.packages || []) {
-                        const installed = !!pkg.installed;
+                        const scopedId = pkg.scope
+                            ? `@${pkg.scope.replace(/^@/, "")}/${pkg.name}`
+                            : pkg.name;
+                        // registry.search doesn't set `installed`; consult
+                        // the locally-cached set we populated on open.
+                        const installed =
+                            !!pkg.installed ||
+                            installedPackageIds.has(scopedId);
                         const base = {
                             package: pkg.name,
                             scope: pkg.scope || null,
@@ -644,7 +708,7 @@ export const WidgetBuilderModal = ({
             }
         }, 1200);
         return () => clearInterval(interval);
-    }, [isOpen]);
+    }, [isOpen, installedPackageIds]);
 
     // End session + clear chat on unmount (modal close) so the next
     // open starts fresh. The open-side clear happens in Dash.js before
@@ -746,7 +810,7 @@ export const WidgetBuilderModal = ({
                     if (
                         msgs.length === 0 &&
                         lastCompiledCode.current &&
-                        !editContext?.componentCode
+                        !effectiveEditContext?.componentCode
                     ) {
                         setPreviewComponent(null);
                         setPreviewError(null);
@@ -902,7 +966,7 @@ export const WidgetBuilderModal = ({
                             })(),
                         // Pass the source package so multi-file widgets can
                         // resolve relative imports from the installed package.
-                        editContext?.originalPackage || null
+                        effectiveEditContext?.originalPackage || null
                     );
 
                 if (isStale()) return;
@@ -950,7 +1014,7 @@ export const WidgetBuilderModal = ({
                 if (!isStale()) setIsCompiling(false);
             }
         },
-        [editContext?.originalPackage]
+        [effectiveEditContext?.originalPackage]
     );
 
     // Fetch a registry widget's source (no install), hand it to the existing
@@ -1020,12 +1084,12 @@ export const WidgetBuilderModal = ({
 
                 if (!componentCode) {
                     // Package isn't installed locally — fall back to the
-                    // registry download. NOTE: the current previewFetch
-                    // returns the alphabetically-first widget in the
-                    // package rather than the requested componentName;
-                    // that's tracked as a follow-up dash-core fix.
+                    // registry download. dash-core v0.1.391+ honors the
+                    // componentName hint so multi-widget packages return
+                    // the right widget.
                     const source = await window.mainApi?.registry?.previewFetch(
-                        packageName
+                        packageName,
+                        componentName
                     );
                     if (isStale()) return;
                     if (!source?.componentCode) {
@@ -1084,6 +1148,10 @@ export const WidgetBuilderModal = ({
                         : p
                 )
             );
+            // Refresh the installed-package set so other cards from the
+            // same package also show the badge, and so a subsequent
+            // AI search re-flattens with the accurate install state.
+            refreshInstalledPackageIds();
             if (typeof onInstalled === "function") {
                 onInstalled(browsingPackage.packageName, scopedId);
             }
@@ -1094,7 +1162,7 @@ export const WidgetBuilderModal = ({
         } finally {
             setRegistryInstalling(false);
         }
-    }, [browsingPackage, onInstalled]);
+    }, [browsingPackage, onInstalled, refreshInstalledPackageIds]);
 
     // Clear the current registry-widget preview so the user can pick
     // another card from the Discover results strip.
@@ -1104,8 +1172,59 @@ export const WidgetBuilderModal = ({
         setPreviewComponent(null);
         setPreviewError(null);
         setInstallStatus(null);
+        setEditContextOverride(null);
         lastCompiledCode.current = null;
     }, []);
+
+    // Remix a registry widget: keep the fetched source + preview in place,
+    // promote the package into an internal edit-context override so the
+    // modal transitions to its edit/remix flow (AI chat now knows the
+    // source code; Install footer becomes the existing remix/rename
+    // footer; handleInstall records remixedFrom attribution).
+    const handleRemixRegistryPackage = useCallback(() => {
+        if (!browsingPackage || !detectedCode?.componentCode) return;
+        const scoped = browsingPackage.scopedPackage
+            ? browsingPackage.scopedPackage
+            : browsingPackage.scope
+            ? `@${browsingPackage.scope.replace(/^@/, "")}/${
+                  browsingPackage.packageName
+              }`
+            : browsingPackage.packageName;
+        const originalComponentName = extractWidgetName(
+            detectedCode.componentCode
+        );
+        setEditContextOverride({
+            componentCode: detectedCode.componentCode,
+            configCode: detectedCode.configCode || "",
+            originalPackage: scoped,
+            originalComponentName,
+            originalWidgetId: `${scoped}/${
+                originalComponentName || browsingPackage.packageName
+            }`,
+            manifest: {
+                author: "Unknown",
+                version: browsingPackage.version || "1.0.0",
+            },
+        });
+        // Seed the remix name so the footer's rename input is pre-filled.
+        const base = (originalComponentName || "").replace(/Remix\d*$/, "");
+        setRemixName(base ? `${base}Remix` : "");
+        setEditMode("remix");
+        // Hand off from browsing-registry footer to the normal remix
+        // footer by clearing browsingPackage.
+        setBrowsingPackage(null);
+        setInstallStatus(null);
+        // Clear the chat so the user can describe their changes from a
+        // clean slate — the system prompt will now include the source.
+        try {
+            localStorage.setItem(
+                "dash-widget-builder",
+                JSON.stringify({ messages: [] })
+            );
+        } catch {
+            /* ignore */
+        }
+    }, [browsingPackage, detectedCode]);
 
     // Kick off the registry device-code sign-in flow: open the browser
     // to the verification URL and start polling for the resulting token.
@@ -1249,12 +1368,18 @@ export const WidgetBuilderModal = ({
                 isRemixMode && editMode === "remix"
                     ? {
                           remixedFrom: {
-                              package: editContext.originalPackage || "unknown",
-                              component:
-                                  editContext.originalComponentName ||
+                              package:
+                                  effectiveEditContext.originalPackage ||
                                   "unknown",
-                              author: editContext.manifest?.author || "Unknown",
-                              version: editContext.manifest?.version || "1.0.0",
+                              component:
+                                  effectiveEditContext.originalComponentName ||
+                                  "unknown",
+                              author:
+                                  effectiveEditContext.manifest?.author ||
+                                  "Unknown",
+                              version:
+                                  effectiveEditContext.manifest?.version ||
+                                  "1.0.0",
                           },
                       }
                     : null;
@@ -1317,7 +1442,7 @@ export const WidgetBuilderModal = ({
         selectedCategory,
         onInstalled,
         cellContext,
-        editContext,
+        effectiveEditContext,
         isRemixMode,
         editMode,
         remixName,
@@ -1456,7 +1581,7 @@ export const WidgetBuilderModal = ({
                     {activeTab === "preview" && (
                         <div className="flex-1 overflow-auto p-4">
                             {/* Source unavailable error (widget needs re-publish) */}
-                            {editContext?.sourceError &&
+                            {effectiveEditContext?.sourceError &&
                                 !previewComponent &&
                                 !previewError &&
                                 !isCompiling && (
@@ -1472,8 +1597,8 @@ export const WidgetBuilderModal = ({
                                                 Source code not available
                                             </p>
                                             <p className="text-xs text-gray-500">
-                                                {editContext.originalComponentName
-                                                    ? `"${editContext.originalComponentName}" `
+                                                {effectiveEditContext.originalComponentName
+                                                    ? `"${effectiveEditContext.originalComponentName}" `
                                                     : "This widget "}
                                                 was published without source
                                                 files. Re-publish the widget
@@ -1493,7 +1618,7 @@ export const WidgetBuilderModal = ({
                             {!previewComponent &&
                                 !previewError &&
                                 !isCompiling &&
-                                !editContext?.sourceError &&
+                                !effectiveEditContext?.sourceError &&
                                 (() => {
                                     const hasDiscoverActivity =
                                         discoverSearching ||
@@ -1807,7 +1932,9 @@ export const WidgetBuilderModal = ({
                                                     previewAppCtx || appContext
                                                 }
                                                 themeCtx={previewThemeCtx}
-                                                editContext={editContext}
+                                                editContext={
+                                                    effectiveEditContext
+                                                }
                                             >
                                                 <PreviewErrorBoundary
                                                     key={
@@ -1872,9 +1999,14 @@ export const WidgetBuilderModal = ({
                                                 <div className="flex items-center gap-3 shrink-0">
                                                     <button
                                                         type="button"
-                                                        disabled
-                                                        title="Remix is coming in a follow-up release"
-                                                        className="px-4 py-2 rounded-lg bg-gray-800 text-gray-500 text-sm font-medium cursor-not-allowed opacity-60"
+                                                        onClick={
+                                                            handleRemixRegistryPackage
+                                                        }
+                                                        disabled={
+                                                            !detectedCode?.componentCode
+                                                        }
+                                                        title="Fork this widget into @ai-built/ and edit it with AI"
+                                                        className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed text-gray-200 text-sm font-medium transition-colors"
                                                     >
                                                         Remix
                                                     </button>
@@ -2015,11 +2147,11 @@ export const WidgetBuilderModal = ({
                                                         ? `Installs to @ai-built/${widgetName?.toLowerCase()}`
                                                         : editMode === "update"
                                                         ? `Updates ${
-                                                              editContext.originalPackage ||
+                                                              effectiveEditContext.originalPackage ||
                                                               `@ai-built/${widgetName?.toLowerCase()}`
                                                           }`
                                                         : `Remixes ${
-                                                              editContext.originalComponentName
+                                                              effectiveEditContext.originalComponentName
                                                           } → @ai-built/${(
                                                               remixName ||
                                                               widgetName
@@ -2354,11 +2486,11 @@ export const WidgetBuilderModal = ({
                         systemPrompt={
                             chatMode === "discover"
                                 ? DISCOVER_SYSTEM_PROMPT
-                                : editContext?.componentCode
+                                : effectiveEditContext?.componentCode
                                 ? `${SYSTEM_PROMPT}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
-                                      editContext.componentCode
+                                      effectiveEditContext.componentCode
                                   }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
-                                      editContext.configCode || ""
+                                      effectiveEditContext.configCode || ""
                                   }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`
                                 : `${SYSTEM_PROMPT}\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences inviting the user to describe the widget they want to build (what it should show, what data source it pulls from, what interactions it needs). No lists, no bullet points, no examples — keep it under 30 words total.`
                         }
@@ -2370,7 +2502,7 @@ export const WidgetBuilderModal = ({
                         initialMessage={
                             chatMode === "discover"
                                 ? "Tell me what kind of widget you're looking for."
-                                : editContext?.componentCode
+                                : effectiveEditContext?.componentCode
                                 ? "Hello, let's make some edits to this widget."
                                 : "Hi, I'd like to build a new widget."
                         }
