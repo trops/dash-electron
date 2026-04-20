@@ -932,7 +932,7 @@ export const WidgetBuilderModal = ({
     }, [isRemixMode, isOwner, registryChecked]);
 
     const compilePreview = useCallback(
-        async (code) => {
+        async (code, sourcePackageOverride = null) => {
             const name = extractWidgetName(code.componentCode);
             if (!name || !code.componentCode) return;
 
@@ -965,8 +965,14 @@ export const WidgetBuilderModal = ({
                                 return `export default { component: "${name}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", category: "general", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
                             })(),
                         // Pass the source package so multi-file widgets can
-                        // resolve relative imports from the installed package.
-                        effectiveEditContext?.originalPackage || null
+                        // resolve relative imports from the installed
+                        // package (e.g. Algolia widgets that import from
+                        // ../hooks/, ../components/, etc.). Callers can
+                        // pass a per-call override (used by the Discover
+                        // flow before editContext gets promoted).
+                        sourcePackageOverride ||
+                            effectiveEditContext?.originalPackage ||
+                            null
                     );
 
                 if (isStale()) return;
@@ -1111,7 +1117,14 @@ export const WidgetBuilderModal = ({
                             : prev
                     );
                 }
-                await compilePreview({ componentCode, configCode });
+                // Pass scopedPackage so the compile IPC can resolve
+                // sibling imports from the installed package dir (or
+                // short-circuit to the pre-built bundle when the source
+                // hasn't been modified yet).
+                await compilePreview(
+                    { componentCode, configCode },
+                    scopedPackage
+                );
             } catch (err) {
                 if (isStale()) return;
                 setPreviewError(err?.message || "Failed to load preview");
