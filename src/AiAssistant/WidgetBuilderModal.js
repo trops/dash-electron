@@ -1280,6 +1280,25 @@ export const WidgetBuilderModal = ({
         lastCompiledCode.current = null;
     }, []);
 
+    // Place an already-installed registry widget into the user's current
+    // grid cell. Mirrors what the AI-build flow does at the end — calls
+    // the onInstalled callback so Dash.js dispatches the
+    // `dash:place-widget-in-cell` event, then shows the success screen.
+    const handleAddInstalledToDashboard = useCallback(() => {
+        if (!browsingPackage) return;
+        const scopedId = browsingPackage.scopedPackage
+            ? browsingPackage.scopedPackage
+            : browsingPackage.scope
+            ? `@${browsingPackage.scope.replace(/^@/, "")}/${
+                  browsingPackage.packageName
+              }`
+            : browsingPackage.packageName;
+        setInstallStatus({ success: true, widgetName: scopedId });
+        if (typeof onInstalled === "function") {
+            onInstalled(browsingPackage.packageName, scopedId);
+        }
+    }, [browsingPackage, onInstalled]);
+
     // Remix a registry widget: keep the fetched source + preview in place,
     // promote the package into an internal edit-context override so the
     // modal transitions to its edit/remix flow (AI chat now knows the
@@ -1361,6 +1380,20 @@ export const WidgetBuilderModal = ({
                         signInPollRef.current = null;
                         setSignInFlow(null);
                         setPreviewError(null);
+                        // Refresh auth status so the Discover "sign in as
+                        // guest" banner disappears and any edit-with-AI
+                        // ownership checks see the user as logged in.
+                        try {
+                            const status =
+                                await window.mainApi?.registryAuth?.getStatus();
+                            if (status?.authenticated) {
+                                const profile =
+                                    await window.mainApi?.registryAuth?.getProfile();
+                                setRegistryUsername(profile?.username || null);
+                            }
+                        } catch {
+                            /* ignore */
+                        }
                         // Auto-retry the current registry package
                         if (browsingPackage) {
                             const retry = {
@@ -1760,6 +1793,36 @@ export const WidgetBuilderModal = ({
                                                         preview
                                                     </span>
                                                 </div>
+                                                {/* Sign-in nudge: the
+                                                    registry only returns
+                                                    public packages to
+                                                    anonymous users, so
+                                                    missing private/entitled
+                                                    widgets can be surfaced
+                                                    with one click. */}
+                                                {registryChecked &&
+                                                    !registryUsername && (
+                                                        <div className="mt-2 flex items-center gap-3 px-3 py-2 rounded-lg bg-amber-900/15 border border-amber-700/30">
+                                                            <p className="flex-1 text-xs text-amber-200 leading-snug">
+                                                                You're browsing
+                                                                as a guest —
+                                                                sign in to also
+                                                                see private
+                                                                widgets you own
+                                                                or have access
+                                                                to.
+                                                            </p>
+                                                            <button
+                                                                type="button"
+                                                                onClick={
+                                                                    handleSignInForPreview
+                                                                }
+                                                                className="px-3 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 transition-colors"
+                                                            >
+                                                                Sign in
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 {!discoverSearching &&
                                                     discoverResults.length ===
                                                         0 && (
@@ -2131,23 +2194,42 @@ export const WidgetBuilderModal = ({
                                                     >
                                                         Remix
                                                     </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={
-                                                            handleInstallRegistryPackage
-                                                        }
-                                                        disabled={
-                                                            browsingPackage.installed ||
-                                                            registryInstalling
-                                                        }
-                                                        className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
-                                                    >
-                                                        {browsingPackage.installed
-                                                            ? "Installed ✓"
-                                                            : registryInstalling
-                                                            ? "Installing..."
-                                                            : "Install"}
-                                                    </button>
+                                                    {browsingPackage.installed ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={
+                                                                handleAddInstalledToDashboard
+                                                            }
+                                                            disabled={
+                                                                !cellContext
+                                                            }
+                                                            title={
+                                                                cellContext
+                                                                    ? "Place this widget in the dashboard cell you opened the builder from"
+                                                                    : "Open the builder from an empty grid cell to place widgets"
+                                                            }
+                                                            className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                                                        >
+                                                            Add to Dashboard
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={
+                                                                handleInstallRegistryPackage
+                                                            }
+                                                            disabled={
+                                                                registryInstalling
+                                                            }
+                                                            className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                                                        >
+                                                            {registryInstalling
+                                                                ? "Installing..."
+                                                                : cellContext
+                                                                ? "Install + Add to Dashboard"
+                                                                : "Install"}
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                             {installStatus?.error && (
