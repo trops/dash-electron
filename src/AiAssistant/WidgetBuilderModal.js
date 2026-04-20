@@ -39,62 +39,143 @@ import { WidgetConfigureTab } from "./WidgetConfigureTab";
  * Auto-selects the first matching provider for each type declared
  * in the widget config.
  */
-function PreviewContextWrapper({ appCtx, themeCtx, editContext, children }) {
+/**
+ * Parse `providers: [...]` out of a .dash.js config string. Returns
+ * [{ type, providerClass }]. Used by the preview to know which
+ * provider declarations the widget has so we can offer a picker.
+ */
+function extractProviderDeclarations(configCode) {
+    const providers = [];
+    if (!configCode) return providers;
+    const providerMatch = configCode.match(/providers\s*:\s*\[([\s\S]*?)\]/);
+    if (!providerMatch) return providers;
+    const typeMatches = providerMatch[1].matchAll(
+        /type\s*:\s*["']([^"']+)["']/g
+    );
+    const classMatches = providerMatch[1].matchAll(
+        /providerClass\s*:\s*["']([^"']+)["']/g
+    );
+    const classes = [...classMatches].map((m) => m[1]);
+    let i = 0;
+    for (const m of typeMatches) {
+        providers.push({
+            type: m[1],
+            providerClass: classes[i] || "credential",
+        });
+        i++;
+    }
+    return providers;
+}
+
+/**
+ * Small picker strip rendered above the live widget preview. For each
+ * provider type the widget declares, surfaces the compatible providers
+ * the user has configured in the app and lets them pick one. The picker
+ * never auto-selects — an explicit choice is required before the widget
+ * sees a real provider. This avoids surprising the user by sending
+ * traffic from preview to a provider they didn't expect.
+ */
+function PreviewProviderPicker({
+    configCode,
+    appProviders,
+    selection,
+    onChange,
+}) {
+    const declarations = React.useMemo(
+        () => extractProviderDeclarations(configCode || ""),
+        [configCode]
+    );
+
+    // Group the user's configured providers by type, matching type only
+    // (providerClass is often unset or inconsistent across widget authors,
+    // so being strict here would hide valid matches).
+    const compatibleByType = React.useMemo(() => {
+        const map = {};
+        if (!appProviders) return map;
+        for (const decl of declarations) {
+            map[decl.type] = Object.values(appProviders).filter(
+                (p) => p.type === decl.type
+            );
+        }
+        return map;
+    }, [declarations, appProviders]);
+
+    if (declarations.length === 0) return null;
+
+    return (
+        <div className="px-4 pt-2 pb-3 border-b border-gray-800/60 shrink-0 space-y-2">
+            {declarations.map((decl) => {
+                const options = compatibleByType[decl.type] || [];
+                const current = selection?.[decl.type] || "";
+                const label = decl.type.replace(/^./, (c) => c.toUpperCase());
+                return (
+                    <div
+                        key={decl.type}
+                        className="flex items-center gap-2 text-xs"
+                    >
+                        <span className="text-gray-400 shrink-0">
+                            {label} provider:
+                        </span>
+                        {options.length === 0 ? (
+                            <span className="text-amber-300/90 text-[11px]">
+                                None configured — add one in Settings &gt;
+                                Providers to preview.
+                            </span>
+                        ) : (
+                            <select
+                                value={current}
+                                onChange={(e) =>
+                                    onChange({
+                                        ...(selection || {}),
+                                        [decl.type]: e.target.value,
+                                    })
+                                }
+                                className="flex-1 max-w-xs px-2 py-1 bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
+                            >
+                                <option value="">— Select a provider —</option>
+                                {options.map((p) => (
+                                    <option key={p.name} value={p.name}>
+                                        {p.name}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
+function PreviewContextWrapper({
+    appCtx,
+    themeCtx,
+    editContext,
+    previewProviderSelection,
+    children,
+}) {
     const widgetData = React.useMemo(() => {
-        // Extract provider declarations from the config code
-        const configCode = editContext?.configCode || "";
-        const providers = [];
-        const providerMatch = configCode.match(
-            /providers\s*:\s*\[([\s\S]*?)\]/
+        const providers = extractProviderDeclarations(
+            editContext?.configCode || ""
         );
-        if (providerMatch) {
-            const typeMatches = providerMatch[1].matchAll(
-                /type\s*:\s*["']([^"']+)["']/g
-            );
-            const classMatches = providerMatch[1].matchAll(
-                /providerClass\s*:\s*["']([^"']+)["']/g
-            );
-            const classes = [...classMatches].map((m) => m[1]);
-            let i = 0;
-            for (const m of typeMatches) {
-                providers.push({
-                    type: m[1],
-                    providerClass: classes[i] || "mcp",
-                });
-                i++;
-            }
-        }
-
-        // Use the widget's actual selectedProviders from the dashboard.
-        // Fall back to auto-selection only for new (non-remix) widgets.
-        const selectedProviders = editContext?.selectedProviders || {};
-        if (Object.keys(selectedProviders).length === 0 && appCtx?.providers) {
-            for (const decl of providers) {
-                const match =
-                    Object.values(appCtx.providers).find(
-                        (p) =>
-                            p.type === decl.type &&
-                            (p.providerClass || "credential") ===
-                                decl.providerClass
-                    ) ||
-                    Object.values(appCtx.providers).find(
-                        (p) => p.type === decl.type
-                    );
-                if (match) {
-                    selectedProviders[decl.type] = match.name;
-                }
-            }
-        }
-
+        // Precedence for the widget's selectedProviders:
+        //   1. Explicit user selection made in the preview picker
+        //   2. editContext.selectedProviders (Edit-with-AI carries over the
+        //      providers already wired to the widget on the dashboard)
+        //   3. Empty — the widget renders its own "not configured" state
+        const selectedProviders = {
+            ...(editContext?.selectedProviders || {}),
+            ...(previewProviderSelection || {}),
+        };
         return {
             providers,
             selectedProviders,
             uuidString: "preview-widget",
         };
     }, [
-        appCtx?.providers,
         editContext?.configCode,
         editContext?.selectedProviders,
+        previewProviderSelection,
     ]);
 
     return (
@@ -467,6 +548,14 @@ export const WidgetBuilderModal = ({
     // "Install from registry" instead of the AI-built install flow.
     const [browsingPackage, setBrowsingPackage] = useState(null);
     const [registryInstalling, setRegistryInstalling] = useState(false);
+    // User's explicit provider selection for the preview, keyed by the
+    // widget-declared provider type (e.g. { algolia: "My Algolia Account" }).
+    // Passed through to PreviewContextWrapper so the widget sees a real
+    // provider and renders its live UX. Clears whenever the previewed
+    // widget changes so the user re-picks per widget.
+    const [previewProviderSelection, setPreviewProviderSelection] = useState(
+        {}
+    );
     // Device-code sign-in flow for the registry. When the user clicks
     // "Sign in to preview", we stash the flow here so we can display the
     // user code + poll for completion.
@@ -1062,6 +1151,7 @@ export const WidgetBuilderModal = ({
             setPreviewError(null);
             setPreviewComponent(null);
             setInstallStatus(null);
+            setPreviewProviderSelection({});
             setIsCompiling(true);
             try {
                 let componentCode = null;
@@ -1186,6 +1276,7 @@ export const WidgetBuilderModal = ({
         setPreviewError(null);
         setInstallStatus(null);
         setEditContextOverride(null);
+        setPreviewProviderSelection({});
         lastCompiledCode.current = null;
     }, []);
 
@@ -1927,6 +2018,20 @@ export const WidgetBuilderModal = ({
                             {/* Live widget preview */}
                             {PreviewComponent && !installStatus && (
                                 <div className="flex flex-col h-full">
+                                    {/* Provider picker — shown when the
+                                        widget declares providers. Without a
+                                        selection the widget renders its own
+                                        "not configured" empty state, same
+                                        as on a real dashboard. */}
+                                    <PreviewProviderPicker
+                                        configCode={detectedCode.configCode}
+                                        appProviders={
+                                            (previewAppCtx || appContext)
+                                                ?.providers
+                                        }
+                                        selection={previewProviderSelection}
+                                        onChange={setPreviewProviderSelection}
+                                    />
                                     {/* Widget preview — fills available space */}
                                     <div className="flex-1 p-4 overflow-auto">
                                         <div
@@ -1947,6 +2052,9 @@ export const WidgetBuilderModal = ({
                                                 themeCtx={previewThemeCtx}
                                                 editContext={
                                                     effectiveEditContext
+                                                }
+                                                previewProviderSelection={
+                                                    previewProviderSelection
                                                 }
                                             >
                                                 <PreviewErrorBoundary
