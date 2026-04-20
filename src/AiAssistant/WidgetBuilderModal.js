@@ -1137,9 +1137,30 @@ export const WidgetBuilderModal = ({
             const requestId = ++compileRequestIdRef.current;
             const isStale = () => compileRequestIdRef.current !== requestId;
 
+            // Extract the bare widget component name from the card's
+            // dotted id (e.g. "trops.chat.ChatClaudeCodeWidget" →
+            // "ChatClaudeCodeWidget"). Used for readSources (disk files
+            // are named by the bare name).
+            const widgetComponentName = pkg.name?.includes(".")
+                ? pkg.name.split(".").pop()
+                : pkg.name;
+            // The full dotted scoped id is what ComponentManager actually
+            // keys widgets by (from config.id in the bundle). Dash.js's
+            // `dash:place-widget-in-cell` does exact-match lookup, so we
+            // need THIS value — not the bare component name — when handing
+            // off to onInstalled for placement.
+            const registryId =
+                pkg.scope && packageName && widgetComponentName
+                    ? `${pkg.scope.replace(
+                          /^@/,
+                          ""
+                      )}.${packageName}.${widgetComponentName}`
+                    : pkg.name || widgetComponentName;
             setBrowsingPackage({
                 packageName,
                 scopedPackage,
+                componentName: widgetComponentName,
+                registryId,
                 displayName: pkg.displayName || packageName,
                 description: pkg.description || "",
                 downloadUrl: pkg.downloadUrl,
@@ -1165,12 +1186,9 @@ export const WidgetBuilderModal = ({
                 // can't gate on `pkg.installed` (it's undefined and would
                 // force every click into the registry-download fallback,
                 // which always returns the alphabetically-first widget).
-                const componentName = pkg.name?.includes(".")
-                    ? pkg.name.split(".").pop()
-                    : pkg.name;
                 const local = await window.mainApi?.widgets?.readSources(
                     scopedPackage,
-                    componentName
+                    widgetComponentName
                 );
                 if (isStale()) return;
                 if (local?.success && local.componentCode) {
@@ -1185,7 +1203,7 @@ export const WidgetBuilderModal = ({
                     // the right widget.
                     const source = await window.mainApi?.registry?.previewFetch(
                         packageName,
-                        componentName
+                        widgetComponentName
                     );
                     if (isStale()) return;
                     if (!source?.componentCode) {
@@ -1256,7 +1274,14 @@ export const WidgetBuilderModal = ({
             // AI search re-flattens with the accurate install state.
             refreshInstalledPackageIds();
             if (typeof onInstalled === "function") {
-                onInstalled(browsingPackage.packageName, scopedId);
+                // Pass the full dotted registry id (e.g.
+                // "trops.chat.ChatClaudeCodeWidget") as the first arg —
+                // that's the key ComponentManager registers under and
+                // LayoutBuilder looks up when placing into the cell.
+                onInstalled(
+                    browsingPackage.registryId || browsingPackage.packageName,
+                    scopedId
+                );
             }
         } catch (err) {
             setInstallStatus({
@@ -1295,7 +1320,12 @@ export const WidgetBuilderModal = ({
             : browsingPackage.packageName;
         setInstallStatus({ success: true, widgetName: scopedId });
         if (typeof onInstalled === "function") {
-            onInstalled(browsingPackage.packageName, scopedId);
+            // Full dotted registry id is required for the cell-placement
+            // handoff — see the comment in handleInstallRegistryPackage.
+            onInstalled(
+                browsingPackage.registryId || browsingPackage.packageName,
+                scopedId
+            );
         }
     }, [browsingPackage, onInstalled]);
 
