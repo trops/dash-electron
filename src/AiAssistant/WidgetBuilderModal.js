@@ -1351,30 +1351,160 @@ export const WidgetBuilderModal = ({
                                         </div>
                                     </div>
                                 )}
-                            {/* Empty state */}
+                            {/* Empty state: Discover cards grid OR
+                                "Describe your widget" prompt for Build mode. */}
                             {!previewComponent &&
                                 !previewError &&
                                 !isCompiling &&
-                                !editContext?.sourceError && (
-                                    <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                                        <div className="w-16 h-16 rounded-2xl bg-gray-800/80 border border-gray-700/30 flex items-center justify-center">
-                                            <FontAwesomeIcon
-                                                icon="wand-magic-sparkles"
-                                                className="h-7 w-7 text-indigo-400/40"
-                                            />
+                                !editContext?.sourceError &&
+                                (() => {
+                                    const hasDiscoverActivity =
+                                        discoverSearching ||
+                                        discoverResults.length > 0 ||
+                                        !!lastDiscoverQueryRef.current;
+                                    if (hasDiscoverActivity) {
+                                        return (
+                                            <div className="flex flex-col h-full">
+                                                <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-800/60">
+                                                    <div className="flex items-baseline gap-2 min-w-0">
+                                                        <span className="text-sm font-semibold text-gray-200">
+                                                            {discoverSearching
+                                                                ? "Searching registry..."
+                                                                : `${
+                                                                      discoverResults.length
+                                                                  } match${
+                                                                      discoverResults.length ===
+                                                                      1
+                                                                          ? ""
+                                                                          : "es"
+                                                                  }`}
+                                                        </span>
+                                                        {lastDiscoverQueryRef.current && (
+                                                            <span className="text-xs text-gray-500 truncate">
+                                                                for “
+                                                                {
+                                                                    lastDiscoverQueryRef.current
+                                                                }
+                                                                ”
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-[10px] uppercase tracking-wide text-gray-500 shrink-0">
+                                                        Click a widget to
+                                                        preview
+                                                    </span>
+                                                </div>
+                                                {!discoverSearching &&
+                                                    discoverResults.length ===
+                                                        0 && (
+                                                        <div className="flex-1 flex items-center justify-center text-center text-sm text-gray-500 px-6">
+                                                            No registry widgets
+                                                            matched “
+                                                            {
+                                                                lastDiscoverQueryRef.current
+                                                            }
+                                                            ”. Try different
+                                                            keywords, or switch
+                                                            to Build mode to
+                                                            generate one.
+                                                        </div>
+                                                    )}
+                                                {discoverResults.length > 0 && (
+                                                    <div className="flex-1 overflow-auto pt-3">
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                            {discoverResults.map(
+                                                                (pkg) => (
+                                                                    <button
+                                                                        key={`${
+                                                                            pkg.scope ||
+                                                                            ""
+                                                                        }/${
+                                                                            pkg.name
+                                                                        }`}
+                                                                        onClick={() =>
+                                                                            handleSelectRegistryPackage(
+                                                                                pkg
+                                                                            )
+                                                                        }
+                                                                        className="group text-left rounded-lg border border-gray-700/60 bg-gray-800/40 hover:bg-gray-800/80 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-950/50 p-4 transition-all cursor-pointer"
+                                                                    >
+                                                                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                                                                            <div className="font-semibold text-sm text-gray-200 truncate group-hover:text-indigo-200">
+                                                                                {pkg.displayName ||
+                                                                                    pkg.name}
+                                                                            </div>
+                                                                            {pkg.installed && (
+                                                                                <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide bg-green-900/40 text-green-300 border border-green-700/40">
+                                                                                    Installed
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="text-[11px] text-gray-500 truncate font-mono mb-2">
+                                                                            {pkg.scope
+                                                                                ? `@${pkg.scope.replace(
+                                                                                      /^@/,
+                                                                                      ""
+                                                                                  )}/${
+                                                                                      pkg.package ||
+                                                                                      pkg.name
+                                                                                  }`
+                                                                                : pkg.package ||
+                                                                                  pkg.name}
+                                                                        </div>
+                                                                        {pkg.description && (
+                                                                            <div
+                                                                                className="text-xs text-gray-400 overflow-hidden leading-relaxed"
+                                                                                style={{
+                                                                                    display:
+                                                                                        "-webkit-box",
+                                                                                    WebkitLineClamp: 3,
+                                                                                    WebkitBoxOrient:
+                                                                                        "vertical",
+                                                                                }}
+                                                                            >
+                                                                                {
+                                                                                    pkg.description
+                                                                                }
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="mt-3 text-[10px] uppercase tracking-wide text-indigo-400/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                            Click
+                                                                            to
+                                                                            preview
+                                                                            →
+                                                                        </div>
+                                                                    </button>
+                                                                )
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+                                            <div className="w-16 h-16 rounded-2xl bg-gray-800/80 border border-gray-700/30 flex items-center justify-center">
+                                                <FontAwesomeIcon
+                                                    icon="wand-magic-sparkles"
+                                                    className="h-7 w-7 text-indigo-400/40"
+                                                />
+                                            </div>
+                                            <div className="space-y-2 max-w-sm">
+                                                <p className="text-sm font-medium text-gray-300">
+                                                    {chatMode === "discover"
+                                                        ? "Search the registry"
+                                                        : "Describe your widget"}
+                                                </p>
+                                                <p className="text-xs text-gray-500">
+                                                    {chatMode === "discover"
+                                                        ? "Tell the AI what kind of widget you're looking for and registry matches will appear here."
+                                                        : "The AI will generate code and a live preview will appear here automatically."}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div className="space-y-2 max-w-sm">
-                                            <p className="text-sm font-medium text-gray-300">
-                                                Describe your widget
-                                            </p>
-                                            <p className="text-xs text-gray-500">
-                                                The AI will generate code and a
-                                                live preview will appear here
-                                                automatically.
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
+                                    );
+                                })()}
 
                             {/* Auth-gated preview: friendlier than a red error */}
                             {previewError &&
@@ -2030,87 +2160,6 @@ export const WidgetBuilderModal = ({
                                 : "AI will search the registry"}
                         </span>
                     </div>
-
-                    {/* Registry matches strip — shown whenever a search has
-                        happened, regardless of current mode, because the AI
-                        may hit search_widgets from either Build or Discover. */}
-                    {(discoverSearching ||
-                        discoverResults.length > 0 ||
-                        lastDiscoverQueryRef.current) && (
-                        <div className="px-3 pt-2 pb-1 shrink-0 border-b border-gray-800/60 max-h-56 overflow-auto">
-                            <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-gray-500 mb-1">
-                                <span className="truncate">
-                                    {discoverSearching
-                                        ? "Searching registry..."
-                                        : `Registry matches (${discoverResults.length})`}
-                                </span>
-                                {lastDiscoverQueryRef.current && (
-                                    <span className="normal-case text-gray-400 truncate">
-                                        “{lastDiscoverQueryRef.current}”
-                                    </span>
-                                )}
-                            </div>
-                            {!discoverSearching &&
-                                discoverResults.length === 0 && (
-                                    <div className="text-[11px] text-gray-500 py-2">
-                                        No registry widgets matched your last
-                                        query. Try different keywords or switch
-                                        to Build mode to generate one.
-                                    </div>
-                                )}
-                            {discoverResults.length > 0 && (
-                                <div className="flex flex-col gap-1.5">
-                                    {discoverResults.map((pkg) => (
-                                        <button
-                                            key={`${pkg.scope || ""}/${
-                                                pkg.name
-                                            }`}
-                                            onClick={() =>
-                                                handleSelectRegistryPackage(pkg)
-                                            }
-                                            className="text-left rounded border border-gray-700/50 bg-gray-800/30 hover:bg-gray-800/70 hover:border-indigo-500/40 px-2.5 py-1.5 transition-colors"
-                                        >
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="font-semibold text-xs text-gray-200 truncate">
-                                                    {pkg.displayName ||
-                                                        pkg.name}
-                                                </div>
-                                                {pkg.installed && (
-                                                    <span className="shrink-0 px-1 py-0.5 rounded text-[9px] uppercase tracking-wide bg-green-900/40 text-green-300 border border-green-700/40">
-                                                        Installed
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="text-[10px] text-gray-500 truncate font-mono">
-                                                {pkg.scope
-                                                    ? `@${pkg.scope.replace(
-                                                          /^@/,
-                                                          ""
-                                                      )}/${
-                                                          pkg.package ||
-                                                          pkg.name
-                                                      }`
-                                                    : pkg.package || pkg.name}
-                                            </div>
-                                            {pkg.description && (
-                                                <div
-                                                    className="text-[11px] text-gray-400 overflow-hidden mt-0.5"
-                                                    style={{
-                                                        display: "-webkit-box",
-                                                        WebkitLineClamp: 1,
-                                                        WebkitBoxOrient:
-                                                            "vertical",
-                                                    }}
-                                                >
-                                                    {pkg.description}
-                                                </div>
-                                            )}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
 
                     <ChatCore
                         title=""
