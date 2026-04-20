@@ -930,6 +930,22 @@ export const WidgetBuilderModal = ({
                         (c) => c.key === name || c.config?.name === name
                     );
 
+                // TEMP DIAGNOSTIC (v0.0.429): surface what we actually
+                // compiled vs. what we rendered when selecting cards.
+                console.log("[WidgetBuilder] compilePreview result", {
+                    extractedName: name,
+                    componentCodeFirst120:
+                        code.componentCode?.slice(0, 120) || "",
+                    bundleSourceBytes: result.bundleSource?.length,
+                    configKeys: configs.map((c) => c.key),
+                    configNames: configs.map((c) => c.config?.name),
+                    matchKey: match?.key,
+                    matchComponentName:
+                        match?.config?.component?.name ||
+                        match?.config?.component?.displayName ||
+                        "(anonymous)",
+                });
+
                 if (isStale()) return;
 
                 if (match && typeof match.config.component === "function") {
@@ -1008,6 +1024,18 @@ export const WidgetBuilderModal = ({
                         componentName
                     );
                     if (isStale()) return;
+                    // TEMP DIAGNOSTIC (v0.0.429)
+                    console.log("[WidgetBuilder] handleSelectRegistryPackage", {
+                        pkgName: pkg.name,
+                        pkgDisplayName: pkg.displayName,
+                        scopedPackage,
+                        componentNameSent: componentName,
+                        readSourcesSuccess: !!local?.success,
+                        readSourcesError: local?.error,
+                        readSourcesReturnedComponent: local?.componentName,
+                        componentCodeFirst120:
+                            local?.componentCode?.slice(0, 120) || "",
+                    });
                     if (local?.success && local.componentCode) {
                         componentCode = local.componentCode;
                         configCode = local.configCode;
