@@ -450,6 +450,11 @@ export const WidgetBuilderModal = ({
     // "Install from registry" instead of the AI-built install flow.
     const [browsingPackage, setBrowsingPackage] = useState(null);
     const [registryInstalling, setRegistryInstalling] = useState(false);
+    // Device-code sign-in flow for the registry. When the user clicks
+    // "Sign in to preview", we stash the flow here so we can display the
+    // user code + poll for completion.
+    const [signInFlow, setSignInFlow] = useState(null);
+    const signInPollRef = useRef(null);
 
     const settings = appContext?.settings || {};
     const providers = appContext?.providers || {};
@@ -939,11 +944,19 @@ export const WidgetBuilderModal = ({
     //  2. MCP search_widgets tool result — .name is a dotted scoped id
     //     (e.g. "trops.clock.Analog") and .package is the bare name
     // We normalize on .package (bare) when present, falling back to .name.
+    //
+    // If the widget is already installed locally, read the source from disk
+    // (mainApi.widgets.readSources) to avoid the registry's auth-gated
+    // download endpoint. Only un-installed widgets fall back to previewFetch.
     const handleSelectRegistryPackage = useCallback(
         async (pkg) => {
             const packageName = pkg.package || pkg.name;
+            const scopedPackage = pkg.scope
+                ? `@${pkg.scope.replace(/^@/, "")}/${packageName}`
+                : packageName;
             setBrowsingPackage({
                 packageName,
+                scopedPackage,
                 displayName: pkg.displayName || packageName,
                 description: pkg.description || "",
                 downloadUrl: pkg.downloadUrl,
@@ -957,32 +970,50 @@ export const WidgetBuilderModal = ({
             setInstallStatus(null);
             setIsCompiling(true);
             try {
-                const source = await window.mainApi?.registry?.previewFetch(
-                    packageName
-                );
-                if (!source?.componentCode) {
-                    throw new Error(
-                        "This package has no previewable component source."
+                let componentCode = null;
+                let configCode = null;
+                let resolvedDownloadUrl = null;
+
+                if (pkg.installed) {
+                    // Read local source — no registry auth needed
+                    const componentName = pkg.name?.includes(".")
+                        ? pkg.name.split(".").pop()
+                        : pkg.name;
+                    const local = await window.mainApi?.widgets?.readSources(
+                        scopedPackage,
+                        componentName
                     );
+                    if (local?.success && local.componentCode) {
+                        componentCode = local.componentCode;
+                        configCode = local.configCode;
+                    }
                 }
-                setDetectedCode({
-                    componentCode: source.componentCode,
-                    configCode: source.configCode,
-                });
-                // `previewFetch` returns the resolved downloadUrl; capture
-                // it so the Install button below can reinstall without a
-                // second registry lookup (MCP search results omit it).
-                if (source.downloadUrl) {
+
+                if (!componentCode) {
+                    // Fall back to the registry (auth required for private
+                    // packages, and currently also for public downloads).
+                    const source = await window.mainApi?.registry?.previewFetch(
+                        packageName
+                    );
+                    if (!source?.componentCode) {
+                        throw new Error(
+                            "This package has no previewable component source."
+                        );
+                    }
+                    componentCode = source.componentCode;
+                    configCode = source.configCode;
+                    resolvedDownloadUrl = source.downloadUrl;
+                }
+
+                setDetectedCode({ componentCode, configCode });
+                if (resolvedDownloadUrl) {
                     setBrowsingPackage((prev) =>
                         prev
-                            ? { ...prev, downloadUrl: source.downloadUrl }
+                            ? { ...prev, downloadUrl: resolvedDownloadUrl }
                             : prev
                     );
                 }
-                await compilePreview({
-                    componentCode: source.componentCode,
-                    configCode: source.configCode,
-                });
+                await compilePreview({ componentCode, configCode });
             } catch (err) {
                 setPreviewError(err?.message || "Failed to load preview");
                 setIsCompiling(false);
@@ -1039,6 +1070,77 @@ export const WidgetBuilderModal = ({
         setPreviewError(null);
         setInstallStatus(null);
         lastCompiledCode.current = null;
+    }, []);
+
+    // Kick off the registry device-code sign-in flow: open the browser
+    // to the verification URL and start polling for the resulting token.
+    // When polling succeeds, auto-retry the current registry preview.
+    const handleSignInForPreview = useCallback(async () => {
+        try {
+            const flow = await window.mainApi?.registryAuth?.initiateLogin();
+            if (!flow?.deviceCode) {
+                throw new Error(
+                    "Could not start sign-in flow. Please try again."
+                );
+            }
+            setSignInFlow(flow);
+            if (flow.verificationUrlComplete) {
+                window.mainApi?.shell?.openExternal?.(
+                    flow.verificationUrlComplete
+                );
+            }
+            if (signInPollRef.current) {
+                clearInterval(signInPollRef.current);
+            }
+            const intervalMs = (flow.interval || 5) * 1000;
+            signInPollRef.current = setInterval(async () => {
+                try {
+                    const res = await window.mainApi?.registryAuth?.pollToken(
+                        flow.deviceCode
+                    );
+                    if (res?.status === "authorized") {
+                        clearInterval(signInPollRef.current);
+                        signInPollRef.current = null;
+                        setSignInFlow(null);
+                        setPreviewError(null);
+                        // Auto-retry the current registry package
+                        if (browsingPackage) {
+                            const retry = {
+                                name: browsingPackage.packageName,
+                                package: browsingPackage.packageName,
+                                scope: browsingPackage.scope,
+                                displayName: browsingPackage.displayName,
+                                description: browsingPackage.description,
+                                downloadUrl: browsingPackage.downloadUrl,
+                                version: browsingPackage.version,
+                                installed: browsingPackage.installed,
+                            };
+                            handleSelectRegistryPackage(retry);
+                        }
+                    } else if (res?.status === "expired") {
+                        clearInterval(signInPollRef.current);
+                        signInPollRef.current = null;
+                        setSignInFlow(null);
+                        setPreviewError(
+                            "Sign-in code expired. Click Sign in to try again."
+                        );
+                    }
+                } catch {
+                    /* keep polling */
+                }
+            }, intervalMs);
+        } catch (err) {
+            setPreviewError(err?.message || "Could not start sign-in flow.");
+        }
+    }, [browsingPackage, handleSelectRegistryPackage]);
+
+    useEffect(() => {
+        return () => {
+            if (signInPollRef.current) {
+                clearInterval(signInPollRef.current);
+                signInPollRef.current = null;
+            }
+        };
     }, []);
 
     // Track in-progress edits (not yet saved/compiled)
@@ -1521,25 +1623,75 @@ export const WidgetBuilderModal = ({
                                                 Sign in to preview
                                             </div>
                                             <p className="text-xs text-amber-100/80 leading-relaxed">
-                                                This widget may be private, or
-                                                the registry requires sign-in to
-                                                download package sources. Sign
-                                                in with your Dash registry
-                                                account to preview it.
+                                                The registry requires sign-in to
+                                                download this package. Click
+                                                below to open the sign-in page
+                                                in your browser.
                                             </p>
-                                            <button
-                                                type="button"
-                                                onClick={async () => {
-                                                    try {
-                                                        await window.mainApi?.registryAuth?.initiateLogin();
-                                                    } catch {
-                                                        /* ignore */
+                                            {signInFlow ? (
+                                                <div className="space-y-2">
+                                                    <p className="text-xs text-amber-100/90">
+                                                        A browser tab should
+                                                        have opened. Verify the
+                                                        code there matches:
+                                                    </p>
+                                                    <div className="font-mono text-lg tracking-widest text-amber-200 bg-black/30 rounded px-3 py-2 text-center select-all">
+                                                        {signInFlow.userCode ||
+                                                            "—"}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-[11px] text-amber-200/70">
+                                                        <span className="inline-flex gap-0.5">
+                                                            <span
+                                                                className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-bounce"
+                                                                style={{
+                                                                    animationDelay:
+                                                                        "0ms",
+                                                                }}
+                                                            />
+                                                            <span
+                                                                className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-bounce"
+                                                                style={{
+                                                                    animationDelay:
+                                                                        "150ms",
+                                                                }}
+                                                            />
+                                                            <span
+                                                                className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-bounce"
+                                                                style={{
+                                                                    animationDelay:
+                                                                        "300ms",
+                                                                }}
+                                                            />
+                                                        </span>
+                                                        Waiting for sign-in…
+                                                        we'll retry
+                                                        automatically.
+                                                    </div>
+                                                    {signInFlow.verificationUrlComplete && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                window.mainApi?.shell?.openExternal?.(
+                                                                    signInFlow.verificationUrlComplete
+                                                                )
+                                                            }
+                                                            className="text-xs text-indigo-300 hover:text-indigo-200 underline"
+                                                        >
+                                                            Reopen sign-in page
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={
+                                                        handleSignInForPreview
                                                     }
-                                                }}
-                                                className="px-3 py-1.5 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
-                                            >
-                                                Sign in
-                                            </button>
+                                                    className="px-3 py-1.5 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+                                                >
+                                                    Sign in
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 )}
