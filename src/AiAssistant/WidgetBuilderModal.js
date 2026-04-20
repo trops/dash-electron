@@ -510,30 +510,32 @@ export const WidgetBuilderModal = ({
         }
     }, [chatMode]);
 
-    // Populate the Discover results strip from the AI's own search_widgets
-    // call. We watch ChatCore's persisted toolCalls[] for the latest
-    // search_widgets entry, grab its input.query (the AI's extracted
-    // keyword — e.g. "clock" for "find some clock widgets"), then re-run
-    // registry.search ourselves so cards render reliably across both the
-    // Anthropic API and Claude Code CLI backends. (CLI does not forward
-    // MCP tool results to the renderer, so we can't parse the result —
-    // but we now get the finalized input, which is enough to re-run.)
-    // Requires dash-core v0.1.389+ so CLI emits tool input after streaming.
+    // Populate the Discover results strip by watching ChatCore's persisted
+    // messages for the AI's own search_widgets tool call. Priority:
+    //  1. The AI's extracted input.query (best: "clock" vs "find some clock widgets")
+    //  2. The user's most recent message text (fallback when the tool
+    //     name doesn't match or tool_use is still streaming)
+    //
+    // The poll runs any time the modal is open — not gated by chatMode —
+    // so if the AI searches in Build mode the cards are still ready to
+    // show when the user flips to Discover, and users who chat freely
+    // see results sooner.
     useEffect(() => {
-        if (!isOpen || chatMode !== "discover") return;
+        if (!isOpen) return;
         const interval = setInterval(async () => {
             try {
                 const raw = localStorage.getItem("dash-widget-builder");
                 if (!raw) return;
                 const data = JSON.parse(raw);
                 const msgs = data?.messages || [];
-                let query = "";
-                // Claude Code CLI prefixes MCP tools as "mcp__<server>__<tool>",
-                // while the Anthropic API backend passes the bare tool name.
-                // Match both by checking the suffix.
+                // Claude Code CLI prefixes MCP tools as
+                // "mcp__<server>__<tool>"; the Anthropic API backend
+                // passes the bare name. Match anything that contains
+                // "search_widgets" as a defensive net.
                 const isSearchWidgets = (name) =>
                     typeof name === "string" &&
-                    /(^|_)search_widgets$/.test(name);
+                    name.toLowerCase().includes("search_widgets");
+                let query = "";
                 outer: for (let i = msgs.length - 1; i >= 0; i--) {
                     const m = msgs[i];
                     const calls = Array.isArray(m?.toolCalls)
@@ -548,6 +550,29 @@ export const WidgetBuilderModal = ({
                         if (q && String(q).trim()) {
                             query = String(q).trim();
                             break outer;
+                        }
+                    }
+                }
+                // Fallback: if no tool-call query found, use the latest
+                // user message as the search keyword. Imperfect (raw
+                // conversational text rarely substring-matches widget
+                // metadata) but strictly better than no cards at all.
+                if (!query) {
+                    for (let i = msgs.length - 1; i >= 0; i--) {
+                        const m = msgs[i];
+                        if (m?.role !== "user") continue;
+                        const t =
+                            typeof m.content === "string"
+                                ? m.content
+                                : Array.isArray(m.content)
+                                ? m.content
+                                      .filter((c) => c?.type === "text")
+                                      .map((c) => c.text)
+                                      .join(" ")
+                                : "";
+                        if (t && t.trim()) {
+                            query = t.trim();
+                            break;
                         }
                     }
                 }
@@ -609,7 +634,7 @@ export const WidgetBuilderModal = ({
             }
         }, 1200);
         return () => clearInterval(interval);
-    }, [isOpen, chatMode]);
+    }, [isOpen]);
 
     // End session + clear chat on unmount (modal close) so the next
     // open starts fresh. The open-side clear happens in Dash.js before
@@ -2006,90 +2031,86 @@ export const WidgetBuilderModal = ({
                         </span>
                     </div>
 
-                    {/* Discover results strip */}
-                    {chatMode === "discover" &&
-                        (discoverSearching ||
-                            discoverResults.length > 0 ||
-                            lastDiscoverQueryRef.current) && (
-                            <div className="px-3 pt-2 pb-1 shrink-0 border-b border-gray-800/60 max-h-56 overflow-auto">
-                                <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-gray-500 mb-1">
-                                    <span className="truncate">
-                                        {discoverSearching
-                                            ? "Searching registry..."
-                                            : `Registry matches (${discoverResults.length})`}
+                    {/* Registry matches strip — shown whenever a search has
+                        happened, regardless of current mode, because the AI
+                        may hit search_widgets from either Build or Discover. */}
+                    {(discoverSearching ||
+                        discoverResults.length > 0 ||
+                        lastDiscoverQueryRef.current) && (
+                        <div className="px-3 pt-2 pb-1 shrink-0 border-b border-gray-800/60 max-h-56 overflow-auto">
+                            <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-gray-500 mb-1">
+                                <span className="truncate">
+                                    {discoverSearching
+                                        ? "Searching registry..."
+                                        : `Registry matches (${discoverResults.length})`}
+                                </span>
+                                {lastDiscoverQueryRef.current && (
+                                    <span className="normal-case text-gray-400 truncate">
+                                        “{lastDiscoverQueryRef.current}”
                                     </span>
-                                    {lastDiscoverQueryRef.current && (
-                                        <span className="normal-case text-gray-400 truncate">
-                                            “{lastDiscoverQueryRef.current}”
-                                        </span>
-                                    )}
-                                </div>
-                                {!discoverSearching &&
-                                    discoverResults.length === 0 && (
-                                        <div className="text-[11px] text-gray-500 py-2">
-                                            No registry widgets matched your
-                                            last query. Try different keywords
-                                            or switch to Build mode to generate
-                                            one.
-                                        </div>
-                                    )}
-                                {discoverResults.length > 0 && (
-                                    <div className="flex flex-col gap-1.5">
-                                        {discoverResults.map((pkg) => (
-                                            <button
-                                                key={`${pkg.scope || ""}/${
-                                                    pkg.name
-                                                }`}
-                                                onClick={() =>
-                                                    handleSelectRegistryPackage(
-                                                        pkg
-                                                    )
-                                                }
-                                                className="text-left rounded border border-gray-700/50 bg-gray-800/30 hover:bg-gray-800/70 hover:border-indigo-500/40 px-2.5 py-1.5 transition-colors"
-                                            >
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div className="font-semibold text-xs text-gray-200 truncate">
-                                                        {pkg.displayName ||
-                                                            pkg.name}
-                                                    </div>
-                                                    {pkg.installed && (
-                                                        <span className="shrink-0 px-1 py-0.5 rounded text-[9px] uppercase tracking-wide bg-green-900/40 text-green-300 border border-green-700/40">
-                                                            Installed
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="text-[10px] text-gray-500 truncate font-mono">
-                                                    {pkg.scope
-                                                        ? `@${pkg.scope.replace(
-                                                              /^@/,
-                                                              ""
-                                                          )}/${
-                                                              pkg.package ||
-                                                              pkg.name
-                                                          }`
-                                                        : pkg.package ||
-                                                          pkg.name}
-                                                </div>
-                                                {pkg.description && (
-                                                    <div
-                                                        className="text-[11px] text-gray-400 overflow-hidden mt-0.5"
-                                                        style={{
-                                                            display:
-                                                                "-webkit-box",
-                                                            WebkitLineClamp: 1,
-                                                            WebkitBoxOrient:
-                                                                "vertical",
-                                                        }}
-                                                    >
-                                                        {pkg.description}
-                                                    </div>
-                                                )}
-                                            </button>
-                                        ))}
-                                    </div>
                                 )}
                             </div>
-                        )}
+                            {!discoverSearching &&
+                                discoverResults.length === 0 && (
+                                    <div className="text-[11px] text-gray-500 py-2">
+                                        No registry widgets matched your last
+                                        query. Try different keywords or switch
+                                        to Build mode to generate one.
+                                    </div>
+                                )}
+                            {discoverResults.length > 0 && (
+                                <div className="flex flex-col gap-1.5">
+                                    {discoverResults.map((pkg) => (
+                                        <button
+                                            key={`${pkg.scope || ""}/${
+                                                pkg.name
+                                            }`}
+                                            onClick={() =>
+                                                handleSelectRegistryPackage(pkg)
+                                            }
+                                            className="text-left rounded border border-gray-700/50 bg-gray-800/30 hover:bg-gray-800/70 hover:border-indigo-500/40 px-2.5 py-1.5 transition-colors"
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="font-semibold text-xs text-gray-200 truncate">
+                                                    {pkg.displayName ||
+                                                        pkg.name}
+                                                </div>
+                                                {pkg.installed && (
+                                                    <span className="shrink-0 px-1 py-0.5 rounded text-[9px] uppercase tracking-wide bg-green-900/40 text-green-300 border border-green-700/40">
+                                                        Installed
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="text-[10px] text-gray-500 truncate font-mono">
+                                                {pkg.scope
+                                                    ? `@${pkg.scope.replace(
+                                                          /^@/,
+                                                          ""
+                                                      )}/${
+                                                          pkg.package ||
+                                                          pkg.name
+                                                      }`
+                                                    : pkg.package || pkg.name}
+                                            </div>
+                                            {pkg.description && (
+                                                <div
+                                                    className="text-[11px] text-gray-400 overflow-hidden mt-0.5"
+                                                    style={{
+                                                        display: "-webkit-box",
+                                                        WebkitLineClamp: 1,
+                                                        WebkitBoxOrient:
+                                                            "vertical",
+                                                    }}
+                                                >
+                                                    {pkg.description}
+                                                </div>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <ChatCore
                         title=""
