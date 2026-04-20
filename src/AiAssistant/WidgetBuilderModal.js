@@ -818,60 +818,66 @@ export const WidgetBuilderModal = ({
         };
     }, []);
 
-    // Isolate widget-preview runtime errors so buggy user code (event
-    // handlers, async effects) can't crash the rest of the app. React's
-    // PreviewErrorBoundary catches RENDER errors only; event-handler and
-    // async errors bypass it. We catch them here and surface via
-    // previewError so the user sees the error inside the preview pane.
+    // Isolate widget-preview runtime errors so buggy user code (AI-
+    // generated or registry) can't crash the rest of the app. React's
+    // PreviewErrorBoundary catches RENDER errors only; event-handler
+    // and async errors bypass it, and in dev mode react-error-overlay
+    // will blanket the Electron window with its red full-screen UI if
+    // any such error reaches the window-level error handler.
+    //
+    // While the modal is open we trap EVERY unhandled error at the
+    // window level — filtering by stack is unreliable (callbacks from
+    // fetch, timers, MCP IPC all come in through different frames).
+    // This briefly suppresses errors from anywhere in the app, but
+    // the trade-off is worth it: the modal is ephemeral, and the cost
+    // of one missed app error is far lower than an AI widget
+    // whiting-out the entire Electron window with no recovery.
     useEffect(() => {
         if (!isOpen) return;
 
-        // Match errors that originated in the evaluated widget bundle.
-        // V8 stacks show "eval at evaluateBundle (...), <anonymous>:L:C"
-        // for errors inside the sandboxed bundle. We also treat errors
-        // whose filename is empty/"<anonymous>" as bundle-origin, since
-        // `new Function()` eval produces no filename.
-        const fromWidgetBundle = (err, event) => {
-            const stack = err?.stack || "";
-            if (stack.includes("evaluateBundle")) return true;
-            if (stack.includes("<anonymous>")) return true;
-            const filename = event?.filename;
-            if (!filename || filename === "<anonymous>") return true;
-            return false;
+        const handleCapture = (message) => {
+            console.warn("[WidgetBuilderModal] suppressed error:", message);
+            setPreviewError(message || "Widget runtime error");
+            setPreviewComponent(null);
         };
 
         const errorHandler = (event) => {
-            if (!fromWidgetBundle(event.error, event)) return;
-            console.warn(
-                "[WidgetBuilderModal] caught widget bundle error:",
-                event.error?.message || event.message
-            );
+            const msg =
+                event.error?.message || event.message || "Widget runtime error";
             event.preventDefault();
             event.stopImmediatePropagation();
-            setPreviewError(
-                event.error?.message || event.message || "Widget runtime error"
-            );
-            setPreviewComponent(null);
+            handleCapture(msg);
         };
 
         const rejectionHandler = (event) => {
-            if (!fromWidgetBundle(event.reason, event)) return;
-            console.warn(
-                "[WidgetBuilderModal] caught widget bundle rejection:",
-                event.reason?.message || String(event.reason)
-            );
+            const msg =
+                event.reason?.message ||
+                String(event.reason || "Widget async error");
             event.preventDefault();
             event.stopImmediatePropagation();
-            setPreviewError(
-                event.reason?.message ||
-                    String(event.reason || "Widget async error")
-            );
-            setPreviewComponent(null);
+            handleCapture(msg);
         };
 
-        // Capture phase so we run BEFORE index.html's bubble-phase
-        // logger and can stopImmediatePropagation to silence its
-        // "Global error:" noise for widget-originated errors.
+        // Silence the classic window.onerror hook too — react-error-overlay
+        // uses addEventListener, but some polyfills / logging layers still
+        // hit the old hook. Returning true tells the browser the error was
+        // handled and should not be reported further.
+        const prevOnError = window.onerror;
+        const prevOnRejection = window.onunhandledrejection;
+        window.onerror = (message, _src, _ln, _col, error) => {
+            handleCapture(error?.message || message || "Widget runtime error");
+            return true;
+        };
+        window.onunhandledrejection = (event) => {
+            handleCapture(
+                event?.reason?.message || String(event?.reason || "async error")
+            );
+            return true;
+        };
+
+        // Capture phase so we run BEFORE react-error-overlay's listeners
+        // and can stopImmediatePropagation to keep its full-screen red
+        // overlay from taking over the window.
         window.addEventListener("error", errorHandler, true);
         window.addEventListener("unhandledrejection", rejectionHandler, true);
         return () => {
@@ -881,6 +887,8 @@ export const WidgetBuilderModal = ({
                 rejectionHandler,
                 true
             );
+            window.onerror = prevOnError;
+            window.onunhandledrejection = prevOnRejection;
         };
     }, [isOpen]);
 
