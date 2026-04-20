@@ -528,6 +528,12 @@ export const WidgetBuilderModal = ({
                 const data = JSON.parse(raw);
                 const msgs = data?.messages || [];
                 let query = "";
+                // Claude Code CLI prefixes MCP tools as "mcp__<server>__<tool>",
+                // while the Anthropic API backend passes the bare tool name.
+                // Match both by checking the suffix.
+                const isSearchWidgets = (name) =>
+                    typeof name === "string" &&
+                    /(^|_)search_widgets$/.test(name);
                 outer: for (let i = msgs.length - 1; i >= 0; i--) {
                     const m = msgs[i];
                     const calls = Array.isArray(m?.toolCalls)
@@ -535,7 +541,7 @@ export const WidgetBuilderModal = ({
                         : [];
                     for (let j = calls.length - 1; j >= 0; j--) {
                         const c = calls[j];
-                        if (c?.toolName !== "search_widgets") continue;
+                        if (!isSearchWidgets(c?.toolName)) continue;
                         const q =
                             c?.input?.query ??
                             (typeof c?.input === "string" ? c.input : "");
