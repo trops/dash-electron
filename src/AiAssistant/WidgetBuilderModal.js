@@ -930,22 +930,6 @@ export const WidgetBuilderModal = ({
                         (c) => c.key === name || c.config?.name === name
                     );
 
-                // TEMP DIAGNOSTIC (v0.0.429): surface what we actually
-                // compiled vs. what we rendered when selecting cards.
-                console.log("[WidgetBuilder] compilePreview result", {
-                    extractedName: name,
-                    componentCodeFirst120:
-                        code.componentCode?.slice(0, 120) || "",
-                    bundleSourceBytes: result.bundleSource?.length,
-                    configKeys: configs.map((c) => c.key),
-                    configNames: configs.map((c) => c.config?.name),
-                    matchKey: match?.key,
-                    matchComponentName:
-                        match?.config?.component?.name ||
-                        match?.config?.component?.displayName ||
-                        "(anonymous)",
-                });
-
                 if (isStale()) return;
 
                 if (match && typeof match.config.component === "function") {
@@ -1014,37 +998,32 @@ export const WidgetBuilderModal = ({
                 let configCode = null;
                 let resolvedDownloadUrl = null;
 
-                if (pkg.installed) {
-                    // Read local source — no registry auth needed
-                    const componentName = pkg.name?.includes(".")
-                        ? pkg.name.split(".").pop()
-                        : pkg.name;
-                    const local = await window.mainApi?.widgets?.readSources(
-                        scopedPackage,
-                        componentName
-                    );
-                    if (isStale()) return;
-                    // TEMP DIAGNOSTIC (v0.0.429)
-                    console.log("[WidgetBuilder] handleSelectRegistryPackage", {
-                        pkgName: pkg.name,
-                        pkgDisplayName: pkg.displayName,
-                        scopedPackage,
-                        componentNameSent: componentName,
-                        readSourcesSuccess: !!local?.success,
-                        readSourcesError: local?.error,
-                        readSourcesReturnedComponent: local?.componentName,
-                        componentCodeFirst120:
-                            local?.componentCode?.slice(0, 120) || "",
-                    });
-                    if (local?.success && local.componentCode) {
-                        componentCode = local.componentCode;
-                        configCode = local.configCode;
-                    }
+                // Always try the local installed copy first — it's the
+                // only path that can read a specific widget out of a
+                // multi-widget package by componentName. `mainApi.registry.search`
+                // doesn't tell us whether the package is installed, so we
+                // can't gate on `pkg.installed` (it's undefined and would
+                // force every click into the registry-download fallback,
+                // which always returns the alphabetically-first widget).
+                const componentName = pkg.name?.includes(".")
+                    ? pkg.name.split(".").pop()
+                    : pkg.name;
+                const local = await window.mainApi?.widgets?.readSources(
+                    scopedPackage,
+                    componentName
+                );
+                if (isStale()) return;
+                if (local?.success && local.componentCode) {
+                    componentCode = local.componentCode;
+                    configCode = local.configCode;
                 }
 
                 if (!componentCode) {
-                    // Fall back to the registry (auth required for private
-                    // packages, and currently also for public downloads).
+                    // Package isn't installed locally — fall back to the
+                    // registry download. NOTE: the current previewFetch
+                    // returns the alphabetically-first widget in the
+                    // package rather than the requested componentName;
+                    // that's tracked as a follow-up dash-core fix.
                     const source = await window.mainApi?.registry?.previewFetch(
                         packageName
                     );
