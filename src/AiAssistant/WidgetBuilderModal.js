@@ -429,6 +429,11 @@ export const WidgetBuilderModal = ({
     const [registryUsername, setRegistryUsername] = useState(null);
     const [registryChecked, setRegistryChecked] = useState(false);
     const lastCompiledCode = useRef(null);
+    // Monotonic request counter — bumped at the start of every compile
+    // request so in-flight IPCs know if they've been superseded. Used to
+    // ignore stale results when the user rapidly picks different widgets
+    // from the Discover grid.
+    const compileRequestIdRef = useRef(0);
     const [activeTab, setActiveTab] = useState("preview");
     const [activeFile, setActiveFile] = useState("component");
     const manualEditRef = useRef(false);
@@ -867,6 +872,13 @@ export const WidgetBuilderModal = ({
             const name = extractWidgetName(code.componentCode);
             if (!name || !code.componentCode) return;
 
+            // Bump the request counter. Any in-flight compile for an
+            // earlier widget will see that its id is stale and bail out
+            // before overwriting state. Fixes the A → Back → B race where
+            // A's slower compile could overwrite B's rendered preview.
+            const requestId = ++compileRequestIdRef.current;
+            const isStale = () => compileRequestIdRef.current !== requestId;
+
             setIsCompiling(true);
             setPreviewError(null);
             setPreviewComponent(null);
@@ -893,6 +905,8 @@ export const WidgetBuilderModal = ({
                         editContext?.originalPackage || null
                     );
 
+                if (isStale()) return;
+
                 if (!result?.success) {
                     setPreviewError(result?.error || "Compilation failed");
                     setPreviewComponent(null);
@@ -916,6 +930,8 @@ export const WidgetBuilderModal = ({
                         (c) => c.key === name || c.config?.name === name
                     );
 
+                if (isStale()) return;
+
                 if (match && typeof match.config.component === "function") {
                     // Let PreviewErrorBoundary catch runtime errors in React's context
                     setPreviewComponent(() => match.config.component);
@@ -927,10 +943,11 @@ export const WidgetBuilderModal = ({
                     setPreviewComponent(null);
                 }
             } catch (err) {
+                if (isStale()) return;
                 setPreviewError(err.message);
                 setPreviewComponent(null);
             } finally {
-                setIsCompiling(false);
+                if (!isStale()) setIsCompiling(false);
             }
         },
         [editContext?.originalPackage]
@@ -954,6 +971,13 @@ export const WidgetBuilderModal = ({
             const scopedPackage = pkg.scope
                 ? `@${pkg.scope.replace(/^@/, "")}/${packageName}`
                 : packageName;
+            // Bump the shared compile request counter up front so any
+            // in-flight readSources/previewFetch/compile from a
+            // previously-clicked card knows it's stale and bails out
+            // before overwriting state. Fixes the A → Back → B race.
+            const requestId = ++compileRequestIdRef.current;
+            const isStale = () => compileRequestIdRef.current !== requestId;
+
             setBrowsingPackage({
                 packageName,
                 scopedPackage,
@@ -983,6 +1007,7 @@ export const WidgetBuilderModal = ({
                         scopedPackage,
                         componentName
                     );
+                    if (isStale()) return;
                     if (local?.success && local.componentCode) {
                         componentCode = local.componentCode;
                         configCode = local.configCode;
@@ -995,6 +1020,7 @@ export const WidgetBuilderModal = ({
                     const source = await window.mainApi?.registry?.previewFetch(
                         packageName
                     );
+                    if (isStale()) return;
                     if (!source?.componentCode) {
                         throw new Error(
                             "This package has no previewable component source."
@@ -1005,6 +1031,7 @@ export const WidgetBuilderModal = ({
                     resolvedDownloadUrl = source.downloadUrl;
                 }
 
+                if (isStale()) return;
                 setDetectedCode({ componentCode, configCode });
                 if (resolvedDownloadUrl) {
                     setBrowsingPackage((prev) =>
@@ -1015,6 +1042,7 @@ export const WidgetBuilderModal = ({
                 }
                 await compilePreview({ componentCode, configCode });
             } catch (err) {
+                if (isStale()) return;
                 setPreviewError(err?.message || "Failed to load preview");
                 setIsCompiling(false);
             }
