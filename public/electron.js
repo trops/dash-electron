@@ -1328,7 +1328,8 @@ function createWindow() {
                 message.providerClass,
                 message.mcpConfig,
                 message.allowedTools,
-                message.wsConfig
+                message.wsConfig,
+                message.isDefaultForType
             )
         );
         logger.loggedHandle(PROVIDER_LIST, (e, message) =>
