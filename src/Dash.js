@@ -340,10 +340,7 @@ function registerBundleConfigs(
             // is true — we intentionally overwrite the in-memory component so
             // the dashboard picks up the newly-compiled bundle instead of the
             // stale one left over from before the edit.
-            if (
-                !replaceExisting &&
-                ComponentManager.componentMap()[key]
-            ) {
+            if (!replaceExisting && ComponentManager.componentMap()[key]) {
                 console.log(`[Dash.js] Skipping "${key}" — already registered`);
                 continue;
             }
@@ -876,7 +873,9 @@ class App extends React.Component {
                                                                 installed.scopedName,
                                                                 bundleResult.source,
                                                                 null,
-                                                                { replaceExisting: true }
+                                                                {
+                                                                    replaceExisting: true,
+                                                                }
                                                             );
                                                         }
                                                     } catch (regErr) {
