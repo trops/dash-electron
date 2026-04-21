@@ -38,6 +38,21 @@ jobs:
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN || secrets.GITHUB_TOKEN }}
 
+            # The macos-latest runner is arm64, so `npm ci` only installs the
+            # arm64 esbuild binary (via optional deps). `electron-forge make
+            # --arch=universal` then builds BOTH x64 and arm64 asars from the
+            # same node_modules, baking the arm64 binary into both. When
+            # @electron/universal stitches them together the x64 asar.unpacked
+            # ends up with @esbuild/darwin-arm64/bin/esbuild — running under
+            # Rosetta hits "this platform needs darwin-x64".
+            #
+            # Force-install both platform binaries so the universal stitcher
+            # has both archs present and places the right one in each asar.
+            - name: Install cross-arch esbuild binaries for universal build
+              run: |
+                  npm install --no-save --force \
+                    @esbuild/darwin-arm64 @esbuild/darwin-x64
+
             - name: Set app name
               run: |
                   APP_NAME=$(node -p "require('./package.json').productName || 'Dash'")
