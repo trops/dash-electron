@@ -321,7 +321,12 @@ async function loadInstalledWidgets() {
  *                             enrich configs that didn't supply their own
  *                             package/author fields.
  */
-function registerBundleConfigs(widgetName, source, regEntry = null) {
+function registerBundleConfigs(
+    widgetName,
+    source,
+    regEntry = null,
+    { replaceExisting = false } = {}
+) {
     try {
         const { configs } = loadWidgetBundle(source, widgetName);
         console.log(
@@ -329,8 +334,16 @@ function registerBundleConfigs(widgetName, source, regEntry = null) {
         );
 
         for (const { key, config } of configs) {
-            // Skip if already registered (built-in widgets take priority)
-            if (ComponentManager.componentMap()[key]) {
+            // On INITIAL load, skip already-registered keys so a user-installed
+            // widget package can't shadow a built-in widget. On post-install
+            // re-registration (AI builder edit/remix flow), `replaceExisting`
+            // is true — we intentionally overwrite the in-memory component so
+            // the dashboard picks up the newly-compiled bundle instead of the
+            // stale one left over from before the edit.
+            if (
+                !replaceExisting &&
+                ComponentManager.componentMap()[key]
+            ) {
                 console.log(`[Dash.js] Skipping "${key}" — already registered`);
                 continue;
             }
@@ -343,7 +356,10 @@ function registerBundleConfigs(widgetName, source, regEntry = null) {
             }
             ComponentManager.registerWidget(config, key);
             console.log(
-                `[Dash.js] Registered external widget: ${key} (${config.type})`
+                replaceExisting &&
+                    ComponentManager.componentMap()[key] !== undefined
+                    ? `[Dash.js] Re-registered external widget (post-install): ${key} (${config.type})`
+                    : `[Dash.js] Registered external widget: ${key} (${config.type})`
             );
         }
     } catch (error) {
@@ -677,12 +693,18 @@ class App extends React.Component {
 
         let bundleLoaded = false;
 
-        // Try loading CJS bundle first
+        // Try loading CJS bundle first. Pass replaceExisting=true so the
+        // re-evaluated bundle overwrites any component already in
+        // ComponentManager — otherwise editing an @ai-built widget and
+        // re-installing would leave the dashboard rendering the pre-edit
+        // component.
         if (window.mainApi && window.mainApi.widgets.readBundle) {
             const result = await window.mainApi.widgets.readBundle(widgetName);
             if (result.success) {
                 try {
-                    registerBundleConfigs(widgetName, result.source);
+                    registerBundleConfigs(widgetName, result.source, null, {
+                        replaceExisting: true,
+                    });
                     bundleLoaded = true;
                 } catch (err) {
                     console.warn(
@@ -707,9 +729,18 @@ class App extends React.Component {
                     widgetPackage,
                     config: cfg,
                 } of configs) {
-                    if (
+                    // Only skip when the already-registered component comes
+                    // from a DIFFERENT package. Same-package re-registrations
+                    // are a post-edit install and must overwrite so the
+                    // dashboard picks up the newly-compiled widget.
+                    const existing =
                         ComponentManager.componentMap()[componentName] ||
-                        (cfg?.id && ComponentManager.componentMap()[cfg.id])
+                        (cfg?.id && ComponentManager.componentMap()[cfg.id]);
+                    if (
+                        existing &&
+                        existing._sourcePackage &&
+                        existing._sourcePackage !== widgetPackage &&
+                        existing._sourcePackage !== widgetName
                     )
                         continue;
                     ComponentManager.registerWidget(
@@ -833,9 +864,19 @@ class App extends React.Component {
                                                         if (
                                                             bundleResult?.success
                                                         ) {
+                                                            // replaceExisting=true: we just
+                                                            // installed this widget (possibly
+                                                            // a post-edit update), so the
+                                                            // freshly-compiled bundle must
+                                                            // overwrite the stale component
+                                                            // that may already be in
+                                                            // ComponentManager from the
+                                                            // pre-edit state.
                                                             registerBundleConfigs(
                                                                 installed.scopedName,
-                                                                bundleResult.source
+                                                                bundleResult.source,
+                                                                null,
+                                                                { replaceExisting: true }
                                                             );
                                                         }
                                                     } catch (regErr) {
