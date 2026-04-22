@@ -773,17 +773,25 @@ class App extends React.Component {
             }
         }
 
+        // Legacy broadcast — kept for any listener that just wants a
+        // "something changed" ping without caring which widget.
         window.dispatchEvent(new Event("dash:widgets-updated"));
 
-        // Force dashboard to remount with updated widget components.
-        // Skip when widget builder is open — deferred to modal close.
-        // Also skip if the builder just closed (suppression window) to
-        // prevent a late IPC event from discarding unsaved layout edits.
+        // Specific per-widget event — WidgetRenderer listens for this
+        // and surgically re-mounts only instances whose `component`
+        // matches `widgetName`. No more global stageKey bump tearing
+        // down the app shell (sidebar, Settings modal, AI panel, etc.)
+        // on every widget install. Uninstall still uses the legacy
+        // event since every component map entry may be affected.
         if (
             !this.state.isWidgetBuilderOpen &&
             Date.now() > this._suppressStageKeyUntil
         ) {
-            this.setState((prev) => ({ stageKey: prev.stageKey + 1 }));
+            window.dispatchEvent(
+                new CustomEvent("dash:widget-installed", {
+                    detail: { widgetName },
+                })
+            );
         }
     };
 
