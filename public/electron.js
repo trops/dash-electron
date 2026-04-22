@@ -2123,9 +2123,14 @@ function createWindow() {
                     "utf8"
                 );
 
-                // Compile via widgetCompiler (from dash-core)
-                const dashCore = require("@trops/dash-core/electron");
-                await dashCore.widgetCompiler.compileWidget(buildDir);
+                // Compile via widgetCompiler (from dash-core).
+                // `dashCoreRegistry` was already required at the top of
+                // this handler; reuse it here instead of re-requiring /
+                // re-declaring `registry` (which would SyntaxError in
+                // the same scope).
+                const dashCoreCompiler =
+                    require("@trops/dash-core/electron").widgetCompiler;
+                await dashCoreCompiler.compileWidget(buildDir);
 
                 // Verify output
                 const outputPath = path.join(buildDir, "dist", "index.cjs.js");
@@ -2138,7 +2143,6 @@ function createWindow() {
 
                 // Install to @ai-built/ scope — clean up any stale install first
                 const scopedName = `@ai-built/${widgetName.toLowerCase()}`;
-                const registry = dashCore.widgetRegistry.getWidgetRegistry();
                 const installDir = path.join(
                     registry.getCachePath(),
                     "@ai-built",
