@@ -44,8 +44,12 @@ if [[ "$ACTION" == "link" ]]; then
     # Resolve to absolute path
     PKG_PATH="$(cd "$PKG_PATH" && pwd)"
 
-    echo "Building ${PKG} at ${PKG_PATH}..."
-    (cd "$PKG_PATH" && npm run build)
+    if [[ "${SKIP_BUILD:-0}" == "1" ]]; then
+        echo "Skipping build of ${PKG} (SKIP_BUILD=1). Expecting dist/ to be fresh."
+    else
+        echo "Building ${PKG} at ${PKG_PATH}..."
+        (cd "$PKG_PATH" && npm run build)
+    fi
 
     echo "Linking ${PKG} → ${PKG_PATH}"
     rm -rf "$PKG_DIR"
