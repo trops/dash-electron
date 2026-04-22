@@ -167,14 +167,20 @@ function PreviewContextWrapper({
             ...(editContext?.selectedProviders || {}),
             ...(previewProviderSelection || {}),
         };
+        // userPrefs from the dashboard widget instance — threaded in
+        // via Edit-with-AI so the preview renders with the same title,
+        // defaults, and configured state the user sees on the live
+        // dashboard instead of blank values.
         return {
             providers,
             selectedProviders,
+            userPrefs: editContext?.userPrefs || null,
             uuidString: "preview-widget",
         };
     }, [
         editContext?.configCode,
         editContext?.selectedProviders,
+        editContext?.userPrefs,
         previewProviderSelection,
     ]);
 
@@ -588,11 +594,30 @@ export const WidgetBuilderModal = ({
     // User's explicit provider selection for the preview, keyed by the
     // widget-declared provider type (e.g. { algolia: "My Algolia Account" }).
     // Passed through to PreviewContextWrapper so the widget sees a real
-    // provider and renders its live UX. Clears whenever the previewed
-    // widget changes so the user re-picks per widget.
+    // provider and renders its live UX. In Edit-with-AI mode this is
+    // pre-filled from the dashboard widget instance's selectedProviders
+    // so the dropdown reflects the live binding instead of showing
+    // blank — see the editContext-change effect below.
     const [previewProviderSelection, setPreviewProviderSelection] = useState(
         {}
     );
+    // Pre-fill the provider picker from the dashboard widget's existing
+    // bindings whenever a new Edit-with-AI context opens. Without this,
+    // the dropdown reads empty and the user can't tell which provider
+    // the live widget is currently wired to. Keyed by originalWidgetId
+    // (not selectedProviders) so switching between edited widgets
+    // resets correctly but the user's in-session dropdown changes
+    // don't get clobbered by this initializer.
+    React.useEffect(() => {
+        if (effectiveEditContext?.selectedProviders) {
+            setPreviewProviderSelection({
+                ...effectiveEditContext.selectedProviders,
+            });
+        } else {
+            setPreviewProviderSelection({});
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [effectiveEditContext?.originalWidgetId]);
     // Device-code sign-in flow for the registry. When the user clicks
     // "Sign in to preview", we stash the flow here so we can display the
     // user code + poll for completion.
@@ -2227,6 +2252,8 @@ export const WidgetBuilderModal = ({
                                                     >
                                                         <PreviewComponent
                                                             title={displayName}
+                                                            {...(effectiveEditContext?.userPrefs ||
+                                                                {})}
                                                         />
                                                     </React.Suspense>
                                                 </PreviewErrorBoundary>

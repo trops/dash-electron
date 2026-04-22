@@ -1986,11 +1986,70 @@ function createWindow() {
             );
 
             try {
+                // When remixing from an existing multi-file package
+                // (e.g. @ai-built/pipeline), the generated widget code
+                // likely imports local siblings like "./pipelineBootstrap".
+                // Copy the source package into the temp build dir first
+                // so those relative imports resolve during esbuild.
+                // Mirrors the preview-compile handler's strategy.
+                let sourcePackageCopied = false;
+                const remixedFromPackage = remixMeta?.remixedFrom?.package;
+                if (remixedFromPackage) {
+                    try {
+                        const dashCoreRegistry =
+                            require("@trops/dash-core/electron").widgetRegistry;
+                        const registry = dashCoreRegistry.getWidgetRegistry();
+                        const sourceWidget =
+                            registry.getWidget(remixedFromPackage);
+                        if (
+                            sourceWidget?.path &&
+                            fs.existsSync(sourceWidget.path)
+                        ) {
+                            fs.cpSync(sourceWidget.path, buildDir, {
+                                recursive: true,
+                            });
+                            // Purge stale dist so the compile produces a
+                            // fresh bundle from our overwritten sources.
+                            const staleDist = path.join(buildDir, "dist");
+                            if (fs.existsSync(staleDist)) {
+                                fs.rmSync(staleDist, {
+                                    recursive: true,
+                                    force: true,
+                                });
+                            }
+                            // Strip other widgets' .dash.js files so
+                            // compileWidget only emits the remixed one.
+                            // Keep sibling .js utilities (imports resolve).
+                            const wDir = path.join(buildDir, "widgets");
+                            if (fs.existsSync(wDir)) {
+                                for (const f of fs.readdirSync(wDir)) {
+                                    if (
+                                        f.endsWith(".dash.js") &&
+                                        f !== `${widgetName}.dash.js`
+                                    ) {
+                                        fs.unlinkSync(path.join(wDir, f));
+                                    }
+                                }
+                            }
+                            sourcePackageCopied = true;
+                            console.log(
+                                `[widget:ai-build] Copied source package ${remixedFromPackage} into build dir for remix`
+                            );
+                        }
+                    } catch (err) {
+                        console.warn(
+                            `[widget:ai-build] Could not copy source package ${remixedFromPackage}:`,
+                            err?.message || err
+                        );
+                    }
+                }
+
                 // Create temp directory structure
                 const widgetsDir = path.join(buildDir, "widgets");
                 fs.mkdirSync(widgetsDir, { recursive: true });
 
-                // Write component file
+                // Write component file (overwrites the original if we
+                // copied the source package above).
                 fs.writeFileSync(
                     path.join(widgetsDir, `${widgetName}.js`),
                     componentCode,
