@@ -473,10 +473,19 @@ function injectCategoryIntoConfigCode(configCode, category) {
             `category: "${category}"`
         );
     }
-    // Otherwise insert before the closing brace of `export default { ... }`
+    // Otherwise insert before the closing brace of `export default { … }`.
+    // Capture head / body / tail so we can strip any trailing comma the
+    // AI wrote on the last property (legal JS) before prepending our
+    // own separator. Without this, `userConfig: { … },\n}` would turn
+    // into `userConfig: { … },, category: "..."` and esbuild would
+    // choke with "Expected identifier but found ','".
     return configCode.replace(
-        /(export\s+default\s*\{[\s\S]*?)(\s*\}\s*;?\s*)$/,
-        `$1, category: "${category}"$2`
+        /(export\s+default\s*\{)([\s\S]*?)(\s*\}\s*;?\s*)$/,
+        (_match, head, body, tail) => {
+            const cleanedBody = body.replace(/,\s*$/, "");
+            const sep = cleanedBody.trim().length > 0 ? "," : "";
+            return `${head}${cleanedBody}${sep} category: "${category}"${tail}`;
+        }
     );
 }
 
