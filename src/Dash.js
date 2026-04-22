@@ -482,12 +482,52 @@ class App extends React.Component {
             // Resolve the package name. Priority:
             //   1. _sourcePackage from ComponentManager config
             //   2. Derive from scoped component ID (trops.algolia.Widget → @trops/algolia)
-            //   3. Fall back to @ai-built/<name>
+            //   3. Reverse lookup in the widget registry — find the
+            //      installed package whose componentNames or widgets
+            //      list includes widgetComponentName. Handles the
+            //      common case where a multi-widget package (e.g.
+            //      @ai-built/pipeline contains ProspectList) lost its
+            //      _sourcePackage tag during registration, and the old
+            //      guess "@ai-built/<componentname>" would miss.
+            //   4. Fall back to @ai-built/<name> (still useful for
+            //      single-widget AI-built packages where the package
+            //      name literally is the lowercased component name).
             let packageName = sourcePackage;
             if (!packageName && widgetComponentName?.includes(".")) {
                 const parts = widgetComponentName.split(".");
                 if (parts.length >= 3) {
                     packageName = `@${parts[0]}/${parts[1]}`;
+                }
+            }
+            if (!packageName && widgetComponentName) {
+                try {
+                    const installed =
+                        (await window.mainApi.widgets.list?.()) || [];
+                    const match = installed.find((pkg) => {
+                        if (!pkg) return false;
+                        if (
+                            Array.isArray(pkg.componentNames) &&
+                            pkg.componentNames.includes(widgetComponentName)
+                        )
+                            return true;
+                        if (
+                            Array.isArray(pkg.widgets) &&
+                            pkg.widgets.some(
+                                (w) => w && w.name === widgetComponentName
+                            )
+                        )
+                            return true;
+                        return false;
+                    });
+                    if (match) {
+                        packageName =
+                            match.packageId || match.name || packageName;
+                    }
+                } catch (err) {
+                    console.warn(
+                        "[Dash] Reverse package lookup failed:",
+                        err?.message || err
+                    );
                 }
             }
             if (!packageName) {

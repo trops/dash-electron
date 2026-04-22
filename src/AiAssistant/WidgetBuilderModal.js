@@ -1806,16 +1806,30 @@ export const WidgetBuilderModal = ({
                                         </div>
                                         <div className="space-y-2 max-w-md">
                                             <p className="text-sm font-medium text-gray-300">
-                                                Source code not available
+                                                Can't load widget source
                                             </p>
                                             <p className="text-xs text-gray-500">
                                                 {effectiveEditContext.originalComponentName
                                                     ? `"${effectiveEditContext.originalComponentName}" `
                                                     : "This widget "}
-                                                was published without source
-                                                files. Re-publish the widget
-                                                package to include source files
-                                                for remixing.
+                                                source couldn't be read. Try
+                                                re-publishing the widget package
+                                                with source files included, or
+                                                generate a fresh widget below.
+                                            </p>
+                                            {effectiveEditContext.originalPackage && (
+                                                <p className="text-[10px] text-gray-600 font-mono">
+                                                    package:{" "}
+                                                    {
+                                                        effectiveEditContext.originalPackage
+                                                    }
+                                                </p>
+                                            )}
+                                            <p className="text-[10px] text-gray-600 font-mono break-words">
+                                                reason:{" "}
+                                                {
+                                                    effectiveEditContext.sourceError
+                                                }
                                             </p>
                                             <p className="text-xs text-gray-600 mt-2">
                                                 You can still describe a new
