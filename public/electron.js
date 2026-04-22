@@ -1986,21 +1986,46 @@ function createWindow() {
             );
 
             try {
-                // When remixing from an existing multi-file package
-                // (e.g. @ai-built/pipeline), the generated widget code
-                // likely imports local siblings like "./pipelineBootstrap".
-                // Copy the source package into the temp build dir first
-                // so those relative imports resolve during esbuild.
-                // Mirrors the preview-compile handler's strategy.
-                let sourcePackageCopied = false;
-                const remixedFromPackage = remixMeta?.remixedFrom?.package;
-                if (remixedFromPackage) {
+                // When installing a widget whose source code imports
+                // local sibling files (e.g. `./pipelineBootstrap`),
+                // the temp build dir must include those siblings so
+                // esbuild can resolve them. Two cases need this:
+                //
+                //   1. REMIX — we're forking an existing multi-file
+                //      package into a new @ai-built scope. Source =
+                //      remixMeta.remixedFrom.package.
+                //   2. UPDATE — we're editing an already-installed
+                //      @ai-built widget in-place. The existing install
+                //      has the sibling files we need; without copying
+                //      them, the fresh temp dir has only the single
+                //      widget file and imports fail. Source =
+                //      @ai-built/<widgetName.toLowerCase()>, the same
+                //      package we're about to overwrite.
+                //
+                // Priority: remix source wins when both are set.
+                // Fresh net-new installs with no existing package and
+                // no remix get an empty temp dir, which is fine — the
+                // AI shouldn't be emitting local imports in that case.
+                const targetScopedName = `@ai-built/${widgetName.toLowerCase()}`;
+                let sourcePackageName = remixMeta?.remixedFrom?.package || null;
+                let sourcePackageReason = sourcePackageName ? "remix" : null;
+                const dashCoreRegistry =
+                    require("@trops/dash-core/electron").widgetRegistry;
+                const registry = dashCoreRegistry.getWidgetRegistry();
+                if (!sourcePackageName) {
+                    // Update-in-place: does a package with the same
+                    // scoped name already exist on disk?
+                    const existing = registry.getWidget(targetScopedName);
+                    if (existing?.path && fs.existsSync(existing.path)) {
+                        sourcePackageName = targetScopedName;
+                        sourcePackageReason = "update";
+                    }
+                }
+
+                if (sourcePackageName) {
                     try {
-                        const dashCoreRegistry =
-                            require("@trops/dash-core/electron").widgetRegistry;
-                        const registry = dashCoreRegistry.getWidgetRegistry();
                         const sourceWidget =
-                            registry.getWidget(remixedFromPackage);
+                            registry.getWidget(sourcePackageName);
                         if (
                             sourceWidget?.path &&
                             fs.existsSync(sourceWidget.path)
@@ -2018,7 +2043,7 @@ function createWindow() {
                                 });
                             }
                             // Strip other widgets' .dash.js files so
-                            // compileWidget only emits the remixed one.
+                            // compileWidget only emits the target one.
                             // Keep sibling .js utilities (imports resolve).
                             const wDir = path.join(buildDir, "widgets");
                             if (fs.existsSync(wDir)) {
@@ -2031,14 +2056,13 @@ function createWindow() {
                                     }
                                 }
                             }
-                            sourcePackageCopied = true;
                             console.log(
-                                `[widget:ai-build] Copied source package ${remixedFromPackage} into build dir for remix`
+                                `[widget:ai-build] Copied source package ${sourcePackageName} into build dir (${sourcePackageReason})`
                             );
                         }
                     } catch (err) {
                         console.warn(
-                            `[widget:ai-build] Could not copy source package ${remixedFromPackage}:`,
+                            `[widget:ai-build] Could not copy source package ${sourcePackageName}:`,
                             err?.message || err
                         );
                     }
