@@ -303,6 +303,43 @@ DO NOT use these raw HTML elements — use the dash-react equivalent:
 - <table> → use Table
 - Never use raw <div> with manual dark/light styling — dash-react components handle themes
 
+COMPONENT API REFERENCE — use the prop signatures below. These components accept their visible text as a named prop (title / text / message). Children are also accepted as a shorthand (e.g. <Button>Save</Button>), but the prop form is canonical and preferred:
+
+Buttons:
+- <Button title="Save" onClick={fn} disabled={bool} />
+- <ButtonIcon icon="check" text="Confirm" onClick={fn} />
+
+Text:
+- <Heading title="Page Title" /> (also Heading2, Heading3)
+- <SubHeading title="Section" /> (also SubHeading2, SubHeading3)
+- <Paragraph text="Body copy." /> (also Paragraph2, Paragraph3) — accepts children too
+
+Feedback:
+- <Tag text="Active" /> (also Tag2, Tag3)
+- <Alert title="Heads up" message="Details…" /> — accepts children as body content
+- <Toast title="Saved" message="All good" />
+- <AlertBanner title="Maintenance" message="…" variant="info" />
+- <ProgressBar value={0.6} />
+
+Forms (label prop, NOT children):
+- <InputText label="Email" value={s} onChange={fn} placeholder="…" />
+- <TextArea label="Notes" value={s} onChange={fn} />
+- <SelectInput label="Status" value={s} onChange={fn} options={[{label,value}]} />
+- <Checkbox label="Agree" checked={b} onChange={fn} />
+- <Switch label="Enabled" checked={b} onChange={fn} />
+- <Toggle text="On" enabled={b} setEnabled={fn} />
+- <Slider label="Volume" value={n} onChange={fn} min={0} max={100} />
+- <SearchInput label="Query" value={s} onChange={fn} />
+- <RadioGroup label="Size" value={s} onChange={fn} options={[{label,value}]} />
+
+Containers (render children naturally — use children for content):
+- <Panel>…</Panel>, <Card>…</Card>, <Modal isOpen={b} setIsOpen={fn}>…</Modal>
+- <Tabs>, <Accordion>, <MenuItem>, <Container>
+
+Icons: <FontAwesomeIcon icon="check" className="h-4 w-4" />
+
+RULE: never put text-only content on a Button/Tag/Heading/Toggle/ButtonIcon as both a prop AND children — pick one. Prop form is canonical.
+
 CRITICAL RULES — YOU ARE RUNNING INSIDE AN EMBEDDED UI, NOT AN INTERACTIVE TERMINAL:
 - Do NOT use ANY tools — no Skill, Read, Write, Edit, Bash, Glob, Grep, or any other tool
 - Do NOT invoke the dash-widget-builder skill or any other skill
