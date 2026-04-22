@@ -938,6 +938,33 @@ class App extends React.Component {
                                                         );
                                                     }
 
+                                                    // Notify the widget sidebar (and anyone
+                                                    // else listening) that the installed-widget
+                                                    // list changed. This is the event the
+                                                    // main-process `widget:installed` broadcast
+                                                    // would normally trigger — but the ai-build
+                                                    // handler suppresses that broadcast when
+                                                    // cellContext is set (to avoid remounting
+                                                    // the dashboard). We do it here instead so
+                                                    // the sidebar refreshes without tearing
+                                                    // down the app shell.
+                                                    window.dispatchEvent(
+                                                        new Event(
+                                                            "dash:widgets-updated"
+                                                        )
+                                                    );
+                                                    window.dispatchEvent(
+                                                        new CustomEvent(
+                                                            "dash:widget-installed",
+                                                            {
+                                                                detail: {
+                                                                    widgetName:
+                                                                        installed.scopedName,
+                                                                },
+                                                            }
+                                                        )
+                                                    );
+
                                                     if (
                                                         editCtx?.originalWidgetId &&
                                                         ctx?.gridItemId
