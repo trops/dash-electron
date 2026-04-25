@@ -17,9 +17,6 @@ import {
     makeScopedComponentId,
 } from "@trops/dash-core";
 
-// Local Widgets that integrate with Dash
-import * as myWidgets from "./Widgets";
-
 // Debug Console (standalone window)
 import { DebugConsole } from "./DebugConsole";
 
@@ -27,12 +24,19 @@ import { DebugConsole } from "./DebugConsole";
 import { AiAssistantPanel } from "./AiAssistant/AiAssistantPanel";
 import { WidgetBuilderModal } from "./AiAssistant/WidgetBuilderModal";
 
+// Local widgets that integrate with Dash. We discover every
+// `src/Widgets/<Package>/<Widget>.dash.js` via webpack's require.context
+// and register each under the canonical scoped id
+// `local.<package>.<Component>`. The folder name becomes the package
+// name; the filename's component prefix becomes the component name.
+// Adding a new widget = drop a new .dash.js in a folder under
+// src/Widgets/. No manual export wiring required.
+const localWidgetCtx = require.context("./Widgets", true, /\.dash\.js$/);
+
 // Inject dash-core module reference for the widget require shim.
 // This avoids the self-referential import in widgetBundleLoader.js that
 // breaks under webpack scope hoisting in production builds.
 setHostModules({ "@trops/dash-core": dashCore });
-
-console.log("[Dash.js] Imported widgets:", myWidgets);
 
 // the mainApi from electron bridge
 // you can overwrite this API with an abstraction for React
@@ -45,37 +49,53 @@ const appId = process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron";
 console.log("[Dash.js] mainApi available:", !!mainApi);
 console.log("[Dash.js] appId:", appId);
 
-// initialize the widgets,
-// NOTE: YOU MUST DO THIS ITERATION FOR ALL WIDGET LIBRARIES
-// THIS SATISFIES LOCAL ONLY
-try {
-    Object.keys(myWidgets).forEach((widgetKey) => {
-        const widget = myWidgets[widgetKey];
-        console.log(`[Dash.js] Processing widget: ${widgetKey}`, widget);
-
-        // Handle nested widget exports (namespace re-exports with multiple widgets)
-        if (widget && typeof widget === "object" && !widget.component) {
-            // This is a namespace with multiple widgets
-            Object.keys(widget).forEach((subKey) => {
-                const subWidget = widget[subKey];
-                if (subWidget && subWidget.component) {
-                    // Use widget name as fallback key (config.id takes priority
-                    // inside registerWidget, so this only matters if id is unset)
-                    const fallbackKey = subWidget.name || widgetKey;
-                    console.log(`[Dash.js] Registering ${widgetKey}.${subKey}`);
-                    ComponentManager.registerWidget(subWidget, fallbackKey);
-                }
-            });
-        } else if (widget && widget.component) {
-            // This is a direct widget export
-            console.log(`[Dash.js] Registering ${widgetKey}`);
-            ComponentManager.registerWidget(widget, widgetKey);
+// Register every local widget under `local.<package>.<Component>`.
+// Origin metadata (scope, packageName, id) is derived from the file's
+// path under `src/Widgets/` so a developer can drop a new widget in
+// without editing any registration code. The .dash.js may still set
+// `scope` / `packageName` / `id` explicitly — those win, since they
+// might point to e.g. a `local.shared.<Comp>` override.
+function registerLocalWidgets() {
+    localWidgetCtx.keys().forEach((modulePath) => {
+        // modulePath looks like `./<Package>/<Widget>.dash.js`. The
+        // first path segment is the package; the file basename minus
+        // `.dash.js` is the component name.
+        const match = modulePath.match(/^\.\/([^/]+)\/([^/]+)\.dash\.js$/);
+        if (!match) {
+            console.warn(
+                `[Dash.js] Skipping local widget at non-conforming path: ${modulePath}. Expected src/Widgets/<Package>/<Component>.dash.js.`
+            );
+            return;
         }
+        const [, folder, componentName] = match;
+        const mod = localWidgetCtx(modulePath);
+        const config = mod?.default || mod;
+        if (!config || !config.component) {
+            console.warn(
+                `[Dash.js] Skipping ${modulePath} — module did not export a widget config with a React component.`
+            );
+            return;
+        }
+        // Stamp local scope. Existing values in the .dash.js win (a
+        // widget can opt into a different package by setting these).
+        const scope = config.scope || "local";
+        const packageName = config.packageName || folder.toLowerCase();
+        const name = config.name || componentName;
+        const id =
+            config.id || makeScopedComponentId(`${scope}/${packageName}`, name);
+        ComponentManager.registerWidget(
+            { ...config, scope, packageName, name, id },
+            id
+        );
+        console.log(`[Dash.js] Registered ${id}`);
     });
+}
 
-    console.log("[Dash.js] Widget registration complete");
+try {
+    registerLocalWidgets();
+    console.log("[Dash.js] Local widget registration complete");
 } catch (error) {
-    console.error("[Dash.js] Error registering widgets:", error);
+    console.error("[Dash.js] Error registering local widgets:", error);
 }
 
 // Only set app ID if mainApi is available
