@@ -14,6 +14,7 @@ import {
     evaluateBundle,
     extractWidgetConfigs,
     setHostModules,
+    makeScopedComponentId,
 } from "@trops/dash-core";
 
 // Local Widgets that integrate with Dash
@@ -270,15 +271,23 @@ async function loadInstalledWidgets() {
                 // Register with lazy-loaded component, enriching with package
                 // metadata from the registry when the widget config didn't
                 // supply its own package/author (typical for ai-built widgets).
+                // Use a scoped registration id so this lazy entry can't
+                // collide with another package's same-named component.
                 const reg = regByName[widgetPackage] || {};
+                const lazyScopedId = makeScopedComponentId(
+                    widgetPackage,
+                    componentName
+                );
                 ComponentManager.registerWidget(
                     {
                         ...config,
+                        id: lazyScopedId || config.id,
                         component: createLazyWidget(
                             widgetPackage,
                             componentName
                         ),
                         _sourcePackage: widgetPackage,
+                        _bareName: componentName,
                         type: config.type || "widget",
                         canHaveChildren: config.canHaveChildren || false,
                         package:
@@ -296,7 +305,7 @@ async function loadInstalledWidgets() {
                             },
                         },
                     },
-                    componentName
+                    lazyScopedId || componentName
                 );
                 console.log(
                     `[Dash.js] Phase 2: Registered "${componentName}" with lazy loader`
@@ -334,24 +343,36 @@ function registerBundleConfigs(
         );
 
         for (const { key, config } of configs) {
-            // On INITIAL load, skip already-registered keys so a user-installed
-            // widget package can't shadow a built-in widget. On post-install
-            // re-registration (AI builder edit/remix flow), `replaceExisting`
-            // is true — we intentionally overwrite the in-memory component so
-            // the dashboard picks up the newly-compiled bundle instead of the
-            // stale one left over from before the edit.
-            if (!replaceExisting && ComponentManager.componentMap()[key]) {
-                console.log(`[Dash.js] Skipping "${key}" — already registered`);
+            // Canonical scoped registration id — `scope.package.Component`.
+            // Two packages shipping the same bare component name (e.g.
+            // both `@ai-built/prospectlistcolumn` and `@ai-built/pipeline`
+            // exporting `ProspectListColumn`) used to silently collide:
+            // the second registration was skipped and whichever loaded
+            // first won. With scoped ids both register cleanly under
+            // distinct keys; ComponentManager's bare-name fallback (with
+            // packageId hint) routes legacy lookups correctly.
+            const scopedId = makeScopedComponentId(widgetName, key);
+            const registrationKey = scopedId || key;
+
+            if (
+                !replaceExisting &&
+                ComponentManager.componentMap()[registrationKey]
+            ) {
+                console.log(
+                    `[Dash.js] Skipping "${registrationKey}" — already registered`
+                );
                 continue;
             }
 
+            config.id = scopedId || config.id;
             config._sourcePackage = widgetName;
+            config._bareName = key;
             if (regEntry) {
                 if (!config.package)
                     config.package = regEntry.displayName || regEntry.name;
                 if (!config.author) config.author = regEntry.author;
             }
-            ComponentManager.registerWidget(config, key);
+            ComponentManager.registerWidget(config, registrationKey);
             console.log(
                 replaceExisting &&
                     ComponentManager.componentMap()[key] !== undefined
