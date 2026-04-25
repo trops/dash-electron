@@ -774,93 +774,28 @@ class App extends React.Component {
     handleWidgetInstalled = async ({ widgetName, config }) => {
         console.log(`[App] Widget installed: ${widgetName}`, config);
 
-        let bundleLoaded = false;
-
-        // Try loading CJS bundle first. Pass replaceExisting=true so the
-        // re-evaluated bundle overwrites any component already in
-        // ComponentManager — otherwise editing an @ai-built widget and
-        // re-installing would leave the dashboard rendering the pre-edit
-        // component.
-        if (window.mainApi && window.mainApi.widgets.readBundle) {
-            const result = await window.mainApi.widgets.readBundle(widgetName);
-            if (result.success) {
-                try {
-                    registerBundleConfigs(widgetName, result.source, null, {
-                        replaceExisting: true,
-                    });
-                    bundleLoaded = true;
-                } catch (err) {
-                    console.warn(
-                        `[App] Bundle eval failed for ${widgetName}:`,
-                        err
-                    );
-                }
-            }
+        // Re-register every installed widget. The single-widget
+        // `readBundle(widgetName)` path was silently failing for fresh
+        // registry installs (the bundle file path resolution differs
+        // between read-one and read-all in main process), which is why
+        // a manual app reload was previously required to see newly
+        // installed widgets. `loadInstalledWidgets()` is the same code
+        // that runs on boot — guaranteed to register every widget on
+        // disk. Race-free, idempotent, and slightly cheaper than a
+        // window reload.
+        try {
+            await loadInstalledWidgets();
+        } catch (err) {
+            console.error(
+                `[App] Failed to refresh widget registry after install of ${widgetName}:`,
+                err
+            );
         }
 
-        // Fallback: register via config + ExternalWidget
-        if (
-            !bundleLoaded &&
-            window.mainApi &&
-            window.mainApi.widgets.getComponentConfigs
-        ) {
-            try {
-                const configs =
-                    await window.mainApi.widgets.getComponentConfigs();
-                for (const {
-                    componentName,
-                    widgetPackage,
-                    config: cfg,
-                } of configs) {
-                    // Only skip when the already-registered component comes
-                    // from a DIFFERENT package. Same-package re-registrations
-                    // are a post-edit install and must overwrite so the
-                    // dashboard picks up the newly-compiled widget.
-                    const existing =
-                        ComponentManager.componentMap()[componentName] ||
-                        (cfg?.id && ComponentManager.componentMap()[cfg.id]);
-                    if (
-                        existing &&
-                        existing._sourcePackage &&
-                        existing._sourcePackage !== widgetPackage &&
-                        existing._sourcePackage !== widgetName
-                    )
-                        continue;
-                    ComponentManager.registerWidget(
-                        {
-                            ...cfg,
-                            component: createLazyWidget(
-                                widgetPackage,
-                                componentName
-                            ),
-                            _sourcePackage: widgetPackage,
-                            type: cfg.type || "widget",
-                            canHaveChildren: cfg.canHaveChildren || false,
-                            userConfig: cfg.userConfig || {
-                                title: {
-                                    type: "text",
-                                    defaultValue: componentName,
-                                    displayName: "Title",
-                                    required: false,
-                                },
-                            },
-                        },
-                        componentName
-                    );
-                    console.log(
-                        `[App] Registered "${componentName}" via lazy loader`
-                    );
-                }
-            } catch (error) {
-                console.error(
-                    `[App] Config fallback failed for ${widgetName}:`,
-                    error
-                );
-            }
-        }
-
-        // Legacy broadcast — kept for any listener that just wants a
-        // "something changed" ping without caring which widget.
+        // Notify every list-rendering surface that the registry just
+        // mutated. `useWidgetRegistryVersion` listens for this event
+        // and re-derives — sidebar, Settings → Widgets, dropdowns,
+        // dependencies tab, etc.
         window.dispatchEvent(new Event("dash:widgets-updated"));
 
         // Specific per-widget event — WidgetRenderer listens for this
