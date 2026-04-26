@@ -490,6 +490,60 @@ function injectCategoryIntoConfigCode(configCode, category) {
     );
 }
 
+/**
+ * Dedup duplicate provider-type entries in a `providers: [...]` array
+ * inside an `export default { ... }` config literal. AI code-gen
+ * occasionally produces `providers: [{type: "x"}, {type: "x"}]` — left
+ * unchecked, the duplicates ship to the registry verbatim and double
+ * up the rows in the Dashboard Config → Providers tab on every
+ * downstream install. We dedup at AI-build write time so the .dash.js
+ * file written to disk (and ultimately zipped on publish) is already
+ * clean. The runtime dedup in dash-core/providerResolution.js stays
+ * as defense-in-depth for older / hand-edited configs.
+ *
+ * Regex-based and intentionally conservative: only matches a single-
+ * level array-of-object-literals form. Anything more exotic (computed
+ * keys, spread, nested arrays) falls through unchanged and the
+ * runtime dedup picks up the slack.
+ */
+function dedupProvidersInConfigCode(configCode) {
+    if (!configCode) return configCode;
+    return configCode.replace(
+        /(providers\s*:\s*\[)([^[\]]*?)(\])/,
+        (match, head, body, tail) => {
+            // Split into individual `{...}` chunks. The split keeps the
+            // braces — we just need to walk in order and drop dupes.
+            const chunks = body
+                .split(/(\{[^{}]*\})/)
+                .filter((s) => s && /\S/.test(s));
+            const seenTypes = new Set();
+            const kept = [];
+            let dropped = 0;
+            for (const chunk of chunks) {
+                if (!chunk.startsWith("{")) {
+                    // Punctuation between objects (commas, whitespace).
+                    // Suppress now and we'll re-emit our own separators.
+                    continue;
+                }
+                const typeMatch = chunk.match(/type\s*:\s*["']([^"']+)["']/);
+                if (!typeMatch) {
+                    kept.push(chunk.trim());
+                    continue;
+                }
+                const t = typeMatch[1];
+                if (seenTypes.has(t)) {
+                    dropped++;
+                    continue;
+                }
+                seenTypes.add(t);
+                kept.push(chunk.trim());
+            }
+            if (dropped === 0) return match;
+            return `${head}${kept.join(", ")}${tail}`;
+        }
+    );
+}
+
 /** Try to extract an existing category from a configCode string. */
 function extractCategoryFromConfigCode(configCode) {
     if (!configCode) return null;
@@ -1726,6 +1780,7 @@ export const WidgetBuilderModal = ({
                     detectedCode.configCode,
                     selectedCategory
                 );
+                finalConfigCode = dedupProvidersInConfigCode(finalConfigCode);
                 // Update the component reference in config to match the rename
                 if (installName !== widgetName) {
                     finalConfigCode = finalConfigCode.replace(
