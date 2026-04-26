@@ -486,10 +486,25 @@ ${formatKnownExternalForPrompt(knownExternalCatalog)}
 
 ## When the user asks for a widget that needs external data
 
-Walk these steps in order. Stop at the first match:
+WALK THESE STEPS IN ORDER. STOP AT THE FIRST MATCH. This decision tree runs BEFORE you write any widget code:
 
-1. **Built-in catalog?** Service appears in "Available MCP providers (built-in)" above? → Use \`useMcpProvider(<id>)\`, declare in \`providers: [{ type, providerClass: "mcp", required: true }]\`. No SDK imports. Done.
-2. **Known external?** Service appears in "Other known MCP servers"? → Call the \`install_known_mcp_server\` tool with the matching \`id\` (e.g. \`install_known_mcp_server({ id: "trello" })\`). The user will see a confirmation modal showing the package, command, and credential fields. They confirm; the MCP gets added; you then continue generating the widget against the now-available MCP. If the user declines, stop and ask them what they want to do.
+1. **Built-in catalog?** Service appears in "Available MCP providers (built-in)" above? → Use \`useMcpProvider(<id>)\`, declare in \`providers: [{ type, providerClass: "mcp", required: true }]\`. No SDK imports. Generate the widget. Done.
+
+2. **Known external?** Service appears in "Other known MCP servers"? → BEFORE writing any code, call the \`install_known_mcp_server\` tool with the matching \`id\`. The user sees a confirmation modal pre-filled with the curated package + credential fields, confirms, and the MCP becomes available. ONLY AFTER the tool returns success do you generate the widget code. If the tool returns \`{ success: false, declined: true }\`, stop and ask the user what they want to do.
+
+   **Example interaction (literal):**
+
+   User: "Build me a Jira ticket viewer."
+
+   You match "Jira" to the \`atlassian\` entry in "Other known MCP servers" (the description says "Read Jira issues + Confluence pages"). Your FIRST action is the tool call:
+
+   > [calls \`install_known_mcp_server({ id: "atlassian" })\`]
+   > [tool returns \`{ success: true, name: "Atlassian (Jira + Confluence)", type: "atlassian" }\`]
+
+   Then — only then — you write the widget files declaring \`providers: [{ type: "atlassian", providerClass: "mcp", required: true }]\` and using \`useMcpProvider("atlassian")\`.
+
+   If you skip the tool call and jump straight to code, the user will install your widget but have no MCP server wired up, so the widget shows "provider not configured" and the user is stuck. ALWAYS call the tool first.
+
 3. **No MCP anywhere?** Tell the user no MCP server exists for this service in either list. Suggest they request adding one to the curated list (or contribute one upstream at github.com/modelcontextprotocol/servers). DO NOT generate widget code that imports an SDK or makes direct HTTP calls — this release is MCP-only.
 
 ## Critical rules
@@ -498,10 +513,10 @@ YOU ARE RUNNING INSIDE AN EMBEDDED UI, NOT AN INTERACTIVE TERMINAL:
 - Do NOT use Read, Write, Edit, Bash, Glob, or Grep tools — the app handles file creation and compilation automatically.
 - Do NOT invoke the dash-widget-builder skill or any other skill.
 - Do NOT read files, scan directories, or run shell commands.
-- The \`install_known_mcp_server\` tool is the ONLY tool you should call (and only when step 2 of the decision tree applies).
+- The \`install_known_mcp_server\` tool is the ONLY tool you should call, and only when step 2 of the decision tree applies. When step 2 applies, calling that tool BEFORE writing any widget code is required, not optional — the "respond immediately with code" rule below does NOT override the decision tree.
 - ONLY output text + code blocks (with optional \`File:\` markers) — that's how the app receives your widget.
 - ALWAYS output COMPLETE code blocks. Never partial diffs or snippets, even for small changes — re-emit the full file.
-- Respond immediately with the code — do not plan, research, or scaffold first.`;
+- Respond immediately with the code — do not plan, research, or scaffold first. EXCEPTION: if the decision tree directs you to call \`install_known_mcp_server\` first, do that first, then immediately output the code once the tool returns.`;
 }
 
 const DISCOVER_SYSTEM_PROMPT = `You are helping the user DISCOVER existing widgets in the Dash registry. Your only job this conversation is to search and describe registry matches. You MUST NOT generate widget code.
@@ -815,6 +830,31 @@ function dedupProvidersInConfigCode(configCode) {
     );
 }
 
+/**
+ * Pull the list of provider types declared in a `.dash.js` config text.
+ * Used by the Widget Builder to detect MCP types the freshly-generated
+ * widget will need at runtime, so we can render an "install missing
+ * provider" affordance even when the AI failed to call the
+ * install_known_mcp_server tool.
+ *
+ * Conservative regex parser — handles the common literal shape
+ * `providers: [{type:"x"}, {type:"y"}]`. Anything more exotic falls
+ * through and the banner just doesn't appear (better than false
+ * positives).
+ */
+function extractProviderTypesFromConfigCode(configCode) {
+    if (!configCode) return [];
+    const arrayMatch = configCode.match(/providers\s*:\s*\[([^[\]]*?)\]/);
+    if (!arrayMatch) return [];
+    const types = [];
+    const typeRe = /type\s*:\s*["']([^"']+)["']/g;
+    let m;
+    while ((m = typeRe.exec(arrayMatch[1])) !== null) {
+        types.push(m[1]);
+    }
+    return types;
+}
+
 /** Try to extract an existing category from a configCode string. */
 function extractCategoryFromConfigCode(configCode) {
     if (!configCode) return null;
@@ -1078,6 +1118,47 @@ export const WidgetBuilderModal = ({
             cancelled = true;
         };
     }, [isOpen]);
+
+    // Cross-reference the freshly-generated config's `providers: [...]`
+    // against the installed-providers map + the known-external catalog
+    // so we can render an "install missing provider" banner. This is the
+    // safety net for cases where the AI declared a provider in the
+    // config but didn't call the install_known_mcp_server tool — without
+    // this, the user has no path forward. Re-checks whenever the
+    // installed-providers map or the catalogs change (the modal also
+    // listens for `dash:provider-installed` to force a re-fetch of the
+    // installed list after the user installs via the banner button).
+    const installedProviderTypes = React.useMemo(() => {
+        const set = new Set();
+        for (const p of Object.values(providers || {})) {
+            if (p && typeof p === "object" && p.type) set.add(p.type);
+        }
+        return set;
+        // `providers` is freshly-derived from appContext on every render,
+        // so we depend on it as-is. The set value is identity-stable
+        // across renders that produce the same types, which is what
+        // matters for the downstream useMemo.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [JSON.stringify(Object.keys(providers || {}).sort())]);
+
+    const missingExternalProviders = React.useMemo(() => {
+        const types = extractProviderTypesFromConfigCode(
+            detectedCode.configCode
+        );
+        if (types.length === 0) return [];
+        const seen = new Set();
+        const out = [];
+        for (const type of types) {
+            if (seen.has(type)) continue;
+            seen.add(type);
+            if (installedProviderTypes.has(type)) continue;
+            const entry = (knownExternalCatalog || []).find(
+                (s) => s && s.id === type
+            );
+            if (entry) out.push(entry);
+        }
+        return out;
+    }, [detectedCode.configCode, installedProviderTypes, knownExternalCatalog]);
 
     const healthCheckIssues = healthCheck
         ? [
@@ -2287,6 +2368,48 @@ export const WidgetBuilderModal = ({
                             {issue.detail}
                         </div>
                     ))}
+                </div>
+            )}
+
+            {/* Missing-provider banner — appears when the freshly-generated
+                widget config declares an MCP `provider` that the user
+                hasn't installed yet AND the curated allow-list has an
+                entry for it. Lets the user install the provider in one
+                click without going back to Settings or relying on the AI
+                to call install_known_mcp_server. Disappears once the
+                provider is added (driven by the `providers` map from
+                AppContext). */}
+            {missingExternalProviders.length > 0 && (
+                <div className="flex flex-col gap-2 px-4 py-2 bg-indigo-900/20 border-b border-indigo-700/30 shrink-0">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-indigo-200">
+                        <FontAwesomeIcon icon="plug" className="h-3 w-3" />
+                        This widget needs{" "}
+                        {missingExternalProviders.length === 1
+                            ? "1 provider"
+                            : `${missingExternalProviders.length} providers`}{" "}
+                        you haven't installed yet.
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 pl-5">
+                        {missingExternalProviders.map((entry) => (
+                            <button
+                                key={entry.id}
+                                type="button"
+                                onClick={() =>
+                                    window.dispatchEvent(
+                                        new CustomEvent(
+                                            "dash:install-known-external",
+                                            {
+                                                detail: { id: entry.id },
+                                            }
+                                        )
+                                    )
+                                }
+                                className="text-xs px-2 py-1 rounded bg-indigo-700 hover:bg-indigo-600 text-white transition-colors"
+                            >
+                                Install {entry.name}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             )}
 
