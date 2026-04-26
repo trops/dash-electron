@@ -1559,7 +1559,8 @@ function createWindow() {
                 getSenderWindow(e),
                 message.appId,
                 message.packageName,
-                widgetRegistry.getWidgetRegistry()
+                widgetRegistry.getWidgetRegistry(),
+                message.options || {}
             )
         );
         logger.loggedHandle(DASHBOARD_CONFIG_COMPATIBILITY, (e, msg) =>
