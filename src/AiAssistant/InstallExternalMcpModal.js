@@ -30,30 +30,74 @@ export const InstallExternalMcpModal = () => {
     const [isInstalling, setIsInstalling] = useState(false);
     const [error, setError] = useState(null);
 
+    const openWith = (server, mode, requestId = null) => {
+        // Pre-fill empty values for each declared credential field.
+        const initial = {};
+        const schema = server.credentialSchema || {};
+        for (const key of Object.keys(schema)) {
+            initial[key] = "";
+        }
+        setRequest({ server, mode, requestId });
+        setCredentials(initial);
+        setError(null);
+        setIsInstalling(false);
+    };
+
     // Subscribe to confirm-install requests from the dash MCP tool.
+    // mode === "ai-tool": reply via sendInstallKnownExternalResult so
+    // the tool resolves on the AI side. The main process handles the
+    // actual provider save.
     useEffect(() => {
         if (!window.mainApi?.mcp?.onInstallKnownExternalConfirm) return;
         const cleanup = window.mainApi.mcp.onInstallKnownExternalConfirm(
             (payload) => {
                 if (!payload?.requestId || !payload?.server) return;
-                setRequest(payload);
-                // Pre-fill empty values for each declared credential field.
-                const initial = {};
-                const schema = payload.server.credentialSchema || {};
-                for (const key of Object.keys(schema)) {
-                    initial[key] = "";
-                }
-                setCredentials(initial);
-                setError(null);
-                setIsInstalling(false);
+                openWith(payload.server, "ai-tool", payload.requestId);
             }
         );
         return cleanup;
     }, []);
 
+    // UI-triggered fallback: anywhere in the renderer can dispatch
+    // `dash:install-known-external` with `{ id, appId? }` and this
+    // modal will look up the curated entry and show itself. Used by
+    // the Widget Builder banner when a freshly-generated widget
+    // references an MCP type that isn't installed yet — works even
+    // when the AI failed to call the install_known_mcp_server tool.
+    // mode === "ui": save the provider directly via the renderer
+    // mainApi instead of replying to the AI tool.
+    useEffect(() => {
+        async function handle(event) {
+            const id = event?.detail?.id;
+            if (!id) return;
+            try {
+                const result =
+                    await window.mainApi?.mcp?.getKnownExternalCatalog?.();
+                const server = (result?.servers || []).find(
+                    (s) => s && s.id === id
+                );
+                if (!server) {
+                    console.warn(
+                        `[InstallExternalMcpModal] No allow-list entry for id "${id}"`
+                    );
+                    return;
+                }
+                openWith(server, "ui");
+            } catch (err) {
+                console.warn(
+                    "[InstallExternalMcpModal] Failed to load catalog:",
+                    err
+                );
+            }
+        }
+        window.addEventListener("dash:install-known-external", handle);
+        return () =>
+            window.removeEventListener("dash:install-known-external", handle);
+    }, []);
+
     if (!request) return null;
 
-    const { server, requestId } = request;
+    const { server, requestId, mode } = request;
     const schema = server.credentialSchema || {};
     const credentialKeys = Object.keys(schema);
     const requiredKeys = credentialKeys.filter((k) => schema[k]?.required);
@@ -61,7 +105,7 @@ export const InstallExternalMcpModal = () => {
         (k) => !credentials[k] || !String(credentials[k]).trim()
     );
 
-    const reply = (result) => {
+    const replyToAiTool = (result) => {
         if (!window.mainApi?.mcp?.sendInstallKnownExternalResult) return;
         window.mainApi.mcp.sendInstallKnownExternalResult(requestId, result);
     };
@@ -77,15 +121,50 @@ export const InstallExternalMcpModal = () => {
             return;
         }
         setIsInstalling(true);
-        // The main-process tool routes through handleAddProvider after we
-        // reply. Close the modal optimistically; the AI's chat reply will
-        // surface any install error.
-        reply({ confirmed: true, credentials });
-        setRequest(null);
+
+        if (mode === "ai-tool") {
+            // Main-process dash MCP tool routes through handleAddProvider
+            // after we reply. Close optimistically; the AI's chat reply
+            // surfaces any install error.
+            replyToAiTool({ confirmed: true, credentials });
+            setRequest(null);
+            return;
+        }
+
+        // mode === "ui": no AI in the loop — save the provider
+        // directly via the renderer mainApi.
+        try {
+            const appId =
+                process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron";
+            const result = await window.mainApi?.providers?.saveProvider?.(
+                appId,
+                server.name,
+                server.id,
+                credentials,
+                "mcp",
+                server.mcpConfig
+            );
+            if (result && result.success === false) {
+                setError(result.error || "Could not save the provider.");
+                setIsInstalling(false);
+                return;
+            }
+            // Notify any listening UI (the Widget Builder banner re-checks
+            // installed providers on this event).
+            window.dispatchEvent(
+                new CustomEvent("dash:provider-installed", {
+                    detail: { id: server.id, name: server.name },
+                })
+            );
+            setRequest(null);
+        } catch (err) {
+            setError(err?.message || "Could not save the provider.");
+            setIsInstalling(false);
+        }
     };
 
     const handleCancel = () => {
-        reply({ confirmed: false });
+        if (mode === "ai-tool") replyToAiTool({ confirmed: false });
         setRequest(null);
     };
 
