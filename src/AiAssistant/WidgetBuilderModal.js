@@ -545,6 +545,12 @@ export const WidgetBuilderModal = ({
 
     const [previewComponent, setPreviewComponent] = useState(null);
     const [previewError, setPreviewError] = useState(null);
+    // Structured error metadata from the main process (e.g. an
+    // ESBUILD_SPAWN_FAILED with diagnostics). When present we render an
+    // expanded diagnostics block under the error message — this is what
+    // turns "spawn ENOENT" from a dead end into something the user (or
+    // we) can act on. Cleared whenever previewError is cleared.
+    const [previewErrorMeta, setPreviewErrorMeta] = useState(null);
     const [isCompiling, setIsCompiling] = useState(false);
     const [installStatus, setInstallStatus] = useState(null);
     const [detectedCode, setDetectedCode] = useState({
@@ -683,6 +689,77 @@ export const WidgetBuilderModal = ({
             lastDiscoverQueryRef.current = "";
         }
     }, [isOpen]);
+
+    // Probe Claude CLI / esbuild / @ai-built dir on every modal open so
+    // we can surface failures BEFORE the user tries to compile and hits
+    // a raw "spawn ENOENT" with no path forward. Result is rendered as a
+    // yellow banner at the top of the modal — only shown when something
+    // is actually wrong.
+    const [healthCheck, setHealthCheck] = useState(null);
+    useEffect(() => {
+        if (!isOpen) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const result =
+                    await window.mainApi?.aiAssistant?.healthCheck?.();
+                if (!cancelled) setHealthCheck(result || null);
+            } catch (err) {
+                if (!cancelled)
+                    setHealthCheck({
+                        cli: { ok: false, error: err.message },
+                        compiler: { ok: false, error: err.message },
+                        aiBuiltDir: { ok: false, error: err.message },
+                    });
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen]);
+
+    const healthCheckIssues = healthCheck
+        ? [
+              healthCheck.cli && healthCheck.cli.ok === false
+                  ? {
+                        label: "Claude CLI",
+                        detail:
+                            healthCheck.cli.error ||
+                            "Not found — chat will not work until installed",
+                    }
+                  : null,
+              healthCheck.compiler && healthCheck.compiler.ok === false
+                  ? {
+                        label: "Widget compiler",
+                        detail:
+                            (healthCheck.compiler.error ||
+                                "esbuild not available") +
+                            (healthCheck.compiler.diagnostics
+                                ? ` (arch ${
+                                      healthCheck.compiler.diagnostics.arch
+                                  }, native binary ${
+                                      healthCheck.compiler.diagnostics
+                                          .nativeBinaryExists
+                                          ? "present"
+                                          : "missing"
+                                  } at ${
+                                      healthCheck.compiler.diagnostics
+                                          .nativeBinaryPath || "<unresolved>"
+                                  })`
+                                : ""),
+                        diagnostics: healthCheck.compiler.diagnostics,
+                    }
+                  : null,
+              healthCheck.aiBuiltDir && healthCheck.aiBuiltDir.ok === false
+                  ? {
+                        label: "Widget output dir",
+                        detail: `${
+                            healthCheck.aiBuiltDir.error || "Not writable"
+                        } (${healthCheck.aiBuiltDir.path || "unknown path"})`,
+                    }
+                  : null,
+          ].filter(Boolean)
+        : [];
 
     // Fetch the set of installed package IDs whenever the modal opens so
     // Discover cards can show accurate "Installed ✓" badges. Refreshed
@@ -1147,6 +1224,14 @@ export const WidgetBuilderModal = ({
 
                 if (!result?.success) {
                     setPreviewError(result?.error || "Compilation failed");
+                    setPreviewErrorMeta(
+                        result?.code || result?.diagnostics
+                            ? {
+                                  code: result?.code || null,
+                                  diagnostics: result?.diagnostics || null,
+                              }
+                            : null
+                    );
                     setPreviewComponent(null);
                     setIsCompiling(false);
                     return;
@@ -1730,6 +1815,33 @@ export const WidgetBuilderModal = ({
                 </button>
             </div>
 
+            {/* Health-check banner — only renders when something is
+                actually broken. Kept above the split pane so it's
+                visible regardless of which tab the user is on. */}
+            {healthCheckIssues.length > 0 && (
+                <div className="flex flex-col gap-1 px-4 py-2 bg-amber-900/20 border-b border-amber-700/30 shrink-0">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-300">
+                        <FontAwesomeIcon
+                            icon="triangle-exclamation"
+                            className="h-3 w-3"
+                        />
+                        AI Assistant setup issue
+                        {healthCheckIssues.length > 1
+                            ? ` (${healthCheckIssues.length})`
+                            : ""}
+                    </div>
+                    {healthCheckIssues.map((issue, idx) => (
+                        <div
+                            key={idx}
+                            className="text-xs text-amber-200/80 pl-5"
+                        >
+                            <span className="font-medium">{issue.label}:</span>{" "}
+                            {issue.detail}
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {/* Split pane */}
             <div className={`flex flex-row flex-1 min-h-0 ${bgDark}`}>
                 {/* Left: Live Preview (2/3) */}
@@ -2158,11 +2270,48 @@ export const WidgetBuilderModal = ({
                                                     icon="exclamation-circle"
                                                     className="h-4 w-4"
                                                 />
-                                                Compilation Error
+                                                {previewErrorMeta?.code ===
+                                                "ESBUILD_SPAWN_FAILED"
+                                                    ? "Widget compiler unavailable"
+                                                    : "Compilation Error"}
                                             </div>
                                             <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto max-h-32">
                                                 {previewError}
                                             </pre>
+                                            {previewErrorMeta?.diagnostics && (
+                                                <details className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto">
+                                                    <summary className="cursor-pointer text-red-400 select-none">
+                                                        Diagnostics — share this
+                                                        if you report a bug
+                                                    </summary>
+                                                    <pre className="mt-2 whitespace-pre-wrap break-all">
+                                                        {JSON.stringify(
+                                                            previewErrorMeta.diagnostics,
+                                                            null,
+                                                            2
+                                                        )}
+                                                    </pre>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            try {
+                                                                navigator.clipboard.writeText(
+                                                                    `${previewError}\n\n${JSON.stringify(
+                                                                        previewErrorMeta.diagnostics,
+                                                                        null,
+                                                                        2
+                                                                    )}`
+                                                                );
+                                                            } catch {
+                                                                /* noop */
+                                                            }
+                                                        }}
+                                                        className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                                                    >
+                                                        Copy diagnostics
+                                                    </button>
+                                                </details>
+                                            )}
                                             <button
                                                 onClick={() => {
                                                     try {

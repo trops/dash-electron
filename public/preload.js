@@ -89,6 +89,14 @@ const extendedApi = {
                 componentName,
             }),
     },
+    aiAssistant: {
+        // Probes Claude CLI availability, esbuild native helper
+        // availability, and @ai-built/ directory writability. Returns
+        // a structured object with per-check ok/error/diagnostics so
+        // the UI can show a banner with the actual problem instead of
+        // letting the user hit an opaque ENOENT mid-compile.
+        healthCheck: () => ipcRenderer.invoke("ai-assistant:health-check"),
+    },
     debug: {
         open: () => ipcRenderer.invoke("debug-window-open"),
         close: () => ipcRenderer.invoke("debug-window-close"),
