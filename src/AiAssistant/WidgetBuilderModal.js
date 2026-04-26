@@ -30,6 +30,7 @@ import {
     WidgetContext,
     evaluateBundle,
     extractWidgetConfigs,
+    makeScopedComponentId,
 } from "@trops/dash-core";
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
 
@@ -1757,7 +1758,20 @@ export const WidgetBuilderModal = ({
                     widgetName: result.widgetName,
                 });
                 if (onInstalled) {
-                    onInstalled(installName, result.widgetName);
+                    // Pass the canonical scoped component id (e.g.
+                    // "ai-built.mywidget.MyWidget") — that's the key
+                    // ComponentManager registers under post-v0.1.432
+                    // and the cell-placement handler expects. Passing
+                    // the bare component name lands a layout item
+                    // whose `component:` field doesn't resolve via the
+                    // render-path lookups, so the new widget silently
+                    // doesn't appear on the dashboard. The registry-
+                    // install path was fixed for this in ca166ff; the
+                    // AI-build path was missed.
+                    const scopedRegistryId = result.widgetName
+                        ? makeScopedComponentId(result.widgetName, installName)
+                        : installName;
+                    onInstalled(scopedRegistryId, result.widgetName);
                 }
             } else {
                 setInstallStatus({
