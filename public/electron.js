@@ -1824,6 +1824,75 @@ function createWindow() {
             }
             return out;
         });
+        // --- AI Assistant: Health Check ---
+        // Probes whether the bits the AI Assistant + Widget Builder need
+        // are actually working: the Claude CLI (chat backend), esbuild's
+        // native helper (widget compiler), and writability of the
+        // @ai-built/ install dir. The renderer calls this on panel mount
+        // so it can show a yellow banner with concrete diagnostics
+        // BEFORE the user tries to compile and hits an opaque ENOENT.
+        logger.loggedHandle("ai-assistant:health-check", async () => {
+            const result = {
+                cli: { ok: null, error: null, binaryPath: null },
+                compiler: {
+                    ok: null,
+                    error: null,
+                    code: null,
+                    diagnostics: null,
+                },
+                aiBuiltDir: { ok: null, error: null, path: null },
+            };
+            try {
+                const dashCore = require("@trops/dash-core/electron");
+                // CLI probe
+                try {
+                    const status =
+                        await dashCore.cliController?.isAvailable?.();
+                    result.cli.ok = !!status?.available;
+                    result.cli.binaryPath = status?.binaryPath || null;
+                    if (!result.cli.ok)
+                        result.cli.error = "Claude CLI not found in PATH";
+                } catch (err) {
+                    result.cli.ok = false;
+                    result.cli.error = err.message;
+                }
+                // Compiler probe (esbuild)
+                try {
+                    const probe =
+                        await dashCore.widgetCompiler?.healthCheck?.();
+                    result.compiler.ok = !!probe?.ok;
+                    result.compiler.error = probe?.error || null;
+                    result.compiler.code = probe?.code || null;
+                    result.compiler.diagnostics = probe?.diagnostics || null;
+                } catch (err) {
+                    result.compiler.ok = false;
+                    result.compiler.error = err.message;
+                }
+                // @ai-built/ writability probe
+                try {
+                    const registry =
+                        dashCore.widgetRegistry?.getWidgetRegistry?.();
+                    const aiBuiltDir = require("path").join(
+                        registry.getCachePath(),
+                        "@ai-built"
+                    );
+                    result.aiBuiltDir.path = aiBuiltDir;
+                    const fs = require("fs");
+                    if (!fs.existsSync(aiBuiltDir)) {
+                        fs.mkdirSync(aiBuiltDir, { recursive: true });
+                    }
+                    fs.accessSync(aiBuiltDir, fs.constants.W_OK);
+                    result.aiBuiltDir.ok = true;
+                } catch (err) {
+                    result.aiBuiltDir.ok = false;
+                    result.aiBuiltDir.error = err.message;
+                }
+            } catch (err) {
+                console.error("[ai-assistant:health-check] failed:", err);
+            }
+            return result;
+        });
+
         // --- AI Widget Builder: Preview Compile ---
         // Compiles widget code and returns the bundle source for live preview.
         // Does NOT install — just compile and return.
@@ -1965,7 +2034,16 @@ function createWindow() {
                     widgetName,
                 };
             } catch (err) {
-                return { success: false, error: err.message };
+                // Preserve structured fields from WidgetCompileError so the
+                // renderer can show actionable diagnostics ("native helper
+                // not found at <path>, arch=<arch>") instead of a raw
+                // "spawn ENOENT".
+                return {
+                    success: false,
+                    error: err.message,
+                    code: err.code || null,
+                    diagnostics: err.diagnostics || null,
+                };
             }
         });
 

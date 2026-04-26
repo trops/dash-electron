@@ -48,10 +48,21 @@ jobs:
             #
             # Force-install both platform binaries so the universal stitcher
             # has both archs present and places the right one in each asar.
+            #
+            # IMPORTANT: pin the install to the exact esbuild version that
+            # `npm ci` already installed. Otherwise `npm install --force` (no
+            # version) pulls the latest from npm, which bumps the top-level
+            # `@esbuild/<arch>` to a newer protocol version than the
+            # `esbuild` JS lib in node_modules. The lib then spawns a binary
+            # with a mismatched `--service=<old>` and the user sees a vague
+            # ENOENT/protocol error in the widget builder preview.
             - name: Install cross-arch esbuild binaries for universal build
               run: |
+                  ESBUILD_VERSION=$(node -p "require('esbuild/package.json').version")
+                  echo "Pinning cross-arch esbuild binaries to $ESBUILD_VERSION"
                   npm install --no-save --force \
-                    @esbuild/darwin-arm64 @esbuild/darwin-x64
+                    "@esbuild/darwin-arm64@$ESBUILD_VERSION" \
+                    "@esbuild/darwin-x64@$ESBUILD_VERSION"
 
             - name: Set app name
               run: |
