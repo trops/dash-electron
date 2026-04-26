@@ -273,31 +273,117 @@ class PreviewErrorBoundary extends React.Component {
     }
 }
 
-const SYSTEM_PROMPT = `You are the Dash Widget Builder. When the user describes a widget, generate the code directly in your response as two code blocks:
+// ─── System prompt builder ──────────────────────────────────────────
+//
+// The widget-builder system prompt is assembled at modal-mount time so we
+// can splice in dynamic context — specifically the live MCP catalogs —
+// alongside the static rules. The static parts (component cheatsheet,
+// styling guardrails, multi-file protocol, MCP-first decision tree)
+// don't change between sessions, but they all live here as one builder
+// so the entire prompt is in one place when reading or auditing.
+//
+// Sections in order (static unless marked DYNAMIC):
+//   1. Output protocol (single- or multi-file via `File:` markers)
+//   2. Component-library cheatsheet (dash-react)
+//   3. Styling rules (Tailwind safelist guardrails)
+//   4. Provider integration pattern
+//   5. ## Available MCP providers (built-in) — DYNAMIC, from local catalog
+//   6. ## Other known MCP servers — DYNAMIC, from curated allow-list
+//   7. ## When the user asks for a widget that needs external data
+//      (the MCP-first decision tree)
+//   8. Critical rules (no tools, no skills, etc.)
 
+function formatBuiltInCatalogForPrompt(servers) {
+    if (!Array.isArray(servers) || servers.length === 0) {
+        return "(none configured — only build widgets that don't need external services until the user adds providers)";
+    }
+    return servers
+        .map((s) => {
+            const credKeys = Object.keys(s.credentialSchema || {});
+            const credNote =
+                credKeys.length > 0
+                    ? `requires: ${credKeys.join(", ")}`
+                    : "no credentials needed";
+            return `- ${s.id} — ${s.name}: ${
+                s.description || ""
+            } (${credNote})`;
+        })
+        .join("\n");
+}
+
+function formatKnownExternalForPrompt(servers) {
+    if (!Array.isArray(servers) || servers.length === 0) return "(none)";
+    return servers
+        .map((s) => `- ${s.id} — ${s.name}: ${s.description || ""}`)
+        .join("\n");
+}
+
+function buildSystemPrompt({
+    builtInCatalog = [],
+    knownExternalCatalog = [],
+} = {}) {
+    return `You are the Dash Widget Builder. When the user describes a widget, generate the code directly in your response.
+
+## Output protocol
+
+You can output either a single-file widget (component + config) or a multi-file package.
+
+SINGLE-FILE (default for most widgets):
 1. A \`\`\`jsx code block with the React component
 2. A \`\`\`javascript code block with the .dash.js config
 
-RULES:
-- Default export: export default function WidgetName(props) { ... }
-- Import React hooks from 'react': import React, { useState, useEffect } from 'react';
-- NEVER import useState, useEffect, or any React hooks from '@trops/dash-react' — they MUST come from 'react'
-- Wrap in <Panel>...</Panel>
-- Use Tailwind CSS for spacing, layout, and custom styling
-- Config MUST include: component (matching function name), name (display name with spaces), type: "widget", canHaveChildren: false, workspace: "ai-built"
-- Example config: export default { component: "CounterWidget", name: "Counter Widget", type: "widget", canHaveChildren: false, workspace: "ai-built", userConfig: { title: { type: "text", defaultValue: "Counter", displayName: "Title" } } }
+That's it — no \`File:\` markers needed. The app saves them as
+\`widgets/<Name>.js\` and \`widgets/<Name>.dash.js\`.
 
-THEME-AWARE COMPONENTS — MANDATORY:
-All widgets MUST use @trops/dash-react components instead of raw HTML elements. These components inherit the dashboard theme automatically. Raw HTML elements will look inconsistent with the rest of the application.
+MULTI-FILE (when the package needs shared utilities, multiple widgets, or supporting files):
+Prefix each fenced code block with a \`File: <relative-path>\` marker on its own line:
+
+File: widgets/PipelineKanban.js
+\`\`\`jsx
+... component code ...
+\`\`\`
+
+File: widgets/PipelineKanban.dash.js
+\`\`\`javascript
+... config ...
+\`\`\`
+
+File: widgets/pipelineConfigLoader.js
+\`\`\`javascript
+... shared utility imported by the component ...
+\`\`\`
+
+Allowed paths:
+- \`widgets/<Name>.js\` and \`widgets/<Name>.dash.js\` for each widget
+- \`widgets/<Name>.js\` shared utilities (or sub-folder \`widgets/utils/foo.js\`, \`widgets/automations/bar.js\`)
+- Package-root files: \`README.md\`, \`<package>.config.js\`, etc.
+- DO NOT write to \`dist/\`, \`node_modules/\`, \`.git/\`, or any hidden dotfile path
+- DO NOT use \`..\` segments or absolute paths
+
+For multi-widget packages, every widget needs BOTH a \`<Name>.js\` and matching \`<Name>.dash.js\`.
+
+## Widget config rules
+
+- Default export the component: \`export default function WidgetName(props) { ... }\`
+- Import React hooks from 'react': \`import React, { useState, useEffect } from 'react';\`
+- NEVER import useState, useEffect, or any React hooks from '@trops/dash-react' — they MUST come from 'react'
+- Wrap the component in \`<Panel>…</Panel>\` (it's the canonical widget chrome).
+- Config MUST include: \`component\` (matching function name), \`name\` (display name with spaces), \`type: "widget"\`, \`canHaveChildren: false\`, \`workspace: "ai-built"\`
+- Example config: \`export default { component: "CounterWidget", name: "Counter Widget", type: "widget", canHaveChildren: false, workspace: "ai-built", userConfig: { title: { type: "text", defaultValue: "Counter", displayName: "Title" } } }\`
+
+## Component library — @trops/dash-react
+
+All widgets MUST use @trops/dash-react components instead of raw HTML — they pick up the active theme automatically. Raw \`<div>\`/\`<h1>\`/\`<button>\` will look out of place.
 
 Import from '@trops/dash-react':
-- Layout: Panel (widget wrapper — REQUIRED), Card, DashPanel
+- Layout: Panel (widget wrapper — REQUIRED), Card, DashPanel, LayoutContainer, WidgetChrome
 - Text: Heading, SubHeading, Paragraph (and Heading2/3, SubHeading2/3, Paragraph2/3 variants)
 - Buttons: Button, ButtonIcon
-- Forms: InputText, TextArea, SelectInput, Toggle, Checkbox, SearchInput
-- Menus: Menu, MenuItem
-- Feedback: Alert, Tag, ProgressBar, EmptyState, Skeleton
+- Forms: InputText, TextArea, SelectInput, Toggle, Switch, Checkbox, RadioGroup, Slider, SearchInput
+- Menus: Menu, MenuItem, DropdownPanel
+- Feedback: Alert, AlertBanner, Toast, Tag, ProgressBar, EmptyState, Skeleton, ErrorMessage
 - Data: Table, Tabs, Accordion, DataList, StatCard
+- Composites: Stepper, Sidebar, FormField, ConfirmationModal, Tooltip
 - Icons: FontAwesomeIcon
 
 DO NOT use these raw HTML elements — use the dash-react equivalent:
@@ -310,25 +396,17 @@ DO NOT use these raw HTML elements — use the dash-react equivalent:
 - <table> → use Table
 - Never use raw <div> with manual dark/light styling — dash-react components handle themes
 
-COMPONENT API REFERENCE — use the prop signatures below. These components accept their visible text as a named prop (title / text / message). Children are also accepted as a shorthand (e.g. <Button>Save</Button>), but the prop form is canonical and preferred:
-
-Buttons:
+Component API (use prop signatures; children also accepted but prop form is canonical):
 - <Button title="Save" onClick={fn} disabled={bool} />
 - <ButtonIcon icon="check" text="Confirm" onClick={fn} />
-
-Text:
 - <Heading title="Page Title" /> (also Heading2, Heading3)
 - <SubHeading title="Section" /> (also SubHeading2, SubHeading3)
-- <Paragraph text="Body copy." /> (also Paragraph2, Paragraph3) — accepts children too
-
-Feedback:
-- <Tag text="Active" /> (also Tag2, Tag3)
-- <Alert title="Heads up" message="Details…" /> — accepts children as body content
+- <Paragraph text="Body copy." />
+- <Tag text="Active" />
+- <Alert title="Heads up" message="Details…" />
 - <Toast title="Saved" message="All good" />
 - <AlertBanner title="Maintenance" message="…" variant="info" />
 - <ProgressBar value={0.6} />
-
-Forms (label prop, NOT children):
 - <InputText label="Email" value={s} onChange={fn} placeholder="…" />
 - <TextArea label="Notes" value={s} onChange={fn} />
 - <SelectInput label="Status" value={s} onChange={fn} options={[{label,value}]} />
@@ -338,22 +416,93 @@ Forms (label prop, NOT children):
 - <Slider label="Volume" value={n} onChange={fn} min={0} max={100} />
 - <SearchInput label="Query" value={s} onChange={fn} />
 - <RadioGroup label="Size" value={s} onChange={fn} options={[{label,value}]} />
-
-Containers (render children naturally — use children for content):
 - <Panel>…</Panel>, <Card>…</Card>, <Modal isOpen={b} setIsOpen={fn}>…</Modal>
 - <Tabs>, <Accordion>, <MenuItem>, <Container>
-
-Icons: <FontAwesomeIcon icon="check" className="h-4 w-4" />
+- <FontAwesomeIcon icon="check" className="h-4 w-4" />
 
 RULE: never put text-only content on a Button/Tag/Heading/Toggle/ButtonIcon as both a prop AND children — pick one. Prop form is canonical.
 
-CRITICAL RULES — YOU ARE RUNNING INSIDE AN EMBEDDED UI, NOT AN INTERACTIVE TERMINAL:
-- Do NOT use ANY tools — no Skill, Read, Write, Edit, Bash, Glob, Grep, or any other tool
-- Do NOT invoke the dash-widget-builder skill or any other skill
-- Do NOT read files, scan directories, or run commands
-- ONLY output text and code blocks in your response — the app handles file creation and compilation automatically
-- ALWAYS output BOTH complete code blocks (jsx component + javascript config) in every response, even for small changes — never output partial diffs or snippets
-- Respond immediately with the code — do not plan, research, or scaffold first`;
+## Styling rules — TAILWIND SAFELIST IS NARROW
+
+The host app ships a PREBUILT Tailwind CSS bundle with a regex-based safelist. Classes outside that safelist will silently render as no-op (the class is in your code but no styles get applied). This is the #1 cause of generated widgets that "look broken" — please follow these rules:
+
+ALLOWED patterns:
+- \`bg/text/border-{color}-{shade}\` — colors must be one of: gray, slate, zinc, neutral, stone, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, rose. Shades: 50, 100, 200, …, 900, 950.
+- \`opacity-0\`, \`opacity-5\`, \`opacity-10\`, …, \`opacity-100\`
+- \`grid-cols-{1..12}\`, \`grid-rows-{1..6}\`
+- Gradients: \`from-{color}-{shade}\`, \`via-{color}-{shade}\`, \`to-{color}-{shade}\`
+- Hover variants on bg/text/border colors
+- Standard layout/spacing utilities (flex, grid, p-*, m-*, gap-*, w-*, h-*) at standard sizes (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48, 56, 64)
+- \`bg-black\`, \`bg-white\`, \`bg-transparent\`, \`text-black\`, \`text-white\`
+
+DO NOT USE (they will silently disappear):
+- Opacity modifiers on colors: \`bg-white/10\`, \`text-blue-500/50\`, \`border-gray-300/30\` — use a SOLID color or use inline \`style={{ opacity: 0.1 }}\`.
+- Arbitrary values: \`text-[10px]\`, \`w-[440px]\`, \`bg-[#abcdef]\`, \`p-[7px]\`. Use inline \`style={{ fontSize: "10px" }}\` or pick a standard utility.
+- \`ring-*\` color variants — use \`border\` instead.
+- \`divide-*\` color variants
+- \`outline-*\` color variants (other than \`outline-none\`)
+- Custom hex colors in any utility — go through \`style\`.
+
+Escape hatch: when you absolutely need a non-safelisted color, size, or opacity, use inline \`style={{ ... }}\` instead of fighting with Tailwind — the styles will apply correctly.
+
+## Provider integration pattern (MCP)
+
+Widgets that need external data (Slack, Notion, Drive, etc.) talk to MCP servers. The user wires credentials in Settings → Providers; widget code never asks for credentials directly.
+
+DECLARATION (in the .dash.js config):
+\`\`\`javascript
+providers: [{ type: "slack", providerClass: "mcp", required: true }]
+\`\`\`
+
+CONSUMPTION (in the component):
+\`\`\`jsx
+import { useMcpProvider } from "@trops/dash-core";
+
+export default function MyWidget() {
+  const { callTool, tools, isConnected, error } = useMcpProvider("slack");
+
+  // Call a tool
+  const channels = await callTool("slack_list_channels", {});
+
+  if (error) return <Panel><ErrorMessage message={error} /></Panel>;
+  if (!isConnected) return <Panel><Skeleton /></Panel>;
+  return <Panel>...</Panel>;
+}
+\`\`\`
+
+\`useMcpProvider(type)\` returns \`{ callTool, tools, resources, readResource, isConnected, isConnecting, error, provider, serverName }\`.
+
+## Available MCP providers (built-in)
+
+These are already in the user's local catalog — declare them in \`providers: [...]\` and use \`useMcpProvider("<id>")\`. No SDK imports.
+
+${formatBuiltInCatalogForPrompt(builtInCatalog)}
+
+## Other known MCP servers
+
+These exist in the official MCP servers repo but aren't pre-loaded in the user's local catalog. The user can add any of these via Settings → Providers → Add Custom MCP — OR you can call the \`install_known_mcp_server\` tool with the matching \`id\` to trigger a confirmation modal that installs it for them.
+
+${formatKnownExternalForPrompt(knownExternalCatalog)}
+
+## When the user asks for a widget that needs external data
+
+Walk these steps in order. Stop at the first match:
+
+1. **Built-in catalog?** Service appears in "Available MCP providers (built-in)" above? → Use \`useMcpProvider(<id>)\`, declare in \`providers: [{ type, providerClass: "mcp", required: true }]\`. No SDK imports. Done.
+2. **Known external?** Service appears in "Other known MCP servers"? → Call the \`install_known_mcp_server\` tool with the matching \`id\` (e.g. \`install_known_mcp_server({ id: "trello" })\`). The user will see a confirmation modal showing the package, command, and credential fields. They confirm; the MCP gets added; you then continue generating the widget against the now-available MCP. If the user declines, stop and ask them what they want to do.
+3. **No MCP anywhere?** Tell the user no MCP server exists for this service in either list. Suggest they request adding one to the curated list (or contribute one upstream at github.com/modelcontextprotocol/servers). DO NOT generate widget code that imports an SDK or makes direct HTTP calls — this release is MCP-only.
+
+## Critical rules
+
+YOU ARE RUNNING INSIDE AN EMBEDDED UI, NOT AN INTERACTIVE TERMINAL:
+- Do NOT use Read, Write, Edit, Bash, Glob, or Grep tools — the app handles file creation and compilation automatically.
+- Do NOT invoke the dash-widget-builder skill or any other skill.
+- Do NOT read files, scan directories, or run shell commands.
+- The \`install_known_mcp_server\` tool is the ONLY tool you should call (and only when step 2 of the decision tree applies).
+- ONLY output text + code blocks (with optional \`File:\` markers) — that's how the app receives your widget.
+- ALWAYS output COMPLETE code blocks. Never partial diffs or snippets, even for small changes — re-emit the full file.
+- Respond immediately with the code — do not plan, research, or scaffold first.`;
+}
 
 const DISCOVER_SYSTEM_PROMPT = `You are helping the user DISCOVER existing widgets in the Dash registry. Your only job this conversation is to search and describe registry matches. You MUST NOT generate widget code.
 
@@ -369,23 +518,55 @@ Hard rules:
 - Do NOT invoke the dash-widget-builder skill.
 - The only tool you should use is \`search_widgets\`.`;
 
+/**
+ * Walk the most-recent assistant messages backwards looking for code
+ * blocks. Returns BOTH the legacy `{ componentCode, configCode }` shape
+ * AND the new `{ files: [{ path, content }] }` shape so callers can pick
+ * whichever they need.
+ *
+ * Two response formats are supported, in priority order:
+ *
+ * 1. **Multi-file** — when blocks are preceded by `File: <relative-path>`
+ *    markers, every block is captured with its declared path. The first
+ *    matched assistant message that contains AT LEAST ONE `File:` marker
+ *    is taken whole (so a multi-widget package with N siblings parses
+ *    in one shot).
+ *
+ * 2. **Two-block legacy** — no `File:` markers, but at least 2 fenced
+ *    code blocks. First is treated as the component, second as the
+ *    config. Same heuristic as the old extractor — preserves
+ *    backwards-compat with single-file widget responses.
+ *
+ * 3. **Single-block fix-up** — a single block that looks like a
+ *    component (export default function / import React) or a config
+ *    (workspace:/canHaveChildren). Used during edit cycles where the
+ *    user only asks to change one half of the widget. Walks further
+ *    back through history to fill in the other half.
+ */
 function extractCodeBlocks(messages) {
+    // First pass: look for multi-file responses.
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
+        if (msg.role !== "assistant") continue;
+        const text = textOfMessage(msg);
+        if (!text) continue;
+
+        const fileBlocks = extractFileBlocks(text);
+        if (fileBlocks.length > 0) {
+            const { componentCode, configCode } =
+                derivePrimaryFromFileBlocks(fileBlocks);
+            return { componentCode, configCode, files: fileBlocks };
+        }
+    }
+
+    // Second pass: legacy two-block / single-block flow.
     let componentCode = null;
     let configCode = null;
 
     for (let i = messages.length - 1; i >= 0; i--) {
         const msg = messages[i];
         if (msg.role !== "assistant") continue;
-
-        const text =
-            typeof msg.content === "string"
-                ? msg.content
-                : Array.isArray(msg.content)
-                ? msg.content
-                      .filter((c) => c.type === "text")
-                      .map((c) => c.text)
-                      .join("\n")
-                : "";
+        const text = textOfMessage(msg);
         if (!text) continue;
 
         const blocks = [];
@@ -397,12 +578,10 @@ function extractCodeBlocks(messages) {
         }
 
         if (blocks.length >= 2 && !componentCode) {
-            // Full response with both component + config
             componentCode = blocks[0];
             configCode = blocks[1];
             break;
         } else if (blocks.length === 1) {
-            // Single block — likely a fix. Detect if it's component or config.
             const block = blocks[0];
             if (
                 !componentCode &&
@@ -421,6 +600,98 @@ function extractCodeBlocks(messages) {
 
         if (componentCode && configCode) break;
     }
+
+    // Synthesize a files[] payload from the legacy two-block result so
+    // downstream install code paths can take a uniform shape regardless
+    // of which format the AI returned.
+    const files = [];
+    if (componentCode || configCode) {
+        const widgetName = extractWidgetName(componentCode);
+        const safeName = widgetName || "Widget";
+        if (componentCode) {
+            files.push({
+                path: `widgets/${safeName}.js`,
+                content: componentCode,
+            });
+        }
+        if (configCode) {
+            files.push({
+                path: `widgets/${safeName}.dash.js`,
+                content: configCode,
+            });
+        }
+    }
+
+    return { componentCode, configCode, files };
+}
+
+function textOfMessage(msg) {
+    return typeof msg.content === "string"
+        ? msg.content
+        : Array.isArray(msg.content)
+        ? msg.content
+              .filter((c) => c.type === "text")
+              .map((c) => c.text)
+              .join("\n")
+        : "";
+}
+
+/**
+ * Parse `File: <path>\n```...```` markers out of a message body. Each
+ * fenced code block immediately preceded by a `File:` marker becomes one
+ * file entry. Blocks with no preceding marker are ignored here (the
+ * legacy two-block path catches those separately).
+ */
+function extractFileBlocks(text) {
+    if (!text) return [];
+    // Match: a `File: <path>` line, optional blank, then a fenced block.
+    // Allow common code-fence info strings (jsx/js/javascript/json/md/...).
+    const regex =
+        /(?:^|\n)\s*File:\s*([^\n`]+?)\s*\n+```[a-zA-Z0-9]*\s*\n([\s\S]*?)```/g;
+    const out = [];
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+        const path = match[1].trim();
+        const content = match[2];
+        if (path && content !== undefined) {
+            out.push({ path, content: content.replace(/\s+$/, "") });
+        }
+    }
+    return out;
+}
+
+/**
+ * Pick the "primary" widget out of a multi-file response so the legacy
+ * preview / install pipeline can keep showing one widget. Strategy:
+ *  - Find the first `widgets/<Name>.dash.js`. The matching
+ *    `widgets/<Name>.js` is the component.
+ *  - If there's no .dash.js at all, fall back to the first .js with
+ *    `export default function`.
+ */
+function derivePrimaryFromFileBlocks(files) {
+    let componentCode = null;
+    let configCode = null;
+
+    const dashFile = files.find((f) => f.path.endsWith(".dash.js"));
+    if (dashFile) {
+        configCode = dashFile.content;
+        const baseName = dashFile.path.replace(/\.dash\.js$/, "");
+        const componentFile = files.find(
+            (f) => f.path === `${baseName}.js` || f.path === `${baseName}.jsx`
+        );
+        if (componentFile) componentCode = componentFile.content;
+    }
+
+    if (!componentCode) {
+        const candidate = files.find(
+            (f) =>
+                /\.(js|jsx|tsx|ts)$/.test(f.path) &&
+                !f.path.endsWith(".dash.js") &&
+                /export\s+default\s+function/.test(f.content)
+        );
+        if (candidate) componentCode = candidate.content;
+    }
+
     return { componentCode, configCode };
 }
 
@@ -611,6 +882,12 @@ export const WidgetBuilderModal = ({
     const [detectedCode, setDetectedCode] = useState({
         componentCode: null,
         configCode: null,
+        // Multi-file payload (Phase 2). Includes the primary widget's
+        // component + config plus any sibling utility files Claude
+        // emitted with `File:` markers. Empty for legacy two-block
+        // responses; downstream code synthesizes a 2-entry files[]
+        // from componentCode + configCode in that case.
+        files: [],
     });
     // Required category for the install — user must pick before Install enables.
     // Pre-filled in remix mode if the original config already declares one.
@@ -766,6 +1043,35 @@ export const WidgetBuilderModal = ({
                         compiler: { ok: false, error: err.message },
                         aiBuiltDir: { ok: false, error: err.message },
                     });
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen]);
+
+    // Pull both MCP catalogs (built-in + known-external) so the system
+    // prompt can advertise them to Claude. Refetched on every open so a
+    // newly-added custom MCP shows up without restarting the modal.
+    const [builtInCatalog, setBuiltInCatalog] = useState([]);
+    const [knownExternalCatalog, setKnownExternalCatalog] = useState([]);
+    useEffect(() => {
+        if (!isOpen) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const [local, external] = await Promise.all([
+                    window.mainApi?.mcp?.getCatalog?.(),
+                    window.mainApi?.mcp?.getKnownExternalCatalog?.(),
+                ]);
+                if (cancelled) return;
+                setBuiltInCatalog(local?.catalog || []);
+                setKnownExternalCatalog(external?.servers || []);
+            } catch (err) {
+                console.warn(
+                    "[WidgetBuilderModal] MCP catalog fetch failed:",
+                    err
+                );
             }
         })();
         return () => {
@@ -1272,7 +1578,15 @@ export const WidgetBuilderModal = ({
                         // flow before editContext gets promoted).
                         sourcePackageOverride ||
                             effectiveEditContext?.originalPackage ||
-                            null
+                            null,
+                        // Multi-file payload (Phase 2): when the AI
+                        // emitted sibling utility files alongside the
+                        // primary widget, hand them to the main process
+                        // so esbuild sees the full package and can
+                        // resolve relative imports during preview.
+                        Array.isArray(code.files) && code.files.length > 0
+                            ? code.files
+                            : null
                     );
 
                 if (isStale()) return;
@@ -1798,6 +2112,70 @@ export const WidgetBuilderModal = ({
                 finalConfigCode = `export default { component: "${installName}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", category: "${selectedCategory}", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
             }
 
+            // Build the final multi-file payload. Start from the
+            // detected files[] (which may contain sibling utilities)
+            // and replace the primary widget's component + config with
+            // the post-processed strings (category injected, rename
+            // applied). For legacy two-block responses where files[]
+            // was synthesized from componentCode+configCode, this just
+            // overwrites the same two entries we already had.
+            const finalFiles = (() => {
+                const out = [];
+                const primaryComponentPath = `widgets/${installName}.js`;
+                const primaryConfigPath = `widgets/${installName}.dash.js`;
+                const detectedFiles = Array.isArray(detectedCode.files)
+                    ? detectedCode.files
+                    : [];
+                let wroteComponent = false;
+                let wroteConfig = false;
+
+                for (const f of detectedFiles) {
+                    if (!f?.path || f.content == null) continue;
+                    const isPrimaryConfig =
+                        f.path.endsWith(".dash.js") &&
+                        !wroteConfig &&
+                        // Match either the original or the renamed widget
+                        (f.path === primaryConfigPath ||
+                            f.path === `widgets/${widgetName}.dash.js`);
+                    const isPrimaryComponent =
+                        !isPrimaryConfig &&
+                        !f.path.endsWith(".dash.js") &&
+                        !wroteComponent &&
+                        (f.path === primaryComponentPath ||
+                            f.path === `widgets/${widgetName}.js` ||
+                            f.path === `widgets/${widgetName}.jsx`);
+                    if (isPrimaryConfig) {
+                        out.push({
+                            path: primaryConfigPath,
+                            content: finalConfigCode,
+                        });
+                        wroteConfig = true;
+                    } else if (isPrimaryComponent) {
+                        out.push({
+                            path: primaryComponentPath,
+                            content: installComponentCode,
+                        });
+                        wroteComponent = true;
+                    } else {
+                        out.push({ path: f.path, content: f.content });
+                    }
+                }
+
+                if (!wroteComponent) {
+                    out.push({
+                        path: primaryComponentPath,
+                        content: installComponentCode,
+                    });
+                }
+                if (!wroteConfig) {
+                    out.push({
+                        path: primaryConfigPath,
+                        content: finalConfigCode,
+                    });
+                }
+                return out;
+            })();
+
             const result = await window.mainApi?.widgetBuilder?.aiBuild(
                 installName,
                 installComponentCode,
@@ -1805,7 +2183,8 @@ export const WidgetBuilderModal = ({
                 `AI-generated widget: ${installName}`,
                 cellContext || null,
                 process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron",
-                remixMeta
+                remixMeta,
+                finalFiles
             );
             if (result?.success) {
                 setInstallStatus({
@@ -3029,17 +3408,23 @@ export const WidgetBuilderModal = ({
                     <ChatCore
                         title=""
                         model={model}
-                        systemPrompt={
-                            chatMode === "discover"
-                                ? DISCOVER_SYSTEM_PROMPT
-                                : effectiveEditContext?.componentCode
-                                ? `${SYSTEM_PROMPT}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
-                                      effectiveEditContext.componentCode
-                                  }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
-                                      effectiveEditContext.configCode || ""
-                                  }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`
-                                : `${SYSTEM_PROMPT}\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences inviting the user to describe the widget they want to build (what it should show, what data source it pulls from, what interactions it needs). No lists, no bullet points, no examples — keep it under 30 words total.`
-                        }
+                        systemPrompt={(() => {
+                            if (chatMode === "discover") {
+                                return DISCOVER_SYSTEM_PROMPT;
+                            }
+                            const base = buildSystemPrompt({
+                                builtInCatalog,
+                                knownExternalCatalog,
+                            });
+                            if (effectiveEditContext?.componentCode) {
+                                return `${base}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
+                                    effectiveEditContext.componentCode
+                                }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
+                                    effectiveEditContext.configCode || ""
+                                }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
+                            }
+                            return `${base}\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences inviting the user to describe the widget they want to build (what it should show, what data source it pulls from, what interactions it needs). No lists, no bullet points, no examples — keep it under 30 words total.`;
+                        })()}
                         maxToolRounds="10"
                         apiKey={apiKey}
                         backend={preferredBackend}

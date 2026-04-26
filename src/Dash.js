@@ -23,6 +23,7 @@ import { DebugConsole } from "./DebugConsole";
 // AI Assistant panel (app shell)
 import { AiAssistantPanel } from "./AiAssistant/AiAssistantPanel";
 import { WidgetBuilderModal } from "./AiAssistant/WidgetBuilderModal";
+import { InstallExternalMcpModal } from "./AiAssistant/InstallExternalMcpModal";
 
 // Local widgets that integrate with Dash. We discover every
 // `src/Widgets/<Package>/<Widget>.dash.js` via webpack's require.context
@@ -852,6 +853,12 @@ class App extends React.Component {
                                     grow={true}
                                     renderAiAssistant={<AiAssistantPanel />}
                                 />
+                                {/* Always-mounted: handles
+                                    install_known_mcp_server confirm
+                                    requests from the dash MCP tool
+                                    regardless of which view the user
+                                    is currently in. */}
+                                <InstallExternalMcpModal />
                                 {this.state.isWidgetBuilderOpen && (
                                     <WidgetBuilderModal
                                         isOpen={this.state.isWidgetBuilderOpen}

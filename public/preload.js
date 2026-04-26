@@ -57,13 +57,20 @@ const extendedApi = {
             widgetName,
             componentCode,
             configCode,
-            sourcePackage
+            sourcePackage,
+            files
         ) =>
             ipcRenderer.invoke("widget:ai-compile-preview", {
                 widgetName,
                 componentCode,
                 configCode,
                 sourcePackage,
+                // Multi-file payload (Phase 2). When present, the main
+                // process writes every file before compiling so esbuild
+                // can resolve sibling imports. Optional —
+                // componentCode/configCode alone still work for legacy
+                // single-file widgets.
+                files,
             }),
         aiBuild: (
             widgetName,
@@ -72,7 +79,8 @@ const extendedApi = {
             description,
             cellContext,
             appId,
-            remixMeta
+            remixMeta,
+            files
         ) =>
             ipcRenderer.invoke("widget:ai-build", {
                 widgetName,
@@ -82,6 +90,15 @@ const extendedApi = {
                 cellContext,
                 appId,
                 remixMeta,
+                // Multi-file payload (Phase 2): each entry is
+                // { path, content } relative to the package root. When
+                // present and non-empty, the main process writes ALL
+                // listed files instead of just the legacy
+                // componentCode+configCode pair. componentCode/configCode
+                // are still passed alongside for the post-install
+                // category injection + ComponentManager registration
+                // path which keys off the primary widget.
+                files,
             }),
         readSources: (widgetName, componentName) =>
             ipcRenderer.invoke("widget:read-sources", {

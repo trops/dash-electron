@@ -503,6 +503,7 @@ const {
     MCP_READ_RESOURCE,
     MCP_SERVER_STATUS,
     MCP_GET_CATALOG,
+    MCP_GET_KNOWN_EXTERNAL,
     MCP_RUN_AUTH,
     REGISTRY_FETCH_INDEX,
     REGISTRY_SEARCH,
@@ -1391,6 +1392,9 @@ function createWindow() {
         logger.loggedHandle(MCP_GET_CATALOG, (e) =>
             mcpController.getCatalog(getSenderWindow(e))
         );
+        logger.loggedHandle(MCP_GET_KNOWN_EXTERNAL, () =>
+            mcpController.getKnownExternalCatalog()
+        );
         logger.loggedHandle(MCP_RUN_AUTH, (e, message) =>
             mcpController.runAuth(
                 getSenderWindow(e),
@@ -1893,12 +1897,130 @@ function createWindow() {
             return result;
         });
 
+        // ── Multi-file payload helpers ──────────────────────────────
+        //
+        // The AI Widget Builder may emit a multi-file package (Phase 2):
+        // every code block is preceded by a `File: <relative-path>`
+        // marker, and the renderer ships a `files: [{path, content}]`
+        // array alongside the legacy componentCode + configCode strings.
+        //
+        // The AI is being trusted to write to disk — these helpers are
+        // the security gate. Anything that doesn't pass goes nowhere.
+        const ALLOWED_FILE_EXTENSIONS = new Set([
+            ".js",
+            ".jsx",
+            ".ts",
+            ".tsx",
+            ".json",
+            ".md",
+            ".css",
+            ".txt",
+        ]);
+        const FORBIDDEN_PATH_PREFIXES = [
+            "dist/",
+            "node_modules/",
+            ".git/",
+            ".github/",
+        ];
+
+        function validateAiFilePath(rawPath) {
+            if (typeof rawPath !== "string" || rawPath.length === 0) {
+                return { ok: false, error: "Empty path" };
+            }
+            // Disallow absolute paths and Windows drive letters.
+            if (
+                rawPath.startsWith("/") ||
+                rawPath.startsWith("\\") ||
+                /^[a-zA-Z]:[\\/]/.test(rawPath)
+            ) {
+                return {
+                    ok: false,
+                    error: `Absolute paths are not allowed: ${rawPath}`,
+                };
+            }
+            // Normalize and reject any segment that climbs out.
+            const segments = rawPath.split(/[\\/]/);
+            if (segments.some((s) => s === "..")) {
+                return {
+                    ok: false,
+                    error: `Path traversal blocked: ${rawPath}`,
+                };
+            }
+            // Reject hidden dotfile / dotdir at any segment.
+            if (segments.some((s) => s.length > 0 && s.startsWith("."))) {
+                return {
+                    ok: false,
+                    error: `Hidden paths not allowed: ${rawPath}`,
+                };
+            }
+            // Reject forbidden prefixes (dist/, node_modules/, .git/).
+            const normalized = rawPath.replace(/\\/g, "/");
+            for (const prefix of FORBIDDEN_PATH_PREFIXES) {
+                if (
+                    normalized === prefix.slice(0, -1) ||
+                    normalized.startsWith(prefix)
+                ) {
+                    return {
+                        ok: false,
+                        error: `Reserved path not allowed: ${rawPath}`,
+                    };
+                }
+            }
+            // Extension allow-list. Files at the package root with no
+            // extension (rare, e.g. LICENSE) are also rejected for safety.
+            const dotIdx = rawPath.lastIndexOf(".");
+            const ext = dotIdx >= 0 ? rawPath.slice(dotIdx) : "";
+            // .dash.js counts as .js for this check.
+            const effectiveExt = rawPath.endsWith(".dash.js") ? ".js" : ext;
+            if (!ALLOWED_FILE_EXTENSIONS.has(effectiveExt)) {
+                return {
+                    ok: false,
+                    error: `File extension not allowed: ${rawPath}`,
+                };
+            }
+            return { ok: true, normalized };
+        }
+
+        /**
+         * Write each entry of files[] into stagingDir after path
+         * validation. Returns the count written and the list of skipped
+         * entries with reasons. Throws only on FS errors — invalid
+         * paths are reported in the result so the caller can decide
+         * whether to fail or continue.
+         */
+        function writeAiFiles(stagingDir, files) {
+            const path = require("path");
+            const fs = require("fs");
+            const result = { written: 0, skipped: [] };
+            for (const entry of files || []) {
+                const v = validateAiFilePath(entry?.path);
+                if (!v.ok) {
+                    result.skipped.push({ path: entry?.path, error: v.error });
+                    continue;
+                }
+                const target = path.join(stagingDir, v.normalized);
+                fs.mkdirSync(path.dirname(target), { recursive: true });
+                fs.writeFileSync(
+                    target,
+                    typeof entry.content === "string" ? entry.content : "",
+                    "utf8"
+                );
+                result.written++;
+            }
+            return result;
+        }
+
         // --- AI Widget Builder: Preview Compile ---
         // Compiles widget code and returns the bundle source for live preview.
         // Does NOT install — just compile and return.
         logger.loggedHandle("widget:ai-compile-preview", async (e, message) => {
-            const { widgetName, componentCode, configCode, sourcePackage } =
-                message;
+            const {
+                widgetName,
+                componentCode,
+                configCode,
+                sourcePackage,
+                files,
+            } = message;
             const path = require("path");
             const fs = require("fs");
             const os = require("os");
@@ -2003,6 +2125,22 @@ function createWindow() {
 
                 const widgetsDir = path.join(buildDir, "widgets");
                 fs.mkdirSync(widgetsDir, { recursive: true });
+
+                // Multi-file payload: write every declared file. The
+                // legacy componentCode/configCode are still written
+                // explicitly below as a backstop, since validation may
+                // skip something we still need for compile.
+                let fileWriteSummary = null;
+                if (Array.isArray(files) && files.length > 0) {
+                    fileWriteSummary = writeAiFiles(buildDir, files);
+                    if (fileWriteSummary.skipped.length > 0) {
+                        console.warn(
+                            "[ai-compile-preview] Skipped files:",
+                            fileWriteSummary.skipped
+                        );
+                    }
+                }
+
                 fs.writeFileSync(
                     path.join(widgetsDir, `${widgetName}.js`),
                     componentCode,
@@ -2032,6 +2170,7 @@ function createWindow() {
                     success: true,
                     bundleSource,
                     widgetName,
+                    skippedFiles: fileWriteSummary?.skipped || [],
                 };
             } catch (err) {
                 // Preserve structured fields from WidgetCompileError so the
@@ -2058,6 +2197,7 @@ function createWindow() {
                 description,
                 cellContext,
                 remixMeta,
+                files,
             } = message;
 
             const path = require("path");
@@ -2156,8 +2296,27 @@ function createWindow() {
                 const widgetsDir = path.join(buildDir, "widgets");
                 fs.mkdirSync(widgetsDir, { recursive: true });
 
+                // Multi-file payload: write every declared file before
+                // writing the legacy primary widget files. Path-validated
+                // and sandboxed to the staging dir. Skipped entries are
+                // logged but don't fail the install — the legacy
+                // componentCode/configCode below ensures the primary
+                // widget always lands.
+                let installFileWriteSummary = null;
+                if (Array.isArray(files) && files.length > 0) {
+                    installFileWriteSummary = writeAiFiles(buildDir, files);
+                    if (installFileWriteSummary.skipped.length > 0) {
+                        console.warn(
+                            "[widget:ai-build] Skipped files:",
+                            installFileWriteSummary.skipped
+                        );
+                    }
+                }
+
                 // Write component file (overwrites the original if we
-                // copied the source package above).
+                // copied the source package above OR overrides whatever
+                // was in files[] for the primary widget so post-modal
+                // category injection / rename land at install time).
                 fs.writeFileSync(
                     path.join(widgetsDir, `${widgetName}.js`),
                     componentCode,
