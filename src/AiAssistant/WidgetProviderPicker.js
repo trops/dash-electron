@@ -191,7 +191,7 @@ export const WidgetProviderPicker = ({
     }, []);
 
     return (
-        <div className={`relative shrink-0 border-t ${borderColor}`}>
+        <div className={`relative shrink-0 ${borderColor}`}>
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
@@ -217,7 +217,7 @@ export const WidgetProviderPicker = ({
 
             {open && (
                 <div
-                    className={`absolute bottom-full left-0 right-0 mb-1 z-20 max-h-80 overflow-y-auto rounded-md border ${borderColor} bg-gray-900 shadow-xl`}
+                    className={`absolute top-full left-0 right-0 mt-1 z-20 max-h-80 overflow-y-auto rounded-md border ${borderColor} bg-gray-900 shadow-xl`}
                 >
                     {/* Installed providers, grouped by type */}
                     {installedOptions.length > 0 && (

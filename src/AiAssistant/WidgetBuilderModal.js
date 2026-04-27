@@ -511,6 +511,8 @@ DO NOT USE (silently fail): opacity modifiers (\`bg-white/10\`), arbitrary value
 - Do NOT call any tools — the provider is already chosen.
 - ONLY output text + code blocks (with optional \`File:\` markers).
 - ALWAYS output COMPLETE code blocks. Never partial diffs or snippets.
+- ALWAYS emit BOTH a \`\`\`jsx component block AND a \`\`\`javascript config block — never just one. Without the config block the widget will not install. The config block MUST contain the \`providers: [...]\` array shown above.
+- Widget code runs in the BROWSER (renderer process). DO NOT use Node-only APIs: \`process.cwd()\`, \`process.env\` (except \`process.env.NODE_ENV\`), \`__dirname\`, \`__filename\`, \`require()\`, or imports of \`fs\` / \`path\` / \`os\` / \`child_process\` / \`crypto\` / \`stream\`. For paths default to literal strings like \`"/"\` or \`"~/"\`, or take a path from \`props\` / \`userConfig\`. To talk to the OS, go through the provider hooks (mcp \`callTool\` or credential \`window.mainApi.<service>\`).
 - Respond immediately with the code.`;
     }
 
@@ -1130,6 +1132,34 @@ const VALID_CATEGORIES = [
 ];
 
 /**
+ * Build a default `.dash.js` config literal when the AI emitted only the
+ * component block. Bakes in the user-picked provider (if any) so the Code
+ * tab shows what's actually going to install rather than a blank file.
+ * The category is injected later by handleInstall once the user picks one.
+ */
+function synthesizeDefaultConfigCode(widgetName, selectedProvider) {
+    if (!widgetName) return "";
+    const displayName = widgetName.replace(/([A-Z])/g, " $1").trim();
+    const providersLine = (() => {
+        if (!selectedProvider) return "";
+        if (selectedProvider.sentinel === "none") return "";
+        const { type, providerClass } = selectedProvider;
+        if (!type || !providerClass) return "";
+        return `\n    providers: [{ type: "${type}", providerClass: "${providerClass}", required: true }],`;
+    })();
+    return `export default {
+    component: "${widgetName}",
+    name: "${displayName}",
+    package: "${displayName}",
+    author: "AI Assistant",
+    type: "widget",
+    canHaveChildren: false,
+    workspace: "ai-built",${providersLine}
+};
+`;
+}
+
+/**
  * Inject (or replace) a `category: "..."` field on an `export default { ... }`
  * config literal. The aiBuild IPC handler writes configCode verbatim to disk
  * with no parsing, so any string transform here lands directly in the saved
@@ -1314,6 +1344,13 @@ export const WidgetBuilderModal = ({
     //   - { name, type, providerClass }           → an installed provider
     const [selectedProviderForBuild, setSelectedProviderForBuild] =
         useState(null);
+    // Mirror into a ref so the message-poller closure (which captures
+    // state at modal-open time) can read the latest pick without us
+    // having to invalidate the interval on every change.
+    const selectedProviderForBuildRef = useRef(null);
+    useEffect(() => {
+        selectedProviderForBuildRef.current = selectedProviderForBuild;
+    }, [selectedProviderForBuild]);
     const [previewError, setPreviewError] = useState(null);
     // Structured error metadata from the main process (e.g. an
     // ESBUILD_SPAWN_FAILED with diagnostics). When present we render an
@@ -1886,6 +1923,11 @@ export const WidgetBuilderModal = ({
     useEffect(() => {
         if (!isOpen) return;
 
+        // Tells the early-boot error listener in public/index.html to
+        // stay quiet — we own all error handling while the modal is
+        // open, and double-logging just confuses the user.
+        window.__DASH_WIDGET_BUILDER_OPEN = true;
+
         const handleCapture = (message) => {
             console.warn("[WidgetBuilderModal] suppressed error:", message);
             setPreviewError(message || "Widget runtime error");
@@ -1940,6 +1982,7 @@ export const WidgetBuilderModal = ({
             );
             window.onerror = prevOnError;
             window.onunhandledrejection = prevOnRejection;
+            delete window.__DASH_WIDGET_BUILDER_OPEN;
         };
     }, [isOpen]);
 
@@ -1989,8 +2032,62 @@ export const WidgetBuilderModal = ({
                             console.log(
                                 "[WidgetBuilder] New code detected, compiling preview..."
                             );
-                            setDetectedCode(extracted);
-                            compilePreview(extracted);
+                            // If AI emitted only the component (no .dash.js
+                            // block), synthesize a default config bound to
+                            // the picker selection so the Code tab shows
+                            // the file the user is actually going to
+                            // install. Without this the .dash.js editor
+                            // appears empty and the user can't see that
+                            // their picked provider is wired in.
+                            let normalized = extracted;
+                            if (!extracted.configCode) {
+                                // Derive widgetName from the AI's component
+                                // code rather than reading the stale captured
+                                // closure variable (this poller was set up
+                                // when the modal first opened and detectedCode
+                                // was empty).
+                                const liveWidgetName = extractWidgetName(
+                                    extracted.componentCode
+                                );
+                                const livePick =
+                                    selectedProviderForBuildRef.current;
+                                const synthesized = synthesizeDefaultConfigCode(
+                                    liveWidgetName,
+                                    livePick
+                                );
+                                if (synthesized && liveWidgetName) {
+                                    const filesWithConfig = (() => {
+                                        const out = Array.isArray(
+                                            extracted.files
+                                        )
+                                            ? [...extracted.files]
+                                            : [];
+                                        const dashPath = `widgets/${liveWidgetName}.dash.js`;
+                                        const existing = out.findIndex(
+                                            (f) => f?.path === dashPath
+                                        );
+                                        if (existing >= 0) {
+                                            out[existing] = {
+                                                path: dashPath,
+                                                content: synthesized,
+                                            };
+                                        } else {
+                                            out.push({
+                                                path: dashPath,
+                                                content: synthesized,
+                                            });
+                                        }
+                                        return out;
+                                    })();
+                                    normalized = {
+                                        ...extracted,
+                                        configCode: synthesized,
+                                        files: filesWithConfig,
+                                    };
+                                }
+                            }
+                            setDetectedCode(normalized);
+                            compilePreview(normalized);
                         }
                     } else if (msgs.length > 0 && false) {
                         // Debug: check if assistant responded but no code blocks found
@@ -2675,10 +2772,17 @@ export const WidgetBuilderModal = ({
                     );
                 }
             } else {
-                const displayName = installName
-                    .replace(/([A-Z])/g, " $1")
-                    .trim();
-                finalConfigCode = `export default { component: "${installName}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", category: "${selectedCategory}", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
+                // Same synthesizer the message-poller uses, with the
+                // user-picked category baked in. Picker selection drives
+                // the providers array.
+                finalConfigCode = synthesizeDefaultConfigCode(
+                    installName,
+                    selectedProviderForBuild
+                );
+                finalConfigCode = injectCategoryIntoConfigCode(
+                    finalConfigCode,
+                    selectedCategory
+                );
             }
 
             // Build the final multi-file payload. Start from the
