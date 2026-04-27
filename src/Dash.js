@@ -681,6 +681,13 @@ class App extends React.Component {
                 // "dash:apply-theme" and calls changeCurrentTheme in
                 // place, avoiding a full remount.
                 "apply_theme",
+                // install_known_mcp_server adds an MCP provider via
+                // the InstallExternalMcpModal flow — that modal already
+                // dispatches `dash:provider-installed` for any UI that
+                // cares (e.g. the Widget Builder banner). A stageKey
+                // bump here would tear down the open Widget Builder
+                // modal and lose the user's generated widget code.
+                "install_known_mcp_server",
             ]);
 
             this._unsubMcpStateChanged =
