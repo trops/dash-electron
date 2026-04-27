@@ -371,6 +371,44 @@ For multi-widget packages, every widget needs BOTH a \`<Name>.js\` and matching 
 - Config MUST include: \`component\` (matching function name), \`name\` (display name with spaces), \`type: "widget"\`, \`canHaveChildren: false\`, \`workspace: "ai-built"\`
 - Example config: \`export default { component: "CounterWidget", name: "Counter Widget", type: "widget", canHaveChildren: false, workspace: "ai-built", userConfig: { title: { type: "text", defaultValue: "Counter", displayName: "Title" } } }\`
 
+### How the widget receives userConfig values at runtime — IMPORTANT
+
+The \`userConfig\` block in the config is a **schema**, not a runtime prop. The host (Dash) reads the schema and passes each field's value to your component as a **flat top-level prop**, named after the field key.
+
+**Given this config:**
+\`\`\`javascript
+userConfig: {
+  defaultJql: { type: "text", defaultValue: "assignee = currentUser()", displayName: "Default JQL" },
+  refreshInterval: { type: "number", defaultValue: 60, displayName: "Refresh (sec)" },
+}
+\`\`\`
+
+**Your component receives:**
+\`\`\`jsx
+function JiraWidget({ defaultJql, refreshInterval, title }) {
+  // defaultJql === "assignee = currentUser()"     ← from the defaultValue
+  // refreshInterval === 60
+  // Always provide a fallback in case the prop is missing for any reason:
+  const [query, setQuery] = useState(defaultJql || "assignee = currentUser()");
+  ...
+}
+\`\`\`
+
+**DO NOT do any of these — they will crash the widget:**
+\`\`\`jsx
+// ❌ WRONG — userConfig is the schema, not a runtime prop
+const query = props.userConfig.defaultJql.defaultValue;
+
+// ❌ WRONG — same mistake with destructuring
+const { userConfig } = props;
+const query = userConfig.defaultJql;
+
+// ❌ WRONG — config is not a prop either
+const { config } = props;
+\`\`\`
+
+Always read userConfig values as flat props. Always provide a JS-level fallback (\`|| "..."\`) on first use in case the host didn't pass them yet (e.g. preview before save).
+
 ## Component library — @trops/dash-react
 
 All widgets MUST use @trops/dash-react components instead of raw HTML — they pick up the active theme automatically. Raw \`<div>\`/\`<h1>\`/\`<button>\` will look out of place.
@@ -490,20 +528,21 @@ WALK THESE STEPS IN ORDER. STOP AT THE FIRST MATCH. This decision tree runs BEFO
 
 1. **Built-in catalog?** Service appears in "Available MCP providers (built-in)" above? → Use \`useMcpProvider(<id>)\`, declare in \`providers: [{ type, providerClass: "mcp", required: true }]\`. No SDK imports. Generate the widget. Done.
 
-2. **Known external?** Service appears in "Other known MCP servers"? → BEFORE writing any code, call the \`install_known_mcp_server\` tool with the matching \`id\`. The user sees a confirmation modal pre-filled with the curated package + credential fields, confirms, and the MCP becomes available. ONLY AFTER the tool returns success do you generate the widget code. If the tool returns \`{ success: false, declined: true }\`, stop and ask the user what they want to do.
+2. **Known external?** Service appears in "Other known MCP servers"? → BEFORE writing any code, call the \`install_known_mcp_server\` tool with the matching \`id\`. The user sees a confirmation modal pre-filled with the curated package + credential fields. The tool returns one of:
 
-   **Example interaction (literal):**
+   - \`{ success: true, name, type }\` → MCP installed, generate the widget normally.
+   - \`{ success: false, declined: true }\` → User declined or doesn't have credentials handy. **Still generate the full widget** with the provider declaration in its config exactly as if install had succeeded — the user can install the provider later via Settings → Providers → Add MCP and the widget will start working then. Add a brief note at the end of your response: "I built the widget. The Atlassian provider isn't installed yet — when you're ready, go to Settings → Providers → Add MCP, find Atlassian, and add your credentials. The widget will pick it up automatically." DO NOT block on the install. The user is in flow building widgets — getting credentials can come later.
+   - \`{ success: false, error }\` → Real error (allow-list rejection, malformed config). Tell the user what went wrong; don't generate the widget.
+
+   **Example interaction:**
 
    User: "Build me a Jira ticket viewer."
 
-   You match "Jira" to the \`atlassian\` entry in "Other known MCP servers" (the description says "Read Jira issues + Confluence pages"). Your FIRST action is the tool call:
+   You match "Jira" to the \`atlassian\` entry in "Other known MCP servers". Call the tool first:
 
    > [calls \`install_known_mcp_server({ id: "atlassian" })\`]
-   > [tool returns \`{ success: true, name: "Atlassian (Jira + Confluence)", type: "atlassian" }\`]
 
-   Then — only then — you write the widget files declaring \`providers: [{ type: "atlassian", providerClass: "mcp", required: true }]\` and using \`useMcpProvider("atlassian")\`.
-
-   If you skip the tool call and jump straight to code, the user will install your widget but have no MCP server wired up, so the widget shows "provider not configured" and the user is stuck. ALWAYS call the tool first.
+   Then handle whichever outcome you get and ALWAYS write the widget files — declaring \`providers: [{ type: "atlassian", providerClass: "mcp", required: true }]\` and using \`useMcpProvider("atlassian")\` — unless step 3 below applies (no MCP exists at all).
 
 3. **No MCP anywhere?** Tell the user no MCP server exists for this service in either list. Suggest they request adding one to the curated list (or contribute one upstream at github.com/modelcontextprotocol/servers). DO NOT generate widget code that imports an SDK or makes direct HTTP calls — this release is MCP-only.
 
@@ -910,6 +949,16 @@ export const WidgetBuilderModal = ({
     const appContext = useContext(AppContext);
 
     const [previewComponent, setPreviewComponent] = useState(null);
+    // Default prop values derived from the parsed config's `userConfig`
+    // schema. Live widgets receive their userConfig defaultValues as
+    // FLAT props (see WidgetFactory.userPrefsForItem in dash-core); for
+    // a brand-new widget being built in this modal there's no
+    // editContext.userPrefs, so without this the widget would get
+    // nothing for fields it expects to read off props.* — first render
+    // would crash on `Cannot read properties of undefined`.
+    // editContext.userPrefs (when editing an existing widget) takes
+    // priority because that's the user's actually-saved value.
+    const [previewWidgetDefaults, setPreviewWidgetDefaults] = useState({});
     const [previewError, setPreviewError] = useState(null);
     // Structured error metadata from the main process (e.g. an
     // ESBUILD_SPAWN_FAILED with diagnostics). When present we render an
@@ -1145,7 +1194,6 @@ export const WidgetBuilderModal = ({
         const types = extractProviderTypesFromConfigCode(
             detectedCode.configCode
         );
-        if (types.length === 0) return [];
         const seen = new Set();
         const out = [];
         for (const type of types) {
@@ -1156,6 +1204,29 @@ export const WidgetBuilderModal = ({
                 (s) => s && s.id === type
             );
             if (entry) out.push(entry);
+        }
+        // Debug breadcrumb — visible in Electron devtools, helps
+        // diagnose when the banner doesn't appear despite a config
+        // that declares a provider. Stripped from production builds
+        // (rollup-plugin-strip removes console.* in dash-core but
+        // dash-electron keeps these).
+        try {
+            window.__DASH_AI_BUILDER_DEBUG = {
+                detectedConfigCodePresent: !!detectedCode.configCode,
+                detectedConfigCodeLength: detectedCode.configCode
+                    ? detectedCode.configCode.length
+                    : 0,
+                detectedTypes: types,
+                installedTypes: Array.from(installedProviderTypes || []),
+                knownExternalCount: (knownExternalCatalog || []).length,
+                knownExternalIds: (knownExternalCatalog || []).map(
+                    (s) => s && s.id
+                ),
+                missingMatches: out.map((s) => s && s.id),
+                computedAt: new Date().toISOString(),
+            };
+        } catch (e) {
+            /* noop — debug only */
         }
         return out;
     }, [detectedCode.configCode, installedProviderTypes, knownExternalCatalog]);
@@ -1706,10 +1777,34 @@ export const WidgetBuilderModal = ({
                 if (isStale()) return;
 
                 if (match && typeof match.config.component === "function") {
+                    // Compute default props from the parsed userConfig
+                    // schema. Each entry of the form
+                    // `{ fieldName: { defaultValue: X } }` becomes a
+                    // flat prop `fieldName: X`. This mirrors what
+                    // dash-core's WidgetFactory does for live-rendered
+                    // widgets, so AI-generated code that reads
+                    // `props.defaultJql` / `props.title` / etc. gets a
+                    // sensible value instead of undefined.
+                    const userConfig = match.config?.userConfig || {};
+                    const defaults = {};
+                    for (const [fieldName, spec] of Object.entries(
+                        userConfig
+                    )) {
+                        if (
+                            spec &&
+                            typeof spec === "object" &&
+                            "defaultValue" in spec
+                        ) {
+                            defaults[fieldName] = spec.defaultValue;
+                        }
+                    }
+                    setPreviewWidgetDefaults(defaults);
+
                     // Let PreviewErrorBoundary catch runtime errors in React's context
                     setPreviewComponent(() => match.config.component);
                     setPreviewError(null);
                 } else {
+                    setPreviewWidgetDefaults({});
                     setPreviewError(
                         "Could not resolve widget component from bundle."
                     );
@@ -2981,6 +3076,15 @@ export const WidgetBuilderModal = ({
                                                     >
                                                         <PreviewComponent
                                                             title={displayName}
+                                                            // userConfig defaults first
+                                                            // (so brand-new widgets render
+                                                            // with the AI's defaults
+                                                            // instead of undefined), then
+                                                            // userPrefs from the edit
+                                                            // context (so editing-an-
+                                                            // existing-widget shows the
+                                                            // user's saved values).
+                                                            {...previewWidgetDefaults}
                                                             {...(effectiveEditContext?.userPrefs ||
                                                                 {})}
                                                         />
