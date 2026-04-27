@@ -519,14 +519,29 @@ providers: [{ type: "slack", providerClass: "mcp", required: true }]
 
 CONSUMPTION (in the component):
 \`\`\`jsx
+import React, { useState, useEffect } from "react";
 import { useMcpProvider } from "@trops/dash-core";
+import { Panel, ErrorMessage, Skeleton } from "@trops/dash-react";
 
 export default function MyWidget() {
   const { callTool, tools, isConnected, error } = useMcpProvider("slack");
-  const channels = await callTool("slack_list_channels", {});
+  const [channels, setChannels] = useState([]);
+
+  // 1. Always check status BEFORE you try to call tools.
+  // 2. Tool calls are async — wrap in useEffect, never call at render
+  //    or top-level (calls during render crash the component).
+  useEffect(() => {
+    if (!isConnected) return;
+    let cancelled = false;
+    callTool("slack_list_channels", {})
+      .then((result) => { if (!cancelled) setChannels(result?.channels || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isConnected, callTool]);
+
   if (error) return <Panel><ErrorMessage message={error} /></Panel>;
   if (!isConnected) return <Panel><Skeleton /></Panel>;
-  return <Panel>...</Panel>;
+  return <Panel>{/* render channels */}</Panel>;
 }
 \`\`\`
 
@@ -543,24 +558,46 @@ providers: [{ type: "algolia", providerClass: "credential", required: true }]
 
 CONSUMPTION:
 \`\`\`jsx
+import React, { useState, useEffect } from "react";
 import { useWidgetProviders, useProviderClient } from "@trops/dash-core";
+import { Panel, EmptyState } from "@trops/dash-react";
 
 export default function MyWidget({ title }) {
   const { hasProvider, getProvider } = useWidgetProviders();
+
+  // 1. Always check hasProvider BEFORE getProvider/useProviderClient —
+  //    calling getProvider for a missing provider is fine, but downstream
+  //    IPC calls would crash on the empty handle.
   if (!hasProvider("algolia")) {
-    return <Panel><EmptyState message="Configure an Algolia provider in Settings → Providers" /></Panel>;
+    return (
+      <Panel>
+        <EmptyState message="Configure an Algolia provider in Settings → Providers" />
+      </Panel>
+    );
   }
+
   const provider = getProvider("algolia");
   const pc = useProviderClient(provider);
   // pc is a handle: { providerHash, providerName, dashboardAppId }.
-  // Call a host IPC to do the actual API work — for Algolia:
-  //   const result = await window.mainApi.algolia.search(pc, { indexName, query });
-  // For provider types where no dedicated mainApi.* exists yet, the user
-  // will need to wire one. Build a clean component that's ready when it is,
-  // and put a TODO comment at the call site.
-  ...
+
+  // 2. Async API calls must go in useEffect, never at render. The host
+  //    IPC for Algolia is window.mainApi.algolia.* — pass \`pc\` as the
+  //    first arg so credentials stay in the main process.
+  const [results, setResults] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    window.mainApi.algolia
+      .search(pc, { indexName: "your-index", query: "" })
+      .then((r) => { if (!cancelled) setResults(r?.hits || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [pc?.providerHash]);
+
+  return <Panel>{/* render results */}</Panel>;
 }
 \`\`\`
+
+For provider types where no dedicated \`mainApi.<service>.*\` exists yet, build the component skeleton with a TODO comment at the call site — the user will know to wire it.
 
 ## Providers the user already has configured
 
@@ -584,9 +621,13 @@ ${formatKnownExternalForPrompt(knownExternalCatalog)}
 
 WALK THESE STEPS IN ORDER. STOP AT THE FIRST MATCH. This decision tree runs BEFORE you write any widget code:
 
-0. **User already has a configured provider for this service?** Look at "Providers the user already has configured" above. Match by \`type\` (e.g. user asks for an Algolia widget and there's an installed provider with \`type: "algolia"\`). → Use that provider's class to drive the integration:
+0. **User already has a configured provider for this service?** Look at "Providers the user already has configured" above. Match by \`type\` (e.g. user asks for an Algolia widget and there's an installed provider with \`type: "algolia"\`). → Use that provider's CLASS to drive the integration. **THIS BEATS EVERY OTHER SIGNAL** — including patterns you might find via search_widgets in pre-existing widgets:
    - \`class: mcp\` → declare \`providers: [{ type: <theType>, providerClass: "mcp", required: true }]\`, consume with \`useMcpProvider(<theType>)\`. Done. No install needed.
    - \`class: credential\` → declare \`providers: [{ type: <theType>, providerClass: "credential", required: true }]\`, consume with \`useWidgetProviders\` + \`getProvider\` + \`useProviderClient\` per the credential pattern above. Done. No install needed.
+
+   **CRITICAL — DO NOT copy other widgets' provider class blindly.** \`search_widgets\` may surface a previously-built @ai-built widget that declared the same service with a DIFFERENT class (e.g. another Algolia widget using \`mcp\` while the user actually has Algolia configured as \`credential\`). The existing widget might be broken. **Always trust "Providers the user already has configured" over what other widgets declare.** If the installed provider's class differs from a widget you're referencing, IGNORE the reference and follow the installed class.
+
+   Example: user has \`algolia\` configured as \`credential\`. \`search_widgets\` returns an existing widget with \`providers: [{type:"algolia", providerClass:"mcp"}]\`. → IGNORE that example. Use \`credential\` because that's what's installed. Output \`providers: [{type:"algolia", providerClass:"credential", required: true}]\` and use \`useWidgetProviders\` + \`getProvider\` + \`useProviderClient\`, NOT \`useMcpProvider\`.
 
 1. **Built-in MCP catalog?** Service appears in "Available MCP providers (built-in)"? → Use \`useMcpProvider(<id>)\`, declare in \`providers: [{ type, providerClass: "mcp", required: true }]\`. No SDK imports. Generate the widget. Done.
 
