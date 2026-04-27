@@ -33,6 +33,7 @@ import {
     makeScopedComponentId,
 } from "@trops/dash-core";
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
+import { WidgetProviderPicker } from "./WidgetProviderPicker";
 
 /**
  * Wraps the preview widget in the full context stack (AppContext,
@@ -342,14 +343,27 @@ function buildSystemPrompt({
     builtInCatalog = [],
     knownExternalCatalog = [],
     installedProviders = {},
+    selectedProvider = null,
 } = {}) {
-    // Compute the set of types the user already has installed. Both
-    // catalog lists are filtered to EXCLUDE these — the AI's decision
-    // tree step 0 (match against installed) is the only path the
-    // service should take when a provider already exists. If the user
-    // has algolia as `credential` AND algolia also appears in the
-    // built-in MCP catalog, listing both causes the AI to flip a coin;
-    // hiding the catalog entry forces step 0.
+    // The user picks a provider via the WidgetProviderPicker BEFORE
+    // sending a chat message. When a provider is selected, the prompt
+    // gets a single focused "use this exact provider" section and the
+    // catalogs + decision tree + HARD RULE are dropped entirely. This
+    // takes the provider-selection decision out of the LLM's hands so
+    // it can stop wavering between MCP/credential and just write code.
+    const hasPicked =
+        selectedProvider &&
+        (selectedProvider.sentinel === "none" ||
+            (selectedProvider.type && selectedProvider.providerClass));
+    const isPickedNone = selectedProvider?.sentinel === "none";
+    const pickedType = selectedProvider?.type;
+    const pickedClass = selectedProvider?.providerClass;
+    const pickedName = selectedProvider?.name;
+
+    // Catalogs are still useful when no specific provider is picked
+    // yet — keep the legacy decision-tree path so the modal still
+    // works during the brief window between modal-open and picker-
+    // selection. Once the picker fires, the focused branch wins.
     const installedTypeSet = new Set();
     for (const p of Object.values(installedProviders || {})) {
         if (p && typeof p === "object" && p.type) {
@@ -362,6 +376,186 @@ function buildSystemPrompt({
     const filteredKnownExternal = (knownExternalCatalog || []).filter(
         (s) => s && !installedTypeSet.has(s.id)
     );
+
+    // Focused branch: the user has picked. Emit only what the AI needs.
+    if (hasPicked && !isPickedNone) {
+        return `You are the Dash Widget Builder. The user has pre-selected the provider for this widget. Your job is to write code that uses it.
+
+## Provider for this widget (PRE-SELECTED — DO NOT DEVIATE)
+
+- Name: ${pickedName}
+- Type: ${pickedType}
+- Class: ${pickedClass}
+
+The widget config MUST declare:
+\`\`\`javascript
+providers: [{ type: "${pickedType}", providerClass: "${pickedClass}", required: true }]
+\`\`\`
+
+Consume the provider via the hook for class \`${pickedClass}\`:
+
+${
+    pickedClass === "credential"
+        ? `\`\`\`jsx
+import React, { useState, useEffect } from "react";
+import { useWidgetProviders, useProviderClient } from "@trops/dash-core";
+import { Panel, EmptyState } from "@trops/dash-react";
+
+export default function MyWidget({ title }) {
+  const { hasProvider, getProvider } = useWidgetProviders();
+  if (!hasProvider("${pickedType}")) {
+    return <Panel><EmptyState message="Configure ${pickedName} in Settings → Providers" /></Panel>;
+  }
+  const provider = getProvider("${pickedType}");
+  const pc = useProviderClient(provider);
+  // pc is { providerHash, providerName, dashboardAppId }
+  // For provider-specific API calls, use the host IPC, e.g. for algolia:
+  //   const result = await window.mainApi.algolia.search(pc, { indexName, query });
+  // If no host IPC exists for this type yet, leave a TODO comment in the
+  // call site — the user will wire it.
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    // TODO: replace with the appropriate window.mainApi.<service>.<method>(pc, ...)
+    // call for type "${pickedType}".
+    return () => { cancelled = true; };
+  }, [pc?.providerHash]);
+  return <Panel>{/* render data */}</Panel>;
+}
+\`\`\``
+        : `\`\`\`jsx
+import React, { useState, useEffect } from "react";
+import { useMcpProvider } from "@trops/dash-core";
+import { Panel, ErrorMessage, Skeleton } from "@trops/dash-react";
+
+export default function MyWidget() {
+  const { callTool, tools, isConnected, error } = useMcpProvider("${pickedType}");
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    if (!isConnected) return;
+    let cancelled = false;
+    // TODO: pick the right tool from \`tools\` (or pass an explicit name) for
+    // the user's intent and call it. Tool calls are async, must go in a
+    // useEffect, never at render.
+    // Example shape:
+    //   callTool("<tool_name>", { /* args */ })
+    //     .then((r) => { if (!cancelled) setData(r); })
+    //     .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isConnected, callTool]);
+  if (error) return <Panel><ErrorMessage message={error} /></Panel>;
+  if (!isConnected) return <Panel><Skeleton /></Panel>;
+  return <Panel>{/* render data */}</Panel>;
+}
+\`\`\``
+}
+
+DO NOT change the provider class. DO NOT pick a different provider type. DO NOT use \`useMcpProvider\` if the class above is \`credential\`, and vice versa. The user has already configured this provider — your only job is to write a working widget that consumes it.
+
+## Output protocol
+
+You can output either a single-file widget (component + config) or a multi-file package.
+
+SINGLE-FILE (default for most widgets):
+1. A \`\`\`jsx code block with the React component
+2. A \`\`\`javascript code block with the .dash.js config
+
+That's it — no \`File:\` markers needed. The app saves them as
+\`widgets/<Name>.js\` and \`widgets/<Name>.dash.js\`.
+
+MULTI-FILE (when the package needs shared utilities, multiple widgets, or supporting files):
+Prefix each fenced code block with a \`File: <relative-path>\` marker on its own line.
+
+Allowed paths:
+- \`widgets/<Name>.js\` and \`widgets/<Name>.dash.js\` for each widget
+- \`widgets/<subdir>/foo.js\` for shared utilities
+- Package-root files: \`README.md\`, \`<package>.config.js\`
+- DO NOT write to \`dist/\`, \`node_modules/\`, \`.git/\`, or any hidden dotfile path
+- DO NOT use \`..\` segments or absolute paths
+
+For multi-widget packages, every widget needs BOTH a \`<Name>.js\` and matching \`<Name>.dash.js\`.
+
+## Widget config rules
+
+- Default export the component: \`export default function WidgetName(props) { ... }\`
+- Import React hooks from 'react': \`import React, { useState, useEffect } from 'react';\`
+- NEVER import useState, useEffect, or any React hooks from '@trops/dash-react' — they MUST come from 'react'
+- Wrap the component in \`<Panel>…</Panel>\` (it's the canonical widget chrome).
+- Config MUST include: \`component\` (matching function name), \`name\` (display name with spaces), \`type: "widget"\`, \`canHaveChildren: false\`, \`workspace: "ai-built"\`, plus the \`providers: [...]\` array shown above.
+
+### How userConfig values reach the component
+
+The \`userConfig\` block is a SCHEMA. The host passes each field's value as a flat top-level prop (named after the field key). Read \`props.fieldName\` directly. NEVER use \`props.userConfig.X\` or \`props.config.X\` — those don't exist.
+
+Example: \`userConfig: { defaultJql: { type: "text", defaultValue: "X", displayName: "Default JQL" } }\` → component reads \`props.defaultJql\` (not \`props.userConfig.defaultJql\`). Always provide a fallback: \`const v = props.defaultJql || "X";\`.
+
+## Component library — @trops/dash-react
+
+All widgets MUST use @trops/dash-react components instead of raw HTML — they pick up the active theme automatically.
+
+Components: Panel (REQUIRED widget wrapper), Card, DashPanel, LayoutContainer, Heading/2/3, SubHeading/2/3, Paragraph, Tag, Button, ButtonIcon, InputText, TextArea, SelectInput, Toggle, Switch, Checkbox, RadioGroup, Slider, SearchInput, Menu, MenuItem, DropdownPanel, Alert, AlertBanner, Toast, ProgressBar, EmptyState, Skeleton, ErrorMessage, Table, Tabs, Accordion, DataList, StatCard, FontAwesomeIcon, Modal.
+
+Forms accept a \`label\` prop, NOT children. Buttons/Tags/Headings prefer prop form (\`title\`, \`text\`) over children for visible text.
+
+## Styling rules — TAILWIND SAFELIST IS NARROW
+
+ALLOWED: \`bg/text/border-{color}-{shade}\` (gray, slate, zinc, neutral, stone, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, rose; shades 50-950), \`opacity-0..100\`, \`grid-cols-{1..12}\`, gradient \`from/via/to-{color}-{shade}\`, hover variants on bg/text/border colors, standard layout/spacing utilities at standard sizes.
+
+DO NOT USE (silently fail): opacity modifiers (\`bg-white/10\`), arbitrary values (\`text-[10px]\`, \`w-[440px]\`, \`bg-[#abc]\`), \`ring-*\`, \`divide-*\` color variants, \`outline-*\` color variants. Use inline \`style={{...}}\` for non-safelisted needs.
+
+## Critical rules
+
+- Do NOT use Read, Write, Edit, Bash, Glob, or Grep tools.
+- Do NOT invoke the dash-widget-builder skill or any other skill.
+- Do NOT read files, scan directories, or run shell commands.
+- Do NOT call any tools — the provider is already chosen.
+- ONLY output text + code blocks (with optional \`File:\` markers).
+- ALWAYS output COMPLETE code blocks. Never partial diffs or snippets.
+- Respond immediately with the code.`;
+    }
+
+    // No-provider branch: user explicitly picked "no external provider".
+    // Skip ALL provider context. The widget should be self-contained.
+    if (isPickedNone) {
+        return `You are the Dash Widget Builder. The user has chosen NOT to use any external provider for this widget — generate a self-contained widget (clock, counter, static display, etc.) with no \`providers: [...]\` array in the config.
+
+## Output protocol
+
+Single-file: a \`\`\`jsx code block with the component + a \`\`\`javascript code block with the config. Multi-file: \`File: <path>\` markers before each fenced block; allowed paths are \`widgets/<Name>.js\`, \`widgets/<Name>.dash.js\`, \`widgets/<subdir>/*.js\`, package-root \`README.md\` / \`<package>.config.js\`. Don't write to \`dist/\`, \`node_modules/\`, dotfiles, or use \`..\`.
+
+## Widget config rules
+
+- Default export the component: \`export default function WidgetName(props) { ... }\`
+- Import React hooks from 'react': \`import React, { useState, useEffect } from 'react';\`
+- NEVER import hooks from '@trops/dash-react'.
+- Wrap the component in \`<Panel>…</Panel>\`.
+- Config MUST include: \`component\`, \`name\`, \`type: "widget"\`, \`canHaveChildren: false\`, \`workspace: "ai-built"\`. NO \`providers: [...]\` array.
+
+### How userConfig values reach the component
+
+The host passes each \`userConfig\` field's value as a flat top-level prop. Read \`props.fieldName\`, NEVER \`props.userConfig.fieldName\`. Always fallback: \`const v = props.fieldName || "default";\`.
+
+## Component library
+
+Use @trops/dash-react: Panel (REQUIRED), Card, Heading, SubHeading, Paragraph, Tag, Button, InputText, TextArea, SelectInput, Toggle, Switch, Checkbox, ProgressBar, EmptyState, Skeleton, Table, Tabs, FontAwesomeIcon, etc.
+
+## Styling rules — TAILWIND SAFELIST IS NARROW
+
+ALLOWED: \`bg/text/border-{color}-{shade}\`, \`opacity-0..100\`, \`grid-cols-{1..12}\`. DO NOT USE: opacity modifiers (\`bg-white/10\`), arbitrary values, \`ring-*\`, \`divide-*\` color variants. Inline \`style={{...}}\` is the escape hatch.
+
+## Critical rules
+
+- Do NOT call any tools.
+- Do NOT invoke skills.
+- ONLY output text + code blocks.
+- Respond immediately with the code.`;
+    }
+
+    // Legacy branch: nothing picked yet. Keep the catalogs + decision
+    // tree as a fallback so the modal isn't broken if somehow the
+    // picker is bypassed. This is rarely hit in practice — the picker
+    // gates the chat input — but the legacy prompt is here as a
+    // safety net during the rollout.
     return `You are the Dash Widget Builder. When the user describes a widget, generate the code directly in your response.
 
 ## ⚠️ HARD RULE — read this first, every turn
@@ -1110,6 +1304,16 @@ export const WidgetBuilderModal = ({
     // editContext.userPrefs (when editing an existing widget) takes
     // priority because that's the user's actually-saved value.
     const [previewWidgetDefaults, setPreviewWidgetDefaults] = useState({});
+    // Provider the user selected for the widget being built. Drives the
+    // system prompt (single deterministic provider section instead of a
+    // catalog + decision tree the LLM has to navigate) AND the post-
+    // processing rewrite that snaps the AI's generated config to the
+    // selected provider. See WidgetProviderPicker.
+    //   - null                                    → not picked yet
+    //   - { sentinel: "none" }                    → "no external provider"
+    //   - { name, type, providerClass }           → an installed provider
+    const [selectedProviderForBuild, setSelectedProviderForBuild] =
+        useState(null);
     const [previewError, setPreviewError] = useState(null);
     // Structured error metadata from the main process (e.g. an
     // ESBUILD_SPAWN_FAILED with diagnostics). When present we render an
@@ -1205,6 +1409,41 @@ export const WidgetBuilderModal = ({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [effectiveEditContext?.originalWidgetId]);
+
+    // Pre-populate the provider picker from edit-context when editing
+    // an existing widget. If the existing config declares a provider
+    // type that matches one of the user's installed providers, pick
+    // that one. Otherwise leave the picker null so the user picks
+    // explicitly.
+    React.useEffect(() => {
+        if (!effectiveEditContext?.configCode) return;
+        const types = extractProviderTypesFromConfigCode(
+            effectiveEditContext.configCode
+        );
+        if (types.length === 0) {
+            // Existing widget has no provider declared → "no external".
+            setSelectedProviderForBuild({ sentinel: "none" });
+            return;
+        }
+        const wantedType = types[0];
+        const installed = Object.values(providers || {}).find(
+            (p) => p && typeof p === "object" && p.type === wantedType
+        );
+        if (installed) {
+            setSelectedProviderForBuild({
+                name: installed.name,
+                type: installed.type,
+                providerClass: installed.providerClass || "credential",
+            });
+        }
+        // If type declared but not installed, leave the picker null so
+        // the user is forced to install or pick manually — that's the
+        // safer default than silently selecting a non-existent provider.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        effectiveEditContext?.configCode,
+        effectiveEditContext?.originalWidgetId,
+    ]);
     // Device-code sign-in flow for the registry. When the user clicks
     // "Sign in to preview", we stash the flow here so we can display the
     // user code + poll for completion.
@@ -1889,7 +2128,10 @@ export const WidgetBuilderModal = ({
                         // resolve relative imports during preview.
                         Array.isArray(code.files) && code.files.length > 0
                             ? code.files
-                            : null
+                            : null,
+                        // Provider the user pre-selected — main process
+                        // auto-corrects any drift in the AI's config.
+                        selectedProviderForBuild
                     );
 
                 if (isStale()) return;
@@ -1969,7 +2211,7 @@ export const WidgetBuilderModal = ({
                 if (!isStale()) setIsCompiling(false);
             }
         },
-        [effectiveEditContext?.originalPackage]
+        [effectiveEditContext?.originalPackage, selectedProviderForBuild]
     );
 
     // Fetch a registry widget's source (no install), hand it to the existing
@@ -2511,7 +2753,10 @@ export const WidgetBuilderModal = ({
                 cellContext || null,
                 process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron",
                 remixMeta,
-                finalFiles
+                finalFiles,
+                // Provider the user pre-selected — main process
+                // auto-corrects any drift in the AI's config to match.
+                selectedProviderForBuild
             );
             if (result?.success) {
                 setInstallStatus({
@@ -2552,6 +2797,7 @@ export const WidgetBuilderModal = ({
         isRemixMode,
         editMode,
         remixName,
+        selectedProviderForBuild,
     ]);
 
     if (!isOpen) return null;
@@ -3783,6 +4029,18 @@ export const WidgetBuilderModal = ({
                         </span>
                     </div>
 
+                    {/* Provider picker — drives the prompt's pre-selected
+                        provider section. Only relevant in build mode;
+                        discover mode searches the registry without
+                        building anything. */}
+                    {chatMode === "build" && (
+                        <WidgetProviderPicker
+                            value={selectedProviderForBuild}
+                            onChange={setSelectedProviderForBuild}
+                            knownExternalCatalog={knownExternalCatalog}
+                        />
+                    )}
+
                     <ChatCore
                         title=""
                         model={model}
@@ -3794,6 +4052,7 @@ export const WidgetBuilderModal = ({
                                 builtInCatalog,
                                 knownExternalCatalog,
                                 installedProviders: providers,
+                                selectedProvider: selectedProviderForBuild,
                             });
                             if (effectiveEditContext?.componentCode) {
                                 return `${base}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
