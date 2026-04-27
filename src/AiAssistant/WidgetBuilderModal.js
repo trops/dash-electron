@@ -343,6 +343,25 @@ function buildSystemPrompt({
     knownExternalCatalog = [],
     installedProviders = {},
 } = {}) {
+    // Compute the set of types the user already has installed. Both
+    // catalog lists are filtered to EXCLUDE these — the AI's decision
+    // tree step 0 (match against installed) is the only path the
+    // service should take when a provider already exists. If the user
+    // has algolia as `credential` AND algolia also appears in the
+    // built-in MCP catalog, listing both causes the AI to flip a coin;
+    // hiding the catalog entry forces step 0.
+    const installedTypeSet = new Set();
+    for (const p of Object.values(installedProviders || {})) {
+        if (p && typeof p === "object" && p.type) {
+            installedTypeSet.add(p.type);
+        }
+    }
+    const filteredBuiltIn = (builtInCatalog || []).filter(
+        (s) => s && !installedTypeSet.has(s.id)
+    );
+    const filteredKnownExternal = (knownExternalCatalog || []).filter(
+        (s) => s && !installedTypeSet.has(s.id)
+    );
     return `You are the Dash Widget Builder. When the user describes a widget, generate the code directly in your response.
 
 ## Output protocol
@@ -609,13 +628,17 @@ ${formatInstalledProvidersForPrompt(installedProviders)}
 
 Pre-loaded in the user's local MCP catalog — declare them in \`providers: [...]\` and use \`useMcpProvider("<id>")\`. No SDK imports.
 
-${formatBuiltInCatalogForPrompt(builtInCatalog)}
+(Types the user already has configured under "Providers the user already has configured" above are EXCLUDED from this list. If a service is missing here, check the installed-providers section first.)
+
+${formatBuiltInCatalogForPrompt(filteredBuiltIn)}
 
 ## Other known MCP servers
 
 These exist in the official MCP servers repo but aren't pre-loaded. The user can add any of these via Settings → Providers → Add Custom MCP — OR you can call the \`install_known_mcp_server\` tool with the matching \`id\` to trigger a confirmation modal that installs it for them.
 
-${formatKnownExternalForPrompt(knownExternalCatalog)}
+(Same filter as above: types already configured by the user are excluded.)
+
+${formatKnownExternalForPrompt(filteredKnownExternal)}
 
 ## When the user asks for a widget that needs external data
 
