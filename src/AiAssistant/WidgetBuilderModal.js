@@ -318,9 +318,30 @@ function formatKnownExternalForPrompt(servers) {
         .join("\n");
 }
 
+/**
+ * Format the user's currently-installed providers for the prompt.
+ * The AI uses this to detect "this widget needs algolia, the user
+ * already has an algolia provider, no install required" — saving the
+ * user from reconfiguring credentials they've already set up.
+ */
+function formatInstalledProvidersForPrompt(providersMap) {
+    if (!providersMap || typeof providersMap !== "object") return "(none)";
+    const entries = Object.values(providersMap).filter(
+        (p) => p && typeof p === "object" && p.type
+    );
+    if (entries.length === 0) return "(none)";
+    return entries
+        .map((p) => {
+            const cls = p.providerClass || "credential";
+            return `- ${p.name} — type: \`${p.type}\`, class: \`${cls}\``;
+        })
+        .join("\n");
+}
+
 function buildSystemPrompt({
     builtInCatalog = [],
     knownExternalCatalog = [],
+    installedProviders = {},
 } = {}) {
     return `You are the Dash Widget Builder. When the user describes a widget, generate the code directly in your response.
 
@@ -483,9 +504,13 @@ DO NOT USE (they will silently disappear):
 
 Escape hatch: when you absolutely need a non-safelisted color, size, or opacity, use inline \`style={{ ... }}\` instead of fighting with Tailwind — the styles will apply correctly.
 
-## Provider integration pattern (MCP)
+## Provider integration patterns
 
-Widgets that need external data (Slack, Notion, Drive, etc.) talk to MCP servers. The user wires credentials in Settings → Providers; widget code never asks for credentials directly.
+Widgets that need external data (Slack, Notion, Drive, Algolia, OpenAI, etc.) consume **providers**. The user wires credentials in Settings → Providers; widget code never asks for credentials directly. Two provider classes:
+
+### MCP providers (\`providerClass: "mcp"\`)
+
+Talk to an MCP server. Tools are discovered + called via the dash-core hook.
 
 DECLARATION (in the .dash.js config):
 \`\`\`javascript
@@ -498,10 +523,7 @@ import { useMcpProvider } from "@trops/dash-core";
 
 export default function MyWidget() {
   const { callTool, tools, isConnected, error } = useMcpProvider("slack");
-
-  // Call a tool
   const channels = await callTool("slack_list_channels", {});
-
   if (error) return <Panel><ErrorMessage message={error} /></Panel>;
   if (!isConnected) return <Panel><Skeleton /></Panel>;
   return <Panel>...</Panel>;
@@ -510,15 +532,51 @@ export default function MyWidget() {
 
 \`useMcpProvider(type)\` returns \`{ callTool, tools, resources, readResource, isConnected, isConnecting, error, provider, serverName }\`.
 
+### Credential providers (\`providerClass: "credential"\`)
+
+Plain API-key style providers (Algolia, OpenAI, internal APIs). The widget gets a provider handle; the actual API call typically goes through a host-side IPC so credentials stay in the main process.
+
+DECLARATION:
+\`\`\`javascript
+providers: [{ type: "algolia", providerClass: "credential", required: true }]
+\`\`\`
+
+CONSUMPTION:
+\`\`\`jsx
+import { useWidgetProviders, useProviderClient } from "@trops/dash-core";
+
+export default function MyWidget({ title }) {
+  const { hasProvider, getProvider } = useWidgetProviders();
+  if (!hasProvider("algolia")) {
+    return <Panel><EmptyState message="Configure an Algolia provider in Settings → Providers" /></Panel>;
+  }
+  const provider = getProvider("algolia");
+  const pc = useProviderClient(provider);
+  // pc is a handle: { providerHash, providerName, dashboardAppId }.
+  // Call a host IPC to do the actual API work — for Algolia:
+  //   const result = await window.mainApi.algolia.search(pc, { indexName, query });
+  // For provider types where no dedicated mainApi.* exists yet, the user
+  // will need to wire one. Build a clean component that's ready when it is,
+  // and put a TODO comment at the call site.
+  ...
+}
+\`\`\`
+
+## Providers the user already has configured
+
+These providers are already wired with credentials. **Always check this list FIRST** before suggesting an MCP install — the user shouldn't have to set up a provider they already have.
+
+${formatInstalledProvidersForPrompt(installedProviders)}
+
 ## Available MCP providers (built-in)
 
-These are already in the user's local catalog — declare them in \`providers: [...]\` and use \`useMcpProvider("<id>")\`. No SDK imports.
+Pre-loaded in the user's local MCP catalog — declare them in \`providers: [...]\` and use \`useMcpProvider("<id>")\`. No SDK imports.
 
 ${formatBuiltInCatalogForPrompt(builtInCatalog)}
 
 ## Other known MCP servers
 
-These exist in the official MCP servers repo but aren't pre-loaded in the user's local catalog. The user can add any of these via Settings → Providers → Add Custom MCP — OR you can call the \`install_known_mcp_server\` tool with the matching \`id\` to trigger a confirmation modal that installs it for them.
+These exist in the official MCP servers repo but aren't pre-loaded. The user can add any of these via Settings → Providers → Add Custom MCP — OR you can call the \`install_known_mcp_server\` tool with the matching \`id\` to trigger a confirmation modal that installs it for them.
 
 ${formatKnownExternalForPrompt(knownExternalCatalog)}
 
@@ -526,12 +584,16 @@ ${formatKnownExternalForPrompt(knownExternalCatalog)}
 
 WALK THESE STEPS IN ORDER. STOP AT THE FIRST MATCH. This decision tree runs BEFORE you write any widget code:
 
-1. **Built-in catalog?** Service appears in "Available MCP providers (built-in)" above? → Use \`useMcpProvider(<id>)\`, declare in \`providers: [{ type, providerClass: "mcp", required: true }]\`. No SDK imports. Generate the widget. Done.
+0. **User already has a configured provider for this service?** Look at "Providers the user already has configured" above. Match by \`type\` (e.g. user asks for an Algolia widget and there's an installed provider with \`type: "algolia"\`). → Use that provider's class to drive the integration:
+   - \`class: mcp\` → declare \`providers: [{ type: <theType>, providerClass: "mcp", required: true }]\`, consume with \`useMcpProvider(<theType>)\`. Done. No install needed.
+   - \`class: credential\` → declare \`providers: [{ type: <theType>, providerClass: "credential", required: true }]\`, consume with \`useWidgetProviders\` + \`getProvider\` + \`useProviderClient\` per the credential pattern above. Done. No install needed.
 
-2. **Known external?** Service appears in "Other known MCP servers"? → BEFORE writing any code, call the \`install_known_mcp_server\` tool with the matching \`id\`. The user sees a confirmation modal pre-filled with the curated package + credential fields. The tool returns one of:
+1. **Built-in MCP catalog?** Service appears in "Available MCP providers (built-in)"? → Use \`useMcpProvider(<id>)\`, declare in \`providers: [{ type, providerClass: "mcp", required: true }]\`. No SDK imports. Generate the widget. Done.
+
+2. **Known external MCP?** Service appears in "Other known MCP servers"? → BEFORE writing any code, call the \`install_known_mcp_server\` tool with the matching \`id\`. The user sees a confirmation modal pre-filled with the curated package + credential fields. The tool returns one of:
 
    - \`{ success: true, name, type }\` → MCP installed, generate the widget normally.
-   - \`{ success: false, declined: true }\` → User declined or doesn't have credentials handy. **Still generate the full widget** with the provider declaration in its config exactly as if install had succeeded — the user can install the provider later via Settings → Providers → Add MCP and the widget will start working then. Add a brief note at the end of your response: "I built the widget. The Atlassian provider isn't installed yet — when you're ready, go to Settings → Providers → Add MCP, find Atlassian, and add your credentials. The widget will pick it up automatically." DO NOT block on the install. The user is in flow building widgets — getting credentials can come later.
+   - \`{ success: false, declined: true }\` → User declined or doesn't have credentials handy. **Still generate the full widget** with the provider declaration in its config exactly as if install had succeeded — the user can install the provider later via Settings → Providers → Add MCP and the widget will start working then. Add a brief note at the end of your response: "I built the widget. The Atlassian provider isn't installed yet — when you're ready, go to Settings → Providers → Add MCP, find Atlassian, and add your credentials. The widget will pick it up automatically." DO NOT block on the install.
    - \`{ success: false, error }\` → Real error (allow-list rejection, malformed config). Tell the user what went wrong; don't generate the widget.
 
    **Example interaction:**
@@ -542,9 +604,9 @@ WALK THESE STEPS IN ORDER. STOP AT THE FIRST MATCH. This decision tree runs BEFO
 
    > [calls \`install_known_mcp_server({ id: "atlassian" })\`]
 
-   Then handle whichever outcome you get and ALWAYS write the widget files — declaring \`providers: [{ type: "atlassian", providerClass: "mcp", required: true }]\` and using \`useMcpProvider("atlassian")\` — unless step 3 below applies (no MCP exists at all).
+   Then handle whichever outcome you get and ALWAYS write the widget files — declaring \`providers: [{ type: "atlassian", providerClass: "mcp", required: true }]\` and using \`useMcpProvider("atlassian")\` — unless step 3 below applies.
 
-3. **No MCP anywhere?** Tell the user no MCP server exists for this service in either list. Suggest they request adding one to the curated list (or contribute one upstream at github.com/modelcontextprotocol/servers). DO NOT generate widget code that imports an SDK or makes direct HTTP calls — this release is MCP-only.
+3. **No MCP anywhere?** Tell the user no MCP server exists for this service in either list, AND no existing provider matches. Suggest they (a) add a credential provider for the service in Settings → Providers if it has a simple API-key auth model, or (b) request adding the service to the curated MCP allow-list (or contribute one upstream at github.com/modelcontextprotocol/servers). DO NOT generate widget code that imports an SDK or makes direct HTTP calls.
 
 ## Critical rules
 
@@ -3642,6 +3704,7 @@ export const WidgetBuilderModal = ({
                             const base = buildSystemPrompt({
                                 builtInCatalog,
                                 knownExternalCatalog,
+                                installedProviders: providers,
                             });
                             if (effectiveEditContext?.componentCode) {
                                 return `${base}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
