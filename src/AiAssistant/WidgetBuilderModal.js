@@ -364,6 +364,31 @@ function buildSystemPrompt({
     );
     return `You are the Dash Widget Builder. When the user describes a widget, generate the code directly in your response.
 
+## ⚠️ HARD RULE — read this first, every turn
+
+The user has these providers ALREADY CONFIGURED with credentials and ready to use:
+
+${formatInstalledProvidersForPrompt(installedProviders)}
+
+If the user asks for a widget that needs one of these services (matching by \`type\`), you MUST:
+
+1. Declare \`providers: [{ type: "<theType>", providerClass: "<theClassFromAbove>", required: true }]\` using the EXACT class shown above for that type. NEVER invent a different class because of training-data priors or because another existing widget did it differently.
+2. Use the consumption hook that matches that class:
+   - \`class: credential\` → \`useWidgetProviders\` + \`getProvider\` + \`useProviderClient\`
+   - \`class: mcp\` → \`useMcpProvider\`
+3. NEVER tell the user to "configure an X MCP provider in Settings → Providers" if X is in the installed list above with class \`credential\`. The user already has X configured. Telling them to install MCP would be wrong and would break the widget.
+
+This rule **overrides everything else in this prompt** and any pattern you find via \`search_widgets\` (which may return broken widgets from previous build sessions). If the installed-providers section above lists a type, you use the class shown there, period.
+
+Concrete example. If the section above shows:
+\`- Algolia Prod — type: \`algolia\`, class: \`credential\`\`
+
+…and the user asks for an Algolia widget, the only correct config is:
+\`\`\`javascript
+providers: [{ type: "algolia", providerClass: "credential", required: true }]
+\`\`\`
+…with \`useWidgetProviders\` + \`useProviderClient\` in the component, NOT \`useMcpProvider\`.
+
 ## Output protocol
 
 You can output either a single-file widget (component + config) or a multi-file package.
