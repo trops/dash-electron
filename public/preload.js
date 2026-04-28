@@ -72,12 +72,14 @@ const extendedApi = {
                 // componentCode/configCode alone still work for legacy
                 // single-file widgets.
                 files,
-                // Provider the user pre-selected via WidgetProviderPicker.
-                // The main process uses this to auto-correct any drift in
-                // the AI's generated config (`providers: [...]`) so the
-                // widget always declares the provider the user actually
-                // chose. Shape: { name, type, providerClass } or
-                // { sentinel: "none" } or null.
+                // Provider TYPE the user pre-selected via the
+                // ChatProviderGate. The main process uses this to
+                // auto-correct any drift in the AI's generated config
+                // (`providers: [...]`) so the widget always declares
+                // the type+class the user actually picked. Shape:
+                //   { type, providerClass } or { sentinel: "none" } or null
+                // (no instance name — instance binding is handled at
+                // runtime by the preview-area dropdown).
                 selectedProvider,
             }),
         aiBuild: (
@@ -108,9 +110,11 @@ const extendedApi = {
                 // category injection + ComponentManager registration
                 // path which keys off the primary widget.
                 files,
-                // Provider the user pre-selected via WidgetProviderPicker.
-                // Used by the main-process auto-correct to snap any AI
-                // drift in `providers: [...]` to the actual choice.
+                // Provider type the user pre-selected via the
+                // ChatProviderGate. Used by the main-process auto-correct
+                // to snap any AI drift in `providers: [...]` to the
+                // actual type+class. Shape: { type, providerClass } or
+                // { sentinel: "none" } or null.
                 selectedProvider,
             }),
         readSources: (widgetName, componentName) =>

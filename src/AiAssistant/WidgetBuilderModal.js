@@ -358,7 +358,6 @@ function buildSystemPrompt({
     const isPickedNone = selectedProvider?.sentinel === "none";
     const pickedType = selectedProvider?.type;
     const pickedClass = selectedProvider?.providerClass;
-    const pickedName = selectedProvider?.name;
 
     // Catalogs are still useful when no specific provider is picked
     // yet — keep the legacy decision-tree path so the modal still
@@ -383,7 +382,6 @@ function buildSystemPrompt({
 
 ## Provider for this widget (PRE-SELECTED — DO NOT DEVIATE)
 
-- Name: ${pickedName}
 - Type: ${pickedType}
 - Class: ${pickedClass}
 
@@ -404,7 +402,7 @@ import { Panel, EmptyState } from "@trops/dash-react";
 export default function MyWidget({ title }) {
   const { hasProvider, getProvider } = useWidgetProviders();
   if (!hasProvider("${pickedType}")) {
-    return <Panel><EmptyState message="Configure ${pickedName} in Settings → Providers" /></Panel>;
+    return <Panel><EmptyState message="Configure a ${pickedType} provider in Settings → Providers" /></Panel>;
   }
   const provider = getProvider("${pickedType}");
   const pc = useProviderClient(provider);
@@ -1474,20 +1472,23 @@ export const WidgetBuilderModal = ({
             setSelectedProviderForBuild({ sentinel: "none" });
             return;
         }
+        // Type-first architecture: derive just { type, providerClass }
+        // from the existing widget's config. Class is determined by
+        // matching an installed provider of that type, or falling back
+        // to "credential" (the more common case for non-MCP providers).
         const wantedType = types[0];
         const installed = Object.values(providers || {}).find(
             (p) => p && typeof p === "object" && p.type === wantedType
         );
-        if (installed) {
-            setSelectedProviderForBuild({
-                name: installed.name,
-                type: installed.type,
-                providerClass: installed.providerClass || "credential",
-            });
-        }
-        // If type declared but not installed, leave the picker null so
-        // the user is forced to install or pick manually — that's the
-        // safer default than silently selecting a non-existent provider.
+        setSelectedProviderForBuild({
+            type: wantedType,
+            providerClass:
+                installed?.providerClass ||
+                // No installed match — guess "mcp" if the type appears
+                // in the MCP catalog (heuristic), else default to
+                // "credential". Either way the user can change later.
+                "credential",
+        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         effectiveEditContext?.configCode,
@@ -4168,6 +4169,8 @@ export const WidgetBuilderModal = ({
                             selectedProviderForBuild === null && (
                                 <ChatProviderGate
                                     onChange={setSelectedProviderForBuild}
+                                    builtInCatalog={builtInCatalog}
+                                    knownExternalCatalog={knownExternalCatalog}
                                 />
                             )}
 

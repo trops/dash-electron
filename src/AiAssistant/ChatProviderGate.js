@@ -3,22 +3,27 @@
  *
  * Full-coverage overlay rendered inside the chat panel of
  * WidgetBuilderModal. Gates entry to the chat: until the user picks a
- * provider (or "no external provider"), they cannot interact with the
- * chat. This replaces the prior bottom-of-chat dropdown picker, whose
- * placement-inside-an-active-modal made the modal-stacking bug
- * possible and left the user uncertain whether the picker was wired.
+ * provider TYPE (or "no external provider"), they cannot interact
+ * with the chat.
  *
- * Selection shape (emitted via `onChange`):
- *   - { sentinel: "none" }                       → "no external provider"
- *   - { name, type, providerClass }              → an installed provider
+ * Type-first architecture (post-refactor): the gate lists provider
+ * TYPES drawn from three sources, deduped on (type, providerClass):
  *
- * Phase A scope: installed providers + the "no external provider"
- * sentinel only. Install-new is intentionally NOT here — Phase B will
- * close this modal and open Settings → Providers via a deep-link.
+ *   1. Built-in MCP catalog              → class = "mcp"
+ *   2. Known-external MCP catalog        → class = "mcp"
+ *   3. Installed providers' types        → class = whatever was saved
+ *                                          (e.g. "credential" for
+ *                                          algolia-style providers)
  *
- * The auto-select listener for `dash:provider-installed` is kept so
- * that if a provider is installed via any other path while the gate
- * is showing, the gate proactively picks it.
+ * Selection emits `{ type, providerClass }` — no instance name. The
+ * runtime instance binding ("which Algolia Prod / Dev / Sandbox?") is
+ * handled later by the existing preview-area `PreviewProviderPicker`
+ * dropdown.
+ *
+ * "Add new" is intentionally NOT in this gate. The user adds new
+ * provider INSTANCES of an existing type via the preview-area
+ * dropdown's empty-state CTA (Settings → Providers deep-link). The
+ * gate never offers creation of a new TYPE — types are catalog-defined.
  */
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { AppContext } from "@trops/dash-core";
@@ -26,7 +31,11 @@ import { FontAwesomeIcon, ThemeContext } from "@trops/dash-react";
 
 const NONE_SENTINEL = { sentinel: "none" };
 
-export const ChatProviderGate = ({ onChange }) => {
+export const ChatProviderGate = ({
+    onChange,
+    builtInCatalog = [],
+    knownExternalCatalog = [],
+}) => {
     const appContext = useContext(AppContext);
     const { currentTheme } = useContext(ThemeContext);
     const borderColor =
@@ -34,7 +43,7 @@ export const ChatProviderGate = ({ onChange }) => {
 
     // Pull installed providers from AppContext. If empty (the AppWrapper
     // may not have populated yet), fall back to a one-shot mainApi
-    // fetch — same pattern the prior picker used.
+    // fetch — same pattern the prior gate used.
     const contextProviders = useMemo(
         () => appContext?.providers || {},
         [appContext?.providers]
@@ -72,56 +81,45 @@ export const ChatProviderGate = ({ onChange }) => {
         };
     }, [contextProviders, appContext?.credentials?.appId]);
 
-    const providersMap =
+    const installedProviders =
         Object.keys(contextProviders).length > 0
             ? contextProviders
             : fallbackProviders;
 
-    // Group installed providers by type, alphabetized within each
-    // group. Same shape as the prior picker so swapping one for the
-    // other is mechanically simple.
-    const installedOptions = useMemo(() => {
-        const entries = Object.values(providersMap).filter(
-            (p) => p && typeof p === "object" && p.type && p.name
+    // Build the type list. Three sources, deduped on (type, class).
+    // Built-in MCP and known-external both contribute type+class="mcp".
+    // Installed providers contribute their own type+class (catches
+    // credential-class types like algolia that aren't in either MCP
+    // catalog).
+    const typeOptions = useMemo(() => {
+        const seen = new Map();
+
+        const addEntry = (type, providerClass, label) => {
+            if (!type || !providerClass) return;
+            const key = `${type}|${providerClass}`;
+            if (seen.has(key)) return;
+            seen.set(key, { type, providerClass, label: label || type });
+        };
+
+        for (const entry of builtInCatalog || []) {
+            if (!entry?.id) continue;
+            addEntry(entry.id, "mcp", entry.name || entry.id);
+        }
+        for (const entry of knownExternalCatalog || []) {
+            if (!entry?.id) continue;
+            addEntry(entry.id, "mcp", entry.name || entry.id);
+        }
+        for (const p of Object.values(installedProviders || {})) {
+            if (!p?.type) continue;
+            addEntry(p.type, p.providerClass || "credential", p.type);
+        }
+
+        return Array.from(seen.values()).sort((a, b) =>
+            a.type.localeCompare(b.type)
         );
-        const byType = new Map();
-        for (const p of entries) {
-            if (!byType.has(p.type)) byType.set(p.type, []);
-            byType.get(p.type).push({
-                name: p.name,
-                type: p.type,
-                providerClass: p.providerClass || "credential",
-            });
-        }
-        const groups = [];
-        for (const [type, list] of byType.entries()) {
-            list.sort((a, b) => a.name.localeCompare(b.name));
-            groups.push({ type, list });
-        }
-        groups.sort((a, b) => a.type.localeCompare(b.type));
-        return groups;
-    }, [providersMap]);
+    }, [builtInCatalog, knownExternalCatalog, installedProviders]);
 
-    // Auto-select on `dash:provider-installed`. If a provider is
-    // installed through any other flow while the gate is open, pick
-    // it without making the user click again.
-    useEffect(() => {
-        function onInstalled(event) {
-            const detail = event?.detail || {};
-            if (!detail?.name || !detail?.id) return;
-            const next = {
-                name: detail.name,
-                type: detail.id,
-                providerClass: detail.providerClass || "mcp",
-            };
-            onChange(next);
-        }
-        window.addEventListener("dash:provider-installed", onInstalled);
-        return () =>
-            window.removeEventListener("dash:provider-installed", onInstalled);
-    }, [onChange]);
-
-    const hasInstalled = installedOptions.length > 0;
+    const hasTypes = typeOptions.length > 0;
 
     return (
         <div
@@ -134,48 +132,47 @@ export const ChatProviderGate = ({ onChange }) => {
                         className="h-4 w-4 text-indigo-300"
                     />
                     <h2 className="text-sm font-semibold text-gray-100">
-                        Choose a provider for this widget
+                        Choose a provider type for this widget
                     </h2>
                 </div>
                 <p className="text-xs text-gray-400 leading-snug">
-                    The AI will write code that consumes the provider you pick
-                    here. Pick "No external provider" for self-contained widgets
-                    (clock, counter, etc.).
+                    The AI will write code targeting the type you pick. After
+                    selecting, you'll bind a specific provider instance in the
+                    preview pane. Pick "No external provider" for self-contained
+                    widgets (clock, counter, etc.).
                 </p>
             </div>
 
             <div className="flex-1 px-4 pb-4 space-y-3 overflow-y-auto">
-                {hasInstalled && (
+                {hasTypes && (
                     <div>
                         <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">
-                            Use one of your providers
+                            Provider types
                         </div>
                         <div
                             className={`rounded-md border ${borderColor} bg-gray-800/40 divide-y divide-gray-700/40`}
                         >
-                            {installedOptions.map(({ type, list }) => (
-                                <div key={type}>
-                                    {list.map((opt) => (
-                                        <button
-                                            key={opt.name}
-                                            type="button"
-                                            onClick={() => onChange(opt)}
-                                            className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-300 hover:bg-white/5 transition-colors"
-                                        >
-                                            <span className="truncate text-left">
-                                                {opt.name}
-                                            </span>
-                                            <span className="ml-2 flex items-center gap-1 shrink-0">
-                                                <span className="text-[10px] opacity-60">
-                                                    {opt.type}
-                                                </span>
-                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-200">
-                                                    {opt.providerClass}
-                                                </span>
-                                            </span>
-                                        </button>
-                                    ))}
-                                </div>
+                            {typeOptions.map((opt) => (
+                                <button
+                                    key={`${opt.type}|${opt.providerClass}`}
+                                    type="button"
+                                    onClick={() =>
+                                        onChange({
+                                            type: opt.type,
+                                            providerClass: opt.providerClass,
+                                        })
+                                    }
+                                    className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-300 hover:bg-white/5 transition-colors"
+                                >
+                                    <span className="truncate text-left">
+                                        {opt.type}
+                                    </span>
+                                    <span className="ml-2 flex items-center gap-1 shrink-0">
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-200">
+                                            {opt.providerClass}
+                                        </span>
+                                    </span>
+                                </button>
                             ))}
                         </div>
                     </div>
@@ -203,14 +200,15 @@ export const ChatProviderGate = ({ onChange }) => {
                     </button>
                 </div>
 
-                {!hasInstalled && (
+                {!hasTypes && (
                     <div
                         className={`rounded-md border ${borderColor} bg-amber-900/15 px-3 py-2 text-[11px] text-amber-200 leading-snug`}
                     >
-                        No providers configured. Pick "No external provider"
-                        above for a self-contained widget, or close this modal
-                        and add one in Settings → Providers, then reopen the
-                        builder.
+                        No provider types available. The MCP catalog may not
+                        have loaded yet, or you may be running in an offline
+                        environment. Pick "No external provider" above for a
+                        self-contained widget, or close this modal and try again
+                        once catalogs load.
                     </div>
                 )}
             </div>
