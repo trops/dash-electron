@@ -40,10 +40,33 @@
             // scoped handler; everything else falls through to React
             // error boundaries and DevTools. Appending error divs to
             // body was blocking clicks whenever any widget threw.
+            //
+            // While the AI Widget Builder modal is open it sets
+            // `window.__DASH_WIDGET_BUILDER_OPEN`. AI-generated widgets
+            // routinely throw (process.cwd, undefined imports, etc.)
+            // during their first render — those go through the modal's
+            // own scoped handler + PreviewErrorBoundary, which already
+            // shows the user a friendly error + "Send error to AI"
+            // recovery action. Spamming the global console with stack
+            // traces on top of that is just noise that makes the user
+            // think the app is broken when it actually caught the
+            // error cleanly.
             window.addEventListener(
                 "error",
                 function (e) {
+                    if (window.__DASH_WIDGET_BUILDER_OPEN) return;
                     console.error("Global error:", e.error || e.message);
+                },
+                true
+            );
+            window.addEventListener(
+                "unhandledrejection",
+                function (e) {
+                    if (window.__DASH_WIDGET_BUILDER_OPEN) return;
+                    console.error(
+                        "Unhandled rejection:",
+                        e.reason || e.message
+                    );
                 },
                 true
             );

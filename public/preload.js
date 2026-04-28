@@ -58,7 +58,8 @@ const extendedApi = {
             componentCode,
             configCode,
             sourcePackage,
-            files
+            files,
+            selectedProvider
         ) =>
             ipcRenderer.invoke("widget:ai-compile-preview", {
                 widgetName,
@@ -71,6 +72,13 @@ const extendedApi = {
                 // componentCode/configCode alone still work for legacy
                 // single-file widgets.
                 files,
+                // Provider the user pre-selected via WidgetProviderPicker.
+                // The main process uses this to auto-correct any drift in
+                // the AI's generated config (`providers: [...]`) so the
+                // widget always declares the provider the user actually
+                // chose. Shape: { name, type, providerClass } or
+                // { sentinel: "none" } or null.
+                selectedProvider,
             }),
         aiBuild: (
             widgetName,
@@ -80,7 +88,8 @@ const extendedApi = {
             cellContext,
             appId,
             remixMeta,
-            files
+            files,
+            selectedProvider
         ) =>
             ipcRenderer.invoke("widget:ai-build", {
                 widgetName,
@@ -99,6 +108,10 @@ const extendedApi = {
                 // category injection + ComponentManager registration
                 // path which keys off the primary widget.
                 files,
+                // Provider the user pre-selected via WidgetProviderPicker.
+                // Used by the main-process auto-correct to snap any AI
+                // drift in `providers: [...]` to the actual choice.
+                selectedProvider,
             }),
         readSources: (widgetName, componentName) =>
             ipcRenderer.invoke("widget:read-sources", {

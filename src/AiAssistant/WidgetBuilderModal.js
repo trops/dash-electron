@@ -33,6 +33,7 @@ import {
     makeScopedComponentId,
 } from "@trops/dash-core";
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
+import { ChatProviderGate } from "./ChatProviderGate";
 
 /**
  * Wraps the preview widget in the full context stack (AppContext,
@@ -342,14 +343,27 @@ function buildSystemPrompt({
     builtInCatalog = [],
     knownExternalCatalog = [],
     installedProviders = {},
+    selectedProvider = null,
 } = {}) {
-    // Compute the set of types the user already has installed. Both
-    // catalog lists are filtered to EXCLUDE these — the AI's decision
-    // tree step 0 (match against installed) is the only path the
-    // service should take when a provider already exists. If the user
-    // has algolia as `credential` AND algolia also appears in the
-    // built-in MCP catalog, listing both causes the AI to flip a coin;
-    // hiding the catalog entry forces step 0.
+    // The user picks a provider via the WidgetProviderPicker BEFORE
+    // sending a chat message. When a provider is selected, the prompt
+    // gets a single focused "use this exact provider" section and the
+    // catalogs + decision tree + HARD RULE are dropped entirely. This
+    // takes the provider-selection decision out of the LLM's hands so
+    // it can stop wavering between MCP/credential and just write code.
+    const hasPicked =
+        selectedProvider &&
+        (selectedProvider.sentinel === "none" ||
+            (selectedProvider.type && selectedProvider.providerClass));
+    const isPickedNone = selectedProvider?.sentinel === "none";
+    const pickedType = selectedProvider?.type;
+    const pickedClass = selectedProvider?.providerClass;
+    const pickedName = selectedProvider?.name;
+
+    // Catalogs are still useful when no specific provider is picked
+    // yet — keep the legacy decision-tree path so the modal still
+    // works during the brief window between modal-open and picker-
+    // selection. Once the picker fires, the focused branch wins.
     const installedTypeSet = new Set();
     for (const p of Object.values(installedProviders || {})) {
         if (p && typeof p === "object" && p.type) {
@@ -362,6 +376,195 @@ function buildSystemPrompt({
     const filteredKnownExternal = (knownExternalCatalog || []).filter(
         (s) => s && !installedTypeSet.has(s.id)
     );
+
+    // Focused branch: the user has picked. Emit only what the AI needs.
+    if (hasPicked && !isPickedNone) {
+        return `You are the Dash Widget Builder. The user has pre-selected the provider for this widget. Your job is to write code that uses it.
+
+## Provider for this widget (PRE-SELECTED — DO NOT DEVIATE)
+
+- Name: ${pickedName}
+- Type: ${pickedType}
+- Class: ${pickedClass}
+
+The widget config MUST declare:
+\`\`\`javascript
+providers: [{ type: "${pickedType}", providerClass: "${pickedClass}", required: true }]
+\`\`\`
+
+Consume the provider via the hook for class \`${pickedClass}\`:
+
+${
+    pickedClass === "credential"
+        ? `\`\`\`jsx
+import React, { useState, useEffect } from "react";
+import { useWidgetProviders, useProviderClient } from "@trops/dash-core";
+import { Panel, EmptyState } from "@trops/dash-react";
+
+export default function MyWidget({ title }) {
+  const { hasProvider, getProvider } = useWidgetProviders();
+  if (!hasProvider("${pickedType}")) {
+    return <Panel><EmptyState message="Configure ${pickedName} in Settings → Providers" /></Panel>;
+  }
+  const provider = getProvider("${pickedType}");
+  const pc = useProviderClient(provider);
+  // pc is { providerHash, providerName, dashboardAppId }
+  // For provider-specific API calls, use the host IPC, e.g. for algolia:
+  //   const result = await window.mainApi.algolia.search(pc, { indexName, query });
+  // If no host IPC exists for this type yet, leave a TODO comment in the
+  // call site — the user will wire it.
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    // TODO: replace with the appropriate window.mainApi.<service>.<method>(pc, ...)
+    // call for type "${pickedType}".
+    return () => { cancelled = true; };
+  }, [pc?.providerHash]);
+  return <Panel>{/* render data */}</Panel>;
+}
+\`\`\``
+        : `\`\`\`jsx
+import React, { useState, useEffect } from "react";
+import { useMcpProvider } from "@trops/dash-core";
+import { Panel, ErrorMessage, Skeleton } from "@trops/dash-react";
+
+export default function MyWidget() {
+  const { callTool, tools, isConnected, error } = useMcpProvider("${pickedType}");
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    if (!isConnected) return;
+    let cancelled = false;
+    // TODO: pick the right tool from \`tools\` (or pass an explicit name) for
+    // the user's intent and call it. Tool calls are async, must go in a
+    // useEffect, never at render.
+    // Example shape:
+    //   callTool("<tool_name>", { /* args */ })
+    //     .then((r) => { if (!cancelled) setData(r); })
+    //     .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isConnected, callTool]);
+  if (error) return <Panel><ErrorMessage message={error} /></Panel>;
+  if (!isConnected) return <Panel><Skeleton /></Panel>;
+  return <Panel>{/* render data */}</Panel>;
+}
+\`\`\``
+}
+
+DO NOT change the provider class. DO NOT pick a different provider type. DO NOT use \`useMcpProvider\` if the class above is \`credential\`, and vice versa. The user has already configured this provider — your only job is to write a working widget that consumes it.
+
+## Output protocol
+
+You can output either a single-file widget (component + config) or a multi-file package.
+
+SINGLE-FILE (default for most widgets):
+1. A \`\`\`jsx code block with the React component
+2. A \`\`\`javascript code block with the .dash.js config
+
+That's it — no \`File:\` markers needed. The app saves them as
+\`widgets/<Name>.js\` and \`widgets/<Name>.dash.js\`.
+
+MULTI-FILE (when the package needs shared utilities, multiple widgets, or supporting files):
+Prefix each fenced code block with a \`File: <relative-path>\` marker on its own line.
+
+Allowed paths:
+- \`widgets/<Name>.js\` and \`widgets/<Name>.dash.js\` for each widget
+- \`widgets/<subdir>/foo.js\` for shared utilities
+- Package-root files: \`README.md\`, \`<package>.config.js\`
+- DO NOT write to \`dist/\`, \`node_modules/\`, \`.git/\`, or any hidden dotfile path
+- DO NOT use \`..\` segments or absolute paths
+
+For multi-widget packages, every widget needs BOTH a \`<Name>.js\` and matching \`<Name>.dash.js\`.
+
+## Widget config rules
+
+- Default export the component: \`export default function WidgetName(props) { ... }\`
+- Import React hooks from 'react': \`import React, { useState, useEffect } from 'react';\`
+- NEVER import useState, useEffect, or any React hooks from '@trops/dash-react' — they MUST come from 'react'
+- Wrap the component in \`<Panel>…</Panel>\` (it's the canonical widget chrome).
+- Config MUST include: \`component\` (matching function name), \`name\` (display name with spaces), \`type: "widget"\`, \`canHaveChildren: false\`, \`workspace: "ai-built"\`, plus the \`providers: [...]\` array shown above.
+
+### How userConfig values reach the component
+
+The \`userConfig\` block is a SCHEMA. The host passes each field's value as a flat top-level prop (named after the field key). Read \`props.fieldName\` directly. NEVER use \`props.userConfig.X\` or \`props.config.X\` — those don't exist.
+
+Example: \`userConfig: { defaultJql: { type: "text", defaultValue: "X", displayName: "Default JQL" } }\` → component reads \`props.defaultJql\` (not \`props.userConfig.defaultJql\`). Always provide a fallback: \`const v = props.defaultJql || "X";\`.
+
+## Component library — @trops/dash-react
+
+All widgets MUST use @trops/dash-react components instead of raw HTML — they pick up the active theme automatically.
+
+Components: Panel (REQUIRED widget wrapper), Card, DashPanel, LayoutContainer, Heading/2/3, SubHeading/2/3, Paragraph, Tag, Button, ButtonIcon, InputText, TextArea, SelectInput, Toggle, Switch, Checkbox, RadioGroup, Slider, SearchInput, Menu, MenuItem, DropdownPanel, Alert, AlertBanner, Toast, ProgressBar, EmptyState, Skeleton, ErrorMessage, Table, Tabs, Accordion, DataList, StatCard, FontAwesomeIcon, Modal.
+
+Forms accept a \`label\` prop, NOT children. Buttons/Tags/Headings prefer prop form (\`title\`, \`text\`) over children for visible text.
+
+## Styling rules — TAILWIND SAFELIST IS NARROW
+
+ALLOWED: \`bg/text/border-{color}-{shade}\` (gray, slate, zinc, neutral, stone, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, rose; shades 50-950), \`opacity-0..100\`, \`grid-cols-{1..12}\`, gradient \`from/via/to-{color}-{shade}\`, hover variants on bg/text/border colors, standard layout/spacing utilities at standard sizes.
+
+DO NOT USE (silently fail): opacity modifiers (\`bg-white/10\`), arbitrary values (\`text-[10px]\`, \`w-[440px]\`, \`bg-[#abc]\`), \`ring-*\`, \`divide-*\` color variants, \`outline-*\` color variants. Use inline \`style={{...}}\` for non-safelisted needs.
+
+## Critical rules
+
+- Do NOT use Read, Write, Edit, Bash, Glob, or Grep tools.
+- Do NOT invoke the dash-widget-builder skill or any other skill.
+- Do NOT read files, scan directories, or run shell commands.
+- Do NOT call any tools — the provider is already chosen.
+- ONLY output text + code blocks (with optional \`File:\` markers).
+- ALWAYS output COMPLETE code blocks. Never partial diffs or snippets.
+- ALWAYS emit BOTH a \`\`\`jsx component block AND a \`\`\`javascript config block — never just one. Without the config block the widget will not install. The config block MUST contain the \`providers: [...]\` array shown above.
+- Widget code runs in the BROWSER (renderer process). DO NOT use Node-only APIs: \`process.cwd()\`, \`process.env\` (except \`process.env.NODE_ENV\`), \`__dirname\`, \`__filename\`, \`require()\`, or imports of \`fs\` / \`path\` / \`os\` / \`child_process\` / \`crypto\` / \`stream\`. For paths default to literal strings like \`"/"\` or \`"~/"\`, or take a path from \`props\` / \`userConfig\`. To talk to the OS, go through the provider hooks (mcp \`callTool\` or credential \`window.mainApi.<service>\`).
+- DEFENSIVE on every MCP tool response. Shapes are provider-specific and undocumented; never assume a field exists. Guard before calling string/array methods: \`typeof item.name === "string" ? item.name.split(".").pop() : ""\`, \`Array.isArray(result?.entries) ? result.entries : []\`, \`const name = typeof item === "string" ? item : item?.name\`. Use optional chaining (\`item?.type === "directory"\`). Errors like "Cannot read properties of undefined" or "X is not a function" on first render are NOT acceptable.
+- For MCP widgets: DON'T hardcode tool names like \`callTool("read_directory", ...)\`. Tool names are server-specific and AI guesses are usually wrong (e.g., the official filesystem server exposes \`list_directory\`, not \`read_directory\`). Discover the right tool from the live \`tools\` array returned by \`useMcpProvider\`: \`const tool = tools.find(t => t.name === "list_directory") || tools.find(t => t.name.includes("list"))\`. If no tool matches, render an actionable error (\`<ErrorMessage message={\\\`No directory-listing tool. Available: \\\${tools.map(t => t.name).join(", ")}\\\`} />\`), NOT an empty state.
+- **MCP response envelope.** Tool responses follow the protocol shape \`{ content: [{ type: "text", text: "…" }, …] }\`. The actual data is INSIDE the \`text\` field of each content item, NOT at the top of \`result\`. Extract before parsing: \`const text = result?.content?.find(c => c?.type === "text")?.text; const lines = typeof text === "string" ? text.split("\\\\n").filter(Boolean) : [];\`. Server-specific format inside \`text\` varies (newline-separated list, JSON, plain prose) — parse per the server's documented format. The standard filesystem server's \`list_directory\` returns lines like \`[FILE] foo.txt\` and \`[DIR] subdir/\`. DON'T assume \`callTool(...)\` returns a structured array directly — that's the protocol envelope, not the data.
+- **NEVER silently swallow errors.** A \`catch\` block MUST render the error to the user via \`<ErrorMessage message={err.message} />\` (or equivalent visible feedback in the widget) — NOT just \`setData([])\` followed by a blank state. An empty array is fine when the data really IS empty; an empty array as the *result of a caught exception* is a silent failure that leaves the user wondering whether the widget loaded. Every error path needs a user-visible signal.
+- Respond immediately with the code.`;
+    }
+
+    // No-provider branch: user explicitly picked "no external provider".
+    // Skip ALL provider context. The widget should be self-contained.
+    if (isPickedNone) {
+        return `You are the Dash Widget Builder. The user has chosen NOT to use any external provider for this widget — generate a self-contained widget (clock, counter, static display, etc.) with no \`providers: [...]\` array in the config.
+
+## Output protocol
+
+Single-file: a \`\`\`jsx code block with the component + a \`\`\`javascript code block with the config. Multi-file: \`File: <path>\` markers before each fenced block; allowed paths are \`widgets/<Name>.js\`, \`widgets/<Name>.dash.js\`, \`widgets/<subdir>/*.js\`, package-root \`README.md\` / \`<package>.config.js\`. Don't write to \`dist/\`, \`node_modules/\`, dotfiles, or use \`..\`.
+
+## Widget config rules
+
+- Default export the component: \`export default function WidgetName(props) { ... }\`
+- Import React hooks from 'react': \`import React, { useState, useEffect } from 'react';\`
+- NEVER import hooks from '@trops/dash-react'.
+- Wrap the component in \`<Panel>…</Panel>\`.
+- Config MUST include: \`component\`, \`name\`, \`type: "widget"\`, \`canHaveChildren: false\`, \`workspace: "ai-built"\`. NO \`providers: [...]\` array.
+
+### How userConfig values reach the component
+
+The host passes each \`userConfig\` field's value as a flat top-level prop. Read \`props.fieldName\`, NEVER \`props.userConfig.fieldName\`. Always fallback: \`const v = props.fieldName || "default";\`.
+
+## Component library
+
+Use @trops/dash-react: Panel (REQUIRED), Card, Heading, SubHeading, Paragraph, Tag, Button, InputText, TextArea, SelectInput, Toggle, Switch, Checkbox, ProgressBar, EmptyState, Skeleton, Table, Tabs, FontAwesomeIcon, etc.
+
+## Styling rules — TAILWIND SAFELIST IS NARROW
+
+ALLOWED: \`bg/text/border-{color}-{shade}\`, \`opacity-0..100\`, \`grid-cols-{1..12}\`. DO NOT USE: opacity modifiers (\`bg-white/10\`), arbitrary values, \`ring-*\`, \`divide-*\` color variants. Inline \`style={{...}}\` is the escape hatch.
+
+## Critical rules
+
+- Do NOT call any tools.
+- Do NOT invoke skills.
+- ONLY output text + code blocks.
+- Widget code runs in the BROWSER (renderer process). DO NOT use Node-only APIs: \`process.cwd()\`, \`process.env\` (except \`process.env.NODE_ENV\`), \`__dirname\`, \`__filename\`, \`require()\`, or imports of \`fs\` / \`path\` / \`os\` / \`child_process\` / \`crypto\` / \`stream\`. For paths default to literal strings or read from \`props\` / \`userConfig\`.
+- DEFENSIVE on every MCP tool response. Even though this widget has no provider, the same hygiene applies to any external data (\`props\`, fetched values): never assume a field exists. Guard before calling string/array methods (\`typeof x === "string"\`, \`Array.isArray(y)\`, optional chaining). Errors like "Cannot read properties of undefined" on first render are NOT acceptable.
+- **NEVER silently swallow errors.** A \`catch\` block MUST render the error to the user via \`<ErrorMessage message={err.message} />\` (or equivalent visible feedback in the widget) — NOT just \`setData([])\` followed by a blank state. An empty array is fine when the data really IS empty; an empty array as the *result of a caught exception* is a silent failure. Every error path needs a user-visible signal.
+- Respond immediately with the code.`;
+    }
+
+    // Legacy branch: nothing picked yet. Keep the catalogs + decision
+    // tree as a fallback so the modal isn't broken if somehow the
+    // picker is bypassed. This is rarely hit in practice — the picker
+    // gates the chat input — but the legacy prompt is here as a
+    // safety net during the rollout.
     return `You are the Dash Widget Builder. When the user describes a widget, generate the code directly in your response.
 
 ## ⚠️ HARD RULE — read this first, every turn
@@ -706,6 +909,11 @@ YOU ARE RUNNING INSIDE AN EMBEDDED UI, NOT AN INTERACTIVE TERMINAL:
 - The \`install_known_mcp_server\` tool is the ONLY tool you should call, and only when step 2 of the decision tree applies. When step 2 applies, calling that tool BEFORE writing any widget code is required, not optional — the "respond immediately with code" rule below does NOT override the decision tree.
 - ONLY output text + code blocks (with optional \`File:\` markers) — that's how the app receives your widget.
 - ALWAYS output COMPLETE code blocks. Never partial diffs or snippets, even for small changes — re-emit the full file.
+- Widget code runs in the BROWSER (renderer process). DO NOT use Node-only APIs: \`process.cwd()\`, \`process.env\` (except \`process.env.NODE_ENV\`), \`__dirname\`, \`__filename\`, \`require()\`, or imports of \`fs\` / \`path\` / \`os\` / \`child_process\` / \`crypto\` / \`stream\`. For paths default to literal strings like \`"/"\` or \`"~/"\`, or take a path from \`props\` / \`userConfig\`. To talk to the OS, go through the provider hooks (mcp \`callTool\` or credential \`window.mainApi.<service>\`).
+- DEFENSIVE on every MCP tool response. Shapes are provider-specific and undocumented; never assume a field exists. Guard before calling string/array methods: \`typeof item.name === "string" ? item.name.split(".").pop() : ""\`, \`Array.isArray(result?.entries) ? result.entries : []\`, \`const name = typeof item === "string" ? item : item?.name\`. Use optional chaining (\`item?.type === "directory"\`). Errors like "Cannot read properties of undefined" or "X is not a function" on first render are NOT acceptable.
+- For MCP widgets: DON'T hardcode tool names like \`callTool("read_directory", ...)\`. Tool names are server-specific and AI guesses are usually wrong (e.g., the official filesystem server exposes \`list_directory\`, not \`read_directory\`). Discover the right tool from the live \`tools\` array returned by \`useMcpProvider\`: \`const tool = tools.find(t => t.name === "list_directory") || tools.find(t => t.name.includes("list"))\`. If no tool matches, render an actionable error (\`<ErrorMessage message={\\\`No directory-listing tool. Available: \\\${tools.map(t => t.name).join(", ")}\\\`} />\`), NOT an empty state.
+- **MCP response envelope.** Tool responses follow the protocol shape \`{ content: [{ type: "text", text: "…" }, …] }\`. The actual data is INSIDE the \`text\` field of each content item, NOT at the top of \`result\`. Extract before parsing: \`const text = result?.content?.find(c => c?.type === "text")?.text; const lines = typeof text === "string" ? text.split("\\\\n").filter(Boolean) : [];\`. Server-specific format inside \`text\` varies (newline-separated list, JSON, plain prose) — parse per the server's documented format. The standard filesystem server's \`list_directory\` returns lines like \`[FILE] foo.txt\` and \`[DIR] subdir/\`. DON'T assume \`callTool(...)\` returns a structured array directly — that's the protocol envelope, not the data.
+- **NEVER silently swallow errors.** A \`catch\` block MUST render the error to the user via \`<ErrorMessage message={err.message} />\` (or equivalent visible feedback in the widget) — NOT just \`setData([])\` followed by a blank state. An empty array is fine when the data really IS empty; an empty array as the *result of a caught exception* is a silent failure that leaves the user wondering whether the widget loaded. Every error path needs a user-visible signal.
 - Respond immediately with the code — do not plan, research, or scaffold first. EXCEPTION: if the decision tree directs you to call \`install_known_mcp_server\` first, do that first, then immediately output the code once the tool returns.`;
 }
 
@@ -936,6 +1144,34 @@ const VALID_CATEGORIES = [
 ];
 
 /**
+ * Build a default `.dash.js` config literal when the AI emitted only the
+ * component block. Bakes in the user-picked provider (if any) so the Code
+ * tab shows what's actually going to install rather than a blank file.
+ * The category is injected later by handleInstall once the user picks one.
+ */
+function synthesizeDefaultConfigCode(widgetName, selectedProvider) {
+    if (!widgetName) return "";
+    const displayName = widgetName.replace(/([A-Z])/g, " $1").trim();
+    const providersLine = (() => {
+        if (!selectedProvider) return "";
+        if (selectedProvider.sentinel === "none") return "";
+        const { type, providerClass } = selectedProvider;
+        if (!type || !providerClass) return "";
+        return `\n    providers: [{ type: "${type}", providerClass: "${providerClass}", required: true }],`;
+    })();
+    return `export default {
+    component: "${widgetName}",
+    name: "${displayName}",
+    package: "${displayName}",
+    author: "AI Assistant",
+    type: "widget",
+    canHaveChildren: false,
+    workspace: "ai-built",${providersLine}
+};
+`;
+}
+
+/**
  * Inject (or replace) a `category: "..."` field on an `export default { ... }`
  * config literal. The aiBuild IPC handler writes configCode verbatim to disk
  * with no parsing, so any string transform here lands directly in the saved
@@ -1110,6 +1346,23 @@ export const WidgetBuilderModal = ({
     // editContext.userPrefs (when editing an existing widget) takes
     // priority because that's the user's actually-saved value.
     const [previewWidgetDefaults, setPreviewWidgetDefaults] = useState({});
+    // Provider the user selected for the widget being built. Drives the
+    // system prompt (single deterministic provider section instead of a
+    // catalog + decision tree the LLM has to navigate) AND the post-
+    // processing rewrite that snaps the AI's generated config to the
+    // selected provider. See WidgetProviderPicker.
+    //   - null                                    → not picked yet
+    //   - { sentinel: "none" }                    → "no external provider"
+    //   - { name, type, providerClass }           → an installed provider
+    const [selectedProviderForBuild, setSelectedProviderForBuild] =
+        useState(null);
+    // Mirror into a ref so the message-poller closure (which captures
+    // state at modal-open time) can read the latest pick without us
+    // having to invalidate the interval on every change.
+    const selectedProviderForBuildRef = useRef(null);
+    useEffect(() => {
+        selectedProviderForBuildRef.current = selectedProviderForBuild;
+    }, [selectedProviderForBuild]);
     const [previewError, setPreviewError] = useState(null);
     // Structured error metadata from the main process (e.g. an
     // ESBUILD_SPAWN_FAILED with diagnostics). When present we render an
@@ -1205,6 +1458,41 @@ export const WidgetBuilderModal = ({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [effectiveEditContext?.originalWidgetId]);
+
+    // Pre-populate the provider picker from edit-context when editing
+    // an existing widget. If the existing config declares a provider
+    // type that matches one of the user's installed providers, pick
+    // that one. Otherwise leave the picker null so the user picks
+    // explicitly.
+    React.useEffect(() => {
+        if (!effectiveEditContext?.configCode) return;
+        const types = extractProviderTypesFromConfigCode(
+            effectiveEditContext.configCode
+        );
+        if (types.length === 0) {
+            // Existing widget has no provider declared → "no external".
+            setSelectedProviderForBuild({ sentinel: "none" });
+            return;
+        }
+        const wantedType = types[0];
+        const installed = Object.values(providers || {}).find(
+            (p) => p && typeof p === "object" && p.type === wantedType
+        );
+        if (installed) {
+            setSelectedProviderForBuild({
+                name: installed.name,
+                type: installed.type,
+                providerClass: installed.providerClass || "credential",
+            });
+        }
+        // If type declared but not installed, leave the picker null so
+        // the user is forced to install or pick manually — that's the
+        // safer default than silently selecting a non-existent provider.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        effectiveEditContext?.configCode,
+        effectiveEditContext?.originalWidgetId,
+    ]);
     // Device-code sign-in flow for the registry. When the user clicks
     // "Sign in to preview", we stash the flow here so we can display the
     // user code + poll for completion.
@@ -1647,6 +1935,11 @@ export const WidgetBuilderModal = ({
     useEffect(() => {
         if (!isOpen) return;
 
+        // Tells the early-boot error listener in public/index.html to
+        // stay quiet — we own all error handling while the modal is
+        // open, and double-logging just confuses the user.
+        window.__DASH_WIDGET_BUILDER_OPEN = true;
+
         const handleCapture = (message) => {
             console.warn("[WidgetBuilderModal] suppressed error:", message);
             setPreviewError(message || "Widget runtime error");
@@ -1701,6 +1994,7 @@ export const WidgetBuilderModal = ({
             );
             window.onerror = prevOnError;
             window.onunhandledrejection = prevOnRejection;
+            delete window.__DASH_WIDGET_BUILDER_OPEN;
         };
     }, [isOpen]);
 
@@ -1728,6 +2022,13 @@ export const WidgetBuilderModal = ({
                             configCode: null,
                         });
                         setInstallStatus(null);
+                        // Reset the provider gate so it reappears for the
+                        // user to re-pick (matches user-stated UX: "if the
+                        // user would like to change the provider, the
+                        // session would end, a new chat would begin and the
+                        // provider view would show as if they started from
+                        // the beginning").
+                        setSelectedProviderForBuild(null);
                         lastCompiledCode.current = null;
                         return;
                     }
@@ -1750,8 +2051,62 @@ export const WidgetBuilderModal = ({
                             console.log(
                                 "[WidgetBuilder] New code detected, compiling preview..."
                             );
-                            setDetectedCode(extracted);
-                            compilePreview(extracted);
+                            // If AI emitted only the component (no .dash.js
+                            // block), synthesize a default config bound to
+                            // the picker selection so the Code tab shows
+                            // the file the user is actually going to
+                            // install. Without this the .dash.js editor
+                            // appears empty and the user can't see that
+                            // their picked provider is wired in.
+                            let normalized = extracted;
+                            if (!extracted.configCode) {
+                                // Derive widgetName from the AI's component
+                                // code rather than reading the stale captured
+                                // closure variable (this poller was set up
+                                // when the modal first opened and detectedCode
+                                // was empty).
+                                const liveWidgetName = extractWidgetName(
+                                    extracted.componentCode
+                                );
+                                const livePick =
+                                    selectedProviderForBuildRef.current;
+                                const synthesized = synthesizeDefaultConfigCode(
+                                    liveWidgetName,
+                                    livePick
+                                );
+                                if (synthesized && liveWidgetName) {
+                                    const filesWithConfig = (() => {
+                                        const out = Array.isArray(
+                                            extracted.files
+                                        )
+                                            ? [...extracted.files]
+                                            : [];
+                                        const dashPath = `widgets/${liveWidgetName}.dash.js`;
+                                        const existing = out.findIndex(
+                                            (f) => f?.path === dashPath
+                                        );
+                                        if (existing >= 0) {
+                                            out[existing] = {
+                                                path: dashPath,
+                                                content: synthesized,
+                                            };
+                                        } else {
+                                            out.push({
+                                                path: dashPath,
+                                                content: synthesized,
+                                            });
+                                        }
+                                        return out;
+                                    })();
+                                    normalized = {
+                                        ...extracted,
+                                        configCode: synthesized,
+                                        files: filesWithConfig,
+                                    };
+                                }
+                            }
+                            setDetectedCode(normalized);
+                            compilePreview(normalized);
                         }
                     } else if (msgs.length > 0 && false) {
                         // Debug: check if assistant responded but no code blocks found
@@ -1889,7 +2244,10 @@ export const WidgetBuilderModal = ({
                         // resolve relative imports during preview.
                         Array.isArray(code.files) && code.files.length > 0
                             ? code.files
-                            : null
+                            : null,
+                        // Provider the user pre-selected — main process
+                        // auto-corrects any drift in the AI's config.
+                        selectedProviderForBuild
                     );
 
                 if (isStale()) return;
@@ -1969,7 +2327,7 @@ export const WidgetBuilderModal = ({
                 if (!isStale()) setIsCompiling(false);
             }
         },
-        [effectiveEditContext?.originalPackage]
+        [effectiveEditContext?.originalPackage, selectedProviderForBuild]
     );
 
     // Fetch a registry widget's source (no install), hand it to the existing
@@ -2433,10 +2791,17 @@ export const WidgetBuilderModal = ({
                     );
                 }
             } else {
-                const displayName = installName
-                    .replace(/([A-Z])/g, " $1")
-                    .trim();
-                finalConfigCode = `export default { component: "${installName}", name: "${displayName}", package: "${displayName}", author: "AI Assistant", category: "${selectedCategory}", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
+                // Same synthesizer the message-poller uses, with the
+                // user-picked category baked in. Picker selection drives
+                // the providers array.
+                finalConfigCode = synthesizeDefaultConfigCode(
+                    installName,
+                    selectedProviderForBuild
+                );
+                finalConfigCode = injectCategoryIntoConfigCode(
+                    finalConfigCode,
+                    selectedCategory
+                );
             }
 
             // Build the final multi-file payload. Start from the
@@ -2511,7 +2876,10 @@ export const WidgetBuilderModal = ({
                 cellContext || null,
                 process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron",
                 remixMeta,
-                finalFiles
+                finalFiles,
+                // Provider the user pre-selected — main process
+                // auto-corrects any drift in the AI's config to match.
+                selectedProviderForBuild
             );
             if (result?.success) {
                 setInstallStatus({
@@ -2552,6 +2920,7 @@ export const WidgetBuilderModal = ({
         isRemixMode,
         editMode,
         remixName,
+        selectedProviderForBuild,
     ]);
 
     if (!isOpen) return null;
@@ -3783,40 +4152,61 @@ export const WidgetBuilderModal = ({
                         </span>
                     </div>
 
-                    <ChatCore
-                        title=""
-                        model={model}
-                        systemPrompt={(() => {
-                            if (chatMode === "discover") {
-                                return DISCOVER_SYSTEM_PROMPT;
+                    {/* Chat content + provider gate. Relative wrapper
+                        so the gate's `absolute inset-0` covers only
+                        this region — the mode toggle above stays
+                        clickable so the user can switch to Discover.
+                        The gate appears when in build mode and no
+                        provider has been picked yet (Edit-with-AI
+                        auto-derives via the useEffect at line ~1467
+                        and skips the gate). New Chat clears messages
+                        which triggers the message-poller's reset
+                        block to also null `selectedProviderForBuild`,
+                        re-opening the gate. */}
+                    <div className="relative flex flex-col flex-1 min-h-0">
+                        {chatMode === "build" &&
+                            selectedProviderForBuild === null && (
+                                <ChatProviderGate
+                                    onChange={setSelectedProviderForBuild}
+                                />
+                            )}
+
+                        <ChatCore
+                            title=""
+                            model={model}
+                            systemPrompt={(() => {
+                                if (chatMode === "discover") {
+                                    return DISCOVER_SYSTEM_PROMPT;
+                                }
+                                const base = buildSystemPrompt({
+                                    builtInCatalog,
+                                    knownExternalCatalog,
+                                    installedProviders: providers,
+                                    selectedProvider: selectedProviderForBuild,
+                                });
+                                if (effectiveEditContext?.componentCode) {
+                                    return `${base}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
+                                        effectiveEditContext.componentCode
+                                    }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
+                                        effectiveEditContext.configCode || ""
+                                    }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
+                                }
+                                return `${base}\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences inviting the user to describe the widget they want to build (what it should show, what data source it pulls from, what interactions it needs). No lists, no bullet points, no examples — keep it under 30 words total.`;
+                            })()}
+                            maxToolRounds="10"
+                            apiKey={apiKey}
+                            backend={preferredBackend}
+                            persistKey="dash-widget-builder"
+                            hideToolsBanner={true}
+                            initialMessage={
+                                chatMode === "discover"
+                                    ? "Tell me what kind of widget you're looking for."
+                                    : effectiveEditContext?.componentCode
+                                    ? "Hello, let's make some edits to this widget."
+                                    : "Hi, I'd like to build a new widget."
                             }
-                            const base = buildSystemPrompt({
-                                builtInCatalog,
-                                knownExternalCatalog,
-                                installedProviders: providers,
-                            });
-                            if (effectiveEditContext?.componentCode) {
-                                return `${base}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
-                                    effectiveEditContext.componentCode
-                                }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
-                                    effectiveEditContext.configCode || ""
-                                }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
-                            }
-                            return `${base}\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences inviting the user to describe the widget they want to build (what it should show, what data source it pulls from, what interactions it needs). No lists, no bullet points, no examples — keep it under 30 words total.`;
-                        })()}
-                        maxToolRounds="10"
-                        apiKey={apiKey}
-                        backend={preferredBackend}
-                        persistKey="dash-widget-builder"
-                        hideToolsBanner={true}
-                        initialMessage={
-                            chatMode === "discover"
-                                ? "Tell me what kind of widget you're looking for."
-                                : effectiveEditContext?.componentCode
-                                ? "Hello, let's make some edits to this widget."
-                                : "Hi, I'd like to build a new widget."
-                        }
-                    />
+                        />
+                    </div>
                 </div>
             </div>
         </Modal>

@@ -2010,6 +2010,84 @@ function createWindow() {
             return result;
         }
 
+        /**
+         * Auto-correct safety net for the WidgetProviderPicker. The user
+         * chose a provider in the picker UI; the LLM may have generated
+         * a config that declares a different `type` or `providerClass`
+         * (training-data anchor, search_widgets imitation, etc.). Snap
+         * the config's `providers: [...]` to match the picker so the
+         * widget on disk always uses the user's chosen provider.
+         *
+         * Conservative regex rewrite: only touches the first
+         * `providers: [...]` array literal. Other shapes (computed,
+         * spread, multi-array) fall through unchanged — those are rare
+         * enough that we accept the AI's output rather than risk
+         * mangling code we don't understand. The widget will then
+         * surface the mismatch via the existing missing-provider banner.
+         *
+         * @param {string} configCode - the .dash.js source
+         * @param {object|null} selectedProvider - { type, providerClass }
+         *   or { sentinel: "none" } or null
+         * @returns {{ source: string, rewrote: boolean, reason?: string }}
+         */
+        function snapProvidersToSelection(configCode, selectedProvider) {
+            if (!configCode || !selectedProvider) {
+                return { source: configCode, rewrote: false };
+            }
+            // "no external provider" → strip any providers array.
+            if (selectedProvider.sentinel === "none") {
+                if (!/providers\s*:\s*\[/.test(configCode)) {
+                    return { source: configCode, rewrote: false };
+                }
+                const stripped = configCode.replace(
+                    /providers\s*:\s*\[[^[\]]*?\]\s*,?\s*/,
+                    ""
+                );
+                return {
+                    source: stripped,
+                    rewrote: stripped !== configCode,
+                    reason: "user picked No external provider",
+                };
+            }
+            const { type, providerClass } = selectedProvider;
+            if (!type || !providerClass) {
+                return { source: configCode, rewrote: false };
+            }
+            const desired = `providers: [{ type: "${type}", providerClass: "${providerClass}", required: true }]`;
+            // Replace the existing providers array if present.
+            if (/providers\s*:\s*\[[^[\]]*?\]/.test(configCode)) {
+                const replaced = configCode.replace(
+                    /providers\s*:\s*\[[^[\]]*?\]/,
+                    desired
+                );
+                return {
+                    source: replaced,
+                    rewrote: replaced !== configCode,
+                    reason:
+                        replaced !== configCode
+                            ? `snapped providers to picker: ${type}/${providerClass}`
+                            : undefined,
+                };
+            }
+            // No providers array — inject one before the closing brace.
+            const injected = configCode.replace(
+                /(export\s+default\s*\{)([\s\S]*?)(\s*\}\s*;?\s*)$/,
+                (_m, head, body, tail) => {
+                    const cleaned = body.replace(/,\s*$/, "");
+                    const sep = cleaned.trim().length > 0 ? "," : "";
+                    return `${head}${cleaned}${sep} ${desired}${tail}`;
+                }
+            );
+            return {
+                source: injected,
+                rewrote: injected !== configCode,
+                reason:
+                    injected !== configCode
+                        ? `injected missing providers array: ${type}/${providerClass}`
+                        : undefined,
+            };
+        }
+
         // --- AI Widget Builder: Preview Compile ---
         // Compiles widget code and returns the bundle source for live preview.
         // Does NOT install — just compile and return.
@@ -2017,10 +2095,23 @@ function createWindow() {
             const {
                 widgetName,
                 componentCode,
-                configCode,
                 sourcePackage,
                 files,
+                selectedProvider,
             } = message;
+            // Snap the config's providers array to the user's pick before
+            // anything else uses it (compile uses configCode + files).
+            const providerSnap = snapProvidersToSelection(
+                message.configCode,
+                selectedProvider
+            );
+            if (providerSnap.rewrote) {
+                console.log(
+                    "[ai-compile-preview] Provider auto-correct:",
+                    providerSnap.reason
+                );
+            }
+            const configCode = providerSnap.source;
             const path = require("path");
             const fs = require("fs");
             const os = require("os");
@@ -2129,10 +2220,37 @@ function createWindow() {
                 // Multi-file payload: write every declared file. The
                 // legacy componentCode/configCode are still written
                 // explicitly below as a backstop, since validation may
-                // skip something we still need for compile.
+                // skip something we still need for compile. Snap the
+                // primary widget's .dash.js to the picker's selection
+                // here too so the preview compile sees the corrected
+                // providers array.
                 let fileWriteSummary = null;
-                if (Array.isArray(files) && files.length > 0) {
-                    fileWriteSummary = writeAiFiles(buildDir, files);
+                const snappedPreviewFiles = Array.isArray(files)
+                    ? files.map((f) => {
+                          if (
+                              f &&
+                              typeof f.path === "string" &&
+                              f.path.endsWith(".dash.js") &&
+                              (f.path === `widgets/${widgetName}.dash.js` ||
+                                  f.path.endsWith(`/${widgetName}.dash.js`))
+                          ) {
+                              const sn = snapProvidersToSelection(
+                                  f.content,
+                                  selectedProvider
+                              );
+                              return { ...f, content: sn.source };
+                          }
+                          return f;
+                      })
+                    : files;
+                if (
+                    Array.isArray(snappedPreviewFiles) &&
+                    snappedPreviewFiles.length > 0
+                ) {
+                    fileWriteSummary = writeAiFiles(
+                        buildDir,
+                        snappedPreviewFiles
+                    );
                     if (fileWriteSummary.skipped.length > 0) {
                         console.warn(
                             "[ai-compile-preview] Skipped files:",
@@ -2193,12 +2311,49 @@ function createWindow() {
             const {
                 widgetName,
                 componentCode,
-                configCode,
                 description,
                 cellContext,
                 remixMeta,
                 files,
+                selectedProvider,
             } = message;
+            // Auto-correct the config's providers array against the
+            // user's picker selection BEFORE writing files / compiling
+            // / installing. This is the safety net for AI drift —
+            // even if the LLM emitted the wrong providerClass the
+            // installed widget will declare the right one.
+            const providerSnap = snapProvidersToSelection(
+                message.configCode,
+                selectedProvider
+            );
+            if (providerSnap.rewrote) {
+                console.log(
+                    "[widget:ai-build] Provider auto-correct:",
+                    providerSnap.reason
+                );
+            }
+            const configCode = providerSnap.source;
+            // If the renderer also packaged the primary widget's
+            // .dash.js into files[], snap that copy too so the on-disk
+            // file matches.
+            const snappedFiles = Array.isArray(files)
+                ? files.map((f) => {
+                      if (
+                          f &&
+                          typeof f.path === "string" &&
+                          f.path.endsWith(".dash.js") &&
+                          (f.path === `widgets/${widgetName}.dash.js` ||
+                              f.path.endsWith(`/${widgetName}.dash.js`))
+                      ) {
+                          const sn = snapProvidersToSelection(
+                              f.content,
+                              selectedProvider
+                          );
+                          return { ...f, content: sn.source };
+                      }
+                      return f;
+                  })
+                : files;
 
             const path = require("path");
             const fs = require("fs");
@@ -2303,8 +2458,11 @@ function createWindow() {
                 // componentCode/configCode below ensures the primary
                 // widget always lands.
                 let installFileWriteSummary = null;
-                if (Array.isArray(files) && files.length > 0) {
-                    installFileWriteSummary = writeAiFiles(buildDir, files);
+                if (Array.isArray(snappedFiles) && snappedFiles.length > 0) {
+                    installFileWriteSummary = writeAiFiles(
+                        buildDir,
+                        snappedFiles
+                    );
                     if (installFileWriteSummary.skipped.length > 0) {
                         console.warn(
                             "[widget:ai-build] Skipped files:",
