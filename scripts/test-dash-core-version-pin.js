@@ -1,8 +1,15 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.451, the version that removed the End Session button
- * from ChatCore.
+ * be at ≥ 0.1.452, the version that adds the deep-link create-provider
+ * flow (initialProviderType / initialProviderClass on AppSettingsModal,
+ * `dash:open-settings-create-provider` listener on DashboardStage). An
+ * older version would silently disable the Widget Builder's "Add new
+ * <type>" CTA — the dispatched event would have no listener, no
+ * Settings open, no provider created.
+ *
+ * Also covers the prior pin (≥ 0.1.451 — End Session button removed)
+ * because semver.
  *
  * Why a regression-pin: the End Session removal lives in dash-core
  * (shipped as v0.1.451). dash-electron's only role is to consume
@@ -32,7 +39,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.451";
+const minRequired = "0.1.452";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -48,5 +55,5 @@ assert.ok(
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, End Session button is removed)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, includes deep-link create-provider flow)`
 );
