@@ -513,6 +513,7 @@ DO NOT USE (silently fail): opacity modifiers (\`bg-white/10\`), arbitrary value
 - ALWAYS output COMPLETE code blocks. Never partial diffs or snippets.
 - ALWAYS emit BOTH a \`\`\`jsx component block AND a \`\`\`javascript config block — never just one. Without the config block the widget will not install. The config block MUST contain the \`providers: [...]\` array shown above.
 - Widget code runs in the BROWSER (renderer process). DO NOT use Node-only APIs: \`process.cwd()\`, \`process.env\` (except \`process.env.NODE_ENV\`), \`__dirname\`, \`__filename\`, \`require()\`, or imports of \`fs\` / \`path\` / \`os\` / \`child_process\` / \`crypto\` / \`stream\`. For paths default to literal strings like \`"/"\` or \`"~/"\`, or take a path from \`props\` / \`userConfig\`. To talk to the OS, go through the provider hooks (mcp \`callTool\` or credential \`window.mainApi.<service>\`).
+- DEFENSIVE on every MCP tool response. Shapes are provider-specific and undocumented; never assume a field exists. Guard before calling string/array methods: \`typeof item.name === "string" ? item.name.split(".").pop() : ""\`, \`Array.isArray(result?.entries) ? result.entries : []\`, \`const name = typeof item === "string" ? item : item?.name\`. Use optional chaining (\`item?.type === "directory"\`). Errors like "Cannot read properties of undefined" or "X is not a function" on first render are NOT acceptable.
 - Respond immediately with the code.`;
     }
 
@@ -550,6 +551,8 @@ ALLOWED: \`bg/text/border-{color}-{shade}\`, \`opacity-0..100\`, \`grid-cols-{1.
 - Do NOT call any tools.
 - Do NOT invoke skills.
 - ONLY output text + code blocks.
+- Widget code runs in the BROWSER (renderer process). DO NOT use Node-only APIs: \`process.cwd()\`, \`process.env\` (except \`process.env.NODE_ENV\`), \`__dirname\`, \`__filename\`, \`require()\`, or imports of \`fs\` / \`path\` / \`os\` / \`child_process\` / \`crypto\` / \`stream\`. For paths default to literal strings or read from \`props\` / \`userConfig\`.
+- DEFENSIVE on every MCP tool response. Even though this widget has no provider, the same hygiene applies to any external data (\`props\`, fetched values): never assume a field exists. Guard before calling string/array methods (\`typeof x === "string"\`, \`Array.isArray(y)\`, optional chaining). Errors like "Cannot read properties of undefined" on first render are NOT acceptable.
 - Respond immediately with the code.`;
     }
 
@@ -902,6 +905,8 @@ YOU ARE RUNNING INSIDE AN EMBEDDED UI, NOT AN INTERACTIVE TERMINAL:
 - The \`install_known_mcp_server\` tool is the ONLY tool you should call, and only when step 2 of the decision tree applies. When step 2 applies, calling that tool BEFORE writing any widget code is required, not optional — the "respond immediately with code" rule below does NOT override the decision tree.
 - ONLY output text + code blocks (with optional \`File:\` markers) — that's how the app receives your widget.
 - ALWAYS output COMPLETE code blocks. Never partial diffs or snippets, even for small changes — re-emit the full file.
+- Widget code runs in the BROWSER (renderer process). DO NOT use Node-only APIs: \`process.cwd()\`, \`process.env\` (except \`process.env.NODE_ENV\`), \`__dirname\`, \`__filename\`, \`require()\`, or imports of \`fs\` / \`path\` / \`os\` / \`child_process\` / \`crypto\` / \`stream\`. For paths default to literal strings like \`"/"\` or \`"~/"\`, or take a path from \`props\` / \`userConfig\`. To talk to the OS, go through the provider hooks (mcp \`callTool\` or credential \`window.mainApi.<service>\`).
+- DEFENSIVE on every MCP tool response. Shapes are provider-specific and undocumented; never assume a field exists. Guard before calling string/array methods: \`typeof item.name === "string" ? item.name.split(".").pop() : ""\`, \`Array.isArray(result?.entries) ? result.entries : []\`, \`const name = typeof item === "string" ? item : item?.name\`. Use optional chaining (\`item?.type === "directory"\`). Errors like "Cannot read properties of undefined" or "X is not a function" on first render are NOT acceptable.
 - Respond immediately with the code — do not plan, research, or scaffold first. EXCEPTION: if the decision tree directs you to call \`install_known_mcp_server\` first, do that first, then immediately output the code once the tool returns.`;
 }
 
