@@ -508,6 +508,19 @@ class App extends React.Component {
             });
         });
 
+        // Cross-modal nav: when the user clicks "Add new <type>" in the
+        // Widget Builder's preview-area dropdown (because the chosen
+        // type has zero installed instances), the picker dispatches
+        // `dash:open-settings-create-provider`. This handler closes the
+        // builder modal so Settings can open cleanly on top of just the
+        // dashboard. dash-core's DashboardStage handles the Settings
+        // open via its own listener for the same event.
+        window.addEventListener("dash:open-settings-create-provider", () => {
+            if (this.state.isWidgetBuilderOpen) {
+                this.setState({ isWidgetBuilderOpen: false });
+            }
+        });
+
         // Listen for "Edit with AI" — reads source and opens builder in remix mode
         window.addEventListener("dash:edit-widget-with-ai", async (e) => {
             const detail = e.detail || {};

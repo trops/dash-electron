@@ -119,10 +119,43 @@ function PreviewProviderPicker({
                             {label} provider:
                         </span>
                         {options.length === 0 ? (
-                            <span className="text-amber-300/90 text-[11px]">
-                                None configured — add one in Settings &gt;
-                                Providers to preview.
-                            </span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    // Cross-modal nav: dash-electron's
+                                    // Dash.js listens for this and closes
+                                    // the WidgetBuilderModal; dash-core's
+                                    // DashboardStage listens for the same
+                                    // event and opens Settings →
+                                    // Providers in create mode with the
+                                    // type pre-selected (catalog detail
+                                    // for mcp class, credential form for
+                                    // credential class).
+                                    try {
+                                        window.dispatchEvent(
+                                            new CustomEvent(
+                                                "dash:open-settings-create-provider",
+                                                {
+                                                    detail: {
+                                                        type: decl.type,
+                                                        providerClass:
+                                                            decl.providerClass ||
+                                                            null,
+                                                    },
+                                                }
+                                            )
+                                        );
+                                    } catch (err) {
+                                        console.warn(
+                                            "[PreviewProviderPicker] Failed to dispatch open-settings-create-provider:",
+                                            err
+                                        );
+                                    }
+                                }}
+                                className="text-[11px] px-2 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-700/40 transition-colors"
+                            >
+                                + Add new {label} provider
+                            </button>
                         ) : (
                             <select
                                 value={current}
