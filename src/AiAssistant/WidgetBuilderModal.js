@@ -33,7 +33,7 @@ import {
     makeScopedComponentId,
 } from "@trops/dash-core";
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
-import { WidgetProviderPicker } from "./WidgetProviderPicker";
+import { ChatProviderGate } from "./ChatProviderGate";
 
 /**
  * Wraps the preview widget in the full context stack (AppContext,
@@ -2022,6 +2022,13 @@ export const WidgetBuilderModal = ({
                             configCode: null,
                         });
                         setInstallStatus(null);
+                        // Reset the provider gate so it reappears for the
+                        // user to re-pick (matches user-stated UX: "if the
+                        // user would like to change the provider, the
+                        // session would end, a new chat would begin and the
+                        // provider view would show as if they started from
+                        // the beginning").
+                        setSelectedProviderForBuild(null);
                         lastCompiledCode.current = null;
                         return;
                     }
@@ -4145,53 +4152,61 @@ export const WidgetBuilderModal = ({
                         </span>
                     </div>
 
-                    {/* Provider picker — drives the prompt's pre-selected
-                        provider section. Only relevant in build mode;
-                        discover mode searches the registry without
-                        building anything. */}
-                    {chatMode === "build" && (
-                        <WidgetProviderPicker
-                            value={selectedProviderForBuild}
-                            onChange={setSelectedProviderForBuild}
-                            knownExternalCatalog={knownExternalCatalog}
-                        />
-                    )}
+                    {/* Chat content + provider gate. Relative wrapper
+                        so the gate's `absolute inset-0` covers only
+                        this region — the mode toggle above stays
+                        clickable so the user can switch to Discover.
+                        The gate appears when in build mode and no
+                        provider has been picked yet (Edit-with-AI
+                        auto-derives via the useEffect at line ~1467
+                        and skips the gate). New Chat clears messages
+                        which triggers the message-poller's reset
+                        block to also null `selectedProviderForBuild`,
+                        re-opening the gate. */}
+                    <div className="relative flex flex-col flex-1 min-h-0">
+                        {chatMode === "build" &&
+                            selectedProviderForBuild === null && (
+                                <ChatProviderGate
+                                    onChange={setSelectedProviderForBuild}
+                                />
+                            )}
 
-                    <ChatCore
-                        title=""
-                        model={model}
-                        systemPrompt={(() => {
-                            if (chatMode === "discover") {
-                                return DISCOVER_SYSTEM_PROMPT;
+                        <ChatCore
+                            title=""
+                            model={model}
+                            systemPrompt={(() => {
+                                if (chatMode === "discover") {
+                                    return DISCOVER_SYSTEM_PROMPT;
+                                }
+                                const base = buildSystemPrompt({
+                                    builtInCatalog,
+                                    knownExternalCatalog,
+                                    installedProviders: providers,
+                                    selectedProvider: selectedProviderForBuild,
+                                });
+                                if (effectiveEditContext?.componentCode) {
+                                    return `${base}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
+                                        effectiveEditContext.componentCode
+                                    }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
+                                        effectiveEditContext.configCode || ""
+                                    }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
+                                }
+                                return `${base}\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences inviting the user to describe the widget they want to build (what it should show, what data source it pulls from, what interactions it needs). No lists, no bullet points, no examples — keep it under 30 words total.`;
+                            })()}
+                            maxToolRounds="10"
+                            apiKey={apiKey}
+                            backend={preferredBackend}
+                            persistKey="dash-widget-builder"
+                            hideToolsBanner={true}
+                            initialMessage={
+                                chatMode === "discover"
+                                    ? "Tell me what kind of widget you're looking for."
+                                    : effectiveEditContext?.componentCode
+                                    ? "Hello, let's make some edits to this widget."
+                                    : "Hi, I'd like to build a new widget."
                             }
-                            const base = buildSystemPrompt({
-                                builtInCatalog,
-                                knownExternalCatalog,
-                                installedProviders: providers,
-                                selectedProvider: selectedProviderForBuild,
-                            });
-                            if (effectiveEditContext?.componentCode) {
-                                return `${base}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
-                                    effectiveEditContext.componentCode
-                                }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
-                                    effectiveEditContext.configCode || ""
-                                }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
-                            }
-                            return `${base}\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences inviting the user to describe the widget they want to build (what it should show, what data source it pulls from, what interactions it needs). No lists, no bullet points, no examples — keep it under 30 words total.`;
-                        })()}
-                        maxToolRounds="10"
-                        apiKey={apiKey}
-                        backend={preferredBackend}
-                        persistKey="dash-widget-builder"
-                        hideToolsBanner={true}
-                        initialMessage={
-                            chatMode === "discover"
-                                ? "Tell me what kind of widget you're looking for."
-                                : effectiveEditContext?.componentCode
-                                ? "Hello, let's make some edits to this widget."
-                                : "Hi, I'd like to build a new widget."
-                        }
-                    />
+                        />
+                    </div>
                 </div>
             </div>
         </Modal>
