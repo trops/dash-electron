@@ -41,20 +41,37 @@
             // error boundaries and DevTools. Appending error divs to
             // body was blocking clicks whenever any widget threw.
             //
-            // While the AI Widget Builder modal is open it sets
-            // `window.__DASH_WIDGET_BUILDER_OPEN`. AI-generated widgets
-            // routinely throw (process.cwd, undefined imports, etc.)
-            // during their first render — those go through the modal's
-            // own scoped handler + PreviewErrorBoundary, which already
-            // shows the user a friendly error + "Send error to AI"
-            // recovery action. Spamming the global console with stack
-            // traces on top of that is just noise that makes the user
-            // think the app is broken when it actually caught the
-            // error cleanly.
+            // Two suppression paths, both prevent duplicate console
+            // noise that makes the user think the app crashed when
+            // an error boundary actually caught the failure:
+            //
+            // 1. While the AI Widget Builder modal is open it sets
+            //    `window.__DASH_WIDGET_BUILDER_OPEN`. The modal's
+            //    own scoped handler + PreviewErrorBoundary show the
+            //    friendly recovery UI, so we skip the global log.
+            //
+            // 2. When the error's stack contains `evaluateBundle`,
+            //    the throw originated inside an AI widget bundle —
+            //    on the dashboard, dash-core's WidgetErrorBoundary
+            //    in WidgetFactory catches it and renders the inline
+            //    error card. In dev mode React rethrows so DevTools
+            //    can see the trace; we don't want to log it AGAIN
+            //    at the global level.
+            function isWidgetBundleError(e) {
+                var stack =
+                    (e && e.error && e.error.stack) ||
+                    (e && e.reason && e.reason.stack) ||
+                    "";
+                return (
+                    typeof stack === "string" &&
+                    stack.indexOf("evaluateBundle") >= 0
+                );
+            }
             window.addEventListener(
                 "error",
                 function (e) {
                     if (window.__DASH_WIDGET_BUILDER_OPEN) return;
+                    if (isWidgetBundleError(e)) return;
                     console.error("Global error:", e.error || e.message);
                 },
                 true
@@ -63,6 +80,7 @@
                 "unhandledrejection",
                 function (e) {
                     if (window.__DASH_WIDGET_BUILDER_OPEN) return;
+                    if (isWidgetBundleError(e)) return;
                     console.error(
                         "Unhandled rejection:",
                         e.reason || e.message
