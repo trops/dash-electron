@@ -378,8 +378,8 @@ function buildSystemPrompt({
     installedProviders = {},
     selectedProvider = null,
 } = {}) {
-    // The user picks a provider via the WidgetProviderPicker BEFORE
-    // sending a chat message. When a provider is selected, the prompt
+    // The user picks a provider TYPE via the ChatProviderGate BEFORE
+    // sending a chat message. When a type is selected, the prompt
     // gets a single focused "use this exact provider" section and the
     // catalogs + decision tree + HARD RULE are dropped entirely. This
     // takes the provider-selection decision out of the LLM's hands so
@@ -1381,7 +1381,7 @@ export const WidgetBuilderModal = ({
     // system prompt (single deterministic provider section instead of a
     // catalog + decision tree the LLM has to navigate) AND the post-
     // processing rewrite that snaps the AI's generated config to the
-    // selected provider. See WidgetProviderPicker.
+    // selected type+class. See ChatProviderGate.
     //   - null                                    → not picked yet
     //   - { sentinel: "none" }                    → "no external provider"
     //   - { name, type, providerClass }           → an installed provider
