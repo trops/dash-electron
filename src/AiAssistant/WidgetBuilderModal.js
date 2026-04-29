@@ -1641,69 +1641,6 @@ export const WidgetBuilderModal = ({
         };
     }, [isOpen]);
 
-    // Cross-reference the freshly-generated config's `providers: [...]`
-    // against the installed-providers map + the known-external catalog
-    // so we can render an "install missing provider" banner. This is the
-    // safety net for cases where the AI declared a provider in the
-    // config but didn't call the install_known_mcp_server tool — without
-    // this, the user has no path forward. Re-checks whenever the
-    // installed-providers map or the catalogs change (the modal also
-    // listens for `dash:provider-installed` to force a re-fetch of the
-    // installed list after the user installs via the banner button).
-    const installedProviderTypes = React.useMemo(() => {
-        const set = new Set();
-        for (const p of Object.values(providers || {})) {
-            if (p && typeof p === "object" && p.type) set.add(p.type);
-        }
-        return set;
-        // `providers` is freshly-derived from appContext on every render,
-        // so we depend on it as-is. The set value is identity-stable
-        // across renders that produce the same types, which is what
-        // matters for the downstream useMemo.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [JSON.stringify(Object.keys(providers || {}).sort())]);
-
-    const missingExternalProviders = React.useMemo(() => {
-        const types = extractProviderTypesFromConfigCode(
-            detectedCode.configCode
-        );
-        const seen = new Set();
-        const out = [];
-        for (const type of types) {
-            if (seen.has(type)) continue;
-            seen.add(type);
-            if (installedProviderTypes.has(type)) continue;
-            const entry = (knownExternalCatalog || []).find(
-                (s) => s && s.id === type
-            );
-            if (entry) out.push(entry);
-        }
-        // Debug breadcrumb — visible in Electron devtools, helps
-        // diagnose when the banner doesn't appear despite a config
-        // that declares a provider. Stripped from production builds
-        // (rollup-plugin-strip removes console.* in dash-core but
-        // dash-electron keeps these).
-        try {
-            window.__DASH_AI_BUILDER_DEBUG = {
-                detectedConfigCodePresent: !!detectedCode.configCode,
-                detectedConfigCodeLength: detectedCode.configCode
-                    ? detectedCode.configCode.length
-                    : 0,
-                detectedTypes: types,
-                installedTypes: Array.from(installedProviderTypes || []),
-                knownExternalCount: (knownExternalCatalog || []).length,
-                knownExternalIds: (knownExternalCatalog || []).map(
-                    (s) => s && s.id
-                ),
-                missingMatches: out.map((s) => s && s.id),
-                computedAt: new Date().toISOString(),
-            };
-        } catch (e) {
-            /* noop — debug only */
-        }
-        return out;
-    }, [detectedCode.configCode, installedProviderTypes, knownExternalCatalog]);
-
     const healthCheckIssues = healthCheck
         ? [
               healthCheck.cli && healthCheck.cli.ok === false
@@ -3027,48 +2964,6 @@ export const WidgetBuilderModal = ({
                             {issue.detail}
                         </div>
                     ))}
-                </div>
-            )}
-
-            {/* Missing-provider banner — appears when the freshly-generated
-                widget config declares an MCP `provider` that the user
-                hasn't installed yet AND the curated allow-list has an
-                entry for it. Lets the user install the provider in one
-                click without going back to Settings or relying on the AI
-                to call install_known_mcp_server. Disappears once the
-                provider is added (driven by the `providers` map from
-                AppContext). */}
-            {missingExternalProviders.length > 0 && (
-                <div className="flex flex-col gap-2 px-4 py-2 bg-indigo-900/20 border-b border-indigo-700/30 shrink-0">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-indigo-200">
-                        <FontAwesomeIcon icon="plug" className="h-3 w-3" />
-                        This widget needs{" "}
-                        {missingExternalProviders.length === 1
-                            ? "1 provider"
-                            : `${missingExternalProviders.length} providers`}{" "}
-                        you haven't installed yet.
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 pl-5">
-                        {missingExternalProviders.map((entry) => (
-                            <button
-                                key={entry.id}
-                                type="button"
-                                onClick={() =>
-                                    window.dispatchEvent(
-                                        new CustomEvent(
-                                            "dash:install-known-external",
-                                            {
-                                                detail: { id: entry.id },
-                                            }
-                                        )
-                                    )
-                                }
-                                className="text-xs px-2 py-1 rounded bg-indigo-700 hover:bg-indigo-600 text-white transition-colors"
-                            >
-                                Install {entry.name}
-                            </button>
-                        ))}
-                    </div>
                 </div>
             )}
 
