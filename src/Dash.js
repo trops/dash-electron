@@ -986,6 +986,8 @@ class App extends React.Component {
                                                                             ctx.cellNumber,
                                                                         gridItemId:
                                                                             ctx.gridItemId,
+                                                                        workspaceId:
+                                                                            ctx.workspaceId,
                                                                     },
                                                                 }
                                                             )
@@ -1006,6 +1008,8 @@ class App extends React.Component {
                                                                             ctx.cellNumber,
                                                                         gridItemId:
                                                                             ctx.gridItemId,
+                                                                        workspaceId:
+                                                                            ctx.workspaceId,
                                                                     },
                                                                 }
                                                             )
