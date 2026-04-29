@@ -1,18 +1,19 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.459, the version that aligns the Providers sidebar
- * search input with Dashboards (SearchInput + compact
- * `py-1.5 text-xs`). An older version reverts to the larger plain
- * InputText with no magnifying-glass icon.
+ * be at ≥ 0.1.460, the version that ships the Dashboard Wizard's
+ * left-sidebar filter layout (binary TYPE: Dashboards / Widgets,
+ * plus CATEGORIES and PROVIDERS as vertical lists). An older version
+ * reverts to the horizontal Tag2 chip wall + Dashboards/Widgets tabs.
  *
- * Also covers prior pins (≥ 0.1.458 workspace-scoped widget
- * placement events; ≥ 0.1.457 search + 4-pill class filter on
- * Providers sidebar; ≥ 0.1.456 list-item click dismisses class
- * chooser; ≥ 0.1.455 consistent ← Back button; ≥ 0.1.454
- * NewProviderPicker class chooser; ≥ 0.1.453 friendlier
- * WidgetErrorBoundary; ≥ 0.1.452 deep-link create-provider;
- * ≥ 0.1.451 End Session removal) because semver.
+ * Also covers prior pins (≥ 0.1.459 Providers search matches
+ * Dashboards; ≥ 0.1.458 workspace-scoped widget placement events;
+ * ≥ 0.1.457 search + 4-pill class filter on Providers sidebar;
+ * ≥ 0.1.456 list-item click dismisses class chooser; ≥ 0.1.455
+ * consistent ← Back button; ≥ 0.1.454 NewProviderPicker class
+ * chooser; ≥ 0.1.453 friendlier WidgetErrorBoundary; ≥ 0.1.452
+ * deep-link create-provider; ≥ 0.1.451 End Session removal) because
+ * semver.
  *
  * Why a regression-pin: the End Session removal lives in dash-core
  * (shipped as v0.1.451). dash-electron's only role is to consume
@@ -42,7 +43,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.459";
+const minRequired = "0.1.460";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -54,9 +55,9 @@ function semverGte(a, b) {
 
 assert.ok(
     semverGte(stripped, minRequired),
-    `@trops/dash-core must be >= ${minRequired} (the version that aligns the Providers search input with the Dashboards search input). Currently pinned at: ${pinned}`
+    `@trops/dash-core must be >= ${minRequired} (the version that ships the Dashboard Wizard's left-sidebar filter layout). Currently pinned at: ${pinned}`
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, Providers search input matches Dashboards)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, Dashboard Wizard has left-sidebar filter layout)`
 );
