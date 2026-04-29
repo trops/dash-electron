@@ -2043,10 +2043,16 @@ export const WidgetBuilderModal = ({
                     const msgs = data?.messages || [];
 
                     // Detect New Chat (messages cleared) — but not in remix mode
-                    // where we intentionally start with empty messages
+                    // where we intentionally start with empty messages.
+                    // Triggers if the user had ANY activity in the chat
+                    // (either compiled code OR sent at least one message),
+                    // so clicking New Chat after Skip-for-now (no compile
+                    // yet) still re-opens the provider gate.
+                    const hadActivity =
+                        !!lastCompiledCode.current || lastMsgCount.current > 0;
                     if (
                         msgs.length === 0 &&
-                        lastCompiledCode.current &&
+                        hadActivity &&
                         !effectiveEditContext?.componentCode
                     ) {
                         setPreviewComponent(null);
@@ -2064,6 +2070,10 @@ export const WidgetBuilderModal = ({
                         // the beginning").
                         setSelectedProviderForBuild(null);
                         lastCompiledCode.current = null;
+                        // Reset the message counter so this block doesn't
+                        // re-fire on the next poll tick (msgs is still []
+                        // until the user types something new).
+                        lastMsgCount.current = 0;
                         return;
                     }
 
