@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.455, the version that ships the consistent "← Back"
- * affordance across all three create-provider forms (Credential /
- * MCP / WebSocket). Reached via the NewProviderPicker class chooser,
- * Back returns the user to the chooser without losing context.
- * An older version leaves each form with its own inconsistent cancel
- * UX and no way to back out of a wrong class pick.
+ * be at ≥ 0.1.456, the version where clicking an existing provider
+ * in the Settings → Providers sidebar correctly dismisses the
+ * NewProviderPicker class chooser. An older version leaves the
+ * chooser stuck on screen with no escape except closing the modal.
  *
- * Also covers prior pins (≥ 0.1.454 NewProviderPicker class chooser;
- * ≥ 0.1.453 friendlier WidgetErrorBoundary; ≥ 0.1.452 deep-link
- * create-provider; ≥ 0.1.451 End Session removal) because semver.
+ * Also covers prior pins (≥ 0.1.455 consistent ← Back button;
+ * ≥ 0.1.454 NewProviderPicker class chooser; ≥ 0.1.453 friendlier
+ * WidgetErrorBoundary; ≥ 0.1.452 deep-link create-provider;
+ * ≥ 0.1.451 End Session removal) because semver.
  *
  * Why a regression-pin: the End Session removal lives in dash-core
  * (shipped as v0.1.451). dash-electron's only role is to consume
@@ -40,7 +39,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.455";
+const minRequired = "0.1.456";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -52,9 +51,9 @@ function semverGte(a, b) {
 
 assert.ok(
     semverGte(stripped, minRequired),
-    `@trops/dash-core must be >= ${minRequired} (the version that ships the consistent ← Back button across create-provider forms). Currently pinned at: ${pinned}`
+    `@trops/dash-core must be >= ${minRequired} (the version where list-item clicks dismiss the new-provider class chooser). Currently pinned at: ${pinned}`
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, includes consistent ← Back button on create-provider forms)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, list-item clicks dismiss the class chooser)`
 );
