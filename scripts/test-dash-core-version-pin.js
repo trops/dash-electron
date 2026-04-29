@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.453, the version that ships the friendlier
- * WidgetErrorBoundary (amber card + "Open in AI Builder" recovery
- * action via dash:edit-widget-with-ai). An older version would
- * silently regress to the bright-red panic card with no recovery
- * affordance for AI-built widgets.
+ * be at ≥ 0.1.454, the version that ships the NewProviderPicker
+ * class chooser (Credential / MCP / WebSocket) for the Settings
+ * "+ New Provider" button. An older version would silently default
+ * to the credential create form, losing the chooser entirely.
  *
- * Also covers prior pins (≥ 0.1.452 — deep-link create-provider
- * flow; ≥ 0.1.451 — End Session button removed) because semver.
+ * Also covers prior pins (≥ 0.1.453 friendlier WidgetErrorBoundary;
+ * ≥ 0.1.452 deep-link create-provider; ≥ 0.1.451 End Session removal)
+ * because semver.
  *
  * Why a regression-pin: the End Session removal lives in dash-core
  * (shipped as v0.1.451). dash-electron's only role is to consume
@@ -38,7 +38,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.453";
+const minRequired = "0.1.454";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -54,5 +54,5 @@ assert.ok(
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, includes friendlier WidgetErrorBoundary)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, includes NewProviderPicker class chooser)`
 );
