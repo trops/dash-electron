@@ -121,6 +121,72 @@ export const ChatProviderGate = ({
 
     const hasTypes = typeOptions.length > 0;
 
+    // Interim selection captured when the user clicks a type for which
+    // they have zero installed instances. Showing a small confirmation
+    // panel here surfaces the "no provider configured" problem BEFORE
+    // the user goes through the full chat-and-build flow only to
+    // discover the gap at preview time. Three exits:
+    //   - Create new: dispatches dash:open-settings-create-provider
+    //     (handled by Dash.js + DashboardStage listeners shipped in
+    //      v0.0.513 / v0.1.452 — closes the builder, opens Settings
+    //      → Providers in create mode with the type pre-selected).
+    //   - Skip for now: calls onChange anyway. The widget config will
+    //     declare the type; the preview-area dropdown's existing "+
+    //     Add new" CTA is the path back if the user changes their mind.
+    //   - Cancel: returns to the type list so they can pick differently.
+    const [pendingType, setPendingType] = useState(null);
+
+    const countInstancesOfType = (type, providerClass) => {
+        let n = 0;
+        for (const p of Object.values(installedProviders || {})) {
+            if (!p || p.type !== type) continue;
+            if ((p.providerClass || "credential") !== providerClass) continue;
+            n += 1;
+        }
+        return n;
+    };
+
+    const handleTypeClick = (opt) => {
+        const installedCount = countInstancesOfType(
+            opt.type,
+            opt.providerClass
+        );
+        if (installedCount === 0) {
+            setPendingType(opt);
+        } else {
+            onChange({ type: opt.type, providerClass: opt.providerClass });
+        }
+    };
+
+    const handleCreateNew = () => {
+        if (!pendingType) return;
+        try {
+            window.dispatchEvent(
+                new CustomEvent("dash:open-settings-create-provider", {
+                    detail: {
+                        type: pendingType.type,
+                        providerClass: pendingType.providerClass,
+                    },
+                })
+            );
+        } catch (err) {
+            console.warn(
+                "[ChatProviderGate] Failed to dispatch open-settings-create-provider:",
+                err
+            );
+        }
+    };
+
+    const handleSkipForNow = () => {
+        if (!pendingType) return;
+        onChange({
+            type: pendingType.type,
+            providerClass: pendingType.providerClass,
+        });
+    };
+
+    const handleCancelPending = () => setPendingType(null);
+
     return (
         <div
             className={`absolute inset-0 z-10 overflow-y-auto bg-gray-900/95 backdrop-blur-sm flex flex-col`}
@@ -144,7 +210,56 @@ export const ChatProviderGate = ({
             </div>
 
             <div className="flex-1 px-4 pb-4 space-y-3 overflow-y-auto">
-                {hasTypes && (
+                {pendingType && (
+                    <div
+                        className={`rounded-md border ${borderColor} bg-amber-950 px-3 py-3 space-y-3`}
+                    >
+                        <div className="text-sm font-semibold text-amber-200">
+                            No {pendingType.type} providers configured yet
+                        </div>
+                        <p className="text-xs text-amber-100 leading-snug">
+                            You haven't added any{" "}
+                            <span className="font-mono">
+                                {pendingType.type}
+                            </span>{" "}
+                            providers in Settings yet. You can create one now,
+                            or skip and add an instance later via the preview
+                            pane's "Add new" button.
+                        </p>
+                        <div className="flex flex-col gap-2">
+                            <button
+                                type="button"
+                                onClick={handleCreateNew}
+                                className="px-3 py-2 rounded text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors text-left"
+                            >
+                                Create new {pendingType.type} provider
+                                <span className="ml-2 text-[10px] opacity-80">
+                                    (closes builder, opens Settings)
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSkipForNow}
+                                className="px-3 py-2 rounded text-xs bg-amber-700 hover:bg-amber-600 text-amber-100 transition-colors text-left"
+                            >
+                                Skip for now
+                                <span className="ml-2 text-[10px] opacity-80">
+                                    (proceed; widget will declare the type but
+                                    won't connect until you add an instance)
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleCancelPending}
+                                className="px-3 py-2 rounded text-xs text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors text-left"
+                            >
+                                Cancel — pick a different type
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {!pendingType && hasTypes && (
                     <div>
                         <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">
                             Provider types
@@ -156,12 +271,7 @@ export const ChatProviderGate = ({
                                 <button
                                     key={`${opt.type}|${opt.providerClass}`}
                                     type="button"
-                                    onClick={() =>
-                                        onChange({
-                                            type: opt.type,
-                                            providerClass: opt.providerClass,
-                                        })
-                                    }
+                                    onClick={() => handleTypeClick(opt)}
                                     className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-300 hover:bg-white/5 transition-colors"
                                 >
                                     <span className="truncate text-left">
@@ -178,29 +288,31 @@ export const ChatProviderGate = ({
                     </div>
                 )}
 
-                <div>
-                    <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">
-                        Or skip the provider
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => onChange(NONE_SENTINEL)}
-                        className={`w-full flex items-center justify-between px-3 py-2 text-xs text-gray-300 rounded-md border ${borderColor} bg-gray-800/40 hover:bg-white/5 transition-colors`}
-                    >
-                        <span className="flex items-center">
-                            <FontAwesomeIcon
-                                icon="circle-minus"
-                                className="h-3 w-3 mr-2 opacity-60"
-                            />
-                            No external provider
-                            <span className="ml-2 text-[10px] opacity-50">
-                                (clock, counter, static display, etc.)
+                {!pendingType && (
+                    <div>
+                        <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">
+                            Or skip the provider
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => onChange(NONE_SENTINEL)}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-xs text-gray-300 rounded-md border ${borderColor} bg-gray-800/40 hover:bg-white/5 transition-colors`}
+                        >
+                            <span className="flex items-center">
+                                <FontAwesomeIcon
+                                    icon="circle-minus"
+                                    className="h-3 w-3 mr-2 opacity-60"
+                                />
+                                No external provider
+                                <span className="ml-2 text-[10px] opacity-50">
+                                    (clock, counter, static display, etc.)
+                                </span>
                             </span>
-                        </span>
-                    </button>
-                </div>
+                        </button>
+                    </div>
+                )}
 
-                {!hasTypes && (
+                {!pendingType && !hasTypes && (
                     <div
                         className={`rounded-md border ${borderColor} bg-amber-900/15 px-3 py-2 text-[11px] text-amber-200 leading-snug`}
                     >
