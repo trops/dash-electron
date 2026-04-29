@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.458, the version that scopes AI widget placement events
- * to the originating workspace. An older version is missing the
- * workspace-id guard in LayoutBuilder, which let a widget built for
- * Dashboard A's cell silently appear in (or overwrite a cell of)
- * Dashboard B when both were open in tabs.
+ * be at ≥ 0.1.459, the version that aligns the Providers sidebar
+ * search input with Dashboards (SearchInput + compact
+ * `py-1.5 text-xs`). An older version reverts to the larger plain
+ * InputText with no magnifying-glass icon.
  *
- * Also covers prior pins (≥ 0.1.457 search + 4-pill class filter on
+ * Also covers prior pins (≥ 0.1.458 workspace-scoped widget
+ * placement events; ≥ 0.1.457 search + 4-pill class filter on
  * Providers sidebar; ≥ 0.1.456 list-item click dismisses class
  * chooser; ≥ 0.1.455 consistent ← Back button; ≥ 0.1.454
  * NewProviderPicker class chooser; ≥ 0.1.453 friendlier
@@ -42,7 +42,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.458";
+const minRequired = "0.1.459";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -54,9 +54,9 @@ function semverGte(a, b) {
 
 assert.ok(
     semverGte(stripped, minRequired),
-    `@trops/dash-core must be >= ${minRequired} (the version that scopes AI widget placement events to the originating workspace). Currently pinned at: ${pinned}`
+    `@trops/dash-core must be >= ${minRequired} (the version that aligns the Providers search input with the Dashboards search input). Currently pinned at: ${pinned}`
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, AI widget placement is workspace-scoped)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, Providers search input matches Dashboards)`
 );
