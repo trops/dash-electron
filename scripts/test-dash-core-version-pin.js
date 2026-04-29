@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.461, the version that adds the registry sign-in CTA to
- * the Dashboard Wizard's Discover step. An older version surfaces no
- * sign-in path inside the wizard, so users can't see private
- * dashboards / widgets they have access to without going elsewhere.
+ * be at ≥ 0.1.462, the version that polishes the Dashboard Wizard:
+ * horizontal sign-in banner, sticky filter sidebar, Summary block at
+ * the top of the Customize step, and a name+theme-required gate on
+ * the Create button. An older version reverts to the sidebar CTA,
+ * scrolling sidebar, bottom Summary, and a name-only Create gate.
  *
- * Also covers prior pins (≥ 0.1.460 Dashboard Wizard left-sidebar
- * filter layout; ≥ 0.1.459 Providers search matches Dashboards;
- * ≥ 0.1.458 workspace-scoped widget placement events; ≥ 0.1.457
- * search + 4-pill class filter on Providers sidebar; ≥ 0.1.456
- * list-item click dismisses class chooser; ≥ 0.1.455 consistent
- * ← Back button; ≥ 0.1.454 NewProviderPicker class chooser;
- * ≥ 0.1.453 friendlier WidgetErrorBoundary; ≥ 0.1.452 deep-link
- * create-provider; ≥ 0.1.451 End Session removal) because semver.
+ * Also covers prior pins (≥ 0.1.461 registry sign-in CTA in the
+ * wizard; ≥ 0.1.460 Dashboard Wizard left-sidebar filter layout;
+ * ≥ 0.1.459 Providers search matches Dashboards; ≥ 0.1.458
+ * workspace-scoped widget placement events; ≥ 0.1.457 search +
+ * 4-pill class filter on Providers sidebar; ≥ 0.1.456 list-item
+ * click dismisses class chooser; ≥ 0.1.455 consistent ← Back
+ * button; ≥ 0.1.454 NewProviderPicker class chooser; ≥ 0.1.453
+ * friendlier WidgetErrorBoundary; ≥ 0.1.452 deep-link create-
+ * provider; ≥ 0.1.451 End Session removal) because semver.
  *
  * Why a regression-pin: the End Session removal lives in dash-core
  * (shipped as v0.1.451). dash-electron's only role is to consume
@@ -43,7 +45,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.461";
+const minRequired = "0.1.462";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -55,9 +57,9 @@ function semverGte(a, b) {
 
 assert.ok(
     semverGte(stripped, minRequired),
-    `@trops/dash-core must be >= ${minRequired} (the version that adds the registry sign-in CTA to the Dashboard Wizard). Currently pinned at: ${pinned}`
+    `@trops/dash-core must be >= ${minRequired} (the version that polishes the Dashboard Wizard with horizontal sign-in banner, sticky sidebar, top-aligned Summary, and theme-required Create gate). Currently pinned at: ${pinned}`
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, Dashboard Wizard surfaces a registry sign-in CTA)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, Dashboard Wizard polish: horizontal banner, sticky sidebar, top Summary, theme-required gate)`
 );
