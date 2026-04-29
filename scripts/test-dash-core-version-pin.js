@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.456, the version where clicking an existing provider
- * in the Settings → Providers sidebar correctly dismisses the
- * NewProviderPicker class chooser. An older version leaves the
- * chooser stuck on screen with no escape except closing the modal.
+ * be at ≥ 0.1.457, the version that ships the search + 4-pill class
+ * filter (All / Credentials / MCP / WebSocket) on the Settings →
+ * Providers sidebar. An older version reverts to the 3-tab segmented
+ * control with no search and no merged-all view.
  *
- * Also covers prior pins (≥ 0.1.455 consistent ← Back button;
- * ≥ 0.1.454 NewProviderPicker class chooser; ≥ 0.1.453 friendlier
+ * Also covers prior pins (≥ 0.1.456 list-item click dismisses class
+ * chooser; ≥ 0.1.455 consistent ← Back button; ≥ 0.1.454
+ * NewProviderPicker class chooser; ≥ 0.1.453 friendlier
  * WidgetErrorBoundary; ≥ 0.1.452 deep-link create-provider;
  * ≥ 0.1.451 End Session removal) because semver.
  *
@@ -39,7 +40,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.456";
+const minRequired = "0.1.457";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -51,9 +52,9 @@ function semverGte(a, b) {
 
 assert.ok(
     semverGte(stripped, minRequired),
-    `@trops/dash-core must be >= ${minRequired} (the version where list-item clicks dismiss the new-provider class chooser). Currently pinned at: ${pinned}`
+    `@trops/dash-core must be >= ${minRequired} (the version that ships search + 4-pill class filter on the Providers sidebar). Currently pinned at: ${pinned}`
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, list-item clicks dismiss the class chooser)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, search + 4-pill class filter on Providers sidebar)`
 );
