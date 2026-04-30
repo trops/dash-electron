@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.464, the version where provider-resolution hooks read
- * widgetId via the canonical fallback chain
- * (`uuidString || uuid || id`). An older version uses `uuidString`
- * only, so widgets that lack `uuidString` (older / AI-built
- * instances) silently miss workspace-level provider bindings written
- * by the dashboard config bulk edit modal — the user picks a
- * provider, hits Save, and the widget keeps rendering as if no
- * provider were set.
+ * be at ≥ 0.1.465, the version where the dashboard config bulk-edit
+ * Save path writes through to BOTH provider-binding layers
+ * (item.selectedProviders + workspace.selectedProviders[id]). Earlier
+ * versions wrote only the workspace-level layer; layer-1 values from
+ * prior single-widget picks silently shadowed the bulk pick — user
+ * Saved and the widget kept rendering the old provider.
  *
- * Also covers prior pins (≥ 0.1.463 wizard step restructure;
+ * Also covers prior pins (≥ 0.1.464 provider hooks use widget-
+ * identity fallback chain; ≥ 0.1.463 wizard step restructure;
  * ≥ 0.1.462 wizard polish — horizontal banner, sticky sidebar, top
  * Summary; ≥ 0.1.461 registry sign-in CTA in the wizard; ≥ 0.1.460
  * Dashboard Wizard left-sidebar filter layout; ≥ 0.1.459 Providers
@@ -50,7 +49,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.464";
+const minRequired = "0.1.465";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -62,9 +61,9 @@ function semverGte(a, b) {
 
 assert.ok(
     semverGte(stripped, minRequired),
-    `@trops/dash-core must be >= ${minRequired} (the version where provider-resolution hooks read widgetId via the canonical uuidString || uuid || id fallback so bulk-edit bindings persist for widgets without uuidString). Currently pinned at: ${pinned}`
+    `@trops/dash-core must be >= ${minRequired} (the version where dashboard config bulk-edit writes through to BOTH provider-binding layers, fixing the layer-1 shadowing bug). Currently pinned at: ${pinned}`
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, provider hooks use widget-identity fallback chain)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, bulk-edit writes through to both provider-binding layers)`
 );
