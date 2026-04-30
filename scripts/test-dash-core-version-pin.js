@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.465, the version where the dashboard config bulk-edit
- * Save path writes through to BOTH provider-binding layers
- * (item.selectedProviders + workspace.selectedProviders[id]). Earlier
- * versions wrote only the workspace-level layer; layer-1 values from
- * prior single-widget picks silently shadowed the bulk pick — user
- * Saved and the widget kept rendering the old provider.
+ * be at ≥ 0.1.466, the version where the dashboard config modal's
+ * bulk-apply override-protection check consults the staged state.
+ * Earlier versions filtered by `b.layoutItem.selectedProviders[type]`
+ * only — a freshly-staged unset wasn't recognised, so the user
+ * could toggle a widget's override off, click Bulk for the same
+ * type, and watch the widget get skipped.
  *
- * Also covers prior pins (≥ 0.1.464 provider hooks use widget-
+ * Also covers prior pins (≥ 0.1.465 bulk-edit writes through to both
+ * provider-binding layers; ≥ 0.1.464 provider hooks use widget-
  * identity fallback chain; ≥ 0.1.463 wizard step restructure;
  * ≥ 0.1.462 wizard polish — horizontal banner, sticky sidebar, top
  * Summary; ≥ 0.1.461 registry sign-in CTA in the wizard; ≥ 0.1.460
@@ -49,7 +50,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.465";
+const minRequired = "0.1.466";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -61,9 +62,9 @@ function semverGte(a, b) {
 
 assert.ok(
     semverGte(stripped, minRequired),
-    `@trops/dash-core must be >= ${minRequired} (the version where dashboard config bulk-edit writes through to BOTH provider-binding layers, fixing the layer-1 shadowing bug). Currently pinned at: ${pinned}`
+    `@trops/dash-core must be >= ${minRequired} (the version where stageBulk consults the staged state so a staged unset is recognised as 'no override' and gets bulked). Currently pinned at: ${pinned}`
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, bulk-edit writes through to both provider-binding layers)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, bulk-apply respects staged unsets)`
 );
