@@ -131,6 +131,13 @@ const extendedApi = {
         // letting the user hit an opaque ENOENT mid-compile.
         healthCheck: () => ipcRenderer.invoke("ai-assistant:health-check"),
     },
+    drafts: {
+        // Auto-saved widget builds. See public/widgetDrafts.cjs.
+        list: () => ipcRenderer.invoke("drafts:list"),
+        get: (id) => ipcRenderer.invoke("drafts:get", { id }),
+        save: (draft) => ipcRenderer.invoke("drafts:save", { draft }),
+        delete: (id) => ipcRenderer.invoke("drafts:delete", { id }),
+    },
     debug: {
         open: () => ipcRenderer.invoke("debug-window-open"),
         close: () => ipcRenderer.invoke("debug-window-close"),
