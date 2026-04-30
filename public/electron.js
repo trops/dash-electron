@@ -35,6 +35,7 @@ const {
     Menu,
     autoUpdater,
 } = require("electron");
+const widgetDrafts = require("./widgetDrafts.cjs");
 
 // Handle Squirrel install/uninstall/update events on Windows
 if (require("electron-squirrel-startup")) app.quit();
@@ -1828,6 +1829,25 @@ function createWindow() {
             }
             return out;
         });
+
+        // --- Widget Builder: Drafts ---
+        // Auto-saved widgets that haven't been installed yet. The
+        // renderer calls these from WidgetBuilderModal so an in-flight
+        // widget survives a crash, modal close, or app restart.
+        // Storage is widget-drafts.json in the user's Dashboard dir;
+        // see public/widgetDrafts.cjs for the contract.
+        logger.loggedHandle("drafts:list", () => widgetDrafts.listDrafts());
+        logger.loggedHandle("drafts:get", (e, { id }) =>
+            widgetDrafts.getDraft(id)
+        );
+        logger.loggedHandle("drafts:save", (e, { draft }) =>
+            widgetDrafts.saveDraft(draft)
+        );
+        logger.loggedHandle("drafts:delete", (e, { id }) => {
+            widgetDrafts.deleteDraft(id);
+            return { ok: true };
+        });
+
         // --- AI Assistant: Health Check ---
         // Probes whether the bits the AI Assistant + Widget Builder need
         // are actually working: the Claude CLI (chat backend), esbuild's
