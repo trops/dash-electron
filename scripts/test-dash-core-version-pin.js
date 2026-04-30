@@ -1,15 +1,19 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.469, the version where DashboardStage's
- * handlePageWorkspaceChange updates the openTabs React state (not
- * just a per-page ref), so workspaceSelected — which the dashboard
- * config bulk-edit modal reads — sees per-widget edits that happen
- * on a page. Without this, the prior cycles' write-through and
- * propagation fixes all landed correctly but the data dead-ended in
- * a ref, leaving the bulk modal rendering pre-edit data.
+ * be at ≥ 0.1.470, the version where forEachWidget walks
+ * `workspace.pages[].layout` BEFORE `workspace.layout`. Without this,
+ * an auto-migrated single-page workspace (whose pages[0].layout was
+ * aliased to workspace.layout in WorkspaceModel and then diverged on
+ * the first per-page edit) produced stale top-level items that the
+ * id-dedupe in forEachWidget kept visiting first — so the bulk-edit
+ * modal's OVERRIDE badge read pre-edit provider bindings even after
+ * the user unset a provider in the per-widget Providers panel. Every
+ * cycle from 0.1.464 forward correctly fixed write-side propagation;
+ * the read-side walk order was the missing piece.
  *
- * Also covers prior pins (≥ 0.1.468 per-widget provider edit writes
+ * Also covers prior pins (≥ 0.1.469 handlePageWorkspaceChange updates
+ * openTabs React state; ≥ 0.1.468 per-widget provider edit writes
  * through to both binding layers; ≥ 0.1.467 per-widget provider
  * edits propagate to the parent; ≥ 0.1.466 bulk-apply respects
  * staged unsets; ≥ 0.1.465 bulk-edit writes through to both
@@ -54,7 +58,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.469";
+const minRequired = "0.1.470";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -66,9 +70,9 @@ function semverGte(a, b) {
 
 assert.ok(
     semverGte(stripped, minRequired),
-    `@trops/dash-core must be >= ${minRequired} (the version where handlePageWorkspaceChange updates openTabs React state so per-widget edits on pages reach the bulk-edit modal). Currently pinned at: ${pinned}`
+    `@trops/dash-core must be >= ${minRequired} (the version where forEachWidget walks pages BEFORE workspace.layout, so per-widget unsets aren't shadowed by the auto-migration alias the bulk modal was reading). Currently pinned at: ${pinned}`
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, page-level workspace changes propagate to React state)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, forEachWidget walks pages first so fresh page data wins over stale workspace.layout alias)`
 );
