@@ -433,10 +433,13 @@ import { useWidgetProviders, useProviderClient } from "@trops/dash-core";
 import { Panel, EmptyState } from "@trops/dash-react";
 
 export default function MyWidget({ title }) {
+  // Hooks first — Rules of Hooks. getProvider returns null when the
+  // provider isn't configured yet, and useProviderClient(null) is safe
+  // (returns a null-shaped handle). Calling them unconditionally keeps
+  // React's hook count stable across renders. Putting the early return
+  // ABOVE these hooks crashes the app the moment hasProvider flips
+  // (e.g. user picks a provider in Settings).
   const { hasProvider, getProvider } = useWidgetProviders();
-  if (!hasProvider("${pickedType}")) {
-    return <Panel><EmptyState message="Configure a ${pickedType} provider in Settings → Providers" /></Panel>;
-  }
   const provider = getProvider("${pickedType}");
   const pc = useProviderClient(provider);
   // pc is { providerHash, providerName, dashboardAppId }
@@ -446,11 +449,17 @@ export default function MyWidget({ title }) {
   // call site — the user will wire it.
   const [data, setData] = useState(null);
   useEffect(() => {
+    if (!pc?.providerHash) return; // bail INSIDE the effect when no provider
     let cancelled = false;
     // TODO: replace with the appropriate window.mainApi.<service>.<method>(pc, ...)
     // call for type "${pickedType}".
     return () => { cancelled = true; };
   }, [pc?.providerHash]);
+
+  // Conditional render goes AFTER all hooks have run.
+  if (!hasProvider("${pickedType}")) {
+    return <Panel><EmptyState message="Configure a ${pickedType} provider in Settings → Providers" /></Panel>;
+  }
   return <Panel>{/* render data */}</Panel>;
 }
 \`\`\``
@@ -513,6 +522,7 @@ For multi-widget packages, every widget needs BOTH a \`<Name>.js\` and matching 
 - NEVER import useState, useEffect, or any React hooks from '@trops/dash-react' — they MUST come from 'react'
 - Wrap the component in \`<Panel>…</Panel>\` (it's the canonical widget chrome).
 - Config MUST include: \`component\` (matching function name), \`name\` (display name with spaces), \`type: "widget"\`, \`canHaveChildren: false\`, \`workspace: "ai-built"\`, plus the \`providers: [...]\` array shown above.
+- **RULES OF HOOKS — non-negotiable.** Every hook (\`useState\`, \`useEffect\`, \`useMcpProvider\`, \`useWidgetProviders\`, \`useProviderClient\`, \`useMemo\`, \`useRef\`, \`useContext\`, etc.) MUST be called UNCONDITIONALLY at the top of the component, BEFORE any \`if\` / early \`return\` / loop / conditional. The hook count must be identical on every render. Putting an early return ABOVE a hook (e.g. \`if (!hasProvider("x")) return <EmptyState/>; const pc = useProviderClient(provider);\`) crashes the entire app the moment the condition flips, with "Rendered more hooks than during the previous render". Place all hooks at the top, run them with possibly-null inputs (it's safe — \`useProviderClient(null)\` returns a null-handle, \`getProvider("x")\` returns null), and put conditional returns AFTER every hook has run. Bail INSIDE \`useEffect\` bodies (\`if (!pc?.providerHash) return;\`) when a precondition isn't met — never bail by skipping the hook itself.
 
 ### How userConfig values reach the component
 
@@ -841,28 +851,26 @@ import { useWidgetProviders, useProviderClient } from "@trops/dash-core";
 import { Panel, EmptyState } from "@trops/dash-react";
 
 export default function MyWidget({ title }) {
+  // 1. RULES OF HOOKS — every hook (useState, useEffect, useProviderClient)
+  //    must be called UNCONDITIONALLY at the top, BEFORE any if / return.
+  //    \`getProvider\` returns null when the provider isn't configured;
+  //    \`useProviderClient(null)\` is safe and returns a null-shaped handle.
+  //    The conditional \`hasProvider\` UI render goes at the BOTTOM.
+  //    Putting an early return above the hooks crashes the app the moment
+  //    \`hasProvider\` flips (e.g. user adds the provider in Settings) with
+  //    "Rendered more hooks than during the previous render".
   const { hasProvider, getProvider } = useWidgetProviders();
-
-  // 1. Always check hasProvider BEFORE getProvider/useProviderClient —
-  //    calling getProvider for a missing provider is fine, but downstream
-  //    IPC calls would crash on the empty handle.
-  if (!hasProvider("algolia")) {
-    return (
-      <Panel>
-        <EmptyState message="Configure an Algolia provider in Settings → Providers" />
-      </Panel>
-    );
-  }
-
   const provider = getProvider("algolia");
   const pc = useProviderClient(provider);
   // pc is a handle: { providerHash, providerName, dashboardAppId }.
 
   // 2. Async API calls must go in useEffect, never at render. The host
   //    IPC for Algolia is window.mainApi.algolia.* — pass \`pc\` as the
-  //    first arg so credentials stay in the main process.
+  //    first arg so credentials stay in the main process. Bail INSIDE the
+  //    effect when there's no provider yet.
   const [results, setResults] = useState([]);
   useEffect(() => {
+    if (!pc?.providerHash) return;
     let cancelled = false;
     window.mainApi.algolia
       .search(pc, { indexName: "your-index", query: "" })
@@ -870,6 +878,16 @@ export default function MyWidget({ title }) {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [pc?.providerHash]);
+
+  // 3. Conditional UI AFTER all hooks. This is the only safe place for
+  //    early returns in a React component.
+  if (!hasProvider("algolia")) {
+    return (
+      <Panel>
+        <EmptyState message="Configure an Algolia provider in Settings → Providers" />
+      </Panel>
+    );
+  }
 
   return <Panel>{/* render results */}</Panel>;
 }
