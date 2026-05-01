@@ -117,7 +117,11 @@ test("addEventHandlerStub inserts a listen() call when none exists", () => {
         "onItemSelected",
         "MyWidget"
     );
-    expect(result).toMatch(/props\.listen\(\s*props\.listeners\s*,\s*\{/);
+    // Optional chaining makes the call safe when props.listen is
+    // undefined (e.g. the AI Builder preview doesn't inject the
+    // WidgetFactory props). On the live dashboard the prop IS
+    // defined and optional chaining is a no-op.
+    expect(result).toMatch(/props\.listen\?\.\(\s*props\.listeners\s*,\s*\{/);
     expect(result).toMatch(/onItemSelected:\s*\(data\)\s*=>/);
 });
 
@@ -139,9 +143,11 @@ test("addEventHandlerStub adds a key to an existing listen block", () => {
     // Both handlers must be present.
     expect(result).toMatch(/onQueryChanged:/);
     expect(result).toMatch(/onItemSelected:/);
-    // Only ONE listen call (we extended, not duplicated).
+    // Only ONE listen call (we extended, not duplicated). Match
+    // either the optional-chained or bare form so legacy widgets
+    // without optional chaining still register as one call.
     const listenCalls = (
-        result.match(/props\.listen\(\s*props\.listeners\s*,/g) || []
+        result.match(/props\.listen\??\.?\(\s*props\.listeners\s*,/g) || []
     ).length;
     expect(listenCalls).toBe(1);
 });
@@ -188,4 +194,16 @@ test("removeEventHandler drops the entire listen call when the last key goes", (
 test("removeEventHandler is a no-op when the handler isn't there", () => {
     const result = removeEventHandler(SIMPLE_WIDGET, "onNeverSubscribed");
     expect(result).toBe(SIMPLE_WIDGET);
+});
+
+test("removeEventHandler also works on optional-chained listen calls", () => {
+    // Widgets generated with the new addEventHandlerStub will use
+    // `props.listen?.(...)`. The remove path must detect both forms.
+    const optionalChained = SIMPLE_WIDGET.replace(
+        "return (",
+        '  props.listen?.(props.listeners, {\n    onItemSelected: (data) => { console.log("a", data); },\n  });\n  return ('
+    );
+    const result = removeEventHandler(optionalChained, "onItemSelected");
+    expect(result).not.toMatch(/onItemSelected:/);
+    expect(result).not.toMatch(/props\.listen\?\.\(/);
 });
