@@ -565,6 +565,28 @@ ALLOWED: \`bg/text/border-{color}-{shade}\` (gray, slate, zinc, neutral, stone, 
 
 DO NOT USE (silently fail): opacity modifiers (\`bg-white/10\`), arbitrary values (\`text-[10px]\`, \`w-[440px]\`, \`bg-[#abc]\`), \`ring-*\`, \`divide-*\` color variants, \`outline-*\` color variants. Use inline \`style={{...}}\` for non-safelisted needs.
 
+## Theme access
+
+Most widgets get the active theme for free by using \`@trops/dash-react\` components — keep doing that. For the rare case where you need a raw HTML element (a custom card layout, a one-off icon container) and want it to follow the user's theme switch, read theme tokens from \`ThemeContext\`:
+
+\`\`\`jsx
+import { useContext } from "react";
+import { ThemeContext } from "@trops/dash-react";
+
+export default function MyWidget() {
+  const { currentTheme } = useContext(ThemeContext);
+  // Each value is a Tailwind class string. Always pair it with a
+  // hardcoded fallback so the className stays valid when a theme is
+  // missing a key.
+  const bg = currentTheme?.["bg-primary-dark"] || "bg-gray-900";
+  const text = currentTheme?.["text-primary-light"] || "text-gray-100";
+  const border = currentTheme?.["border-primary-dark"] || "border-gray-700";
+  return <Panel><div className={\`\${bg} \${text} \${border} border rounded p-3\`}>…</div></Panel>;
+}
+\`\`\`
+
+Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-medium\`, \`border-primary-dark\`, \`border-primary-medium\`, \`text-primary-light\`, \`text-primary-medium\`, \`text-secondary-light\`. Pattern: \`{role}-{intent}-{shade}\` where role is \`bg\`/\`text\`/\`border\`, intent is \`primary\`/\`secondary\`, shade is \`light\`/\`medium\`/\`dark\`/\`very-dark\`. Hardcoded Tailwind classes (e.g. \`bg-gray-800\`) work but won't follow theme switches — use them only as the fallback.
+
 ## Critical rules
 
 - Do NOT use Read, Write, Edit, Bash, Glob, or Grep tools.
