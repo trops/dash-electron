@@ -33,6 +33,11 @@ Framework-level PRDs are in [@trops/dash-core](https://github.com/trops/dash-cor
 
 -   **[MAIN_APP_INTEGRATION.md](./MAIN_APP_INTEGRATION.md)** - Application integration patterns and checklist
 
+## Quality Assurance
+
+-   **[QA/MANUAL-TEST-PLAN.md](./QA/MANUAL-TEST-PLAN.md)** - End-to-end manual test checklist organized by topic (Dashboards, Widgets, Themes, Providers, Settings, AI Assistant, App Lifecycle)
+-   **[QA/REPORT-TEMPLATE.md](./QA/REPORT-TEMPLATE.md)** - Copy-paste template for filing a QA finding
+
 ## Core Framework Documentation
 
 The widget system, provider architecture, and widget API are documented in `@trops/dash-core`:

@@ -112,6 +112,11 @@ For comprehensive guides, see [docs/INDEX.md](./docs/INDEX.md):
 -   [Quick Start](./docs/QUICK_START.md) - Commands, workflows, and troubleshooting
 -   [Development Workflow](./docs/DEVELOPMENT_WORKFLOW.md) - Development workflow and best practices
 
+**Testing a Release:**
+
+-   [Manual QA Test Plan](./docs/QA/MANUAL-TEST-PLAN.md) - End-to-end checklist for testing a build (cold install → CRUD across Dashboards, Widgets, Themes, Providers, AI Assistant)
+-   [QA Report Template](./docs/QA/REPORT-TEMPLATE.md) - Copy-paste shape for filing findings
+
 **Core Framework (widget system, providers, MCP):**
 
 For complete widget system, provider architecture, and widget API documentation, see [@trops/dash-core](https://github.com/trops/dash-core):
