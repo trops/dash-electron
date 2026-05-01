@@ -42,25 +42,48 @@ describe("WidgetBuilderModal — Event publishing guidance in all three branches
         expect(getSectionSlices().length).toBe(3);
     });
 
-    test("each section names the widget-event:publish IPC channel", () => {
+    test("each section uses the props.publishEvent API (NOT window.dispatchEvent)", () => {
+        // The canonical API is `props.publishEvent(eventName, payload)`
+        // — injected as a prop by WidgetFactory. The lower-level
+        // `window.dispatchEvent("widget-event:publish", ...)` form is
+        // internal IPC and shouldn't be in widget code.
         const slices = getSectionSlices();
         expect(slices.length).toBe(3);
         for (const slice of slices) {
-            expect(slice).toMatch(/widget-event:publish/);
+            expect(slice).toMatch(/publishEvent\s*\(\s*["']/);
+            // No raw window.dispatchEvent guidance — the framework
+            // wraps it. We DO allow incidental mention if it explicitly
+            // says "DON'T use", but the canonical example must show
+            // props.publishEvent.
+            const dispatchHits = (
+                slice.match(/window\.dispatchEvent\s*\(/g) || []
+            ).length;
+            expect(dispatchHits).toBe(0);
         }
     });
 
-    test("each section teaches the <package>:<verb-noun> naming convention", () => {
+    test("each section uses camelCase event-name examples", () => {
+        // Codebase convention: queryChanged, itemSelected,
+        // searchQuerySelected, etc. NOT kebab-case (item-selected) or
+        // colon-prefixed (filebrowser:item-selected) — the framework
+        // auto-prefixes scope so the AI just supplies the suffix.
         const slices = getSectionSlices();
         expect(slices.length).toBe(3);
         for (const slice of slices) {
-            // Look for the explicit pattern OR a concrete example
-            // following the convention. Either form is acceptable
-            // evidence the convention is taught.
-            const hasPattern = /<\s*package\s*>:<\s*verb-noun\s*>/.test(slice);
-            const hasExample =
-                /[a-z][a-z0-9-]*:[a-z][a-z0-9-]*-[a-z][a-z0-9-]*/.test(slice);
-            expect(hasPattern || hasExample).toBe(true);
+            // Find the example calls — `publishEvent("..."...)` — and
+            // assert at least one uses camelCase (lowercase first
+            // letter, then a capital letter somewhere).
+            const calls = [
+                ...slice.matchAll(/publishEvent\s*\(\s*["']([^"']+)["']/g),
+            ];
+            expect(calls.length).toBeGreaterThan(0);
+            const camelCase = /^[a-z][a-z0-9]*[A-Z][A-Za-z0-9]*$/;
+            const anyCamel = calls.some((m) => camelCase.test(m[1]));
+            expect(anyCamel).toBe(true);
+            // Reject colon-prefixed forms in any example.
+            for (const m of calls) {
+                expect(m[1]).not.toMatch(/:/);
+            }
         }
     });
 

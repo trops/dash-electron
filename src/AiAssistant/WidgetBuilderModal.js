@@ -596,32 +596,43 @@ Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-me
 
 If the widget has a meaningful interaction worth sharing across the dashboard — a row clicked, a query changed, a file opened, a value submitted — publish an event so other widgets can react. Skip for read-only / static widgets (clocks, dashboards, banners) where there's nothing to broadcast.
 
-**API.** Dispatch a CustomEvent on \`window\`:
+**API.** \`publishEvent\` is injected by the framework as a prop on every widget. Destructure it and call \`publishEvent(eventName, payload)\`:
 
 \`\`\`jsx
-window.dispatchEvent(
-  new CustomEvent("widget-event:publish", {
-    detail: {
-      eventType: "filebrowser:item-selected",
-      content: { path: item.path, name: item.name },
-    },
-  })
-);
+export default function MyWidget(props) {
+  const { publishEvent } = props;
+  return (
+    <Panel>
+      <ul>
+        {items.map((item) => (
+          <li
+            key={item.id}
+            onClick={() => publishEvent("itemSelected", { id: item.id, name: item.name })}
+          >
+            {item.name}
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
 \`\`\`
 
-**Naming convention.** \`<package>:<verb-noun>\`. Use the package's lowercase name (matches the \`@ai-built/<pkg>\` scope) and a kebab-case verb-noun describing the trigger. Examples: \`filebrowser:item-selected\`, \`algoliasearch:query-changed\`, \`gmail:thread-opened\`. Two widgets in the same package emitting consistent names is what makes the cross-widget pub/sub useful — random ad-hoc names defeat it.
+The framework auto-scopes the event to \`<component>[<id>].<eventName>\` on the wire — you only supply the suffix.
+
+**Naming convention.** Plain camelCase verbs/states: \`itemSelected\`, \`queryChanged\`, \`templateChanged\`, \`indexSelected\`, \`valueSubmitted\`, \`searchQuerySelected\`. Match the existing codebase style — NOT kebab-case (\`item-selected\`), NOT colon-prefixed (\`filebrowser:itemSelected\`). The component scope is added automatically; you only need the action name.
 
 **Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array so the Configure tab and any subscriber tooling can see them:
 
 \`\`\`js
 events: [
-  { name: "filebrowser:item-selected", description: "Fired when the user clicks a row" },
+  { name: "itemSelected", description: "Fired when the user clicks a row" },
 ],
 \`\`\`
 
-**Tell the user.** When you add events, list them at the end of your chat response — one line per event, type + trigger:
+**Tell the user.** When you add events, list them at the end of your chat response — one line per event, name + trigger:
 
-> Emits \`filebrowser:item-selected\` when a row is clicked. Connect another widget to it by adding an event handler in Settings → Configure → Event Handlers.
+> Emits \`itemSelected\` when a row is clicked. Connect another widget to it by adding an event handler in Settings → Configure → Event Handlers.
 
 This way the user knows what's wired without reading the diff. DO NOT publish events the user can't see in your response — surfacing them is non-negotiable.
 
@@ -700,32 +711,43 @@ Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-me
 
 If the widget has a meaningful interaction worth sharing across the dashboard — a row clicked, a query changed, a file opened, a value submitted — publish an event so other widgets can react. Skip for read-only / static widgets (clocks, dashboards, banners) where there's nothing to broadcast.
 
-**API.** Dispatch a CustomEvent on \`window\`:
+**API.** \`publishEvent\` is injected by the framework as a prop on every widget. Destructure it and call \`publishEvent(eventName, payload)\`:
 
 \`\`\`jsx
-window.dispatchEvent(
-  new CustomEvent("widget-event:publish", {
-    detail: {
-      eventType: "filebrowser:item-selected",
-      content: { path: item.path, name: item.name },
-    },
-  })
-);
+export default function MyWidget(props) {
+  const { publishEvent } = props;
+  return (
+    <Panel>
+      <ul>
+        {items.map((item) => (
+          <li
+            key={item.id}
+            onClick={() => publishEvent("itemSelected", { id: item.id, name: item.name })}
+          >
+            {item.name}
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
 \`\`\`
 
-**Naming convention.** \`<package>:<verb-noun>\`. Use the package's lowercase name (matches the \`@ai-built/<pkg>\` scope) and a kebab-case verb-noun describing the trigger. Examples: \`filebrowser:item-selected\`, \`algoliasearch:query-changed\`, \`gmail:thread-opened\`. Two widgets in the same package emitting consistent names is what makes the cross-widget pub/sub useful — random ad-hoc names defeat it.
+The framework auto-scopes the event to \`<component>[<id>].<eventName>\` on the wire — you only supply the suffix.
+
+**Naming convention.** Plain camelCase verbs/states: \`itemSelected\`, \`queryChanged\`, \`templateChanged\`, \`indexSelected\`, \`valueSubmitted\`, \`searchQuerySelected\`. Match the existing codebase style — NOT kebab-case (\`item-selected\`), NOT colon-prefixed (\`filebrowser:itemSelected\`). The component scope is added automatically; you only need the action name.
 
 **Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array so the Configure tab and any subscriber tooling can see them:
 
 \`\`\`js
 events: [
-  { name: "filebrowser:item-selected", description: "Fired when the user clicks a row" },
+  { name: "itemSelected", description: "Fired when the user clicks a row" },
 ],
 \`\`\`
 
-**Tell the user.** When you add events, list them at the end of your chat response — one line per event, type + trigger:
+**Tell the user.** When you add events, list them at the end of your chat response — one line per event, name + trigger:
 
-> Emits \`filebrowser:item-selected\` when a row is clicked. Connect another widget to it by adding an event handler in Settings → Configure → Event Handlers.
+> Emits \`itemSelected\` when a row is clicked. Connect another widget to it by adding an event handler in Settings → Configure → Event Handlers.
 
 This way the user knows what's wired without reading the diff. DO NOT publish events the user can't see in your response — surfacing them is non-negotiable.
 
@@ -1122,32 +1144,43 @@ Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-me
 
 If the widget has a meaningful interaction worth sharing across the dashboard — a row clicked, a query changed, a file opened, a value submitted — publish an event so other widgets can react. Skip for read-only / static widgets (clocks, dashboards, banners) where there's nothing to broadcast.
 
-**API.** Dispatch a CustomEvent on \`window\`:
+**API.** \`publishEvent\` is injected by the framework as a prop on every widget. Destructure it and call \`publishEvent(eventName, payload)\`:
 
 \`\`\`jsx
-window.dispatchEvent(
-  new CustomEvent("widget-event:publish", {
-    detail: {
-      eventType: "filebrowser:item-selected",
-      content: { path: item.path, name: item.name },
-    },
-  })
-);
+export default function MyWidget(props) {
+  const { publishEvent } = props;
+  return (
+    <Panel>
+      <ul>
+        {items.map((item) => (
+          <li
+            key={item.id}
+            onClick={() => publishEvent("itemSelected", { id: item.id, name: item.name })}
+          >
+            {item.name}
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
 \`\`\`
 
-**Naming convention.** \`<package>:<verb-noun>\`. Use the package's lowercase name (matches the \`@ai-built/<pkg>\` scope) and a kebab-case verb-noun describing the trigger. Examples: \`filebrowser:item-selected\`, \`algoliasearch:query-changed\`, \`gmail:thread-opened\`. Two widgets in the same package emitting consistent names is what makes the cross-widget pub/sub useful — random ad-hoc names defeat it.
+The framework auto-scopes the event to \`<component>[<id>].<eventName>\` on the wire — you only supply the suffix.
+
+**Naming convention.** Plain camelCase verbs/states: \`itemSelected\`, \`queryChanged\`, \`templateChanged\`, \`indexSelected\`, \`valueSubmitted\`, \`searchQuerySelected\`. Match the existing codebase style — NOT kebab-case (\`item-selected\`), NOT colon-prefixed (\`filebrowser:itemSelected\`). The component scope is added automatically; you only need the action name.
 
 **Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array so the Configure tab and any subscriber tooling can see them:
 
 \`\`\`js
 events: [
-  { name: "filebrowser:item-selected", description: "Fired when the user clicks a row" },
+  { name: "itemSelected", description: "Fired when the user clicks a row" },
 ],
 \`\`\`
 
-**Tell the user.** When you add events, list them at the end of your chat response — one line per event, type + trigger:
+**Tell the user.** When you add events, list them at the end of your chat response — one line per event, name + trigger:
 
-> Emits \`filebrowser:item-selected\` when a row is clicked. Connect another widget to it by adding an event handler in Settings → Configure → Event Handlers.
+> Emits \`itemSelected\` when a row is clicked. Connect another widget to it by adding an event handler in Settings → Configure → Event Handlers.
 
 This way the user knows what's wired without reading the diff. DO NOT publish events the user can't see in your response — surfacing them is non-negotiable.
 
