@@ -19,16 +19,14 @@
  *     match the expected shape (no `export default function`, etc.)
  *     they return the input unchanged rather than corrupt it
  */
-// Uses jest globals (test/expect). The module is plain CJS — require()
-// works fine from a .test.js. Kept as jest tests so the project's
-// existing `npx jest src/AiAssistant/` sweep covers them; an earlier
-// node:test version conflicted with jest auto-discovery on .test.js.
+// Uses jest globals (test/expect). The module is plain ESM —
+// jest+babel handle the named-import resolution for .js files.
 const {
     addPublishEventStub,
     removePublishEvent,
     addEventHandlerStub,
     removeEventHandler,
-} = require("./widgetCodeTransforms.cjs");
+} = require("./widgetCodeTransforms");
 
 const SIMPLE_WIDGET = `import React from "react";
 import { Panel, Heading } from "@trops/dash-react";

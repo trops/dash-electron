@@ -28,8 +28,6 @@
  *
  * No React, no electron — testable from node:test.
  */
-"use strict";
-
 // Anchor: every transform requires the widget to have a default
 // function export. Without that, the file isn't a recognizable
 // widget shape and we bail.
@@ -50,7 +48,7 @@ function findFunctionBodyStart(code) {
 
 // ── publishEvent ──────────────────────────────────────────────────
 
-function addPublishEventStub(code, eventName, widgetName) {
+export function addPublishEventStub(code, eventName, widgetName) {
     if (!HAS_FUNCTION_EXPORT.test(code)) return code;
     if (!eventName) return code;
     // Idempotent: if the TODO comment already references this event,
@@ -63,7 +61,7 @@ function addPublishEventStub(code, eventName, widgetName) {
     return code.slice(0, insertAt) + stub + code.slice(insertAt);
 }
 
-function removePublishEvent(code, eventName) {
+export function removePublishEvent(code, eventName) {
     if (!eventName) return code;
     let out = code;
     // Remove TODO stub comments referencing this event.
@@ -141,7 +139,7 @@ function buildHandlerStub(handlerName, widgetName) {
     return `${safeHandler}: (data) => { console.log("[${safeWidget}] ${safeHandler} received:", data); /* TODO: handle */ },`;
 }
 
-function addEventHandlerStub(code, handlerName, widgetName) {
+export function addEventHandlerStub(code, handlerName, widgetName) {
     if (!HAS_FUNCTION_EXPORT.test(code)) return code;
     if (!handlerName) return code;
 
@@ -218,7 +216,7 @@ function stripHandlerKey(inner, handlerName) {
     return inner.slice(0, entryStart) + inner.slice(entryEnd);
 }
 
-function removeEventHandler(code, handlerName) {
+export function removeEventHandler(code, handlerName) {
     if (!handlerName) return code;
     const block = findListenBlock(code);
     if (!block) return code;
@@ -239,10 +237,3 @@ function removeEventHandler(code, handlerName) {
         code.slice(0, block.callStart) + replacement + code.slice(block.callEnd)
     );
 }
-
-module.exports = {
-    addPublishEventStub,
-    removePublishEvent,
-    addEventHandlerStub,
-    removeEventHandler,
-};
