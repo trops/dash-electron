@@ -42,23 +42,24 @@ describe("WidgetBuilderModal — Event publishing guidance in all three branches
         expect(getSectionSlices().length).toBe(3);
     });
 
-    test("each section uses the props.publishEvent API (NOT window.dispatchEvent)", () => {
-        // The canonical API is `props.publishEvent(eventName, payload)`
-        // — injected as a prop by WidgetFactory. The lower-level
-        // `window.dispatchEvent("widget-event:publish", ...)` form is
-        // internal IPC and shouldn't be in widget code.
+    test("each section teaches the useWidgetEvents() hook (canonical API)", () => {
+        // useWidgetEvents() returns { publishEvent, listen, listeners,
+        // widgetEventNames }. It's the canonical pub/sub API in the
+        // codebase. The legacy `props.publishEvent` form (injected by
+        // WidgetFactory) and the lower-level `window.dispatchEvent`
+        // form should NOT appear in the example.
         const slices = getSectionSlices();
         expect(slices.length).toBe(3);
         for (const slice of slices) {
+            expect(slice).toMatch(/useWidgetEvents/);
             expect(slice).toMatch(/publishEvent\s*\(\s*["']/);
-            // No raw window.dispatchEvent guidance — the framework
-            // wraps it. We DO allow incidental mention if it explicitly
-            // says "DON'T use", but the canonical example must show
-            // props.publishEvent.
+            // No raw window.dispatchEvent guidance — the hook wraps it.
             const dispatchHits = (
                 slice.match(/window\.dispatchEvent\s*\(/g) || []
             ).length;
             expect(dispatchHits).toBe(0);
+            // No props.publishEvent — that was the legacy injection.
+            expect(slice).not.toMatch(/props\.publishEvent/);
         }
     });
 

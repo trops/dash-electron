@@ -46,33 +46,141 @@ function findFunctionBodyStart(code) {
     return match.index + match[0].length;
 }
 
+/**
+ * Ensure a named import from a given source is present. If the
+ * source already has a `import { ... } from "<source>"` line, add
+ * `name` to the names list (idempotent — no-op if already there).
+ * If no import from the source exists, insert a fresh import line
+ * after the last existing import line (or at file top if there are
+ * none). Returns the updated code.
+ */
+function ensureNamedImport(code, name, source) {
+    // 1. Already present in some import from this source?
+    const presenceRe = new RegExp(
+        `import\\s*\\{[^}]*\\b${escapeRegex(
+            name
+        )}\\b[^}]*\\}\\s*from\\s*["']${escapeRegex(source)}["']`
+    );
+    if (presenceRe.test(code)) return code;
+
+    // 2. An import from this source exists with OTHER names — add to it.
+    const existingRe = new RegExp(
+        `(import\\s*\\{)([^}]*)(\\}\\s*from\\s*["']${escapeRegex(source)}["'])`
+    );
+    const existingMatch = code.match(existingRe);
+    if (existingMatch) {
+        const [, head, names, tail] = existingMatch;
+        const trimmed = names.replace(/\s+$/, "");
+        const sep = trimmed.endsWith(",") || trimmed.trim() === "" ? " " : ", ";
+        return code.replace(
+            existingRe,
+            `${head}${trimmed}${sep}${name} ${tail}`
+        );
+    }
+
+    // 3. No import from this source — add a new import line. Place
+    // it after the last `import` statement so they cluster at the top.
+    const importMatches = [...code.matchAll(/^import[^\n]*\n/gm)];
+    if (importMatches.length > 0) {
+        const last = importMatches[importMatches.length - 1];
+        const insertAt = last.index + last[0].length;
+        const line = `import { ${name} } from "${source}";\n`;
+        return code.slice(0, insertAt) + line + code.slice(insertAt);
+    }
+    // No imports at all — prepend.
+    return `import { ${name} } from "${source}";\n` + code;
+}
+
+/**
+ * Find an existing `const { ... } = useWidgetEvents();` destructure
+ * statement and return its boundaries + names list. Returns null
+ * when none exists.
+ */
+function findUseWidgetEventsDestructure(code) {
+    const re = /const\s*\{\s*([^}]*)\s*\}\s*=\s*useWidgetEvents\(\)\s*;?/;
+    const m = code.match(re);
+    if (!m) return null;
+    const names = m[1]
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    return {
+        start: m.index,
+        end: m.index + m[0].length,
+        names,
+        source: m[0],
+    };
+}
+
+/**
+ * Ensure the useWidgetEvents() destructure exists at the top of the
+ * function body and includes ALL the requested names. If it already
+ * exists with some of the names, ADD the missing ones to it. If it
+ * doesn't exist, insert a new line right after the function body's
+ * opening brace.
+ *
+ * Names is an array like ["listen", "listeners"] or ["publishEvent"].
+ */
+function ensureUseWidgetEventsDestructure(code, names) {
+    const existing = findUseWidgetEventsDestructure(code);
+    if (existing) {
+        const have = new Set(existing.names);
+        const add = names.filter((n) => !have.has(n));
+        if (add.length === 0) return code;
+        const merged = [...existing.names, ...add].join(", ");
+        const replacement = `const { ${merged} } = useWidgetEvents();`;
+        return (
+            code.slice(0, existing.start) +
+            replacement +
+            code.slice(existing.end)
+        );
+    }
+    // Insert at the top of the function body. Hooks must come before
+    // any conditional return — placing at the very top satisfies that.
+    const insertAt = findFunctionBodyStart(code);
+    if (insertAt < 0) return code;
+    const line = `\n  const { ${names.join(", ")} } = useWidgetEvents();`;
+    return code.slice(0, insertAt) + line + code.slice(insertAt);
+}
+
 // ── publishEvent ──────────────────────────────────────────────────
 
 export function addPublishEventStub(code, eventName, widgetName) {
     if (!HAS_FUNCTION_EXPORT.test(code)) return code;
     if (!eventName) return code;
-    // Idempotent: if the TODO comment already references this event,
-    // bail.
-    const stubMarker = `TODO: call props.publishEvent("${eventName}"`;
+    // Idempotent: bail if the TODO already mentions this event.
+    const stubMarker = `TODO: call publishEvent("${eventName}"`;
     if (code.includes(stubMarker)) return code;
-    const insertAt = findFunctionBodyStart(code);
-    if (insertAt < 0) return code;
-    const stub = `\n  // TODO: call props.publishEvent("${eventName}", { /* payload */ }) when the user does the action that should fire this event.`;
-    return code.slice(0, insertAt) + stub + code.slice(insertAt);
+
+    let out = code;
+    out = ensureNamedImport(out, "useWidgetEvents", "@trops/dash-core");
+    out = ensureUseWidgetEventsDestructure(out, ["publishEvent"]);
+
+    // Insert the TODO comment right after the destructure line so
+    // the user sees it in context. Find the destructure now (we just
+    // ensured it exists) and insert after it.
+    const destructure = findUseWidgetEventsDestructure(out);
+    const insertAt = destructure ? destructure.end : findFunctionBodyStart(out);
+    if (insertAt < 0) return out;
+    const stub = `\n  // TODO: call publishEvent("${eventName}", { /* payload */ }) when the user does the action that should fire this event.`;
+    return out.slice(0, insertAt) + stub + out.slice(insertAt);
 }
 
 export function removePublishEvent(code, eventName) {
     if (!eventName) return code;
     let out = code;
-    // Remove TODO stub comments referencing this event.
+    // Remove TODO stub comments referencing this event (both legacy
+    // `props.publishEvent` and current `publishEvent` forms).
     const stubLineRe = new RegExp(
-        `\\n[ \\t]*// TODO: call props\\.publishEvent\\("${escapeRegex(
+        `\\n[ \\t]*// TODO: call (?:props\\.)?publishEvent\\("${escapeRegex(
             eventName
         )}"[^\\n]*`,
         "g"
     );
     out = out.replace(stubLineRe, "");
-    // Remove single-line publishEvent calls (props-form or destructured).
+    // Remove single-line publishEvent calls (bare destructured form
+    // OR legacy props-form so cleanup works on widgets generated
+    // before the hook switch).
     const callLineRe = new RegExp(
         `[ \\t]*(?:props\\.)?publishEvent\\("${escapeRegex(
             eventName
@@ -85,19 +193,23 @@ export function removePublishEvent(code, eventName) {
 
 // ── eventHandler (subscribe via listen) ───────────────────────────
 
-// Match both `props.listen(...)` and `props.listen?.(...)` so we can
-// detect existing listen blocks regardless of which form they use.
-// New code we insert always uses optional chaining (safe in preview
-// where the prop isn't injected by WidgetFactory); widgets generated
-// before that fix may have the bare form.
-const LISTEN_HEAD_RE = /props\.listen\??\.?\(\s*props\.listeners\s*,\s*\{/;
+// Match three listen-call shapes so we can detect existing blocks
+// regardless of which form they use:
+//   - `listen(listeners, {` — canonical hook form (what we now insert)
+//   - `props.listen(props.listeners, {` — legacy WidgetFactory form
+//   - `props.listen?.(props.listeners, {` — optional-chained legacy form
+// New code we insert always uses the canonical hook form. The legacy
+// matchers ensure remove operations work on widgets generated before
+// the hook switch.
+const LISTEN_HEAD_RE =
+    /(?:(?:props\.)?listen)\??\.?\(\s*(?:props\.)?listeners\s*,\s*\{/;
 
 /**
- * Find the existing `props.listen(props.listeners, { ... })` call in
- * the source and return its boundaries + inner-object text. Walks
- * brace depth so nested handler bodies (which contain `{ ... }`)
- * don't fool the matcher. Returns null if no listen call exists or
- * the call is malformed.
+ * Find the existing listen() call in the source (any supported shape)
+ * and return its boundaries + inner-object text. Walks brace depth
+ * so nested handler bodies (which contain `{ ... }`) don't fool the
+ * matcher. Returns null if no listen call exists or the call is
+ * malformed.
  */
 function findListenBlock(code) {
     const headMatch = code.match(LISTEN_HEAD_RE);
@@ -154,30 +266,36 @@ export function addEventHandlerStub(code, handlerName, widgetName) {
     );
     if (keyPresentRe.test(code)) return code;
 
+    let out = code;
+    out = ensureNamedImport(out, "useWidgetEvents", "@trops/dash-core");
+    out = ensureUseWidgetEventsDestructure(out, ["listen", "listeners"]);
+
     const stub = buildHandlerStub(handlerName, widgetName);
 
     // If a listen block already exists, splice the stub into it.
-    const block = findListenBlock(code);
+    const block = findListenBlock(out);
     if (block) {
         const inner = block.inner;
         const trimmed = inner.replace(/\s+$/, "");
         const sep =
             trimmed.endsWith(",") || trimmed === "" ? "\n    " : ",\n    ";
         const newInner = `${trimmed}${sep}${stub}\n  `;
-        const replacement = `props.listen?.(props.listeners, {${newInner}});`;
+        const replacement = `listen(listeners, {${newInner}});`;
         return (
-            code.slice(0, block.callStart) +
+            out.slice(0, block.callStart) +
             replacement +
-            code.slice(block.callEnd)
+            out.slice(block.callEnd)
         );
     }
 
-    // Otherwise insert a new listen call right after the function
-    // body's opening brace.
-    const insertAt = findFunctionBodyStart(code);
-    if (insertAt < 0) return code;
-    const newCall = `\n  props.listen?.(props.listeners, {\n    ${stub}\n  });`;
-    return code.slice(0, insertAt) + newCall + code.slice(insertAt);
+    // Otherwise insert a new listen call right after the
+    // useWidgetEvents destructure (which we just ensured exists),
+    // so listen + listeners are already in scope above the call.
+    const destructure = findUseWidgetEventsDestructure(out);
+    const insertAt = destructure ? destructure.end : findFunctionBodyStart(out);
+    if (insertAt < 0) return out;
+    const newCall = `\n  listen(listeners, {\n    ${stub}\n  });`;
+    return out.slice(0, insertAt) + newCall + out.slice(insertAt);
 }
 
 /**
@@ -237,7 +355,10 @@ export function removeEventHandler(code, handlerName) {
         if (cutStart > 0 && code[cutStart - 1] === "\n") cutStart--;
         return code.slice(0, cutStart) + code.slice(block.callEnd);
     }
-    const replacement = `props.listen?.(props.listeners, {${stripped}});`;
+    // After the strip, normalize to the canonical hook form so the
+    // result matches what addEventHandlerStub would produce. (Same
+    // shape, easier to reason about.)
+    const replacement = `listen(listeners, {${stripped}});`;
     return (
         code.slice(0, block.callStart) + replacement + code.slice(block.callEnd)
     );
