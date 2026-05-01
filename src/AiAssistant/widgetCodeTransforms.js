@@ -363,3 +363,165 @@ export function removeEventHandler(code, handlerName) {
         code.slice(0, block.callStart) + replacement + code.slice(block.callEnd)
     );
 }
+
+// ── scheduledTasks (useScheduler) ─────────────────────────────────
+
+const SCHEDULER_HEAD_RE = /useScheduler\(\s*\{/;
+
+/**
+ * Find an existing `useScheduler({ ... })` call and return its
+ * boundaries + inner-object text. Walks brace depth so nested task
+ * handler bodies don't fool the matcher. Returns null when none
+ * exists or the call is malformed.
+ *
+ * The match starts at the outer wrapping (`const { tasks } = ` or
+ * bare expression) — we capture only the call itself; the surrounding
+ * statement context is unchanged by add/remove operations.
+ */
+function findUseSchedulerCall(code) {
+    const headMatch = code.match(SCHEDULER_HEAD_RE);
+    if (!headMatch) return null;
+    const objectOpenIdx = headMatch.index + headMatch[0].length - 1;
+    let depth = 1;
+    let i = objectOpenIdx + 1;
+    for (; i < code.length; i++) {
+        const c = code[i];
+        if (c === "{") depth++;
+        else if (c === "}") {
+            depth--;
+            if (depth === 0) break;
+        }
+    }
+    if (depth !== 0) return null;
+    const objectCloseIdx = i;
+    // Walk past the close paren so the replacement region is the
+    // whole `useScheduler(...)` call.
+    let j = objectCloseIdx + 1;
+    while (j < code.length && /\s/.test(code[j])) j++;
+    if (code[j] !== ")") return null;
+    j++;
+    return {
+        callStart: headMatch.index,
+        objectOpenIdx,
+        objectCloseIdx,
+        callEnd: j,
+        inner: code.slice(objectOpenIdx + 1, objectCloseIdx),
+    };
+}
+
+function buildScheduledTaskStub(taskKey, widgetName) {
+    const safeWidget = String(widgetName || "Widget").replace(/[`"\\]/g, "");
+    const safeKey = String(taskKey || "task").replace(/[`"\\]/g, "");
+    return `${safeKey}: () => { console.log("[${safeWidget}] scheduled task ${safeKey} fired"); /* TODO: handle */ },`;
+}
+
+export function addScheduledTaskStub(code, taskKey, widgetName) {
+    if (!HAS_FUNCTION_EXPORT.test(code)) return code;
+    if (!taskKey) return code;
+
+    // Idempotent: if the task key is already in some useScheduler
+    // call, bail.
+    const keyPresentRe = new RegExp(
+        `\\b${escapeRegex(taskKey)}\\s*:\\s*\\(\\s*\\)\\s*=>`
+    );
+    if (keyPresentRe.test(code)) return code;
+
+    let out = code;
+    out = ensureNamedImport(out, "useScheduler", "@trops/dash-core");
+
+    const stub = buildScheduledTaskStub(taskKey, widgetName);
+
+    // If a useScheduler call already exists, splice into it.
+    const block = findUseSchedulerCall(out);
+    if (block) {
+        const inner = block.inner;
+        const trimmed = inner.replace(/\s+$/, "");
+        const sep =
+            trimmed.endsWith(",") || trimmed === "" ? "\n    " : ",\n    ";
+        const newInner = `${trimmed}${sep}${stub}\n  `;
+        const replacement = `useScheduler({${newInner}})`;
+        return (
+            out.slice(0, block.callStart) +
+            replacement +
+            out.slice(block.callEnd)
+        );
+    }
+
+    // Otherwise insert a new `const { tasks } = useScheduler({...});`
+    // call right after the function body's opening brace. Hooks
+    // first, before any conditional return.
+    const insertAt = findFunctionBodyStart(out);
+    if (insertAt < 0) return out;
+    const newCall = `\n  const { tasks } = useScheduler({\n    ${stub}\n  });`;
+    return out.slice(0, insertAt) + newCall + out.slice(insertAt);
+}
+
+/**
+ * Strip the matching `<taskKey>: () => { … },` entry from the
+ * useScheduler call's inner object text. Walks braces so the entry's
+ * body doesn't terminate the match early.
+ */
+function stripScheduledTaskKey(inner, taskKey) {
+    const keyRe = new RegExp(
+        `(^|[\\s{,])${escapeRegex(taskKey)}\\s*:\\s*\\(\\s*\\)\\s*=>\\s*\\{`,
+        ""
+    );
+    const m = inner.match(keyRe);
+    if (!m) return null;
+    const leadingLen = m[1].length;
+    const entryStart = m.index + leadingLen;
+    const bodyOpen = inner.indexOf("{", entryStart);
+    if (bodyOpen < 0) return null;
+    let depth = 1;
+    let i = bodyOpen + 1;
+    for (; i < inner.length; i++) {
+        const c = inner[i];
+        if (c === "{") depth++;
+        else if (c === "}") {
+            depth--;
+            if (depth === 0) break;
+        }
+    }
+    if (depth !== 0) return null;
+    let entryEnd = i + 1;
+    while (entryEnd < inner.length && /\s/.test(inner[entryEnd])) entryEnd++;
+    if (inner[entryEnd] === ",") entryEnd++;
+    return inner.slice(0, entryStart) + inner.slice(entryEnd);
+}
+
+export function removeScheduledTask(code, taskKey) {
+    if (!taskKey) return code;
+    const block = findUseSchedulerCall(code);
+    if (!block) return code;
+
+    const stripped = stripScheduledTaskKey(block.inner, taskKey);
+    if (stripped === null) return code;
+
+    if (stripped.trim() === "") {
+        // Drop the whole `const { tasks } = useScheduler({...});`
+        // statement. Walk back from callStart to eat the leading
+        // `const { tasks } = ` plus any indent + newline so we don't
+        // leave a dangling blank line or orphan const.
+        let cutStart = block.callStart;
+        // Eat backwards: optional `const { ... } = ` prefix.
+        const prefixRe = /\n[ \t]*const\s*\{[^}]*\}\s*=\s*$/;
+        const before = code.slice(0, cutStart);
+        const prefixMatch = before.match(prefixRe);
+        if (prefixMatch) {
+            cutStart = prefixMatch.index;
+        } else {
+            // No const-destructure prefix — just trim leading
+            // whitespace + newline.
+            while (cutStart > 0 && /[ \t]/.test(code[cutStart - 1])) cutStart--;
+            if (cutStart > 0 && code[cutStart - 1] === "\n") cutStart--;
+        }
+        // Also eat a trailing `;` if present.
+        let cutEnd = block.callEnd;
+        if (code[cutEnd] === ";") cutEnd++;
+        return code.slice(0, cutStart) + code.slice(cutEnd);
+    }
+    const replacement = `useScheduler({${stripped}})`;
+    return (
+        code.slice(0, block.callStart) + replacement + code.slice(block.callEnd)
+    );
+}
