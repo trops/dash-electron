@@ -193,6 +193,7 @@ export const WidgetConfigureTab = ({
     componentName,
     onSave,
     borderColor,
+    parsedConfig,
 }) => {
     const { currentTheme } = useContext(ThemeContext);
     const bc =
@@ -212,9 +213,17 @@ export const WidgetConfigureTab = ({
     });
     const [dirty, setDirty] = useState(false);
 
-    // Parse config code into form state when it changes
+    // Populate form state from the most accurate source available:
+    //   1. `parsedConfig` — the resolved config object the modal got
+    //      from `evaluateBundle` + `extractWidgetConfigs`. Same source
+    //      the actual widget renderer uses; handles imports, identifier
+    //      refs, computed property names — everything valid JS.
+    //   2. `parseConfigCode(configCode)` — naive string-eval fallback.
+    //      Works for simple shapes without imports / identifier refs.
+    //      Kept for legacy callers and the case where the bundle
+    //      hasn't compiled yet.
     useEffect(() => {
-        const parsed = parseConfigCode(configCode);
+        const parsed = parsedConfig || parseConfigCode(configCode);
         if (parsed) {
             setForm({
                 name: parsed.name || parsed.displayName || componentName || "",
@@ -228,7 +237,7 @@ export const WidgetConfigureTab = ({
             });
             setDirty(false);
         }
-    }, [configCode, componentName]);
+    }, [parsedConfig, configCode, componentName]);
 
     // Update a top-level field
     const updateField = useCallback((field, value) => {

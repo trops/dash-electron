@@ -1416,6 +1416,11 @@ export const WidgetBuilderModal = ({
     // editContext.userPrefs (when editing an existing widget) takes
     // priority because that's the user's actually-saved value.
     const [previewWidgetDefaults, setPreviewWidgetDefaults] = useState({});
+    // Resolved config object from the most recent successful preview
+    // compile. The Configure tab reads from this directly so its form
+    // populates with the AI's actual userConfig / providers / events
+    // — same source the runtime renderer uses, no source-string drift.
+    const [previewParsedConfig, setPreviewParsedConfig] = useState(null);
     // Provider the user selected for the widget being built. Drives the
     // system prompt (single deterministic provider section instead of a
     // catalog + decision tree the LLM has to navigate) AND the post-
@@ -2549,9 +2554,15 @@ export const WidgetBuilderModal = ({
 
                     // Let PreviewErrorBoundary catch runtime errors in React's context
                     setPreviewComponent(() => match.config.component);
+                    // Hand the resolved config to the Configure tab so
+                    // its form reflects what the AI actually generated
+                    // (string-parsing the .dash.js source breaks on
+                    // imports + identifier component refs).
+                    setPreviewParsedConfig(match.config);
                     setPreviewError(null);
                 } else {
                     setPreviewWidgetDefaults({});
+                    setPreviewParsedConfig(null);
                     setPreviewError(
                         "Could not resolve widget component from bundle."
                     );
@@ -4628,6 +4639,7 @@ export const WidgetBuilderModal = ({
                             detectedCode.componentCode && (
                                 <WidgetConfigureTab
                                     configCode={detectedCode.configCode || ""}
+                                    parsedConfig={previewParsedConfig}
                                     componentName={widgetName}
                                     borderColor={borderColor}
                                     onSave={(newConfigCode) => {
