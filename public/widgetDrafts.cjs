@@ -27,10 +27,12 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 let resolvedDraftsFilePath = null;
+let resolvedWidgetsCacheDir = null;
 let testOverridePath = null;
+let testOverrideWidgetsDir = null;
 
 /**
  * Test-only: pin the drafts file to a specific path. Pass null to
@@ -39,6 +41,16 @@ let testOverridePath = null;
 function _setDraftsFilePathForTest(p) {
     testOverridePath = p;
     resolvedDraftsFilePath = null;
+}
+
+/**
+ * Test-only: pin the widgets cache directory (where @ai-built/<pkg>/
+ * lives). Tests pass a tmpdir so they don't touch the user's real
+ * widgets cache.
+ */
+function _setWidgetsCacheDirForTest(p) {
+    testOverrideWidgetsDir = p;
+    resolvedWidgetsCacheDir = null;
 }
 
 /**
@@ -143,9 +155,168 @@ function saveDraft(draft) {
 function deleteDraft(id) {
     if (!id) return;
     const { drafts } = readRaw();
+    const target = drafts.find((d) => d.id === id);
     const filtered = drafts.filter((d) => d.id !== id);
     if (filtered.length === drafts.length) return; // no-op
+    // Clean up the on-disk package dir if the draft owns one. Wrapped
+    // in try/catch so a missing or already-removed dir doesn't block
+    // the metadata delete.
+    if (target && target.packageDir) {
+        try {
+            fs.rmSync(target.packageDir, { recursive: true, force: true });
+        } catch {
+            /* ignore */
+        }
+    }
     writeRaw({ drafts: filtered });
+}
+
+/**
+ * Where AI-built widget packages live. Mirrors the registry's cache
+ * dir convention (`<userData>/widgets/`). Tests override via
+ * _setWidgetsCacheDirForTest. Production resolves via electron.app.
+ */
+function getWidgetsCacheDir() {
+    if (testOverrideWidgetsDir) return testOverrideWidgetsDir;
+    if (resolvedWidgetsCacheDir) return resolvedWidgetsCacheDir;
+    let userData;
+    try {
+        const electron = require("electron");
+        userData = electron?.app?.getPath?.("userData");
+    } catch (_) {
+        userData = null;
+    }
+    if (!userData) userData = path.join(os.homedir(), ".dash");
+    resolvedWidgetsCacheDir = path.join(userData, "widgets");
+    return resolvedWidgetsCacheDir;
+}
+
+/**
+ * Build the canonical draft package directory for a widget. We
+ * deliberately suffix with `-draft-<short-id>` so two concurrent
+ * drafts of the same widget name (e.g. user closed one mid-build,
+ * started another) don't collide on disk and clobber each other. On
+ * install (`promoteDraftPackage`), the suffix is stripped.
+ */
+function getDraftPackageDir(draftId, widgetName) {
+    const base = (widgetName || "untitled").toLowerCase();
+    const shortId = String(draftId || "")
+        .replace(/^draft-/, "")
+        .slice(0, 8);
+    return path.join(
+        getWidgetsCacheDir(),
+        "@ai-built",
+        `${base}-draft-${shortId}`
+    );
+}
+
+/**
+ * Write the draft's compiled-source files to its package dir. Files
+ * is a [{ path: "widgets/Foo.js", content: "..." }, ...] array — same
+ * shape the existing widget-builder pipeline uses. Returns the
+ * absolute package dir.
+ *
+ * Idempotent: existing files in the package dir whose paths aren't in
+ * the new files[] are LEFT IN PLACE (so external editor sessions that
+ * added utility files survive an AI re-iteration that didn't touch
+ * them). Files whose paths ARE in the new payload are overwritten.
+ */
+function materializePackageDir(draftId, widgetName, files) {
+    const packageDir = getDraftPackageDir(draftId, widgetName);
+    fs.mkdirSync(packageDir, { recursive: true });
+    if (Array.isArray(files)) {
+        for (const f of files) {
+            if (
+                !f ||
+                typeof f.path !== "string" ||
+                typeof f.content !== "string"
+            )
+                continue;
+            // Reject any path that escapes the package dir — callers
+            // should already sanitize, but defense in depth.
+            const rel = f.path.replace(/^\/+/, "");
+            if (rel.includes("..")) continue;
+            const abs = path.join(packageDir, rel);
+            const dir = path.dirname(abs);
+            fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(abs, f.content, "utf8");
+        }
+    }
+    return packageDir;
+}
+
+/**
+ * Read the in-progress code from a draft's package dir back into the
+ * shape the modal expects: { componentCode, configCode, files }.
+ *
+ *   - files = every .js / .dash.js / .json under the dir (relative paths)
+ *   - componentCode = widgets/<componentName>.js
+ *   - configCode = widgets/<componentName>.dash.js
+ *
+ * Missing files are returned as null so the caller can decide
+ * whether to fall back to the JSON-string copy (legacy v1 path).
+ */
+function readPackageDirCode(packageDir, componentName) {
+    if (!packageDir || !fs.existsSync(packageDir))
+        return { componentCode: null, configCode: null, files: [] };
+    const files = [];
+    const walk = (dir, rel) => {
+        let entries;
+        try {
+            entries = fs.readdirSync(dir, { withFileTypes: true });
+        } catch {
+            return;
+        }
+        for (const e of entries) {
+            const abs = path.join(dir, e.name);
+            const relPath = rel ? `${rel}/${e.name}` : e.name;
+            if (e.isDirectory()) {
+                walk(abs, relPath);
+            } else if (e.isFile()) {
+                try {
+                    const content = fs.readFileSync(abs, "utf8");
+                    files.push({ path: relPath, content });
+                } catch {
+                    /* ignore unreadable files */
+                }
+            }
+        }
+    };
+    walk(packageDir, "");
+    const compRel = componentName ? `widgets/${componentName}.js` : null;
+    const cfgRel = componentName ? `widgets/${componentName}.dash.js` : null;
+    const componentCode =
+        files.find((f) => f.path === compRel)?.content || null;
+    const configCode = files.find((f) => f.path === cfgRel)?.content || null;
+    return { componentCode, configCode, files };
+}
+
+/**
+ * Promote a draft package dir to its installable name by renaming
+ * `<name>-draft-<id>` → `<name>`. Returns the new absolute path.
+ * If a directory already exists at the canonical install path it's
+ * removed first (matches the existing aiBuild handler's overwrite
+ * semantics). Caller is expected to follow up with a registry
+ * install at the returned path.
+ */
+function promoteDraftPackage(packageDir, widgetName) {
+    if (!packageDir || !fs.existsSync(packageDir)) {
+        throw new Error(
+            `promoteDraftPackage: source dir does not exist: ${packageDir}`
+        );
+    }
+    const installedDir = path.join(
+        getWidgetsCacheDir(),
+        "@ai-built",
+        (widgetName || "untitled").toLowerCase()
+    );
+    if (fs.existsSync(installedDir)) {
+        // Same as aiBuild's overwrite-on-install semantics.
+        fs.rmSync(installedDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(path.dirname(installedDir), { recursive: true });
+    fs.renameSync(packageDir, installedDir);
+    return installedDir;
 }
 
 module.exports = {
@@ -154,6 +325,12 @@ module.exports = {
     saveDraft,
     deleteDraft,
     getDraftsFilePath,
+    getWidgetsCacheDir,
+    getDraftPackageDir,
+    materializePackageDir,
+    readPackageDirCode,
+    promoteDraftPackage,
     SCHEMA_VERSION,
     _setDraftsFilePathForTest,
+    _setWidgetsCacheDirForTest,
 };

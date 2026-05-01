@@ -1837,15 +1837,180 @@ function createWindow() {
         // Storage is widget-drafts.json in the user's Dashboard dir;
         // see public/widgetDrafts.cjs for the contract.
         logger.loggedHandle("drafts:list", () => widgetDrafts.listDrafts());
-        logger.loggedHandle("drafts:get", (e, { id }) =>
-            widgetDrafts.getDraft(id)
-        );
-        logger.loggedHandle("drafts:save", (e, { draft }) =>
-            widgetDrafts.saveDraft(draft)
-        );
+        logger.loggedHandle("drafts:get", (e, { id }) => {
+            const draft = widgetDrafts.getDraft(id);
+            if (!draft) return null;
+            // For v2 drafts (disk-backed), fold the on-disk code into
+            // the response so the renderer can repopulate the modal's
+            // in-pane editor without a second IPC round-trip. Legacy
+            // v1 drafts still carry componentCode/configCode in the
+            // JSON payload — we only override when packageDir exists.
+            if (draft.packageDir) {
+                const code = widgetDrafts.readPackageDirCode(
+                    draft.packageDir,
+                    draft.componentName
+                );
+                return {
+                    ...draft,
+                    componentCode: code.componentCode || draft.componentCode,
+                    configCode: code.configCode || draft.configCode,
+                    files: code.files.length
+                        ? code.files
+                        : Array.isArray(draft.files)
+                        ? draft.files
+                        : [],
+                };
+            }
+            return draft;
+        });
+        logger.loggedHandle("drafts:save", (e, { draft, files }) => {
+            // When the renderer ships files alongside the draft (the
+            // common path — auto-save fires on each parseable AI
+            // response), materialize them to disk under the draft's
+            // package dir. This keeps disk as the single source of
+            // truth for the in-progress code, so VS Code (Open in
+            // Editor, future PR) sees the same content the modal
+            // does, and Install can register-in-place without
+            // re-compiling from JSON strings.
+            let packageDir = draft?.packageDir || null;
+            if (Array.isArray(files) && files.length > 0 && draft?.id) {
+                packageDir = widgetDrafts.materializePackageDir(
+                    draft.id,
+                    draft.componentName || draft.name,
+                    files
+                );
+            }
+            return widgetDrafts.saveDraft({
+                ...draft,
+                ...(packageDir ? { packageDir } : {}),
+            });
+        });
         logger.loggedHandle("drafts:delete", (e, { id }) => {
             widgetDrafts.deleteDraft(id);
             return { ok: true };
+        });
+        // Open the draft's package dir in the user's editor. Tries
+        // `code <dir>` (VS Code CLI) first; if that's not on PATH we
+        // fall back to shell.openPath which uses the OS default for a
+        // directory (Finder on macOS, File Explorer on Windows). The
+        // caller is responsible for closing the modal afterward.
+        logger.loggedHandle("drafts:openInEditor", async (e, { id }) => {
+            const draft = widgetDrafts.getDraft(id);
+            if (!draft) return { success: false, error: "draft not found" };
+            if (!draft.packageDir) {
+                return {
+                    success: false,
+                    error: "draft has no on-disk files yet",
+                };
+            }
+            const fs2 = require("fs");
+            if (!fs2.existsSync(draft.packageDir)) {
+                return {
+                    success: false,
+                    error: `package dir missing: ${draft.packageDir}`,
+                };
+            }
+            const { spawn } = require("child_process");
+            const { shell } = require("electron");
+            // Try VS Code CLI. Spawn in detached mode so it outlives
+            // this process — VS Code starts and we go back to handling
+            // other IPCs.
+            let editorOpened = false;
+            try {
+                await new Promise((resolve) => {
+                    let settled = false;
+                    const settle = (v) => {
+                        if (settled) return;
+                        settled = true;
+                        resolve(v);
+                    };
+                    const child = spawn("code", [draft.packageDir], {
+                        detached: true,
+                        stdio: "ignore",
+                    });
+                    child.once("error", () => settle(false));
+                    child.once("spawn", () => {
+                        editorOpened = true;
+                        child.unref();
+                        settle(true);
+                    });
+                    // Don't hang forever on a spawn that neither errors
+                    // nor spawns (rare, but possible on Windows when
+                    // the launcher is half-installed).
+                    setTimeout(() => settle(false), 1500);
+                });
+            } catch {
+                /* fall through to shell.openPath */
+            }
+            if (!editorOpened) {
+                try {
+                    const err = await shell.openPath(draft.packageDir);
+                    if (err) {
+                        return {
+                            success: false,
+                            error: err || "openPath failed",
+                        };
+                    }
+                } catch (err2) {
+                    return {
+                        success: false,
+                        error: err2?.message || String(err2),
+                    };
+                }
+            }
+            // Mark the draft as externally edited so the modal can
+            // route a future Resume to "reopen the editor" instead of
+            // dropping the user back into the AI iteration loop.
+            widgetDrafts.saveDraft({ ...draft, mode: "external" });
+            return {
+                success: true,
+                mode: editorOpened ? "code-cli" : "system-default",
+                packageDir: draft.packageDir,
+            };
+        });
+        // Promote a draft to an installed widget: rename its package
+        // dir from <name>-draft-<id> to <name>, register via the
+        // widget registry, then drop the draft entry (without
+        // removing the now-installed dir — clear packageDir first).
+        logger.loggedHandle("drafts:install", async (e, { id }) => {
+            const draft = widgetDrafts.getDraft(id);
+            if (!draft) return { success: false, error: "draft not found" };
+            if (!draft.packageDir) {
+                return {
+                    success: false,
+                    error: "draft has no package dir on disk yet",
+                };
+            }
+            const widgetName = draft.componentName || draft.name;
+            try {
+                const installedDir = widgetDrafts.promoteDraftPackage(
+                    draft.packageDir,
+                    widgetName
+                );
+                const dashCoreRegistry =
+                    require("@trops/dash-core/electron").widgetRegistry;
+                const registry = dashCoreRegistry.getWidgetRegistry();
+                const scopedName = `@ai-built/${(
+                    widgetName || ""
+                ).toLowerCase()}`;
+                const config = await registry.installFromLocalPath(
+                    scopedName,
+                    installedDir,
+                    true,
+                    path.join(installedDir, "dash.json")
+                );
+                // Clear packageDir so deleteDraft's dir-cleanup
+                // doesn't try to rm what's now an installed widget,
+                // then drop the metadata entry.
+                widgetDrafts.saveDraft({ ...draft, packageDir: null });
+                widgetDrafts.deleteDraft(id);
+                return { success: true, widgetName: scopedName, config };
+            } catch (err) {
+                return {
+                    success: false,
+                    error: err?.message || String(err),
+                };
+            }
         });
 
         // --- AI Assistant: Health Check ---

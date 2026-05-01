@@ -1727,25 +1727,48 @@ export const WidgetBuilderModal = ({
         } catch {
             /* ignore */
         }
+        const componentName =
+            extractWidgetName(detectedCode.componentCode) || null;
         const draftName =
-            extractWidgetName(detectedCode.componentCode) ||
+            componentName ||
             (chatHistory
                 .find((m) => m && (m.role === "user" || m.author === "user"))
                 ?.content?.slice?.(0, 60) ??
                 "") ||
             "Untitled draft";
+        // Build the files[] payload for the main process to
+        // materialize on disk. Synthesize a 2-entry array if the AI's
+        // multi-file payload was empty (legacy single-file response).
+        let files = Array.isArray(detectedCode.files)
+            ? detectedCode.files.slice()
+            : [];
+        if (files.length === 0 && componentName && detectedCode.componentCode) {
+            files = [
+                {
+                    path: `widgets/${componentName}.js`,
+                    content: detectedCode.componentCode,
+                },
+            ];
+            if (detectedCode.configCode) {
+                files.push({
+                    path: `widgets/${componentName}.dash.js`,
+                    content: detectedCode.configCode,
+                });
+            }
+        }
         const draft = {
             id,
             name: draftName,
-            componentCode: detectedCode.componentCode,
-            configCode: detectedCode.configCode || null,
-            files: Array.isArray(detectedCode.files) ? detectedCode.files : [],
+            componentName,
             chatHistory,
             pickedProvider: selectedProviderForBuildRef.current,
-            editMode: null,
+            mode: "ai",
         };
         try {
-            window.mainApi?.drafts?.save?.(draft);
+            // Pass files alongside so the main process materializes
+            // them under @ai-built/<name>-draft-<id>/ and stamps
+            // packageDir onto the draft entry.
+            window.mainApi?.drafts?.save?.(draft, files);
         } catch (err) {
             console.warn("[WidgetBuilder] draft save failed:", err);
         }
@@ -3166,6 +3189,24 @@ export const WidgetBuilderModal = ({
             {viewMode === "drafts" && (
                 <div className="flex-1 min-h-0 overflow-hidden">
                     <WidgetDraftsList
+                        onInstalled={(scopedRegistryId, componentName) => {
+                            // Hand off to the modal's normal post-install
+                            // flow so the dashboard picks up the new
+                            // widget. Same callback the modal's "Install"
+                            // button uses after a fresh AI build.
+                            if (typeof onInstalled === "function") {
+                                onInstalled(scopedRegistryId, componentName);
+                            }
+                            setIsOpen(false);
+                        }}
+                        onOpenedInEditor={() => {
+                            // Editor handoff is a clean break — close
+                            // the modal so the in-pane editor doesn't
+                            // get out of sync with whatever the user
+                            // does in VS Code. They can reopen and
+                            // Install from the drafts list later.
+                            setIsOpen(false);
+                        }}
                         onStartNew={() => {
                             draftSessionIdRef.current = null;
                             resumedDraftRef.current = null;
@@ -3190,12 +3231,28 @@ export const WidgetBuilderModal = ({
                             setSelectedProviderForBuild(null);
                             setViewMode("builder");
                         }}
-                        onResume={(draft) => {
+                        onResume={async (draft) => {
+                            // For v2 (disk-backed) drafts the list row
+                            // doesn't carry componentCode/configCode —
+                            // fetch the full draft via drafts.get which
+                            // folds disk-read code into the response.
+                            // Falls back to the row data for legacy v1
+                            // drafts that still have JSON-stored code.
+                            let full = draft;
+                            try {
+                                const fetched =
+                                    await window.mainApi?.drafts?.get?.(
+                                        draft.id
+                                    );
+                                if (fetched) full = fetched;
+                            } catch {
+                                /* ignore — use list-row fallback */
+                            }
                             // Reuse the draft id so subsequent saves
                             // update this row instead of creating a new
                             // one.
-                            resumedDraftRef.current = draft;
-                            draftSessionIdRef.current = draft.id;
+                            resumedDraftRef.current = full;
+                            draftSessionIdRef.current = full.id;
                             // Restore chat history into ChatCore's
                             // persistKey so the conversation reappears.
                             try {
@@ -3203,9 +3260,9 @@ export const WidgetBuilderModal = ({
                                     "dash-widget-builder",
                                     JSON.stringify({
                                         messages: Array.isArray(
-                                            draft.chatHistory
+                                            full.chatHistory
                                         )
-                                            ? draft.chatHistory
+                                            ? full.chatHistory
                                             : [],
                                     })
                                 );
@@ -3215,18 +3272,18 @@ export const WidgetBuilderModal = ({
                             // Restore the latest code so the preview +
                             // editor pick up where the user left off.
                             setDetectedCode({
-                                componentCode: draft.componentCode || null,
-                                configCode: draft.configCode || null,
-                                files: Array.isArray(draft.files)
-                                    ? draft.files
+                                componentCode: full.componentCode || null,
+                                configCode: full.configCode || null,
+                                files: Array.isArray(full.files)
+                                    ? full.files
                                     : [],
                             });
                             // Restore the picked provider so the chat
                             // gate doesn't reappear and the post-process
                             // auto-correct stays consistent.
-                            if (draft.pickedProvider !== undefined) {
+                            if (full.pickedProvider !== undefined) {
                                 setSelectedProviderForBuild(
-                                    draft.pickedProvider
+                                    full.pickedProvider
                                 );
                             }
                             setInstallStatus(null);
