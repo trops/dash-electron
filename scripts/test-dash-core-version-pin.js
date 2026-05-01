@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.471, the version where Settings → Notifications uses
- * the master-detail SectionLayout pattern (alphabetical searchable
- * Sidebar list + dedicated detail pane). Mirrors WidgetsSection's
- * structure; replaces the flat scrollable layout that grew
- * unscannable when users had many widget instances.
+ * be at ≥ 0.1.472, the version where Settings → Notifications gains
+ * Dashboard + Package filter dropdowns alongside the existing search
+ * box. Filters compose with search (AND); dropdown options are
+ * alphabetized.
  *
- * Also covers prior pins (≥ 0.1.470 forEachWidget walks pages before
+ * Also covers prior pins (≥ 0.1.471 Settings → Notifications uses
+ * the master-detail SectionLayout pattern; ≥ 0.1.470 forEachWidget walks pages before
  * workspace.layout so per-widget unsets aren't shadowed by the
  * auto-migration alias; ≥ 0.1.469 handlePageWorkspaceChange updates
  * openTabs React state; ≥ 0.1.468 per-widget provider edit writes
@@ -55,7 +55,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.471";
+const minRequired = "0.1.472";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -67,9 +67,9 @@ function semverGte(a, b) {
 
 assert.ok(
     semverGte(stripped, minRequired),
-    `@trops/dash-core must be >= ${minRequired} (the version where Settings → Notifications uses the master-detail SectionLayout pattern with searchable alphabetical Sidebar list). Currently pinned at: ${pinned}`
+    `@trops/dash-core must be >= ${minRequired} (the version where Settings → Notifications adds Dashboard + Package filter dropdowns). Currently pinned at: ${pinned}`
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, Notifications panel master-detail layout)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, Notifications adds Dashboard + Package filters)`
 );
