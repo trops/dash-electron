@@ -12,6 +12,7 @@ import React, {
     useRef,
 } from "react";
 import { FontAwesomeIcon, ThemeContext } from "@trops/dash-react";
+import { normalizeEventName, normalizeHandlerName } from "./widgetEventNames";
 
 const PROVIDER_TYPES = [
     "algolia",
@@ -362,14 +363,50 @@ export const WidgetConfigureTab = ({
     // — older onSave signatures (single-arg) still work because the
     // extra arg is just ignored.
     const handleSave = () => {
-        const serialized = serializeConfig(componentName, form);
+        // Normalize free-form input into valid identifiers and drop
+        // empties / dupes — auto-fixes "item selected" → "itemSelected"
+        // and "item-selected" handler → "onItemSelected" before any
+        // diff or serialization happens.
+        const normalizedEvents = Array.from(
+            new Set(
+                (form.events || [])
+                    .map((e) => normalizeEventName(e))
+                    .filter(Boolean)
+            )
+        );
+        const normalizedHandlers = Array.from(
+            new Set(
+                (form.eventHandlers || [])
+                    .map((h) => normalizeHandlerName(h))
+                    .filter(Boolean)
+            )
+        );
+        const formForSave = {
+            ...form,
+            events: normalizedEvents,
+            eventHandlers: normalizedHandlers,
+        };
+        // Reflect normalized values back into the form state so the
+        // user sees the cleaned values immediately after Save.
+        if (
+            normalizedEvents.join("|") !== (form.events || []).join("|") ||
+            normalizedHandlers.join("|") !==
+                (form.eventHandlers || []).join("|")
+        ) {
+            setForm((prev) => ({
+                ...prev,
+                events: normalizedEvents,
+                eventHandlers: normalizedHandlers,
+            }));
+        }
+        const serialized = serializeConfig(componentName, formForSave);
         const before = {
             events: new Set(initialEventsRef.current || []),
             eventHandlers: new Set(initialHandlersRef.current || []),
         };
         const after = {
-            events: new Set(form.events || []),
-            eventHandlers: new Set(form.eventHandlers || []),
+            events: new Set(normalizedEvents),
+            eventHandlers: new Set(normalizedHandlers),
         };
         const diff = {
             eventsAdded: [...after.events].filter((e) => !before.events.has(e)),
@@ -387,8 +424,8 @@ export const WidgetConfigureTab = ({
         // Refresh the snapshot so subsequent saves diff against the
         // most recent state (otherwise re-saving the same form would
         // re-add already-applied stubs).
-        initialEventsRef.current = [...(form.events || [])];
-        initialHandlersRef.current = [...(form.eventHandlers || [])];
+        initialEventsRef.current = [...normalizedEvents];
+        initialHandlersRef.current = [...normalizedHandlers];
         setDirty(false);
     };
 
@@ -528,24 +565,40 @@ export const WidgetConfigureTab = ({
                         </p>
                     )}
                     <div className="mt-1 space-y-1">
-                        {form.events.map((evt, idx) => (
-                            <div key={idx} className="flex items-center gap-1">
-                                <SmallInput
-                                    value={evt}
-                                    onChange={(v) => updateEvent(idx, v)}
-                                    placeholder="event-name"
-                                />
-                                <button
-                                    onClick={() => removeEvent(idx)}
-                                    className="text-gray-600 hover:text-red-400 shrink-0"
-                                >
-                                    <FontAwesomeIcon
-                                        icon="times"
-                                        className="h-2.5 w-2.5"
-                                    />
-                                </button>
-                            </div>
-                        ))}
+                        {form.events.map((evt, idx) => {
+                            const normalized = normalizeEventName(evt);
+                            const showHint = normalized && normalized !== evt;
+                            return (
+                                <div key={idx}>
+                                    <div className="flex items-center gap-1">
+                                        <SmallInput
+                                            value={evt}
+                                            onChange={(v) =>
+                                                updateEvent(idx, v)
+                                            }
+                                            placeholder="eventName"
+                                        />
+                                        <button
+                                            onClick={() => removeEvent(idx)}
+                                            className="text-gray-600 hover:text-red-400 shrink-0"
+                                        >
+                                            <FontAwesomeIcon
+                                                icon="times"
+                                                className="h-2.5 w-2.5"
+                                            />
+                                        </button>
+                                    </div>
+                                    {showHint && (
+                                        <p className="text-[10px] text-amber-400 mt-0.5 ml-1">
+                                            Will save as:{" "}
+                                            <span className="font-mono">
+                                                {normalized}
+                                            </span>
+                                        </p>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -564,24 +617,41 @@ export const WidgetConfigureTab = ({
                         </p>
                     )}
                     <div className="mt-1 space-y-1">
-                        {form.eventHandlers.map((handler, idx) => (
-                            <div key={idx} className="flex items-center gap-1">
-                                <SmallInput
-                                    value={handler}
-                                    onChange={(v) => updateHandler(idx, v)}
-                                    placeholder="onEventName"
-                                />
-                                <button
-                                    onClick={() => removeHandler(idx)}
-                                    className="text-gray-600 hover:text-red-400 shrink-0"
-                                >
-                                    <FontAwesomeIcon
-                                        icon="times"
-                                        className="h-2.5 w-2.5"
-                                    />
-                                </button>
-                            </div>
-                        ))}
+                        {form.eventHandlers.map((handler, idx) => {
+                            const normalized = normalizeHandlerName(handler);
+                            const showHint =
+                                normalized && normalized !== handler;
+                            return (
+                                <div key={idx}>
+                                    <div className="flex items-center gap-1">
+                                        <SmallInput
+                                            value={handler}
+                                            onChange={(v) =>
+                                                updateHandler(idx, v)
+                                            }
+                                            placeholder="onEventName"
+                                        />
+                                        <button
+                                            onClick={() => removeHandler(idx)}
+                                            className="text-gray-600 hover:text-red-400 shrink-0"
+                                        >
+                                            <FontAwesomeIcon
+                                                icon="times"
+                                                className="h-2.5 w-2.5"
+                                            />
+                                        </button>
+                                    </div>
+                                    {showHint && (
+                                        <p className="text-[10px] text-amber-400 mt-0.5 ml-1">
+                                            Will save as:{" "}
+                                            <span className="font-mono">
+                                                {normalized}
+                                            </span>
+                                        </p>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
