@@ -622,12 +622,10 @@ The framework auto-scopes the event to \`<component>[<id>].<eventName>\` on the 
 
 **Naming convention.** Plain camelCase verbs/states: \`itemSelected\`, \`queryChanged\`, \`templateChanged\`, \`indexSelected\`, \`valueSubmitted\`, \`searchQuerySelected\`. Match the existing codebase style — NOT kebab-case (\`item-selected\`), NOT colon-prefixed (\`filebrowser:itemSelected\`). The component scope is added automatically; you only need the action name.
 
-**Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array so the Configure tab and any subscriber tooling can see them:
+**Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array — it's a plain array of STRINGS, not objects. The framework reads bare names; the object form (\`{ name, description }\`) is wrong and breaks downstream tooling.
 
 \`\`\`js
-events: [
-  { name: "itemSelected", description: "Fired when the user clicks a row" },
-],
+events: ["itemSelected", "queryChanged"],
 \`\`\`
 
 **Tell the user.** When you add events, list them at the end of your chat response — one line per event, name + trigger:
@@ -737,12 +735,10 @@ The framework auto-scopes the event to \`<component>[<id>].<eventName>\` on the 
 
 **Naming convention.** Plain camelCase verbs/states: \`itemSelected\`, \`queryChanged\`, \`templateChanged\`, \`indexSelected\`, \`valueSubmitted\`, \`searchQuerySelected\`. Match the existing codebase style — NOT kebab-case (\`item-selected\`), NOT colon-prefixed (\`filebrowser:itemSelected\`). The component scope is added automatically; you only need the action name.
 
-**Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array so the Configure tab and any subscriber tooling can see them:
+**Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array — it's a plain array of STRINGS, not objects. The framework reads bare names; the object form (\`{ name, description }\`) is wrong and breaks downstream tooling.
 
 \`\`\`js
-events: [
-  { name: "itemSelected", description: "Fired when the user clicks a row" },
-],
+events: ["itemSelected", "queryChanged"],
 \`\`\`
 
 **Tell the user.** When you add events, list them at the end of your chat response — one line per event, name + trigger:
@@ -1170,12 +1166,10 @@ The framework auto-scopes the event to \`<component>[<id>].<eventName>\` on the 
 
 **Naming convention.** Plain camelCase verbs/states: \`itemSelected\`, \`queryChanged\`, \`templateChanged\`, \`indexSelected\`, \`valueSubmitted\`, \`searchQuerySelected\`. Match the existing codebase style — NOT kebab-case (\`item-selected\`), NOT colon-prefixed (\`filebrowser:itemSelected\`). The component scope is added automatically; you only need the action name.
 
-**Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array so the Configure tab and any subscriber tooling can see them:
+**Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array — it's a plain array of STRINGS, not objects. The framework reads bare names; the object form (\`{ name, description }\`) is wrong and breaks downstream tooling.
 
 \`\`\`js
-events: [
-  { name: "itemSelected", description: "Fired when the user clicks a row" },
-],
+events: ["itemSelected", "queryChanged"],
 \`\`\`
 
 **Tell the user.** When you add events, list them at the end of your chat response — one line per event, name + trigger:

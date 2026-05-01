@@ -103,14 +103,26 @@ describe("WidgetBuilderModal — Event publishing guidance in all three branches
         }
     });
 
-    test("each section mentions declaring events in the .dash.js config", () => {
-        // Declaration in `events: [...]` is what the Configure tab
-        // reads — required so users can see what the widget emits
-        // and wire subscribers manually.
+    test("each section mentions declaring events in the .dash.js config as a string array", () => {
+        // Canonical format is `events: ["eventName"]` — plain string
+        // array. The object form `{ name, description }` is wrong;
+        // the framework reads the bare strings. Pin the array-of-
+        // strings example so the AI doesn't drift back to the
+        // object form.
         const slices = getSectionSlices();
         expect(slices.length).toBe(3);
         for (const slice of slices) {
             expect(slice).toMatch(/\bevents:\s*\[/);
+            // Must contain at least one string-array literal example,
+            // e.g. `events: ["itemSelected"]` — quoted name directly
+            // inside the array, no object wrapper.
+            expect(slice).toMatch(/events:\s*\[\s*["'][a-z][A-Za-z0-9]*["']/);
+            // Must NOT contain the wrong object form anywhere — that
+            // shape leaked into earlier AI output and broke the
+            // Configure tab's parser.
+            expect(slice).not.toMatch(
+                /\{\s*name:\s*["'][^"']+["'],\s*description:/
+            );
         }
     });
 });
