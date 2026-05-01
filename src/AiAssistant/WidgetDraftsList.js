@@ -47,10 +47,18 @@ function firstUserMessageExcerpt(chatHistory) {
     return text.length > 110 ? text.slice(0, 107) + "…" : text;
 }
 
-export const WidgetDraftsList = ({ onResume, onStartNew }) => {
+export const WidgetDraftsList = ({
+    onResume,
+    onStartNew,
+    onInstalled,
+    onOpenedInEditor,
+}) => {
     const [drafts, setDrafts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+    const [installingId, setInstallingId] = useState(null);
+    const [installError, setInstallError] = useState(null);
+    const [openingEditorId, setOpeningEditorId] = useState(null);
 
     const refresh = useCallback(async () => {
         try {
@@ -81,6 +89,59 @@ export const WidgetDraftsList = ({ onResume, onStartNew }) => {
         [refresh]
     );
 
+    const handleOpenInEditor = useCallback(
+        async (draft) => {
+            setOpeningEditorId(draft.id);
+            setInstallError(null);
+            try {
+                const result = await window.mainApi?.drafts?.openInEditor?.(
+                    draft.id
+                );
+                if (result?.success) {
+                    if (typeof onOpenedInEditor === "function") {
+                        onOpenedInEditor(draft);
+                    }
+                } else {
+                    setInstallError(
+                        result?.error || "Couldn't open the editor"
+                    );
+                }
+            } catch (err) {
+                setInstallError(err?.message || String(err));
+            } finally {
+                setOpeningEditorId(null);
+            }
+        },
+        [onOpenedInEditor]
+    );
+
+    const handleInstall = useCallback(
+        async (draft) => {
+            setInstallingId(draft.id);
+            setInstallError(null);
+            try {
+                const result = await window.mainApi?.drafts?.install?.(
+                    draft.id
+                );
+                if (result?.success) {
+                    if (typeof onInstalled === "function") {
+                        onInstalled(result.widgetName, draft.componentName);
+                    }
+                    await refresh();
+                } else {
+                    setInstallError(
+                        result?.error || "Install failed (no error reported)"
+                    );
+                }
+            } catch (err) {
+                setInstallError(err?.message || String(err));
+            } finally {
+                setInstallingId(null);
+            }
+        },
+        [refresh, onInstalled]
+    );
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center h-full p-8 text-gray-300">
@@ -109,6 +170,11 @@ export const WidgetDraftsList = ({ onResume, onStartNew }) => {
                     Build new widget
                 </button>
             </div>
+            {installError && (
+                <div className="px-6 py-2 bg-red-900 border-b border-red-700 text-xs text-red-100">
+                    Install failed: {installError}
+                </div>
+            )}
             {drafts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center flex-1 p-8 text-gray-400">
                     <div className="text-sm">No drafts yet.</div>
@@ -157,6 +223,63 @@ export const WidgetDraftsList = ({ onResume, onStartNew }) => {
                                                     data-testid="drafts-resume"
                                                 >
                                                     Resume
+                                                </button>
+                                                <button
+                                                    onClick={() =>
+                                                        handleOpenInEditor(
+                                                            draft
+                                                        )
+                                                    }
+                                                    disabled={
+                                                        openingEditorId ===
+                                                            draft.id ||
+                                                        !draft.packageDir
+                                                    }
+                                                    title={
+                                                        !draft.packageDir
+                                                            ? "Draft has no on-disk files yet — resume + send a message first"
+                                                            : "Open this widget's package in your editor (VS Code if available)"
+                                                    }
+                                                    className={`px-3 py-1 text-xs font-medium rounded text-gray-100 transition-colors ${
+                                                        openingEditorId ===
+                                                            draft.id ||
+                                                        !draft.packageDir
+                                                            ? "bg-indigo-900 cursor-not-allowed opacity-50"
+                                                            : "bg-indigo-700 hover:bg-indigo-600"
+                                                    }`}
+                                                    data-testid="drafts-open-editor"
+                                                >
+                                                    {openingEditorId ===
+                                                    draft.id
+                                                        ? "Opening…"
+                                                        : "Open in editor"}
+                                                </button>
+                                                <button
+                                                    onClick={() =>
+                                                        handleInstall(draft)
+                                                    }
+                                                    disabled={
+                                                        installingId ===
+                                                            draft.id ||
+                                                        !draft.packageDir
+                                                    }
+                                                    title={
+                                                        !draft.packageDir
+                                                            ? "Draft has no on-disk files yet — resume + send a message first"
+                                                            : "Install this widget"
+                                                    }
+                                                    className={`px-3 py-1 text-xs font-medium rounded text-white transition-colors ${
+                                                        installingId ===
+                                                            draft.id ||
+                                                        !draft.packageDir
+                                                            ? "bg-green-900 cursor-not-allowed opacity-50"
+                                                            : "bg-green-700 hover:bg-green-600"
+                                                    }`}
+                                                    data-testid="drafts-install"
+                                                >
+                                                    {installingId === draft.id
+                                                        ? "Installing…"
+                                                        : "Install"}
                                                 </button>
                                                 <button
                                                     onClick={() =>

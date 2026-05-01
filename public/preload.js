@@ -135,8 +135,16 @@ const extendedApi = {
         // Auto-saved widget builds. See public/widgetDrafts.cjs.
         list: () => ipcRenderer.invoke("drafts:list"),
         get: (id) => ipcRenderer.invoke("drafts:get", { id }),
-        save: (draft) => ipcRenderer.invoke("drafts:save", { draft }),
+        // Optional `files` — when provided, the main process
+        // materializes them under the draft's @ai-built/<name>-draft-<id>/
+        // dir on disk and stores the absolute packageDir on the draft
+        // so Resume / Install / Open-in-Editor can read code from
+        // disk instead of from JSON strings.
+        save: (draft, files) =>
+            ipcRenderer.invoke("drafts:save", { draft, files }),
         delete: (id) => ipcRenderer.invoke("drafts:delete", { id }),
+        install: (id) => ipcRenderer.invoke("drafts:install", { id }),
+        openInEditor: (id) => ipcRenderer.invoke("drafts:openInEditor", { id }),
     },
     debug: {
         open: () => ipcRenderer.invoke("debug-window-open"),
