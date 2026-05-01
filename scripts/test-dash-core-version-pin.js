@@ -1,18 +1,15 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.470, the version where forEachWidget walks
- * `workspace.pages[].layout` BEFORE `workspace.layout`. Without this,
- * an auto-migrated single-page workspace (whose pages[0].layout was
- * aliased to workspace.layout in WorkspaceModel and then diverged on
- * the first per-page edit) produced stale top-level items that the
- * id-dedupe in forEachWidget kept visiting first — so the bulk-edit
- * modal's OVERRIDE badge read pre-edit provider bindings even after
- * the user unset a provider in the per-widget Providers panel. Every
- * cycle from 0.1.464 forward correctly fixed write-side propagation;
- * the read-side walk order was the missing piece.
+ * be at ≥ 0.1.471, the version where Settings → Notifications uses
+ * the master-detail SectionLayout pattern (alphabetical searchable
+ * Sidebar list + dedicated detail pane). Mirrors WidgetsSection's
+ * structure; replaces the flat scrollable layout that grew
+ * unscannable when users had many widget instances.
  *
- * Also covers prior pins (≥ 0.1.469 handlePageWorkspaceChange updates
+ * Also covers prior pins (≥ 0.1.470 forEachWidget walks pages before
+ * workspace.layout so per-widget unsets aren't shadowed by the
+ * auto-migration alias; ≥ 0.1.469 handlePageWorkspaceChange updates
  * openTabs React state; ≥ 0.1.468 per-widget provider edit writes
  * through to both binding layers; ≥ 0.1.467 per-widget provider
  * edits propagate to the parent; ≥ 0.1.466 bulk-apply respects
@@ -58,7 +55,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.470";
+const minRequired = "0.1.471";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -70,9 +67,9 @@ function semverGte(a, b) {
 
 assert.ok(
     semverGte(stripped, minRequired),
-    `@trops/dash-core must be >= ${minRequired} (the version where forEachWidget walks pages BEFORE workspace.layout, so per-widget unsets aren't shadowed by the auto-migration alias the bulk modal was reading). Currently pinned at: ${pinned}`
+    `@trops/dash-core must be >= ${minRequired} (the version where Settings → Notifications uses the master-detail SectionLayout pattern with searchable alphabetical Sidebar list). Currently pinned at: ${pinned}`
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, forEachWidget walks pages first so fresh page data wins over stale workspace.layout alias)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, Notifications panel master-detail layout)`
 );
