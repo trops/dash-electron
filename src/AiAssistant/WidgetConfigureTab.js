@@ -4,7 +4,13 @@
  * User-friendly form for editing the .dash.js widget configuration.
  * Provides sections for widget info, providers, events, handlers, and userConfig fields.
  */
-import React, { useState, useEffect, useCallback, useContext } from "react";
+import React, {
+    useState,
+    useEffect,
+    useCallback,
+    useContext,
+    useRef,
+} from "react";
 import { FontAwesomeIcon, ThemeContext } from "@trops/dash-react";
 
 const PROVIDER_TYPES = [
@@ -212,6 +218,14 @@ export const WidgetConfigureTab = ({
         userConfig: {},
     });
     const [dirty, setDirty] = useState(false);
+    // Snapshot of events + eventHandlers at form-population time, so
+    // handleSave can compute exactly what was added/removed and pass
+    // a diff up to the modal — which then applies code transforms
+    // (add/remove publishEvent stub or listen handler) before
+    // recompiling. Without this snapshot the modal would have to
+    // diff the whole config to detect event changes.
+    const initialEventsRef = useRef([]);
+    const initialHandlersRef = useRef([]);
 
     // Populate form state from the most accurate source available:
     //   1. `parsedConfig` — the resolved config object the modal got
@@ -225,16 +239,22 @@ export const WidgetConfigureTab = ({
     useEffect(() => {
         const parsed = parsedConfig || parseConfigCode(configCode);
         if (parsed) {
+            const events = parsed.events || [];
+            const eventHandlers = parsed.eventHandlers || [];
             setForm({
                 name: parsed.name || parsed.displayName || componentName || "",
                 workspace: parsed.workspace || "ai-built",
                 author: parsed.author || "AI Assistant",
                 providers: parsed.providers || [],
-                events: parsed.events || [],
-                eventHandlers: parsed.eventHandlers || [],
+                events,
+                eventHandlers,
                 userConfig: parsed.userConfig || {},
                 styles: parsed.styles || null,
             });
+            // Snapshot for diff — defensive copy so later form edits
+            // don't mutate the baseline.
+            initialEventsRef.current = [...events];
+            initialHandlersRef.current = [...eventHandlers];
             setDirty(false);
         }
     }, [parsedConfig, configCode, componentName]);
@@ -335,10 +355,40 @@ export const WidgetConfigureTab = ({
         updateField("userConfig", updated);
     };
 
-    // Save handler
+    // Save handler. Computes a diff of events / eventHandlers vs the
+    // form-population snapshot so the modal can apply matching code
+    // transforms (add stub / remove call) before recompiling. The
+    // serialized config goes up as before; the diff is a second arg
+    // — older onSave signatures (single-arg) still work because the
+    // extra arg is just ignored.
     const handleSave = () => {
         const serialized = serializeConfig(componentName, form);
-        onSave(serialized);
+        const before = {
+            events: new Set(initialEventsRef.current || []),
+            eventHandlers: new Set(initialHandlersRef.current || []),
+        };
+        const after = {
+            events: new Set(form.events || []),
+            eventHandlers: new Set(form.eventHandlers || []),
+        };
+        const diff = {
+            eventsAdded: [...after.events].filter((e) => !before.events.has(e)),
+            eventsRemoved: [...before.events].filter(
+                (e) => !after.events.has(e)
+            ),
+            handlersAdded: [...after.eventHandlers].filter(
+                (h) => !before.eventHandlers.has(h)
+            ),
+            handlersRemoved: [...before.eventHandlers].filter(
+                (h) => !after.eventHandlers.has(h)
+            ),
+        };
+        onSave(serialized, diff);
+        // Refresh the snapshot so subsequent saves diff against the
+        // most recent state (otherwise re-saving the same form would
+        // re-add already-applied stubs).
+        initialEventsRef.current = [...(form.events || [])];
+        initialHandlersRef.current = [...(form.eventHandlers || [])];
         setDirty(false);
     };
 

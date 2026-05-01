@@ -33,6 +33,7 @@ import {
     makeScopedComponentId,
 } from "@trops/dash-core";
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
+import transforms from "./widgetCodeTransforms.cjs";
 import { ChatProviderGate } from "./ChatProviderGate";
 import { WidgetDraftsList } from "./WidgetDraftsList";
 import { WidgetConsolePane } from "./WidgetConsolePane";
@@ -4853,9 +4854,56 @@ export const WidgetBuilderModal = ({
                                     parsedConfig={previewParsedConfig}
                                     componentName={widgetName}
                                     borderColor={borderColor}
-                                    onSave={(newConfigCode) => {
+                                    onSave={(newConfigCode, diff) => {
+                                        // Apply matching code transforms
+                                        // for any events/handlers added or
+                                        // removed in the Configure tab —
+                                        // this is what keeps the .dash.js
+                                        // declaration in sync with the
+                                        // widget's actual publishEvent /
+                                        // listen calls. Stubs for adds,
+                                        // surgical removes for deletes.
+                                        let nextComponentCode =
+                                            detectedCode.componentCode;
+                                        if (diff && nextComponentCode) {
+                                            for (const name of diff.eventsRemoved ||
+                                                []) {
+                                                nextComponentCode =
+                                                    transforms.removePublishEvent(
+                                                        nextComponentCode,
+                                                        name
+                                                    );
+                                            }
+                                            for (const name of diff.eventsAdded ||
+                                                []) {
+                                                nextComponentCode =
+                                                    transforms.addPublishEventStub(
+                                                        nextComponentCode,
+                                                        name,
+                                                        widgetName
+                                                    );
+                                            }
+                                            for (const name of diff.handlersRemoved ||
+                                                []) {
+                                                nextComponentCode =
+                                                    transforms.removeEventHandler(
+                                                        nextComponentCode,
+                                                        name
+                                                    );
+                                            }
+                                            for (const name of diff.handlersAdded ||
+                                                []) {
+                                                nextComponentCode =
+                                                    transforms.addEventHandlerStub(
+                                                        nextComponentCode,
+                                                        name,
+                                                        widgetName
+                                                    );
+                                            }
+                                        }
                                         const updated = {
                                             ...detectedCode,
+                                            componentCode: nextComponentCode,
                                             configCode: newConfigCode,
                                         };
                                         setDetectedCode(updated);
