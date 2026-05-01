@@ -493,7 +493,11 @@ export default function MyWidget() {
   const { callTool, tools, isConnected, error } = useMcpProvider("${pickedType}");
   const [data, setData] = useState(null);
   useEffect(() => {
-    if (!isConnected) return;
+    // Gate on BOTH isConnected AND tools.length — connection
+    // becomes ready before the server's tools list is loaded; firing
+    // callTool against an empty registry produces "tool not found"
+    // errors or silent empty states.
+    if (!isConnected || tools.length === 0) return;
     let cancelled = false;
     // TODO: pick the right tool from \`tools\` (or pass an explicit name) for
     // the user's intent and call it. Tool calls are async, must go in a
@@ -503,9 +507,10 @@ export default function MyWidget() {
     //     .then((r) => { if (!cancelled) setData(r); })
     //     .catch(() => {});
     return () => { cancelled = true; };
-  }, [isConnected, callTool]);
+  }, [isConnected, tools, callTool]);
   if (error) return <Panel><ErrorMessage message={error} /></Panel>;
-  if (!isConnected) return <Panel><Skeleton /></Panel>;
+  if (!isConnected || tools.length === 0)
+    return <Panel><Skeleton /></Panel>;
   return <Panel>{/* render data */}</Panel>;
 }
 \`\`\``
@@ -598,6 +603,7 @@ Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-me
 - ALWAYS emit BOTH a \`\`\`jsx component block AND a \`\`\`javascript config block — never just one. Without the config block the widget will not install. The config block MUST contain the \`providers: [...]\` array shown above.
 - Widget code runs in the BROWSER (renderer process). DO NOT use Node-only APIs: \`process.cwd()\`, \`process.env\` (except \`process.env.NODE_ENV\`), \`__dirname\`, \`__filename\`, \`require()\`, or imports of \`fs\` / \`path\` / \`os\` / \`child_process\` / \`crypto\` / \`stream\`. For paths default to literal strings like \`"/"\` or \`"~/"\`, or take a path from \`props\` / \`userConfig\`. To talk to the OS, go through the provider hooks (mcp \`callTool\` or credential \`window.mainApi.<service>\`).
 - DEFENSIVE on every MCP tool response. Shapes are provider-specific and undocumented; never assume a field exists. Guard before calling string/array methods: \`typeof item.name === "string" ? item.name.split(".").pop() : ""\`, \`Array.isArray(result?.entries) ? result.entries : []\`, \`const name = typeof item === "string" ? item : item?.name\`. Use optional chaining (\`item?.type === "directory"\`). Errors like "Cannot read properties of undefined" or "X is not a function" on first render are NOT acceptable.
+- **MCP connection-vs-tools race.** \`useMcpProvider\` exposes \`isConnected\` AND \`tools\` separately, and the connection becomes ready BEFORE the server's tools list is loaded. Gate every tool call on BOTH: \`if (!isConnected || tools.length === 0) return;\`. Apply the same gate to the early-return Skeleton render: \`if (!isConnected || tools.length === 0) return <Panel><Skeleton /></Panel>;\`. Add \`tools\` to the useEffect deps array so the effect re-runs when tools arrive. Gating on \`isConnected\` alone fires \`callTool\` against an empty registry and produces "tool not found" errors even when the tool exists on the server.
 - For MCP widgets: DON'T hardcode tool names like \`callTool("read_directory", ...)\`. Tool names are server-specific and AI guesses are usually wrong (e.g., the official filesystem server exposes \`list_directory\`, not \`read_directory\`). Discover the right tool from the live \`tools\` array returned by \`useMcpProvider\`: \`const tool = tools.find(t => t.name === "list_directory") || tools.find(t => t.name.includes("list"))\`. If no tool matches, render an actionable error (\`<ErrorMessage message={\\\`No directory-listing tool. Available: \\\${tools.map(t => t.name).join(", ")}\\\`} />\`), NOT an empty state.
 - **MCP response envelope.** Tool responses follow the protocol shape \`{ content: [{ type: "text", text: "…" }, …] }\`. The actual data is INSIDE the \`text\` field of each content item, NOT at the top of \`result\`. Extract before parsing: \`const text = result?.content?.find(c => c?.type === "text")?.text; const lines = typeof text === "string" ? text.split("\\\\n").filter(Boolean) : [];\`. Server-specific format inside \`text\` varies (newline-separated list, JSON, plain prose) — parse per the server's documented format. The standard filesystem server's \`list_directory\` returns lines like \`[FILE] foo.txt\` and \`[DIR] subdir/\`. DON'T assume \`callTool(...)\` returns a structured array directly — that's the protocol envelope, not the data.
 - **NEVER silently swallow errors.** A \`catch\` block MUST render the error to the user via \`<ErrorMessage message={err.message} />\` (or equivalent visible feedback in the widget) — NOT just \`setData([])\` followed by a blank state. An empty array is fine when the data really IS empty; an empty array as the *result of a caught exception* is a silent failure that leaves the user wondering whether the widget loaded. Every error path needs a user-visible signal.
@@ -880,20 +886,26 @@ export default function MyWidget() {
   const { callTool, tools, isConnected, error } = useMcpProvider("slack");
   const [channels, setChannels] = useState([]);
 
-  // 1. Always check status BEFORE you try to call tools.
+  // 1. Always gate on BOTH isConnected AND tools.length > 0 BEFORE
+  //    calling any tool. The connection becomes "ready" before the
+  //    server's tool registry is loaded, so checking isConnected
+  //    alone races: callTool fires against an empty registry, which
+  //    rejects with "tool not found" — even though the tool DOES
+  //    exist on the server, the renderer just hadn't seen it yet.
   // 2. Tool calls are async — wrap in useEffect, never call at render
   //    or top-level (calls during render crash the component).
   useEffect(() => {
-    if (!isConnected) return;
+    if (!isConnected || tools.length === 0) return;
     let cancelled = false;
     callTool("slack_list_channels", {})
       .then((result) => { if (!cancelled) setChannels(result?.channels || []); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [isConnected, callTool]);
+  }, [isConnected, tools, callTool]);
 
   if (error) return <Panel><ErrorMessage message={error} /></Panel>;
-  if (!isConnected) return <Panel><Skeleton /></Panel>;
+  if (!isConnected || tools.length === 0)
+    return <Panel><Skeleton /></Panel>;
   return <Panel>{/* render channels */}</Panel>;
 }
 \`\`\`
@@ -1047,6 +1059,7 @@ YOU ARE RUNNING INSIDE AN EMBEDDED UI, NOT AN INTERACTIVE TERMINAL:
 - ALWAYS output COMPLETE code blocks. Never partial diffs or snippets, even for small changes — re-emit the full file.
 - Widget code runs in the BROWSER (renderer process). DO NOT use Node-only APIs: \`process.cwd()\`, \`process.env\` (except \`process.env.NODE_ENV\`), \`__dirname\`, \`__filename\`, \`require()\`, or imports of \`fs\` / \`path\` / \`os\` / \`child_process\` / \`crypto\` / \`stream\`. For paths default to literal strings like \`"/"\` or \`"~/"\`, or take a path from \`props\` / \`userConfig\`. To talk to the OS, go through the provider hooks (mcp \`callTool\` or credential \`window.mainApi.<service>\`).
 - DEFENSIVE on every MCP tool response. Shapes are provider-specific and undocumented; never assume a field exists. Guard before calling string/array methods: \`typeof item.name === "string" ? item.name.split(".").pop() : ""\`, \`Array.isArray(result?.entries) ? result.entries : []\`, \`const name = typeof item === "string" ? item : item?.name\`. Use optional chaining (\`item?.type === "directory"\`). Errors like "Cannot read properties of undefined" or "X is not a function" on first render are NOT acceptable.
+- **MCP connection-vs-tools race.** \`useMcpProvider\` exposes \`isConnected\` AND \`tools\` separately, and the connection becomes ready BEFORE the server's tools list is loaded. Gate every tool call on BOTH: \`if (!isConnected || tools.length === 0) return;\`. Apply the same gate to the early-return Skeleton render: \`if (!isConnected || tools.length === 0) return <Panel><Skeleton /></Panel>;\`. Add \`tools\` to the useEffect deps array so the effect re-runs when tools arrive. Gating on \`isConnected\` alone fires \`callTool\` against an empty registry and produces "tool not found" errors even when the tool exists on the server.
 - For MCP widgets: DON'T hardcode tool names like \`callTool("read_directory", ...)\`. Tool names are server-specific and AI guesses are usually wrong (e.g., the official filesystem server exposes \`list_directory\`, not \`read_directory\`). Discover the right tool from the live \`tools\` array returned by \`useMcpProvider\`: \`const tool = tools.find(t => t.name === "list_directory") || tools.find(t => t.name.includes("list"))\`. If no tool matches, render an actionable error (\`<ErrorMessage message={\\\`No directory-listing tool. Available: \\\${tools.map(t => t.name).join(", ")}\\\`} />\`), NOT an empty state.
 - **MCP response envelope.** Tool responses follow the protocol shape \`{ content: [{ type: "text", text: "…" }, …] }\`. The actual data is INSIDE the \`text\` field of each content item, NOT at the top of \`result\`. Extract before parsing: \`const text = result?.content?.find(c => c?.type === "text")?.text; const lines = typeof text === "string" ? text.split("\\\\n").filter(Boolean) : [];\`. Server-specific format inside \`text\` varies (newline-separated list, JSON, plain prose) — parse per the server's documented format. The standard filesystem server's \`list_directory\` returns lines like \`[FILE] foo.txt\` and \`[DIR] subdir/\`. DON'T assume \`callTool(...)\` returns a structured array directly — that's the protocol envelope, not the data.
 - **NEVER silently swallow errors.** A \`catch\` block MUST render the error to the user via \`<ErrorMessage message={err.message} />\` (or equivalent visible feedback in the widget) — NOT just \`setData([])\` followed by a blank state. An empty array is fine when the data really IS empty; an empty array as the *result of a caught exception* is a silent failure that leaves the user wondering whether the widget loaded. Every error path needs a user-visible signal.
