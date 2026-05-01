@@ -27,6 +27,7 @@ import {
 import {
     ChatCore,
     AppContext,
+    DashboardContext,
     WidgetContext,
     evaluateBundle,
     extractWidgetConfigs,
@@ -241,12 +242,30 @@ function PreviewContextWrapper({
         previewProviderSelection,
     ]);
 
+    // Stub DashboardContext so widget code that calls
+    // `useWidgetEvents()` (the canonical pub/sub hook) doesn't throw
+    // in the preview. The hook reads `dashboard.pub` for publishing
+    // and listener registration; we provide a no-op publisher with
+    // the same shape so calls succeed silently — the preview can't
+    // actually broadcast events to other widgets (none are mounted),
+    // but the widget renders without crashing.
+    const previewDashboard = React.useMemo(
+        () => ({
+            pub: {
+                pub: () => {},
+                registerListeners: () => {},
+            },
+        }),
+        []
+    );
     return (
         <AppContext.Provider value={appCtx}>
             <ThemeContext.Provider value={themeCtx}>
-                <WidgetContext.Provider value={{ widgetData }}>
-                    {children}
-                </WidgetContext.Provider>
+                <DashboardContext.Provider value={previewDashboard}>
+                    <WidgetContext.Provider value={{ widgetData }}>
+                        {children}
+                    </WidgetContext.Provider>
+                </DashboardContext.Provider>
             </ThemeContext.Provider>
         </AppContext.Provider>
     );
@@ -597,11 +616,14 @@ Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-me
 
 If the widget has a meaningful interaction worth sharing across the dashboard — a row clicked, a query changed, a file opened, a value submitted — publish an event so other widgets can react. Skip for read-only / static widgets (clocks, dashboards, banners) where there's nothing to broadcast.
 
-**API.** \`publishEvent\` is injected by the framework as a prop on every widget. Destructure it and call \`publishEvent(eventName, payload)\`:
+**API.** Use the \`useWidgetEvents()\` hook from \`@trops/dash-core\`. It returns \`{ publishEvent, listen, listeners }\` — call \`publishEvent(eventName, payload)\` to publish:
 
 \`\`\`jsx
-export default function MyWidget(props) {
-  const { publishEvent } = props;
+import { useWidgetEvents } from "@trops/dash-core";
+import { Panel } from "@trops/dash-react";
+
+export default function MyWidget() {
+  const { publishEvent } = useWidgetEvents();
   return (
     <Panel>
       <ul>
@@ -619,7 +641,7 @@ export default function MyWidget(props) {
 }
 \`\`\`
 
-The framework auto-scopes the event to \`<component>[<id>].<eventName>\` on the wire — you only supply the suffix.
+The hook auto-scopes the event to \`<component>[<id>].<eventName>\` on the wire — you only supply the suffix. \`useWidgetEvents\` is a hook, so it MUST be called at the top of the component above any conditional return (Rules of Hooks).
 
 **Naming convention.** Plain camelCase verbs/states: \`itemSelected\`, \`queryChanged\`, \`templateChanged\`, \`indexSelected\`, \`valueSubmitted\`, \`searchQuerySelected\`. Match the existing codebase style — NOT kebab-case (\`item-selected\`), NOT colon-prefixed (\`filebrowser:itemSelected\`). The component scope is added automatically; you only need the action name.
 
@@ -710,11 +732,14 @@ Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-me
 
 If the widget has a meaningful interaction worth sharing across the dashboard — a row clicked, a query changed, a file opened, a value submitted — publish an event so other widgets can react. Skip for read-only / static widgets (clocks, dashboards, banners) where there's nothing to broadcast.
 
-**API.** \`publishEvent\` is injected by the framework as a prop on every widget. Destructure it and call \`publishEvent(eventName, payload)\`:
+**API.** Use the \`useWidgetEvents()\` hook from \`@trops/dash-core\`. It returns \`{ publishEvent, listen, listeners }\` — call \`publishEvent(eventName, payload)\` to publish:
 
 \`\`\`jsx
-export default function MyWidget(props) {
-  const { publishEvent } = props;
+import { useWidgetEvents } from "@trops/dash-core";
+import { Panel } from "@trops/dash-react";
+
+export default function MyWidget() {
+  const { publishEvent } = useWidgetEvents();
   return (
     <Panel>
       <ul>
@@ -732,7 +757,7 @@ export default function MyWidget(props) {
 }
 \`\`\`
 
-The framework auto-scopes the event to \`<component>[<id>].<eventName>\` on the wire — you only supply the suffix.
+The hook auto-scopes the event to \`<component>[<id>].<eventName>\` on the wire — you only supply the suffix. \`useWidgetEvents\` is a hook, so it MUST be called at the top of the component above any conditional return (Rules of Hooks).
 
 **Naming convention.** Plain camelCase verbs/states: \`itemSelected\`, \`queryChanged\`, \`templateChanged\`, \`indexSelected\`, \`valueSubmitted\`, \`searchQuerySelected\`. Match the existing codebase style — NOT kebab-case (\`item-selected\`), NOT colon-prefixed (\`filebrowser:itemSelected\`). The component scope is added automatically; you only need the action name.
 
@@ -1141,11 +1166,14 @@ Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-me
 
 If the widget has a meaningful interaction worth sharing across the dashboard — a row clicked, a query changed, a file opened, a value submitted — publish an event so other widgets can react. Skip for read-only / static widgets (clocks, dashboards, banners) where there's nothing to broadcast.
 
-**API.** \`publishEvent\` is injected by the framework as a prop on every widget. Destructure it and call \`publishEvent(eventName, payload)\`:
+**API.** Use the \`useWidgetEvents()\` hook from \`@trops/dash-core\`. It returns \`{ publishEvent, listen, listeners }\` — call \`publishEvent(eventName, payload)\` to publish:
 
 \`\`\`jsx
-export default function MyWidget(props) {
-  const { publishEvent } = props;
+import { useWidgetEvents } from "@trops/dash-core";
+import { Panel } from "@trops/dash-react";
+
+export default function MyWidget() {
+  const { publishEvent } = useWidgetEvents();
   return (
     <Panel>
       <ul>
@@ -1163,7 +1191,7 @@ export default function MyWidget(props) {
 }
 \`\`\`
 
-The framework auto-scopes the event to \`<component>[<id>].<eventName>\` on the wire — you only supply the suffix.
+The hook auto-scopes the event to \`<component>[<id>].<eventName>\` on the wire — you only supply the suffix. \`useWidgetEvents\` is a hook, so it MUST be called at the top of the component above any conditional return (Rules of Hooks).
 
 **Naming convention.** Plain camelCase verbs/states: \`itemSelected\`, \`queryChanged\`, \`templateChanged\`, \`indexSelected\`, \`valueSubmitted\`, \`searchQuerySelected\`. Match the existing codebase style — NOT kebab-case (\`item-selected\`), NOT colon-prefixed (\`filebrowser:itemSelected\`). The component scope is added automatically; you only need the action name.
 

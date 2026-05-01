@@ -52,13 +52,33 @@ test("addPublishEventStub adds a TODO comment for the event", () => {
     expect(result).toMatch(/TODO[\s\S]*publishEvent\("itemSelected"/);
 });
 
-test("addPublishEventStub mentions props.publishEvent so the user knows the API", () => {
+test("addPublishEventStub adds the useWidgetEvents import + destructures publishEvent", () => {
     const result = addPublishEventStub(
         SIMPLE_WIDGET,
         "itemSelected",
         "MyWidget"
     );
-    expect(result).toMatch(/props\.publishEvent/);
+    // Canonical API: import { useWidgetEvents } from "@trops/dash-core"
+    // and destructure publishEvent from the hook return.
+    expect(result).toMatch(/useWidgetEvents/);
+    expect(result).toMatch(
+        /import\s*\{[^}]*useWidgetEvents[^}]*\}\s*from\s*["']@trops\/dash-core["']/
+    );
+    expect(result).toMatch(
+        /const\s*\{[^}]*publishEvent[^}]*\}\s*=\s*useWidgetEvents\(\)/
+    );
+});
+
+test("addPublishEventStub TODO comment references bare publishEvent (no props.) name", () => {
+    const result = addPublishEventStub(
+        SIMPLE_WIDGET,
+        "itemSelected",
+        "MyWidget"
+    );
+    // TODO mentions calling publishEvent (the destructured name),
+    // not props.publishEvent which would be the legacy form.
+    expect(result).toMatch(/TODO[\s\S]*publishEvent\("itemSelected"/);
+    expect(result).not.toMatch(/props\.publishEvent/);
 });
 
 test("addPublishEventStub is idempotent", () => {
@@ -111,18 +131,24 @@ test("removePublishEvent is a no-op when the event isn't there", () => {
 
 // ── addEventHandlerStub ───────────────────────────────────────────
 
-test("addEventHandlerStub inserts a listen() call when none exists", () => {
+test("addEventHandlerStub inserts useWidgetEvents import + destructure + listen call when none exists", () => {
     const result = addEventHandlerStub(
         SIMPLE_WIDGET,
         "onItemSelected",
         "MyWidget"
     );
-    // Optional chaining makes the call safe when props.listen is
-    // undefined (e.g. the AI Builder preview doesn't inject the
-    // WidgetFactory props). On the live dashboard the prop IS
-    // defined and optional chaining is a no-op.
-    expect(result).toMatch(/props\.listen\?\.\(\s*props\.listeners\s*,\s*\{/);
+    // Hook import + destructure (listen + listeners both needed).
+    expect(result).toMatch(
+        /import\s*\{[^}]*useWidgetEvents[^}]*\}\s*from\s*["']@trops\/dash-core["']/
+    );
+    expect(result).toMatch(
+        /const\s*\{[^}]*listen[^}]*listeners[^}]*\}\s*=\s*useWidgetEvents\(\)/
+    );
+    // Bare listen call (no props.) — uses the destructured names.
+    expect(result).toMatch(/\blisten\(\s*listeners\s*,\s*\{/);
     expect(result).toMatch(/onItemSelected:\s*\(data\)\s*=>/);
+    // No props.listen leakage — that was the legacy API.
+    expect(result).not.toMatch(/props\.listen/);
 });
 
 test("addEventHandlerStub stub body contains a console.log so the user sees it firing", () => {
@@ -136,19 +162,20 @@ test("addEventHandlerStub stub body contains a console.log so the user sees it f
 
 test("addEventHandlerStub adds a key to an existing listen block", () => {
     const existing = SIMPLE_WIDGET.replace(
-        "return (",
-        "  props.listen(props.listeners, { onQueryChanged: (data) => { /* existing */ } });\n  return ("
+        "export default function MyWidget(props) {",
+        `import { useWidgetEvents } from "@trops/dash-core";
+
+export default function MyWidget(props) {
+  const { listen, listeners } = useWidgetEvents();
+  listen(listeners, { onQueryChanged: (data) => { /* existing */ } });`
     );
     const result = addEventHandlerStub(existing, "onItemSelected", "MyWidget");
     // Both handlers must be present.
     expect(result).toMatch(/onQueryChanged:/);
     expect(result).toMatch(/onItemSelected:/);
-    // Only ONE listen call (we extended, not duplicated). Match
-    // either the optional-chained or bare form so legacy widgets
-    // without optional chaining still register as one call.
-    const listenCalls = (
-        result.match(/props\.listen\??\.?\(\s*props\.listeners\s*,/g) || []
-    ).length;
+    // Only ONE listen call (we extended, not duplicated).
+    const listenCalls = (result.match(/\blisten\(\s*listeners\s*,/g) || [])
+        .length;
     expect(listenCalls).toBe(1);
 });
 
@@ -173,8 +200,15 @@ test("addEventHandlerStub is a no-op on code without `export default function`",
 
 test("removeEventHandler removes a single handler key", () => {
     const withTwo = SIMPLE_WIDGET.replace(
-        "return (",
-        '  props.listen(props.listeners, {\n    onItemSelected: (data) => { console.log("a", data); },\n    onQueryChanged: (data) => { console.log("b", data); },\n  });\n  return ('
+        "export default function MyWidget(props) {",
+        `import { useWidgetEvents } from "@trops/dash-core";
+
+export default function MyWidget(props) {
+  const { listen, listeners } = useWidgetEvents();
+  listen(listeners, {
+    onItemSelected: (data) => { console.log("a", data); },
+    onQueryChanged: (data) => { console.log("b", data); },
+  });`
     );
     const result = removeEventHandler(withTwo, "onItemSelected");
     expect(result).not.toMatch(/onItemSelected:/);
@@ -188,7 +222,9 @@ test("removeEventHandler drops the entire listen call when the last key goes", (
         "MyWidget"
     );
     const result = removeEventHandler(lone, "onItemSelected");
-    expect(result).not.toMatch(/props\.listen\(/);
+    // Bare listen call gets dropped. The destructure + import stay
+    // (cheap to leave; no harm if no other handlers reference them).
+    expect(result).not.toMatch(/\blisten\(\s*listeners\s*,/);
 });
 
 test("removeEventHandler is a no-op when the handler isn't there", () => {
@@ -196,14 +232,35 @@ test("removeEventHandler is a no-op when the handler isn't there", () => {
     expect(result).toBe(SIMPLE_WIDGET);
 });
 
-test("removeEventHandler also works on optional-chained listen calls", () => {
-    // Widgets generated with the new addEventHandlerStub will use
-    // `props.listen?.(...)`. The remove path must detect both forms.
-    const optionalChained = SIMPLE_WIDGET.replace(
+test("removeEventHandler also detects legacy props.listen call shapes", () => {
+    // Widgets generated before the hook switch may still have the
+    // legacy `props.listen(...)` or `props.listen?.(...)` form. The
+    // remove path needs to handle them so user can clean those up
+    // via the Configure tab without manual editing.
+    const legacy = SIMPLE_WIDGET.replace(
         "return (",
         '  props.listen?.(props.listeners, {\n    onItemSelected: (data) => { console.log("a", data); },\n  });\n  return ('
     );
-    const result = removeEventHandler(optionalChained, "onItemSelected");
+    const result = removeEventHandler(legacy, "onItemSelected");
     expect(result).not.toMatch(/onItemSelected:/);
-    expect(result).not.toMatch(/props\.listen\?\.\(/);
+});
+
+test("addEventHandlerStub idempotent on import + destructure (no duplicates)", () => {
+    const once = addEventHandlerStub(
+        SIMPLE_WIDGET,
+        "onItemSelected",
+        "MyWidget"
+    );
+    const twice = addEventHandlerStub(once, "onAnother", "MyWidget");
+    // Only ONE useWidgetEvents import + ONE destructure even when
+    // adding multiple handlers.
+    const importCount = (
+        twice.match(
+            /import\s*\{[^}]*useWidgetEvents[^}]*\}\s*from\s*["']@trops\/dash-core["']/g
+        ) || []
+    ).length;
+    expect(importCount).toBe(1);
+    const destructureCount = (twice.match(/=\s*useWidgetEvents\(\)/g) || [])
+        .length;
+    expect(destructureCount).toBe(1);
 });
