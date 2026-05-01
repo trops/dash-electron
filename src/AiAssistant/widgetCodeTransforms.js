@@ -85,7 +85,12 @@ export function removePublishEvent(code, eventName) {
 
 // ── eventHandler (subscribe via listen) ───────────────────────────
 
-const LISTEN_HEAD_RE = /props\.listen\(\s*props\.listeners\s*,\s*\{/;
+// Match both `props.listen(...)` and `props.listen?.(...)` so we can
+// detect existing listen blocks regardless of which form they use.
+// New code we insert always uses optional chaining (safe in preview
+// where the prop isn't injected by WidgetFactory); widgets generated
+// before that fix may have the bare form.
+const LISTEN_HEAD_RE = /props\.listen\??\.?\(\s*props\.listeners\s*,\s*\{/;
 
 /**
  * Find the existing `props.listen(props.listeners, { ... })` call in
@@ -159,7 +164,7 @@ export function addEventHandlerStub(code, handlerName, widgetName) {
         const sep =
             trimmed.endsWith(",") || trimmed === "" ? "\n    " : ",\n    ";
         const newInner = `${trimmed}${sep}${stub}\n  `;
-        const replacement = `props.listen(props.listeners, {${newInner}});`;
+        const replacement = `props.listen?.(props.listeners, {${newInner}});`;
         return (
             code.slice(0, block.callStart) +
             replacement +
@@ -171,7 +176,7 @@ export function addEventHandlerStub(code, handlerName, widgetName) {
     // body's opening brace.
     const insertAt = findFunctionBodyStart(code);
     if (insertAt < 0) return code;
-    const newCall = `\n  props.listen(props.listeners, {\n    ${stub}\n  });`;
+    const newCall = `\n  props.listen?.(props.listeners, {\n    ${stub}\n  });`;
     return code.slice(0, insertAt) + newCall + code.slice(insertAt);
 }
 
@@ -232,7 +237,7 @@ export function removeEventHandler(code, handlerName) {
         if (cutStart > 0 && code[cutStart - 1] === "\n") cutStart--;
         return code.slice(0, cutStart) + code.slice(block.callEnd);
     }
-    const replacement = `props.listen(props.listeners, {${stripped}});`;
+    const replacement = `props.listen?.(props.listeners, {${stripped}});`;
     return (
         code.slice(0, block.callStart) + replacement + code.slice(block.callEnd)
     );
