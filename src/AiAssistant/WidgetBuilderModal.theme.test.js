@@ -80,4 +80,33 @@ describe("WidgetBuilderModal system prompt — direct theme access guidance", ()
         ];
         expect(knownKeys.some((k) => para.includes(k))).toBe(true);
     });
+
+    // The prompt has THREE branches in buildSystemPrompt — credential,
+    // mcp, and no-provider. Each has its own copy of the styling rules
+    // because the build-system-prompt function ships three separate
+    // template literals. The Theme access paragraph must appear in
+    // ALL THREE so the AI gets the same guidance regardless of which
+    // provider class the user picked at the start.
+    test("Theme access section appears in all three prompt branches", () => {
+        const occurrences = source.match(/## Theme access/g) || [];
+        expect(occurrences.length).toBe(3);
+    });
+
+    test("each Theme access occurrence is followed by useContext(ThemeContext)", () => {
+        // Walk every "## Theme access" position and assert the
+        // useContext token appears within the same paragraph (before
+        // the next `## ` markdown header).
+        const sectionRe = /## Theme access/g;
+        let match;
+        let count = 0;
+        while ((match = sectionRe.exec(source)) !== null) {
+            const start = match.index;
+            const next = source.indexOf("\\n## ", start + 1);
+            const end = next > 0 ? next : start + 2000;
+            const slice = source.slice(start, end);
+            expect(slice).toMatch(/useContext\s*\(\s*ThemeContext\s*\)/);
+            count++;
+        }
+        expect(count).toBe(3);
+    });
 });

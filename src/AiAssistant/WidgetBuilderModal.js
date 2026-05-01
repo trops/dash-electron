@@ -633,6 +633,28 @@ Use @trops/dash-react: Panel (REQUIRED), Card, Heading, SubHeading, Paragraph, T
 
 ALLOWED: \`bg/text/border-{color}-{shade}\`, \`opacity-0..100\`, \`grid-cols-{1..12}\`. DO NOT USE: opacity modifiers (\`bg-white/10\`), arbitrary values, \`ring-*\`, \`divide-*\` color variants. Inline \`style={{...}}\` is the escape hatch.
 
+## Theme access
+
+Most widgets get the active theme for free by using \`@trops/dash-react\` components — keep doing that. For the rare case where you need a raw HTML element (a custom card layout, a one-off icon container) and want it to follow the user's theme switch, read theme tokens from \`ThemeContext\`:
+
+\`\`\`jsx
+import { useContext } from "react";
+import { ThemeContext } from "@trops/dash-react";
+
+export default function MyWidget() {
+  const { currentTheme } = useContext(ThemeContext);
+  // Each value is a Tailwind class string. Always pair it with a
+  // hardcoded fallback so the className stays valid when a theme is
+  // missing a key.
+  const bg = currentTheme?.["bg-primary-dark"] || "bg-gray-900";
+  const text = currentTheme?.["text-primary-light"] || "text-gray-100";
+  const border = currentTheme?.["border-primary-dark"] || "border-gray-700";
+  return <Panel><div className={\`\${bg} \${text} \${border} border rounded p-3\`}>…</div></Panel>;
+}
+\`\`\`
+
+Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-medium\`, \`border-primary-dark\`, \`border-primary-medium\`, \`text-primary-light\`, \`text-primary-medium\`, \`text-secondary-light\`. Pattern: \`{role}-{intent}-{shade}\` where role is \`bg\`/\`text\`/\`border\`, intent is \`primary\`/\`secondary\`, shade is \`light\`/\`medium\`/\`dark\`/\`very-dark\`. Hardcoded Tailwind classes (e.g. \`bg-gray-800\`) work but won't follow theme switches — use them only as the fallback.
+
 ## Critical rules
 
 - Do NOT call any tools.
@@ -991,6 +1013,28 @@ WALK THESE STEPS IN ORDER. STOP AT THE FIRST MATCH. This decision tree runs BEFO
    Then handle whichever outcome you get and ALWAYS write the widget files — declaring \`providers: [{ type: "atlassian", providerClass: "mcp", required: true }]\` and using \`useMcpProvider("atlassian")\` — unless step 3 below applies.
 
 3. **No MCP anywhere?** Tell the user no MCP server exists for this service in either list, AND no existing provider matches. Suggest they (a) add a credential provider for the service in Settings → Providers if it has a simple API-key auth model, or (b) request adding the service to the curated MCP allow-list (or contribute one upstream at github.com/modelcontextprotocol/servers). DO NOT generate widget code that imports an SDK or makes direct HTTP calls.
+
+## Theme access
+
+Most widgets get the active theme for free by using \`@trops/dash-react\` components — keep doing that. For the rare case where you need a raw HTML element (a custom card layout, a one-off icon container) and want it to follow the user's theme switch, read theme tokens from \`ThemeContext\`:
+
+\`\`\`jsx
+import { useContext } from "react";
+import { ThemeContext } from "@trops/dash-react";
+
+export default function MyWidget() {
+  const { currentTheme } = useContext(ThemeContext);
+  // Each value is a Tailwind class string. Always pair it with a
+  // hardcoded fallback so the className stays valid when a theme is
+  // missing a key.
+  const bg = currentTheme?.["bg-primary-dark"] || "bg-gray-900";
+  const text = currentTheme?.["text-primary-light"] || "text-gray-100";
+  const border = currentTheme?.["border-primary-dark"] || "border-gray-700";
+  return <Panel><div className={\`\${bg} \${text} \${border} border rounded p-3\`}>…</div></Panel>;
+}
+\`\`\`
+
+Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-medium\`, \`border-primary-dark\`, \`border-primary-medium\`, \`text-primary-light\`, \`text-primary-medium\`, \`text-secondary-light\`. Pattern: \`{role}-{intent}-{shade}\` where role is \`bg\`/\`text\`/\`border\`, intent is \`primary\`/\`secondary\`, shade is \`light\`/\`medium\`/\`dark\`/\`very-dark\`. Hardcoded Tailwind classes (e.g. \`bg-gray-800\`) work but won't follow theme switches — use them only as the fallback.
 
 ## Critical rules
 
