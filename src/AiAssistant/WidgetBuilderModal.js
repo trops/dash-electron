@@ -35,6 +35,8 @@ import {
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
 import { ChatProviderGate } from "./ChatProviderGate";
 import { WidgetDraftsList } from "./WidgetDraftsList";
+import { WidgetConsolePane } from "./WidgetConsolePane";
+import { installWidgetConsoleCapture } from "./widgetConsoleCapture";
 
 /**
  * Wraps the preview widget in the full context stack (AppContext,
@@ -1466,6 +1468,25 @@ export const WidgetBuilderModal = ({
     // from the Discover grid.
     const compileRequestIdRef = useRef(0);
     const [activeTab, setActiveTab] = useState("preview");
+    // Console events from the widget under preview. Captured by
+    // widgetConsoleCapture (see useEffect below). Cleared on each new
+    // compile so the user sees only output relevant to the current
+    // bundle. Append-only during a session — bounded to 500 entries
+    // to keep the renderer responsive even with chatty widgets.
+    const [consoleEvents, setConsoleEvents] = useState([]);
+    const consoleEventsRef = useRef([]);
+    const appendConsoleEvent = useCallback((evt) => {
+        const next = consoleEventsRef.current.concat([evt]);
+        // Drop oldest entries when over the cap.
+        const trimmed =
+            next.length > 500 ? next.slice(next.length - 500) : next;
+        consoleEventsRef.current = trimmed;
+        setConsoleEvents(trimmed);
+    }, []);
+    const clearConsoleEvents = useCallback(() => {
+        consoleEventsRef.current = [];
+        setConsoleEvents([]);
+    }, []);
     const [activeFile, setActiveFile] = useState("component");
     const manualEditRef = useRef(false);
     const lastMsgCount = useRef(0);
@@ -1619,6 +1640,24 @@ export const WidgetBuilderModal = ({
             lastDiscoverQueryRef.current = "";
         }
     }, [isOpen]);
+
+    // Capture widget-scoped console.* + window.error + unhandledrejection
+    // while the modal is open. Drives the Console tab. Stack-filtered
+    // so framework / modal-internal logs don't pollute the user's view.
+    // The existing window.error suppression effect (further down) ALSO
+    // listens, but it short-circuits the bubble; our capture installs in
+    // the capture phase too and only records — they coexist.
+    useEffect(() => {
+        if (!isOpen) return undefined;
+        const uninstall = installWidgetConsoleCapture(appendConsoleEvent);
+        return () => {
+            try {
+                uninstall();
+            } catch {
+                /* ignore */
+            }
+        };
+    }, [isOpen, appendConsoleEvent]);
 
     // On open: decide whether to show the Drafts list or jump straight
     // into the builder. Skip the list in remix mode (the user clicked
@@ -2326,6 +2365,10 @@ export const WidgetBuilderModal = ({
             setPreviewError(null);
             setPreviewComponent(null);
             setInstallStatus(null);
+            // Console output from a previous bundle is no longer
+            // relevant to the new compile — clear so the user only
+            // sees output for the widget they're currently looking at.
+            clearConsoleEvents();
             lastCompiledCode.current = code.componentCode;
 
             try {
@@ -2442,7 +2485,11 @@ export const WidgetBuilderModal = ({
                 if (!isStale()) setIsCompiling(false);
             }
         },
-        [effectiveEditContext?.originalPackage, selectedProviderForBuild]
+        [
+            effectiveEditContext?.originalPackage,
+            selectedProviderForBuild,
+            clearConsoleEvents,
+        ]
     );
 
     // Fetch a registry widget's source (no install), hand it to the existing
@@ -3250,6 +3297,36 @@ export const WidgetBuilderModal = ({
                                         className="h-2.5 w-2.5"
                                     />
                                     Configure
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab("console")}
+                                    className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
+                                        activeTab === "console"
+                                            ? "bg-indigo-600/20 text-indigo-300"
+                                            : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
+                                    }`}
+                                    data-testid="tab-console"
+                                >
+                                    <FontAwesomeIcon
+                                        icon="terminal"
+                                        className="h-2.5 w-2.5"
+                                    />
+                                    Console
+                                    {consoleEvents.some(
+                                        (e) => e.severity === "error"
+                                    ) && (
+                                        <span
+                                            className="ml-1 px-1 rounded bg-red-700 text-red-100 text-[10px]"
+                                            title="Error in widget output"
+                                        >
+                                            {
+                                                consoleEvents.filter(
+                                                    (e) =>
+                                                        e.severity === "error"
+                                                ).length
+                                            }
+                                        </span>
+                                    )}
                                 </button>
                             </div>
                             {isCompiling && (
@@ -4319,6 +4396,12 @@ export const WidgetBuilderModal = ({
                                     }}
                                 />
                             )}
+                        {activeTab === "console" && (
+                            <WidgetConsolePane
+                                events={consoleEvents}
+                                onClear={clearConsoleEvents}
+                            />
+                        )}
                     </div>
 
                     {/* Right: Chat (1/3) */}
