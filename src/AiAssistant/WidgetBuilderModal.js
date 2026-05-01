@@ -85,6 +85,7 @@ function PreviewProviderPicker({
     appProviders,
     selection,
     onChange,
+    justChanged,
 }) {
     const declarations = React.useMemo(
         () => extractProviderDeclarations(configCode || ""),
@@ -163,10 +164,14 @@ function PreviewProviderPicker({
                             <select
                                 value={current}
                                 onChange={(e) =>
-                                    onChange({
-                                        ...(selection || {}),
-                                        [decl.type]: e.target.value,
-                                    })
+                                    onChange(
+                                        {
+                                            ...(selection || {}),
+                                            [decl.type]: e.target.value,
+                                        },
+                                        decl.type,
+                                        e.target.value
+                                    )
                                 }
                                 className="flex-1 max-w-xs px-2 py-1 bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
                             >
@@ -177,6 +182,19 @@ function PreviewProviderPicker({
                                     </option>
                                 ))}
                             </select>
+                        )}
+                        {justChanged?.type === decl.type && (
+                            <span
+                                className="text-xs text-green-300 flex items-center gap-1"
+                                data-testid="provider-just-changed"
+                            >
+                                <FontAwesomeIcon
+                                    icon="check-circle"
+                                    className="h-2.5 w-2.5"
+                                />
+                                Now using {justChanged.name || "(none)"} —
+                                preview reloaded
+                            </span>
                         )}
                     </div>
                 );
@@ -1487,6 +1505,39 @@ export const WidgetBuilderModal = ({
         consoleEventsRef.current = [];
         setConsoleEvents([]);
     }, []);
+
+    // Surface auto-save activity in the build view: timestamp of the
+    // last successful draft save + transient state so the user sees
+    // their work is being persisted.
+    const [draftLastSavedAt, setDraftLastSavedAt] = useState(null);
+    const [draftSaveState, setDraftSaveState] = useState("idle"); // "idle" | "saving" | "saved" | "error"
+    const [openingEditor, setOpeningEditor] = useState(false);
+    const [editorOpenError, setEditorOpenError] = useState(null);
+
+    // Provider-picker change feedback. When the user picks a different
+    // provider, briefly flag that type so the picker can show a "Now
+    // using <name> — preview reloaded" caption next to the dropdown.
+    // Auto-clears after a short delay.
+    const [providerJustChanged, setProviderJustChanged] = useState(null);
+    const providerChangedTimerRef = useRef(null);
+    const flagProviderChange = useCallback((type, name) => {
+        if (providerChangedTimerRef.current) {
+            clearTimeout(providerChangedTimerRef.current);
+        }
+        setProviderJustChanged({ type, name, at: Date.now() });
+        providerChangedTimerRef.current = setTimeout(() => {
+            setProviderJustChanged(null);
+            providerChangedTimerRef.current = null;
+        }, 3000);
+    }, []);
+    useEffect(() => {
+        return () => {
+            if (providerChangedTimerRef.current) {
+                clearTimeout(providerChangedTimerRef.current);
+            }
+        };
+    }, []);
+
     const [activeFile, setActiveFile] = useState("component");
     const manualEditRef = useRef(false);
     const lastMsgCount = useRef(0);
@@ -1764,14 +1815,20 @@ export const WidgetBuilderModal = ({
             pickedProvider: selectedProviderForBuildRef.current,
             mode: "ai",
         };
-        try {
-            // Pass files alongside so the main process materializes
-            // them under @ai-built/<name>-draft-<id>/ and stamps
-            // packageDir onto the draft entry.
-            window.mainApi?.drafts?.save?.(draft, files);
-        } catch (err) {
-            console.warn("[WidgetBuilder] draft save failed:", err);
-        }
+        // Pass files alongside so the main process materializes them
+        // under @ai-built/<name>-draft-<id>/ and stamps packageDir
+        // onto the draft entry. Track save state on the parent so the
+        // toolbar's "Saving / Saved Xs ago" indicator can render.
+        setDraftSaveState("saving");
+        Promise.resolve(window.mainApi?.drafts?.save?.(draft, files))
+            .then(() => {
+                setDraftSaveState("saved");
+                setDraftLastSavedAt(Date.now());
+            })
+            .catch((err) => {
+                console.warn("[WidgetBuilder] draft save failed:", err);
+                setDraftSaveState("error");
+            });
     }, [
         isOpen,
         effectiveEditContext,
@@ -3417,6 +3474,124 @@ export const WidgetBuilderModal = ({
                                     {installStatus.widgetName}
                                 </span>
                             )}
+                            {/* Right-side draft toolbar — Open in Editor +
+                                Save Draft + save status. Visible once
+                                the AI has emitted code AND we're in
+                                build mode (not remix). Lives in the
+                                tab bar row so the user can act on
+                                their in-flight draft without leaving
+                                the modal to find the drafts list. */}
+                            {detectedCode.componentCode &&
+                                !effectiveEditContext &&
+                                draftSessionIdRef.current && (
+                                    <div className="ml-auto flex items-center gap-2">
+                                        {editorOpenError && (
+                                            <span className="text-xs text-red-300 max-w-xs truncate">
+                                                {editorOpenError}
+                                            </span>
+                                        )}
+                                        <span className="text-xs text-gray-400">
+                                            {draftSaveState === "saving"
+                                                ? "Saving draft…"
+                                                : draftSaveState === "error"
+                                                ? "Save failed"
+                                                : draftLastSavedAt
+                                                ? `Draft saved ${Math.max(
+                                                      0,
+                                                      Math.round(
+                                                          (Date.now() -
+                                                              draftLastSavedAt) /
+                                                              1000
+                                                      )
+                                                  )}s ago`
+                                                : ""}
+                                        </span>
+                                        <button
+                                            onClick={() => {
+                                                // Re-fire the auto-save
+                                                // effect by re-setting
+                                                // detectedCode to its
+                                                // current value. The
+                                                // useEffect deps include
+                                                // componentCode/configCode/
+                                                // files (by reference) so a
+                                                // new object identity is
+                                                // enough to retrigger.
+                                                setDetectedCode((prev) => ({
+                                                    ...prev,
+                                                }));
+                                            }}
+                                            disabled={
+                                                draftSaveState === "saving"
+                                            }
+                                            className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                                draftSaveState === "saving"
+                                                    ? "bg-blue-900 text-blue-300 cursor-wait"
+                                                    : "bg-blue-700 hover:bg-blue-600 text-blue-100"
+                                            }`}
+                                            title="Force a draft save now"
+                                            data-testid="builder-save-draft"
+                                        >
+                                            <FontAwesomeIcon
+                                                icon="save"
+                                                className="h-2.5 w-2.5"
+                                            />
+                                            Save Draft
+                                        </button>
+                                        <button
+                                            onClick={async () => {
+                                                const id =
+                                                    draftSessionIdRef.current;
+                                                if (!id) return;
+                                                setOpeningEditor(true);
+                                                setEditorOpenError(null);
+                                                try {
+                                                    const result =
+                                                        await window.mainApi?.drafts?.openInEditor?.(
+                                                            id
+                                                        );
+                                                    if (!result?.success) {
+                                                        setEditorOpenError(
+                                                            result?.error ||
+                                                                "Couldn't open the editor"
+                                                        );
+                                                    } else {
+                                                        // Clean break — user
+                                                        // is now editing in
+                                                        // VS Code. The
+                                                        // in-pane editor
+                                                        // would drift, so
+                                                        // close.
+                                                        setIsOpen(false);
+                                                    }
+                                                } catch (err) {
+                                                    setEditorOpenError(
+                                                        err?.message ||
+                                                            String(err)
+                                                    );
+                                                } finally {
+                                                    setOpeningEditor(false);
+                                                }
+                                            }}
+                                            disabled={openingEditor}
+                                            className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                                openingEditor
+                                                    ? "bg-indigo-900 text-indigo-300 cursor-wait"
+                                                    : "bg-indigo-700 hover:bg-indigo-600 text-indigo-100"
+                                            }`}
+                                            title="Open this widget's package directory in your editor (VS Code if installed)"
+                                            data-testid="builder-open-editor"
+                                        >
+                                            <FontAwesomeIcon
+                                                icon="up-right-from-square"
+                                                className="h-2.5 w-2.5"
+                                            />
+                                            {openingEditor
+                                                ? "Opening…"
+                                                : "Open in editor"}
+                                        </button>
+                                    </div>
+                                )}
                         </div>
 
                         {/* Preview content (visible when Preview tab is active) */}
@@ -3863,9 +4038,22 @@ export const WidgetBuilderModal = ({
                                                     ?.providers
                                             }
                                             selection={previewProviderSelection}
-                                            onChange={
-                                                setPreviewProviderSelection
-                                            }
+                                            justChanged={providerJustChanged}
+                                            onChange={(
+                                                next,
+                                                changedType,
+                                                changedValue
+                                            ) => {
+                                                setPreviewProviderSelection(
+                                                    next
+                                                );
+                                                if (changedType) {
+                                                    flagProviderChange(
+                                                        changedType,
+                                                        changedValue
+                                                    );
+                                                }
+                                            }}
                                         />
                                         {/* Widget preview — fills available space */}
                                         <div className="flex-1 p-4 overflow-auto">
