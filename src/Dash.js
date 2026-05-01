@@ -901,10 +901,25 @@ class App extends React.Component {
                                                 // the dashboard and lose dirty edits.
                                                 this._suppressStageKeyUntil =
                                                     Date.now() + 3000;
+                                                // Clear ALL transient widget-builder state on
+                                                // close so a subsequent open ("Edit with AI"
+                                                // on a different widget, or "Build widget"
+                                                // on a fresh cell) starts from a clean slate.
+                                                // Without this, `installedWidgetInfo` from a
+                                                // PREVIOUS session would leak — and if the
+                                                // user closes the new session without
+                                                // installing, the deferred swap-in-cell
+                                                // event would fire using the stale
+                                                // installedWidgetInfo + the new editContext's
+                                                // gridItemId, replacing the user's widget
+                                                // with whatever they last built.
                                                 this.setState({
                                                     isWidgetBuilderOpen: false,
                                                     widgetBuilderEditContext:
                                                         null,
+                                                    widgetBuilderCellContext:
+                                                        null,
+                                                    installedWidgetInfo: null,
                                                 });
 
                                                 if (installed) {
