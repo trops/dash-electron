@@ -26,6 +26,8 @@ const {
     removePublishEvent,
     addEventHandlerStub,
     removeEventHandler,
+    addScheduledTaskStub,
+    removeScheduledTask,
 } = require("./widgetCodeTransforms");
 
 const SIMPLE_WIDGET = `import React from "react";
@@ -263,4 +265,95 @@ test("addEventHandlerStub idempotent on import + destructure (no duplicates)", (
     const destructureCount = (twice.match(/=\s*useWidgetEvents\(\)/g) || [])
         .length;
     expect(destructureCount).toBe(1);
+});
+
+// ── addScheduledTaskStub ──────────────────────────────────────────
+
+test("addScheduledTaskStub adds the useScheduler import", () => {
+    const result = addScheduledTaskStub(
+        SIMPLE_WIDGET,
+        "refreshData",
+        "MyWidget"
+    );
+    expect(result).toMatch(
+        /import\s*\{[^}]*useScheduler[^}]*\}\s*from\s*["']@trops\/dash-core["']/
+    );
+});
+
+test("addScheduledTaskStub inserts useScheduler({ ... }) call with the task key", () => {
+    const result = addScheduledTaskStub(
+        SIMPLE_WIDGET,
+        "refreshData",
+        "MyWidget"
+    );
+    expect(result).toMatch(/useScheduler\(\s*\{/);
+    expect(result).toMatch(/refreshData:\s*\(\s*\)\s*=>/);
+});
+
+test("addScheduledTaskStub stub body has a console.log so the user sees it firing", () => {
+    const result = addScheduledTaskStub(
+        SIMPLE_WIDGET,
+        "refreshData",
+        "MyWidget"
+    );
+    expect(result).toMatch(/console\.log\([^)]*MyWidget[^)]*refreshData/);
+});
+
+test("addScheduledTaskStub adds a key to an existing useScheduler call", () => {
+    const existing = SIMPLE_WIDGET.replace(
+        "export default function MyWidget(props) {",
+        `import { useScheduler } from "@trops/dash-core";
+
+export default function MyWidget(props) {
+  const { tasks } = useScheduler({
+    refreshData: () => { console.log("a"); },
+  });`
+    );
+    const result = addScheduledTaskStub(existing, "generateReport", "MyWidget");
+    expect(result).toMatch(/refreshData:/);
+    expect(result).toMatch(/generateReport:/);
+    // Only ONE useScheduler call.
+    const schedulerCalls = (result.match(/useScheduler\(/g) || []).length;
+    expect(schedulerCalls).toBe(1);
+});
+
+test("addScheduledTaskStub is idempotent on the same key", () => {
+    const once = addScheduledTaskStub(SIMPLE_WIDGET, "refreshData", "MyWidget");
+    const twice = addScheduledTaskStub(once, "refreshData", "MyWidget");
+    expect(once).toBe(twice);
+});
+
+test("addScheduledTaskStub is a no-op on code without `export default function`", () => {
+    const weird = "// not a widget";
+    expect(addScheduledTaskStub(weird, "refreshData", "MyWidget")).toBe(weird);
+});
+
+// ── removeScheduledTask ──────────────────────────────────────────
+
+test("removeScheduledTask removes a single task key", () => {
+    const withTwo = SIMPLE_WIDGET.replace(
+        "export default function MyWidget(props) {",
+        `import { useScheduler } from "@trops/dash-core";
+
+export default function MyWidget(props) {
+  const { tasks } = useScheduler({
+    refreshData: () => { console.log("a"); },
+    generateReport: () => { console.log("b"); },
+  });`
+    );
+    const result = removeScheduledTask(withTwo, "refreshData");
+    expect(result).not.toMatch(/refreshData:/);
+    expect(result).toMatch(/generateReport:/);
+});
+
+test("removeScheduledTask drops the entire useScheduler call when the last key goes", () => {
+    const lone = addScheduledTaskStub(SIMPLE_WIDGET, "refreshData", "MyWidget");
+    const result = removeScheduledTask(lone, "refreshData");
+    expect(result).not.toMatch(/useScheduler\(/);
+});
+
+test("removeScheduledTask is a no-op when the task isn't there", () => {
+    expect(removeScheduledTask(SIMPLE_WIDGET, "neverScheduled")).toBe(
+        SIMPLE_WIDGET
+    );
 });

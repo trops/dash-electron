@@ -80,6 +80,10 @@ function serializeConfig(componentName, data) {
         config.eventHandlers = data.eventHandlers;
     }
 
+    if (data.scheduledTasks && data.scheduledTasks.length > 0) {
+        config.scheduledTasks = data.scheduledTasks;
+    }
+
     if (data.userConfig && Object.keys(data.userConfig).length > 0) {
         config.userConfig = data.userConfig;
     }
@@ -216,17 +220,18 @@ export const WidgetConfigureTab = ({
         providers: [],
         events: [],
         eventHandlers: [],
+        scheduledTasks: [],
         userConfig: {},
     });
     const [dirty, setDirty] = useState(false);
-    // Snapshot of events + eventHandlers at form-population time, so
-    // handleSave can compute exactly what was added/removed and pass
-    // a diff up to the modal — which then applies code transforms
-    // (add/remove publishEvent stub or listen handler) before
-    // recompiling. Without this snapshot the modal would have to
-    // diff the whole config to detect event changes.
+    // Snapshot of events / eventHandlers / scheduledTasks at form-
+    // population time, so handleSave can compute exactly what was
+    // added/removed and pass a diff up to the modal — which applies
+    // code transforms (publishEvent stubs, listen handlers,
+    // useScheduler entries) before recompiling.
     const initialEventsRef = useRef([]);
     const initialHandlersRef = useRef([]);
+    const initialTasksRef = useRef([]);
 
     // Populate form state from the most accurate source available:
     //   1. `parsedConfig` — the resolved config object the modal got
@@ -242,6 +247,7 @@ export const WidgetConfigureTab = ({
         if (parsed) {
             const events = parsed.events || [];
             const eventHandlers = parsed.eventHandlers || [];
+            const scheduledTasks = parsed.scheduledTasks || [];
             setForm({
                 name: parsed.name || parsed.displayName || componentName || "",
                 workspace: parsed.workspace || "ai-built",
@@ -249,6 +255,7 @@ export const WidgetConfigureTab = ({
                 providers: parsed.providers || [],
                 events,
                 eventHandlers,
+                scheduledTasks,
                 userConfig: parsed.userConfig || {},
                 styles: parsed.styles || null,
             });
@@ -256,6 +263,9 @@ export const WidgetConfigureTab = ({
             // don't mutate the baseline.
             initialEventsRef.current = [...events];
             initialHandlersRef.current = [...eventHandlers];
+            initialTasksRef.current = scheduledTasks.map((t) =>
+                typeof t === "string" ? t : t?.key || ""
+            );
             setDirty(false);
         }
     }, [parsedConfig, configCode, componentName]);
@@ -316,6 +326,32 @@ export const WidgetConfigureTab = ({
         const updated = [...form.eventHandlers];
         updated[idx] = value;
         updateField("eventHandlers", updated);
+    };
+
+    // Scheduled task helpers — entries are { key, handler, displayName, description }
+    const addScheduledTask = () =>
+        updateField("scheduledTasks", [
+            ...form.scheduledTasks,
+            { key: "", handler: "", displayName: "", description: "" },
+        ]);
+    const removeScheduledTaskRow = (idx) =>
+        updateField(
+            "scheduledTasks",
+            form.scheduledTasks.filter((_, i) => i !== idx)
+        );
+    const updateScheduledTask = (idx, field, value) => {
+        const updated = [...form.scheduledTasks];
+        const current =
+            typeof updated[idx] === "object" && updated[idx] !== null
+                ? updated[idx]
+                : { key: "", handler: "", displayName: "", description: "" };
+        updated[idx] = { ...current, [field]: value };
+        // Keep handler === key — we don't expose `handler` separately
+        // in v1 since they always match in practice.
+        if (field === "key") {
+            updated[idx].handler = value;
+        }
+        updateField("scheduledTasks", updated);
     };
 
     // UserConfig helpers
@@ -381,32 +417,66 @@ export const WidgetConfigureTab = ({
                     .filter(Boolean)
             )
         );
+        // Normalize scheduled-task `key` (camelCase identifier rule —
+        // same as event names). Drop entries with no usable key.
+        // Dedupe by key.
+        const seenTaskKeys = new Set();
+        const normalizedTasks = [];
+        for (const t of form.scheduledTasks || []) {
+            const rawKey =
+                typeof t === "string" ? t : t?.key || t?.handler || "";
+            const key = normalizeEventName(rawKey);
+            if (!key || seenTaskKeys.has(key)) continue;
+            seenTaskKeys.add(key);
+            normalizedTasks.push({
+                key,
+                handler: key,
+                displayName:
+                    typeof t === "object" && t?.displayName
+                        ? t.displayName
+                        : "",
+                description:
+                    typeof t === "object" && t?.description
+                        ? t.description
+                        : "",
+            });
+        }
         const formForSave = {
             ...form,
             events: normalizedEvents,
             eventHandlers: normalizedHandlers,
+            scheduledTasks: normalizedTasks,
         };
         // Reflect normalized values back into the form state so the
         // user sees the cleaned values immediately after Save.
+        const tasksKeyJoin = normalizedTasks.map((t) => t.key).join("|");
+        const tasksPrevJoin = (form.scheduledTasks || [])
+            .map((t) => (typeof t === "string" ? t : t?.key || ""))
+            .join("|");
         if (
             normalizedEvents.join("|") !== (form.events || []).join("|") ||
             normalizedHandlers.join("|") !==
-                (form.eventHandlers || []).join("|")
+                (form.eventHandlers || []).join("|") ||
+            tasksKeyJoin !== tasksPrevJoin
         ) {
             setForm((prev) => ({
                 ...prev,
                 events: normalizedEvents,
                 eventHandlers: normalizedHandlers,
+                scheduledTasks: normalizedTasks,
             }));
         }
         const serialized = serializeConfig(componentName, formForSave);
         const before = {
             events: new Set(initialEventsRef.current || []),
             eventHandlers: new Set(initialHandlersRef.current || []),
+            tasks: new Set(initialTasksRef.current || []),
         };
+        const taskKeysAfter = normalizedTasks.map((t) => t.key);
         const after = {
             events: new Set(normalizedEvents),
             eventHandlers: new Set(normalizedHandlers),
+            tasks: new Set(taskKeysAfter),
         };
         const diff = {
             eventsAdded: [...after.events].filter((e) => !before.events.has(e)),
@@ -419,6 +489,8 @@ export const WidgetConfigureTab = ({
             handlersRemoved: [...before.eventHandlers].filter(
                 (h) => !after.eventHandlers.has(h)
             ),
+            tasksAdded: [...after.tasks].filter((t) => !before.tasks.has(t)),
+            tasksRemoved: [...before.tasks].filter((t) => !after.tasks.has(t)),
         };
         onSave(serialized, diff);
         // Refresh the snapshot so subsequent saves diff against the
@@ -426,6 +498,7 @@ export const WidgetConfigureTab = ({
         // re-add already-applied stubs).
         initialEventsRef.current = [...normalizedEvents];
         initialHandlersRef.current = [...normalizedHandlers];
+        initialTasksRef.current = [...taskKeysAfter];
         setDirty(false);
     };
 
@@ -649,6 +722,103 @@ export const WidgetConfigureTab = ({
                                             </span>
                                         </p>
                                     )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Scheduled Tasks */}
+                <div>
+                    <SectionHeader
+                        title="Scheduled Tasks"
+                        icon="clock"
+                        onAdd={addScheduledTask}
+                        borderColor={bc}
+                    />
+                    {(form.scheduledTasks || []).length === 0 && (
+                        <p className="text-[10px] text-gray-600 mt-2 italic">
+                            No scheduled tasks. Add named handlers the framework
+                            can run on a schedule (Settings → Schedule sets the
+                            cadence).
+                        </p>
+                    )}
+                    <div className="mt-1 space-y-2">
+                        {(form.scheduledTasks || []).map((task, idx) => {
+                            const rawKey =
+                                typeof task === "string"
+                                    ? task
+                                    : task?.key || "";
+                            const normalized = normalizeEventName(rawKey);
+                            const showHint =
+                                normalized && normalized !== rawKey;
+                            return (
+                                <div
+                                    key={idx}
+                                    className={`border ${bc} rounded p-2 space-y-1`}
+                                >
+                                    <div className="flex items-center gap-1">
+                                        <SmallInput
+                                            value={rawKey}
+                                            onChange={(v) =>
+                                                updateScheduledTask(
+                                                    idx,
+                                                    "key",
+                                                    v
+                                                )
+                                            }
+                                            placeholder="taskKey (camelCase)"
+                                        />
+                                        <button
+                                            onClick={() =>
+                                                removeScheduledTaskRow(idx)
+                                            }
+                                            className="text-gray-600 hover:text-red-400 shrink-0"
+                                        >
+                                            <FontAwesomeIcon
+                                                icon="times"
+                                                className="h-2.5 w-2.5"
+                                            />
+                                        </button>
+                                    </div>
+                                    {showHint && (
+                                        <p className="text-[10px] text-amber-400 ml-1">
+                                            Will save as:{" "}
+                                            <span className="font-mono">
+                                                {normalized}
+                                            </span>
+                                        </p>
+                                    )}
+                                    <SmallInput
+                                        value={
+                                            typeof task === "object"
+                                                ? task?.displayName || ""
+                                                : ""
+                                        }
+                                        onChange={(v) =>
+                                            updateScheduledTask(
+                                                idx,
+                                                "displayName",
+                                                v
+                                            )
+                                        }
+                                        placeholder="Display name (Settings → Schedule)"
+                                    />
+                                    <SmallInput
+                                        value={
+                                            typeof task === "object"
+                                                ? task?.description || ""
+                                                : ""
+                                        }
+                                        onChange={(v) =>
+                                            updateScheduledTask(
+                                                idx,
+                                                "description",
+                                                v
+                                            )
+                                        }
+                                        placeholder="Description"
+                                    />
                                 </div>
                             );
                         })}

@@ -659,6 +659,50 @@ This way the user knows what's wired without reading the diff. DO NOT publish ev
 
 **What NOT to publish.** Mouse moves, keystrokes per character, render ticks. Only publish state changes that another widget could meaningfully react to. If unsure, skip it — the user can ask for an event later.
 
+## Scheduled tasks
+
+If the widget benefits from running on a schedule — refreshing data periodically, polling an external source, generating a recurring report — expose a scheduled task. The user configures WHEN it runs via Settings → Schedule (cron / interval); the widget just exposes a named handler the framework calls on the configured cadence. Skip for purely interactive widgets where the user manually triggers all updates.
+
+**API.** Use the \`useScheduler()\` hook from \`@trops/dash-core\`. Pass an object whose keys are the task names and values are the handler functions. The hook returns \`{ tasks }\` (current state per task — useful for status display, optional to use):
+
+\`\`\`jsx
+import { useScheduler } from "@trops/dash-core";
+import { Panel } from "@trops/dash-react";
+
+export default function MyWidget() {
+  const { tasks } = useScheduler({
+    refreshData: () => {
+      // Fetch fresh data from a provider, update state, etc.
+    },
+    generateReport: () => {
+      // Build + emit a periodic snapshot.
+    },
+  });
+  return <Panel>{/* render */}</Panel>;
+}
+\`\`\`
+
+\`useScheduler\` is a hook — call it at the top of the component above any conditional return (Rules of Hooks).
+
+**Naming convention.** Plain camelCase verbs/nouns: \`refreshData\`, \`generateReport\`, \`pollStatus\`, \`syncCache\`. Same rules as event names — the task key IS the JS identifier.
+
+**Declaration.** ALSO list each task in the \`.dash.js\` config's \`scheduledTasks: [...]\` array. Each entry is an object with \`key\` (the JS identifier — must match a key in the \`useScheduler({...})\` call), \`handler\` (usually identical to \`key\`), \`displayName\` (human label for Settings → Schedule), and \`description\` (what the task does):
+
+\`\`\`js
+scheduledTasks: [
+  { key: "refreshData", handler: "refreshData", displayName: "Refresh Data", description: "Fetch the latest data from the source" },
+  { key: "generateReport", handler: "generateReport", displayName: "Generate Report", description: "Build a periodic snapshot" },
+],
+\`\`\`
+
+**Tell the user.** When you add scheduled tasks, list them at the end of your chat response — one line per task: name + what it does + how the user enables it:
+
+> Added scheduled task \`refreshData\` (refreshes the data). Open Settings → Schedule to set a cadence (cron or interval) and enable it.
+
+DO NOT add scheduled tasks the user can't see in your response — surfacing them is non-negotiable, since the user has to know to configure the cadence.
+
+**What NOT to schedule.** Tasks the user explicitly triggers (button clicks), tasks that need user input each run, anything fast enough to run every render. Only schedule operations that benefit from automatic recurrence.
+
 ## Critical rules
 
 - Do NOT use Read, Write, Edit, Bash, Glob, or Grep tools.
@@ -774,6 +818,50 @@ events: ["itemSelected", "queryChanged"],
 This way the user knows what's wired without reading the diff. DO NOT publish events the user can't see in your response — surfacing them is non-negotiable.
 
 **What NOT to publish.** Mouse moves, keystrokes per character, render ticks. Only publish state changes that another widget could meaningfully react to. If unsure, skip it — the user can ask for an event later.
+
+## Scheduled tasks
+
+If the widget benefits from running on a schedule — refreshing data periodically, polling an external source, generating a recurring report — expose a scheduled task. The user configures WHEN it runs via Settings → Schedule (cron / interval); the widget just exposes a named handler the framework calls on the configured cadence. Skip for purely interactive widgets where the user manually triggers all updates.
+
+**API.** Use the \`useScheduler()\` hook from \`@trops/dash-core\`. Pass an object whose keys are the task names and values are the handler functions. The hook returns \`{ tasks }\` (current state per task — useful for status display, optional to use):
+
+\`\`\`jsx
+import { useScheduler } from "@trops/dash-core";
+import { Panel } from "@trops/dash-react";
+
+export default function MyWidget() {
+  const { tasks } = useScheduler({
+    refreshData: () => {
+      // Fetch fresh data from a provider, update state, etc.
+    },
+    generateReport: () => {
+      // Build + emit a periodic snapshot.
+    },
+  });
+  return <Panel>{/* render */}</Panel>;
+}
+\`\`\`
+
+\`useScheduler\` is a hook — call it at the top of the component above any conditional return (Rules of Hooks).
+
+**Naming convention.** Plain camelCase verbs/nouns: \`refreshData\`, \`generateReport\`, \`pollStatus\`, \`syncCache\`. Same rules as event names — the task key IS the JS identifier.
+
+**Declaration.** ALSO list each task in the \`.dash.js\` config's \`scheduledTasks: [...]\` array. Each entry is an object with \`key\` (the JS identifier — must match a key in the \`useScheduler({...})\` call), \`handler\` (usually identical to \`key\`), \`displayName\` (human label for Settings → Schedule), and \`description\` (what the task does):
+
+\`\`\`js
+scheduledTasks: [
+  { key: "refreshData", handler: "refreshData", displayName: "Refresh Data", description: "Fetch the latest data from the source" },
+  { key: "generateReport", handler: "generateReport", displayName: "Generate Report", description: "Build a periodic snapshot" },
+],
+\`\`\`
+
+**Tell the user.** When you add scheduled tasks, list them at the end of your chat response — one line per task: name + what it does + how the user enables it:
+
+> Added scheduled task \`refreshData\` (refreshes the data). Open Settings → Schedule to set a cadence (cron or interval) and enable it.
+
+DO NOT add scheduled tasks the user can't see in your response — surfacing them is non-negotiable, since the user has to know to configure the cadence.
+
+**What NOT to schedule.** Tasks the user explicitly triggers (button clicks), tasks that need user input each run, anything fast enough to run every render. Only schedule operations that benefit from automatic recurrence.
 
 ## Critical rules
 
@@ -1208,6 +1296,50 @@ events: ["itemSelected", "queryChanged"],
 This way the user knows what's wired without reading the diff. DO NOT publish events the user can't see in your response — surfacing them is non-negotiable.
 
 **What NOT to publish.** Mouse moves, keystrokes per character, render ticks. Only publish state changes that another widget could meaningfully react to. If unsure, skip it — the user can ask for an event later.
+
+## Scheduled tasks
+
+If the widget benefits from running on a schedule — refreshing data periodically, polling an external source, generating a recurring report — expose a scheduled task. The user configures WHEN it runs via Settings → Schedule (cron / interval); the widget just exposes a named handler the framework calls on the configured cadence. Skip for purely interactive widgets where the user manually triggers all updates.
+
+**API.** Use the \`useScheduler()\` hook from \`@trops/dash-core\`. Pass an object whose keys are the task names and values are the handler functions. The hook returns \`{ tasks }\` (current state per task — useful for status display, optional to use):
+
+\`\`\`jsx
+import { useScheduler } from "@trops/dash-core";
+import { Panel } from "@trops/dash-react";
+
+export default function MyWidget() {
+  const { tasks } = useScheduler({
+    refreshData: () => {
+      // Fetch fresh data from a provider, update state, etc.
+    },
+    generateReport: () => {
+      // Build + emit a periodic snapshot.
+    },
+  });
+  return <Panel>{/* render */}</Panel>;
+}
+\`\`\`
+
+\`useScheduler\` is a hook — call it at the top of the component above any conditional return (Rules of Hooks).
+
+**Naming convention.** Plain camelCase verbs/nouns: \`refreshData\`, \`generateReport\`, \`pollStatus\`, \`syncCache\`. Same rules as event names — the task key IS the JS identifier.
+
+**Declaration.** ALSO list each task in the \`.dash.js\` config's \`scheduledTasks: [...]\` array. Each entry is an object with \`key\` (the JS identifier — must match a key in the \`useScheduler({...})\` call), \`handler\` (usually identical to \`key\`), \`displayName\` (human label for Settings → Schedule), and \`description\` (what the task does):
+
+\`\`\`js
+scheduledTasks: [
+  { key: "refreshData", handler: "refreshData", displayName: "Refresh Data", description: "Fetch the latest data from the source" },
+  { key: "generateReport", handler: "generateReport", displayName: "Generate Report", description: "Build a periodic snapshot" },
+],
+\`\`\`
+
+**Tell the user.** When you add scheduled tasks, list them at the end of your chat response — one line per task: name + what it does + how the user enables it:
+
+> Added scheduled task \`refreshData\` (refreshes the data). Open Settings → Schedule to set a cadence (cron or interval) and enable it.
+
+DO NOT add scheduled tasks the user can't see in your response — surfacing them is non-negotiable, since the user has to know to configure the cadence.
+
+**What NOT to schedule.** Tasks the user explicitly triggers (button clicks), tasks that need user input each run, anything fast enough to run every render. Only schedule operations that benefit from automatic recurrence.
 
 ## Critical rules
 
@@ -4925,6 +5057,23 @@ export const WidgetBuilderModal = ({
                                                     transforms.addEventHandlerStub(
                                                         nextComponentCode,
                                                         name,
+                                                        widgetName
+                                                    );
+                                            }
+                                            for (const key of diff.tasksRemoved ||
+                                                []) {
+                                                nextComponentCode =
+                                                    transforms.removeScheduledTask(
+                                                        nextComponentCode,
+                                                        key
+                                                    );
+                                            }
+                                            for (const key of diff.tasksAdded ||
+                                                []) {
+                                                nextComponentCode =
+                                                    transforms.addScheduledTaskStub(
+                                                        nextComponentCode,
+                                                        key,
                                                         widgetName
                                                     );
                                             }
