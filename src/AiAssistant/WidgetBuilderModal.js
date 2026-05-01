@@ -592,6 +592,41 @@ export default function MyWidget() {
 
 Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-medium\`, \`border-primary-dark\`, \`border-primary-medium\`, \`text-primary-light\`, \`text-primary-medium\`, \`text-secondary-light\`. Pattern: \`{role}-{intent}-{shade}\` where role is \`bg\`/\`text\`/\`border\`, intent is \`primary\`/\`secondary\`, shade is \`light\`/\`medium\`/\`dark\`/\`very-dark\`. Hardcoded Tailwind classes (e.g. \`bg-gray-800\`) work but won't follow theme switches — use them only as the fallback.
 
+## Event publishing
+
+If the widget has a meaningful interaction worth sharing across the dashboard — a row clicked, a query changed, a file opened, a value submitted — publish an event so other widgets can react. Skip for read-only / static widgets (clocks, dashboards, banners) where there's nothing to broadcast.
+
+**API.** Dispatch a CustomEvent on \`window\`:
+
+\`\`\`jsx
+window.dispatchEvent(
+  new CustomEvent("widget-event:publish", {
+    detail: {
+      eventType: "filebrowser:item-selected",
+      content: { path: item.path, name: item.name },
+    },
+  })
+);
+\`\`\`
+
+**Naming convention.** \`<package>:<verb-noun>\`. Use the package's lowercase name (matches the \`@ai-built/<pkg>\` scope) and a kebab-case verb-noun describing the trigger. Examples: \`filebrowser:item-selected\`, \`algoliasearch:query-changed\`, \`gmail:thread-opened\`. Two widgets in the same package emitting consistent names is what makes the cross-widget pub/sub useful — random ad-hoc names defeat it.
+
+**Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array so the Configure tab and any subscriber tooling can see them:
+
+\`\`\`js
+events: [
+  { name: "filebrowser:item-selected", description: "Fired when the user clicks a row" },
+],
+\`\`\`
+
+**Tell the user.** When you add events, list them at the end of your chat response — one line per event, type + trigger:
+
+> Emits \`filebrowser:item-selected\` when a row is clicked. Connect another widget to it by adding an event handler in Settings → Configure → Event Handlers.
+
+This way the user knows what's wired without reading the diff. DO NOT publish events the user can't see in your response — surfacing them is non-negotiable.
+
+**What NOT to publish.** Mouse moves, keystrokes per character, render ticks. Only publish state changes that another widget could meaningfully react to. If unsure, skip it — the user can ask for an event later.
+
 ## Critical rules
 
 - Do NOT use Read, Write, Edit, Bash, Glob, or Grep tools.
@@ -660,6 +695,41 @@ export default function MyWidget() {
 \`\`\`
 
 Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-medium\`, \`border-primary-dark\`, \`border-primary-medium\`, \`text-primary-light\`, \`text-primary-medium\`, \`text-secondary-light\`. Pattern: \`{role}-{intent}-{shade}\` where role is \`bg\`/\`text\`/\`border\`, intent is \`primary\`/\`secondary\`, shade is \`light\`/\`medium\`/\`dark\`/\`very-dark\`. Hardcoded Tailwind classes (e.g. \`bg-gray-800\`) work but won't follow theme switches — use them only as the fallback.
+
+## Event publishing
+
+If the widget has a meaningful interaction worth sharing across the dashboard — a row clicked, a query changed, a file opened, a value submitted — publish an event so other widgets can react. Skip for read-only / static widgets (clocks, dashboards, banners) where there's nothing to broadcast.
+
+**API.** Dispatch a CustomEvent on \`window\`:
+
+\`\`\`jsx
+window.dispatchEvent(
+  new CustomEvent("widget-event:publish", {
+    detail: {
+      eventType: "filebrowser:item-selected",
+      content: { path: item.path, name: item.name },
+    },
+  })
+);
+\`\`\`
+
+**Naming convention.** \`<package>:<verb-noun>\`. Use the package's lowercase name (matches the \`@ai-built/<pkg>\` scope) and a kebab-case verb-noun describing the trigger. Examples: \`filebrowser:item-selected\`, \`algoliasearch:query-changed\`, \`gmail:thread-opened\`. Two widgets in the same package emitting consistent names is what makes the cross-widget pub/sub useful — random ad-hoc names defeat it.
+
+**Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array so the Configure tab and any subscriber tooling can see them:
+
+\`\`\`js
+events: [
+  { name: "filebrowser:item-selected", description: "Fired when the user clicks a row" },
+],
+\`\`\`
+
+**Tell the user.** When you add events, list them at the end of your chat response — one line per event, type + trigger:
+
+> Emits \`filebrowser:item-selected\` when a row is clicked. Connect another widget to it by adding an event handler in Settings → Configure → Event Handlers.
+
+This way the user knows what's wired without reading the diff. DO NOT publish events the user can't see in your response — surfacing them is non-negotiable.
+
+**What NOT to publish.** Mouse moves, keystrokes per character, render ticks. Only publish state changes that another widget could meaningfully react to. If unsure, skip it — the user can ask for an event later.
 
 ## Critical rules
 
@@ -1047,6 +1117,41 @@ export default function MyWidget() {
 \`\`\`
 
 Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-medium\`, \`border-primary-dark\`, \`border-primary-medium\`, \`text-primary-light\`, \`text-primary-medium\`, \`text-secondary-light\`. Pattern: \`{role}-{intent}-{shade}\` where role is \`bg\`/\`text\`/\`border\`, intent is \`primary\`/\`secondary\`, shade is \`light\`/\`medium\`/\`dark\`/\`very-dark\`. Hardcoded Tailwind classes (e.g. \`bg-gray-800\`) work but won't follow theme switches — use them only as the fallback.
+
+## Event publishing
+
+If the widget has a meaningful interaction worth sharing across the dashboard — a row clicked, a query changed, a file opened, a value submitted — publish an event so other widgets can react. Skip for read-only / static widgets (clocks, dashboards, banners) where there's nothing to broadcast.
+
+**API.** Dispatch a CustomEvent on \`window\`:
+
+\`\`\`jsx
+window.dispatchEvent(
+  new CustomEvent("widget-event:publish", {
+    detail: {
+      eventType: "filebrowser:item-selected",
+      content: { path: item.path, name: item.name },
+    },
+  })
+);
+\`\`\`
+
+**Naming convention.** \`<package>:<verb-noun>\`. Use the package's lowercase name (matches the \`@ai-built/<pkg>\` scope) and a kebab-case verb-noun describing the trigger. Examples: \`filebrowser:item-selected\`, \`algoliasearch:query-changed\`, \`gmail:thread-opened\`. Two widgets in the same package emitting consistent names is what makes the cross-widget pub/sub useful — random ad-hoc names defeat it.
+
+**Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array so the Configure tab and any subscriber tooling can see them:
+
+\`\`\`js
+events: [
+  { name: "filebrowser:item-selected", description: "Fired when the user clicks a row" },
+],
+\`\`\`
+
+**Tell the user.** When you add events, list them at the end of your chat response — one line per event, type + trigger:
+
+> Emits \`filebrowser:item-selected\` when a row is clicked. Connect another widget to it by adding an event handler in Settings → Configure → Event Handlers.
+
+This way the user knows what's wired without reading the diff. DO NOT publish events the user can't see in your response — surfacing them is non-negotiable.
+
+**What NOT to publish.** Mouse moves, keystrokes per character, render ticks. Only publish state changes that another widget could meaningfully react to. If unsure, skip it — the user can ask for an event later.
 
 ## Critical rules
 
