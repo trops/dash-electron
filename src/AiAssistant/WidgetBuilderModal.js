@@ -37,13 +37,7 @@ import { ChatProviderGate } from "./ChatProviderGate";
 import { WidgetDraftsList } from "./WidgetDraftsList";
 import { WidgetConsolePane } from "./WidgetConsolePane";
 import { installWidgetConsoleCapture } from "./widgetConsoleCapture";
-// Use require() instead of `import` here: the file is plain CJS
-// (module.exports = { ... }) and webpack's CJS interop turns
-// `import * as` / `import default from` into a wrapper namespace
-// where the named members are NOT directly accessible at runtime.
-// require() returns module.exports unwrapped, which is what we want.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const transforms = require("./widgetCodeTransforms.cjs");
+import * as transforms from "./widgetCodeTransforms";
 
 /**
  * Wraps the preview widget in the full context stack (AppContext,
