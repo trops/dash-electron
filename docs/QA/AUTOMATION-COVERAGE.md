@@ -30,6 +30,19 @@ What we already have under `e2e/helpers/`:
 
 All five mock layers are now in. Future work is writing the spec files that combine them.
 
+### Reference spec
+
+`e2e/tests/helpers-integration.spec.js` is the canonical example of all five helpers composed into one `beforeAll`. New specs should follow its shape:
+
+1. Start mock-registry + mock-llm
+2. Pre-seed packages / canned LLM responses
+3. Launch with `DASH_REGISTRY_API_URL` + `ANTHROPIC_BASE_URL` env vars
+4. `seedAuthToken(electronApp)`
+5. `overrideOpenDialog` / `overrideSaveDialog` for fixture paths
+6. `stubMcpServer` per server you need
+
+Then in `afterAll`, restore everything in reverse order. The integration spec verifies each layer independently — if it fails, the helper itself is broken; if it passes but a real spec fails, the spec's UI selectors are wrong.
+
 ---
 
 ## Section 0 — Pre-flight (12 items)
