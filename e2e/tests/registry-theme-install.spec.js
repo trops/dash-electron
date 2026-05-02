@@ -4,6 +4,10 @@ const {
     startMockRegistry,
     stopMockRegistry,
 } = require("../helpers/mock-registry");
+const {
+    seedAuthToken,
+    clearAuthToken,
+} = require("../helpers/auth-token-injector");
 
 let electronApp;
 let window;
@@ -38,35 +42,11 @@ test.beforeAll(async () => {
     }));
 
     // Pre-seed an auth token so installs don't require sign-in
-    await electronApp.evaluate(async () => {
-        const Store = require("electron-store");
-        const s = new Store({
-            name: "dash-registry-auth",
-            encryptionKey: "dash-registry-v1",
-        });
-        s.set("accessToken", "test-e2e-token");
-        s.set("userId", "test-user");
-        s.set("tokenType", "bearer");
-        s.set("authenticatedAt", new Date().toISOString());
-    });
+    await seedAuthToken(electronApp);
 });
 
 test.afterAll(async () => {
-    // Clean up the test auth token
-    await electronApp
-        .evaluate(async () => {
-            const Store = require("electron-store");
-            const s = new Store({
-                name: "dash-registry-auth",
-                encryptionKey: "dash-registry-v1",
-            });
-            s.delete("accessToken");
-            s.delete("userId");
-            s.delete("tokenType");
-            s.delete("authenticatedAt");
-        })
-        .catch(() => {});
-
+    await clearAuthToken(electronApp);
     await closeApp(electronApp);
     await stopMockRegistry();
 });
