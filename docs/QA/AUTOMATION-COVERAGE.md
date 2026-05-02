@@ -21,20 +21,19 @@ Difficulty:
 What we already have under `e2e/helpers/`:
 
 -   **`electron-app.js`** — launches a packaged Electron build with custom `env`.
--   **`mock-registry.js`** — local HTTP server that serves theme zip downloads. Switched in via `DASH_REGISTRY_API_URL`.
+-   **`mock-registry.js`** — local HTTP server. Auto-seeds 10 stock themes; tests can `registerPackage()` widgets/dashboards. Serves `/api/packages` index + single-package metadata, downloads, `POST /api/publish` (with `getPublishHistory()`), `DELETE /api/packages/:scope/:name` (with `getDeleteHistory()`), and `POST /api/packages/resolve`. Switched in via `DASH_REGISTRY_API_URL`. Shipped v0.0.580.
+-   **`auth-token-injector.js`** — `seedAuthToken(app)` / `clearAuthToken(app)` to skip the Cognito hosted-UI flow. Shipped v0.0.580.
+-   **`file-dialog-override.js`** — `overrideOpenDialog(app, { filePaths, canceled })`, `overrideSaveDialog(app, { filePath, canceled })`, `restoreFileDialogs(app)`. Patches both async + sync variants so Import / Install-from-File / Export flows skip the native OS picker. Shipped v0.0.581.
 -   **`test-server.js`** — generic local HTTP fixture server.
 
-What we need to add (each one unlocks a tier of automation):
+What we still need to add:
 
-| Mock                             | Purpose                                                                                                                                              | Unlocks                                                       |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| **`mock-registry.js` extension** | serve widget + dashboard zip downloads, `/api/packages` index, `/api/publish`, `/api/delete-package`, `checkUpdates`                                 | All §1, §2, §3 registry CRUD                                  |
-| **`auth-token-injector.js`**     | pre-seed `dash-registry-auth` electron-store with a fake token (already used in `registry-theme-install.spec.js`) and stub the device-flow endpoints | All auth-gated flows                                          |
-| **`mock-llm-server.js`**         | local SSE server speaking the Anthropic streaming format with canned responses keyed by prompt                                                       | All §6 AI Assistant + AI builder flows in §2                  |
-| **`mock-mcp-transport.js`**      | stub the MCP client transport so `tools/list` and `tools/call` return canned data; fake "Authenticated" status for OAuth servers                     | §4.2, §4.3 (tool list mount; not the consent screen)          |
-| **`file-dialog-override.js`**    | override `dialog.showOpenDialog` / `showSaveDialog` to return fixture paths from `test/fixtures/`                                                    | All "Install from File", "Import zip", "Export to file" flows |
+| Mock                        | Purpose                                                                                                                          | Unlocks                                              |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| **`mock-mcp-transport.js`** | stub the MCP client transport so `tools/list` and `tools/call` return canned data; fake "Authenticated" status for OAuth servers | §4.2, §4.3 (tool list mount; not the consent screen) |
+| **`mock-llm-server.js`**    | local SSE server speaking the Anthropic streaming format with canned responses keyed by prompt                                   | All §6 AI Assistant + AI builder flows in §2         |
 
-All five are bounded — each is ~100-300 LOC. Build them before the specs that depend on them.
+Each is bounded — ~100-300 LOC. Build them before the specs that depend on them.
 
 ---
 
