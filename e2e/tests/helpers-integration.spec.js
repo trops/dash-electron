@@ -148,9 +148,15 @@ test.afterAll(async () => {
     }
 });
 
+// Implementation note: Playwright's `electronApp.evaluate(fn, arg)` calls
+// `fn(electronModule, arg)` — the first param is always the result of
+// `require('electron')` in the main script. `require()` itself is NOT
+// lexically in scope inside the evaluate body. For non-electron modules
+// we use `process.mainModule.require()` (process is a true Node global).
+
 test.describe("E2E helpers — integration smoke", () => {
     test("env vars reach the main process", async () => {
-        const env = await electronApp.evaluate(async () => ({
+        const env = await electronApp.evaluate(async (_electron) => ({
             registry: process.env.DASH_REGISTRY_API_URL || null,
             anthropic: process.env.ANTHROPIC_BASE_URL || null,
         }));
@@ -159,8 +165,9 @@ test.describe("E2E helpers — integration smoke", () => {
     });
 
     test("auth-token-injector seeded the registry token", async () => {
-        const stored = await electronApp.evaluate(async () => {
-            const Store = require("electron-store");
+        const stored = await electronApp.evaluate(async (_electron) => {
+            const _require = process.mainModule && process.mainModule.require;
+            const Store = _require("electron-store");
             const s = new Store({
                 name: "dash-registry-auth",
                 encryptionKey: "dash-registry-v1",
@@ -177,7 +184,7 @@ test.describe("E2E helpers — integration smoke", () => {
     });
 
     test("mock-registry index endpoint reachable from main process", async () => {
-        const result = await electronApp.evaluate(async (url) => {
+        const result = await electronApp.evaluate(async (_electron, url) => {
             const res = await fetch(`${url}/api/packages`);
             const json = await res.json();
             return {
@@ -195,8 +202,7 @@ test.describe("E2E helpers — integration smoke", () => {
     });
 
     test("mock-registry publish history captures a POST", async () => {
-        // Hit /api/publish from inside the main process
-        await electronApp.evaluate(async (url) => {
+        await electronApp.evaluate(async (_electron, url) => {
             await fetch(`${url}/api/publish`, {
                 method: "POST",
                 headers: { "content-type": "multipart/form-data" },
@@ -211,7 +217,7 @@ test.describe("E2E helpers — integration smoke", () => {
 
     test("mock-registry delete history captures a DELETE", async () => {
         const before = getDeleteHistory().length;
-        await electronApp.evaluate(async (url) => {
+        await electronApp.evaluate(async (_electron, url) => {
             await fetch(`${url}/api/packages/%40trops/smoke-test-widget`, {
                 method: "DELETE",
             });
@@ -223,7 +229,7 @@ test.describe("E2E helpers — integration smoke", () => {
     });
 
     test("mock-llm responds with canned SSE for matched prompt", async () => {
-        const result = await electronApp.evaluate(async (url) => {
+        const result = await electronApp.evaluate(async (_electron, url) => {
             const res = await fetch(`${url}/v1/messages`, {
                 method: "POST",
                 headers: { "content-type": "application/json" },
@@ -254,51 +260,59 @@ test.describe("E2E helpers — integration smoke", () => {
     });
 
     test("file-dialog-override returns canned open path", async () => {
-        const result = await electronApp.evaluate(async (expected) => {
-            const { dialog } = require("electron");
-            const r = await dialog.showOpenDialog({});
-            return {
-                canceled: r.canceled,
-                filePathsLen: r.filePaths.length,
-                first: r.filePaths[0] || null,
-                expected,
-            };
-        }, FIXTURE_OPEN_PATH);
+        const result = await electronApp.evaluate(
+            async (electron, expected) => {
+                const r = await electron.dialog.showOpenDialog({});
+                return {
+                    canceled: r.canceled,
+                    filePathsLen: r.filePaths.length,
+                    first: r.filePaths[0] || null,
+                    expected,
+                };
+            },
+            FIXTURE_OPEN_PATH
+        );
         expect(result.canceled).toBe(false);
         expect(result.filePathsLen).toBe(1);
         expect(result.first).toBe(result.expected);
     });
 
     test("file-dialog-override returns canned save path", async () => {
-        const result = await electronApp.evaluate(async (expected) => {
-            const { dialog } = require("electron");
-            const r = await dialog.showSaveDialog({});
-            return {
-                canceled: r.canceled,
-                filePath: r.filePath,
-                expected,
-            };
-        }, FIXTURE_SAVE_PATH);
+        const result = await electronApp.evaluate(
+            async (electron, expected) => {
+                const r = await electron.dialog.showSaveDialog({});
+                return {
+                    canceled: r.canceled,
+                    filePath: r.filePath,
+                    expected,
+                };
+            },
+            FIXTURE_SAVE_PATH
+        );
         expect(result.canceled).toBe(false);
         expect(result.filePath).toBe(result.expected);
     });
 
     test("mock-mcp-transport serves canned tools and call results", async () => {
-        // Drive the SDK's Client + StdioClientTransport directly so we
-        // don't depend on the controller having been triggered yet.
-        const result = await electronApp.evaluate(async () => {
-            let sdkClient;
-            let sdkStdio;
-            try {
-                sdkClient = require("@modelcontextprotocol/sdk/client/index.js");
-            } catch (_) {
-                sdkClient = require("@modelcontextprotocol/sdk/dist/cjs/client/index.js");
-            }
-            try {
-                sdkStdio = require("@modelcontextprotocol/sdk/client/stdio.js");
-            } catch (_) {
-                sdkStdio = require("@modelcontextprotocol/sdk/dist/cjs/client/stdio.js");
-            }
+        const result = await electronApp.evaluate(async (_electron) => {
+            const _require = process.mainModule && process.mainModule.require;
+            const tryRequire = (id) => {
+                try {
+                    return _require(id);
+                } catch (_) {
+                    return null;
+                }
+            };
+            const sdkClient =
+                tryRequire("@modelcontextprotocol/sdk/client/index.js") ||
+                tryRequire(
+                    "@modelcontextprotocol/sdk/dist/cjs/client/index.js"
+                );
+            const sdkStdio =
+                tryRequire("@modelcontextprotocol/sdk/client/stdio.js") ||
+                tryRequire(
+                    "@modelcontextprotocol/sdk/dist/cjs/client/stdio.js"
+                );
             const { Client } = sdkClient;
             const { StdioClientTransport } = sdkStdio;
 

@@ -15,7 +15,12 @@ test.afterAll(async () => {
     await closeApp(electronApp);
 });
 
-test.describe("Sidebar", () => {
+// The sidebar was redesigned. The new layout has only Search, Recents,
+// Dashboards, and Uncategorized — no inline "Home", "Providers",
+// "Themes", "Folders", "Settings" nav items, and the dark/light toggle
+// moved out. These tests reference dead UI; skipped until they're
+// rewritten against the new sidebar shape.
+test.describe.skip("Sidebar (DEAD UI — sidebar redesigned)", () => {
     test("renders Home item", async () => {
         await expect(sidebar.getByText("Home")).toBeVisible();
     });

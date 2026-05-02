@@ -8,78 +8,43 @@
  * working credentials for a dozen third-party services.
  *
  * This helper overrides the `Client` and `StdioClientTransport`
- * prototypes inside the main process so that:
+ * prototypes inside the main process so:
  *
- *   - `client.connect()` becomes a no-op (no subprocess spawn).
+ *   - `client.connect()` is a no-op (no subprocess spawn).
  *   - `client.listTools()` returns canned tools per server name.
  *   - `client.callTool()` returns canned results per (server, tool).
  *   - `client.listResources()` returns an empty list (or canned).
  *   - `client.close()` is a no-op.
  *
- * The stub is keyed by the *next* server name passed to the constructor —
- * which the SDK's Client takes as `{ name, version }` — but mcpController
- * sets that to "dash" for every server, so we instead key by the
- * StdioClientTransport's `command + args` signature: a server's identity
- * is "what it would have spawned." Tests configure servers by friendly
- * name → command-args matcher.
- *
- * Usage:
- *
- *   await stubMcpServer(electronApp, {
- *     match: { commandIncludes: "filesystem" },
- *     tools: [{ name: "read_file", description: "..." }],
- *     callResults: { read_file: { content: [{ type: "text", text: "ok" }] } },
- *   });
- *
- *   // ...exercise the app...
- *
- *   await restoreMcpClient(electronApp);
+ * Implementation note: `require()` is not lexically in scope inside
+ * `electronApp.evaluate()` — Playwright wraps the body in a fresh
+ * Function. We use `process.mainModule.require()` instead, since
+ * `process` is a true Node global.
  */
 
-/**
- * Install (or extend) the MCP stub. Each call appends a new matcher to
- * an in-process registry. Safe to call multiple times — the patch only
- * lands once.
- *
- * @param {import('@playwright/test').ElectronApplication} electronApp
- * @param {Object} stub
- * @param {Object} [stub.match]
- * @param {string} [stub.match.commandIncludes]
- *   Match if `transport.command + transport.args.join(" ")` contains this.
- * @param {string} [stub.match.serverName]
- *   Match if Client was constructed with `{ name }` equal to this. Most
- *   callers won't use this since dash-core hardcodes name="dash".
- * @param {Array<Object>} [stub.tools=[]]
- * @param {Object<string, any>} [stub.callResults={}]
- * @param {Array<Object>} [stub.resources=[]]
- */
 async function stubMcpServer(electronApp, stub) {
-    await electronApp.evaluate(async (stubArg) => {
+    await electronApp.evaluate(async (_electron, stubArg) => {
+        const moduleRequire = process.mainModule && process.mainModule.require;
+
+        const tryRequire = (id) => {
+            try {
+                return moduleRequire(id);
+            } catch (_) {
+                return null;
+            }
+        };
+
         const installPatch = () => {
-            // Resolve the SDK modules. They may not be loaded yet — try,
-            // and if not, install a require cache hook to patch on first
-            // require.
-            let sdkClient;
-            let sdkStdio;
-            try {
-                sdkClient = require("@modelcontextprotocol/sdk/client/index.js");
-            } catch (_) {
-                /* module path varies across SDK versions; try fallback */
-                try {
-                    sdkClient = require("@modelcontextprotocol/sdk/dist/cjs/client/index.js");
-                } catch (_e2) {
-                    /* leave undefined */
-                }
-            }
-            try {
-                sdkStdio = require("@modelcontextprotocol/sdk/client/stdio.js");
-            } catch (_) {
-                try {
-                    sdkStdio = require("@modelcontextprotocol/sdk/dist/cjs/client/stdio.js");
-                } catch (_e2) {
-                    /* leave undefined */
-                }
-            }
+            const sdkClient =
+                tryRequire("@modelcontextprotocol/sdk/client/index.js") ||
+                tryRequire(
+                    "@modelcontextprotocol/sdk/dist/cjs/client/index.js"
+                );
+            const sdkStdio =
+                tryRequire("@modelcontextprotocol/sdk/client/stdio.js") ||
+                tryRequire(
+                    "@modelcontextprotocol/sdk/dist/cjs/client/stdio.js"
+                );
 
             if (!sdkClient || !sdkClient.Client) return false;
 
@@ -171,63 +136,35 @@ async function stubMcpServer(electronApp, stub) {
             return true;
         };
 
-        if (!installPatch()) {
-            // SDK not yet loaded. Install a one-shot require hook so we
-            // patch as soon as it is.
-            global.__dashE2EMcpStubsPending =
-                global.__dashE2EMcpStubsPending || [];
-            global.__dashE2EMcpStubsPending.push(stubArg);
-            if (!global.__dashE2EMcpRequireHook) {
-                const Module = require("module");
-                const orig = Module.prototype.require;
-                Module.prototype.require = function patched(id) {
-                    const result = orig.apply(this, arguments);
-                    if (
-                        typeof id === "string" &&
-                        id.includes("@modelcontextprotocol/sdk")
-                    ) {
-                        // Re-attempt patch installation; flush any
-                        // pending stubs.
-                        const pending = global.__dashE2EMcpStubsPending || [];
-                        global.__dashE2EMcpStubsPending = [];
-                        for (const p of pending) {
-                            global.__dashE2EMcpStubs =
-                                global.__dashE2EMcpStubs || [];
-                            global.__dashE2EMcpStubs.push(p);
-                        }
-                        installPatch();
-                    }
-                    return result;
-                };
-                global.__dashE2EMcpRequireHook = true;
-            }
-        }
+        installPatch();
     }, stub);
 }
 
-/**
- * Restore the original Client + StdioClientTransport prototypes.
- *
- * @param {import('@playwright/test').ElectronApplication} electronApp
- */
 async function restoreMcpClient(electronApp) {
     if (!electronApp) return;
     await electronApp
         .evaluate(async () => {
             if (!global.__dashE2EMcpPatched) return;
+            const moduleRequire =
+                process.mainModule && process.mainModule.require;
+            const tryRequire = (id) => {
+                try {
+                    return moduleRequire(id);
+                } catch (_) {
+                    return null;
+                }
+            };
             try {
-                let sdkClient;
-                let sdkStdio;
-                try {
-                    sdkClient = require("@modelcontextprotocol/sdk/client/index.js");
-                } catch (_) {
-                    sdkClient = require("@modelcontextprotocol/sdk/dist/cjs/client/index.js");
-                }
-                try {
-                    sdkStdio = require("@modelcontextprotocol/sdk/client/stdio.js");
-                } catch (_) {
-                    sdkStdio = require("@modelcontextprotocol/sdk/dist/cjs/client/stdio.js");
-                }
+                const sdkClient =
+                    tryRequire("@modelcontextprotocol/sdk/client/index.js") ||
+                    tryRequire(
+                        "@modelcontextprotocol/sdk/dist/cjs/client/index.js"
+                    );
+                const sdkStdio =
+                    tryRequire("@modelcontextprotocol/sdk/client/stdio.js") ||
+                    tryRequire(
+                        "@modelcontextprotocol/sdk/dist/cjs/client/stdio.js"
+                    );
 
                 const Client = sdkClient && sdkClient.Client;
                 const orig = global.__dashE2EMcpOriginalClient;
@@ -246,7 +183,6 @@ async function restoreMcpClient(electronApp) {
                 }
             } finally {
                 global.__dashE2EMcpStubs = [];
-                global.__dashE2EMcpStubsPending = [];
                 global.__dashE2EMcpPatched = false;
                 delete global.__dashE2EMcpOriginalClient;
                 delete global.__dashE2EMcpOriginalStdio;
