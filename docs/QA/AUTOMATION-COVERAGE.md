@@ -25,13 +25,10 @@ What we already have under `e2e/helpers/`:
 -   **`auth-token-injector.js`** — `seedAuthToken(app)` / `clearAuthToken(app)` to skip the Cognito hosted-UI flow. Shipped v0.0.580.
 -   **`file-dialog-override.js`** — `overrideOpenDialog(app, { filePaths, canceled })`, `overrideSaveDialog(app, { filePath, canceled })`, `restoreFileDialogs(app)`. Patches both async + sync variants so Import / Install-from-File / Export flows skip the native OS picker. Shipped v0.0.581.
 -   **`mock-mcp-transport.js`** — `stubMcpServer(app, { match, tools, callResults, resources })` and `restoreMcpClient(app)`. Patches `Client.prototype` and `StdioClientTransport.prototype` from `@modelcontextprotocol/sdk` so `connect()` is a no-op (no subprocess), `listTools()`/`callTool()`/`listResources()` return canned data keyed by transport command. Shipped v0.0.582.
+-   **`mock-llm-server.js`** — `startMockLlm({ port, responses })` / `stopMockLlm()` / `getRequestHistory()` / `setResponses()`. Local HTTP server speaking Anthropic's `/v1/messages` (both streaming SSE + non-streaming JSON). Match by `lastUserContains` substring or `default: true` fallback. Supports text and `tool_use` blocks. Switched in via `ANTHROPIC_BASE_URL`. Shipped v0.0.583.
 -   **`test-server.js`** — generic local HTTP fixture server.
 
-What we still need to add:
-
-| Mock                     | Purpose                                                                                        | Unlocks                                      |
-| ------------------------ | ---------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| **`mock-llm-server.js`** | local SSE server speaking the Anthropic streaming format with canned responses keyed by prompt | All §6 AI Assistant + AI builder flows in §2 |
+All five mock layers are now in. Future work is writing the spec files that combine them.
 
 ---
 
