@@ -116,6 +116,7 @@ For comprehensive guides, see [docs/INDEX.md](./docs/INDEX.md):
 
 -   [Manual QA Test Plan](./docs/QA/MANUAL-TEST-PLAN.md) - End-to-end checklist for testing a build (cold install → CRUD across Dashboards, Widgets, Themes, Providers, AI Assistant)
 -   [QA Report Template](./docs/QA/REPORT-TEMPLATE.md) - Copy-paste shape for filing findings
+-   [Automation Coverage Matrix](./docs/QA/AUTOMATION-COVERAGE.md) - Map of each manual item to a Playwright spec (existing or proposed) plus the mocks needed
 
 **Core Framework (widget system, providers, MCP):**
 

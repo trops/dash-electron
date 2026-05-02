@@ -6,6 +6,8 @@ Each section has a rough time budget. The whole sweep is ~2.5 hours; you do not 
 
 If something on this list doesn't match what you see in the app, that's still a finding — file it. The product moves fast and this doc may be a little behind.
 
+> **Maintainers:** see [AUTOMATION-COVERAGE.md](./AUTOMATION-COVERAGE.md) for which of these items are already covered by Playwright specs and which still need a human run.
+
 ---
 
 ## Conventions
