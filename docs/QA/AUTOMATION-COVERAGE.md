@@ -24,16 +24,14 @@ What we already have under `e2e/helpers/`:
 -   **`mock-registry.js`** — local HTTP server. Auto-seeds 10 stock themes; tests can `registerPackage()` widgets/dashboards. Serves `/api/packages` index + single-package metadata, downloads, `POST /api/publish` (with `getPublishHistory()`), `DELETE /api/packages/:scope/:name` (with `getDeleteHistory()`), and `POST /api/packages/resolve`. Switched in via `DASH_REGISTRY_API_URL`. Shipped v0.0.580.
 -   **`auth-token-injector.js`** — `seedAuthToken(app)` / `clearAuthToken(app)` to skip the Cognito hosted-UI flow. Shipped v0.0.580.
 -   **`file-dialog-override.js`** — `overrideOpenDialog(app, { filePaths, canceled })`, `overrideSaveDialog(app, { filePath, canceled })`, `restoreFileDialogs(app)`. Patches both async + sync variants so Import / Install-from-File / Export flows skip the native OS picker. Shipped v0.0.581.
+-   **`mock-mcp-transport.js`** — `stubMcpServer(app, { match, tools, callResults, resources })` and `restoreMcpClient(app)`. Patches `Client.prototype` and `StdioClientTransport.prototype` from `@modelcontextprotocol/sdk` so `connect()` is a no-op (no subprocess), `listTools()`/`callTool()`/`listResources()` return canned data keyed by transport command. Shipped v0.0.582.
 -   **`test-server.js`** — generic local HTTP fixture server.
 
 What we still need to add:
 
-| Mock                        | Purpose                                                                                                                          | Unlocks                                              |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| **`mock-mcp-transport.js`** | stub the MCP client transport so `tools/list` and `tools/call` return canned data; fake "Authenticated" status for OAuth servers | §4.2, §4.3 (tool list mount; not the consent screen) |
-| **`mock-llm-server.js`**    | local SSE server speaking the Anthropic streaming format with canned responses keyed by prompt                                   | All §6 AI Assistant + AI builder flows in §2         |
-
-Each is bounded — ~100-300 LOC. Build them before the specs that depend on them.
+| Mock                     | Purpose                                                                                        | Unlocks                                      |
+| ------------------------ | ---------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| **`mock-llm-server.js`** | local SSE server speaking the Anthropic streaming format with canned responses keyed by prompt | All §6 AI Assistant + AI builder flows in §2 |
 
 ---
 
