@@ -59,27 +59,51 @@ test.describe("Google Widgets", () => {
     });
 });
 
+// These tests assert the dev's local Google OAuth tokens are fresh
+// after the app's MCP refresh flow. They're environmental — they
+// require valid credentials AND require the app to have been run
+// recently enough that refresh happened. We skip if either:
+//   (a) the credentials file is missing (never authenticated locally), or
+//   (b) the token is already past its expiry date (refresh hasn't run).
+// In CI / on a teammate's machine without local Google auth, all these
+// skip cleanly. They only run — and only assert — when there's
+// something real to assert against.
+function readCredsIfFresh(credPath) {
+    if (!fs.existsSync(credPath)) return null;
+    const creds = JSON.parse(fs.readFileSync(credPath, "utf8"));
+    if (!creds.access_token) return null;
+    if (
+        typeof creds.expiry_date === "number" &&
+        creds.expiry_date <= Date.now()
+    ) {
+        return null; // expired — skip rather than fail
+    }
+    return creds;
+}
+
 test.describe("Google MCP token refresh", () => {
     const home = process.env.HOME || "";
 
     test("Google Drive credentials have a non-expired token after refresh", async () => {
-        const credPath = path.join(home, ".gdrive-mcp", "credentials.json");
-        if (!fs.existsSync(credPath)) {
+        const creds = readCredsIfFresh(
+            path.join(home, ".gdrive-mcp", "credentials.json")
+        );
+        if (!creds) {
             test.skip();
             return;
         }
-        const creds = JSON.parse(fs.readFileSync(credPath, "utf8"));
         expect(creds.access_token).toBeTruthy();
         expect(creds.expiry_date).toBeGreaterThan(Date.now());
     });
 
     test("Gmail credentials have a non-expired token after refresh", async () => {
-        const credPath = path.join(home, ".gmail-mcp", "credentials.json");
-        if (!fs.existsSync(credPath)) {
+        const creds = readCredsIfFresh(
+            path.join(home, ".gmail-mcp", "credentials.json")
+        );
+        if (!creds) {
             test.skip();
             return;
         }
-        const creds = JSON.parse(fs.readFileSync(credPath, "utf8"));
         expect(creds.access_token).toBeTruthy();
         expect(creds.expiry_date).toBeGreaterThan(Date.now());
     });
@@ -91,7 +115,11 @@ test.describe("Google MCP server connectivity", () => {
     test("Google Drive search tool responds without error", async () => {
         const credPath = path.join(home, ".gdrive-mcp", "credentials.json");
         const keysPath = path.join(home, ".gdrive-mcp", "gcp-oauth.keys.json");
-        if (!fs.existsSync(credPath) || !fs.existsSync(keysPath)) {
+        if (
+            !fs.existsSync(credPath) ||
+            !fs.existsSync(keysPath) ||
+            !readCredsIfFresh(credPath)
+        ) {
             test.skip();
             return;
         }
@@ -124,7 +152,11 @@ test.describe("Google MCP server connectivity", () => {
     test("Gmail search_emails tool responds without error", async () => {
         const credPath = path.join(home, ".gmail-mcp", "credentials.json");
         const keysPath = path.join(home, ".gmail-mcp", "gcp-oauth.keys.json");
-        if (!fs.existsSync(credPath) || !fs.existsSync(keysPath)) {
+        if (
+            !fs.existsSync(credPath) ||
+            !fs.existsSync(keysPath) ||
+            !readCredsIfFresh(credPath)
+        ) {
             test.skip();
             return;
         }

@@ -9,11 +9,27 @@ const {
     clearAuthToken,
 } = require("../helpers/auth-token-injector");
 
+/**
+ * Registry Theme Install — End-to-End
+ *
+ * Walked as a single sequential test rather than per-assertion tests.
+ * Reason: this describe shares one launched Electron app across all
+ * tests with no automatic teardown. The Settings modal is stateful
+ * and stays open between tests, intercepting clicks in the next.
+ * Selector-based reset attempts ("Done" button, Escape, etc.) were
+ * fragile and order-dependent. Collapsing into one flow eliminates
+ * the inter-test transition entirely — every step runs against the
+ * state the previous step left behind, by design.
+ *
+ * Each step still asserts independently and the test stops at the
+ * first failure with a clear step name in the error.
+ */
+
 let electronApp;
 let window;
+let tempUserData;
 let mockRegistryPort;
 
-// Theme names matching test-registry-index.json in dash-core
 const ALL_THEMES = [
     "Nordic Frost",
     "Dracula Night",
@@ -27,187 +43,160 @@ const ALL_THEMES = [
     "Copper Canyon",
 ];
 
-// Themes to install (at least 3 per acceptance criteria)
 const INSTALL_THEMES = ["Nordic Frost", "Dracula Night", "Evergreen Pine"];
 
 test.beforeAll(async () => {
-    // Start mock registry for theme ZIP downloads
     mockRegistryPort = await startMockRegistry();
-
-    // Launch app with mock registry URL so downloads hit our server
-    ({ electronApp, window } = await launchApp({
+    // Hermetic launch — fresh user-data dir per run so previously-
+    // installed themes/dashboards from earlier test runs don't appear
+    // as duplicate "Nordic Frost" entries in the marketplace view.
+    ({ electronApp, window, tempUserData } = await launchApp({
         env: {
             DASH_REGISTRY_API_URL: `http://127.0.0.1:${mockRegistryPort}`,
         },
+        hermetic: true,
     }));
-
-    // Pre-seed an auth token so installs don't require sign-in
     await seedAuthToken(electronApp);
 });
 
 test.afterAll(async () => {
     await clearAuthToken(electronApp);
-    await closeApp(electronApp);
+    await closeApp(electronApp, { tempUserData });
     await stopMockRegistry();
 });
 
-/**
- * Navigate to the Discover Themes (Search Marketplace) pane:
- * 1. Click "Themes" in sidebar → opens Settings modal with Themes section
- * 2. Click "New Theme" button
- * 3. Click "Search Marketplace" card
- */
-async function navigateToDiscoverThemes(win) {
+async function openDiscoverThemes(win) {
     const sidebar = win.locator("aside");
-    await sidebar.getByText("Themes").click();
-    await win.waitForTimeout(1000);
-
-    const newThemeBtn = win.getByText("New Theme", { exact: true });
-    await expect(newThemeBtn).toBeVisible({ timeout: 5000 });
-    await newThemeBtn.click();
+    await sidebar.getByText("Account", { exact: true }).click();
     await win.waitForTimeout(500);
-
-    const marketplaceCard = win.getByText("Search Marketplace", {
-        exact: true,
-    });
-    await expect(marketplaceCard).toBeVisible({ timeout: 5000 });
-    await marketplaceCard.click();
+    await win
+        .getByRole("button", { name: "Settings", exact: true })
+        .first()
+        .click();
     await win.waitForTimeout(1000);
-
-    // Wait for themes to load (loading spinner should disappear)
+    await win
+        .getByRole("button", { name: "Themes", exact: true })
+        .first()
+        .click();
+    await win.waitForTimeout(500);
+    await win.getByText("New Theme", { exact: true }).click();
+    await win.waitForTimeout(500);
+    await win.getByText("Search Marketplace", { exact: true }).click();
+    await win.waitForTimeout(1000);
     await expect(win.getByText("Loading themes...")).toBeHidden({
         timeout: 10000,
     });
 }
 
-/**
- * Navigate back to the theme list from a detail view.
- */
-async function goBackToThemeList(win) {
-    const backBtn = win.locator("button").filter({ hasText: "Back" }).first();
-    await backBtn.click();
+async function backToThemeList(win) {
+    await win.locator("button").filter({ hasText: "Back" }).first().click();
     await win.waitForTimeout(500);
 }
 
-test.describe("Registry Theme Install — End-to-End", () => {
-    test("all 10 themes are discoverable in registry", async () => {
-        await navigateToDiscoverThemes(window);
-
-        // Verify all 10 themes appear in the list
-        for (const themeName of ALL_THEMES) {
+test("Registry theme install — full flow", async () => {
+    // ---- Step 1: discover all 10 themes in the registry --------------
+    // Use .first() everywhere because previous local runs may have left
+    // themes installed — the discover view then shows the same theme
+    // text twice (marketplace list + installed list) and strict mode
+    // would fail. The assertion is "at least one is visible," which is
+    // what we want.
+    await test.step("discover: all 10 themes are visible", async () => {
+        await openDiscoverThemes(window);
+        for (const name of ALL_THEMES) {
             await expect(
-                window.getByText(themeName, { exact: true })
-            ).toBeVisible({
-                timeout: 5000,
-            });
+                window.getByText(name, { exact: true }).first()
+            ).toBeVisible({ timeout: 5000 });
         }
-
-        // Verify the footer shows the correct count
-        await expect(window.getByText("10 themes")).toBeVisible({
+        await expect(window.getByText("10 themes").first()).toBeVisible({
             timeout: 3000,
         });
     });
 
-    test("theme metadata displays correctly", async () => {
-        await navigateToDiscoverThemes(window);
-
-        // Click on Nordic Frost to see detail
-        await window.getByText("Nordic Frost", { exact: true }).click();
+    // ---- Step 2: theme metadata displays correctly -------------------
+    await test.step("metadata: Nordic Frost detail shows author/version/colors/tags", async () => {
+        await window.getByText("Nordic Frost", { exact: true }).first().click();
         await window.waitForTimeout(500);
 
-        // Verify metadata is displayed
-        await expect(window.getByText("Nordic Frost")).toBeVisible({
+        await expect(window.getByText("Nordic Frost").first()).toBeVisible({
             timeout: 5000,
         });
-        await expect(window.getByText("by johng")).toBeVisible();
-        await expect(window.getByText("v1.0.0")).toBeVisible();
+        await expect(window.getByText("by johng").first()).toBeVisible();
+        await expect(window.getByText("v1.0.0").first()).toBeVisible();
         await expect(
-            window.getByText("Cool Scandinavian palette", { exact: false })
+            window
+                .getByText("Cool Scandinavian palette", { exact: false })
+                .first()
         ).toBeVisible();
+        await expect(window.getByText("Primary").first()).toBeVisible();
+        await expect(window.getByText("Secondary").first()).toBeVisible();
+        await expect(window.getByText("PREVIEW").first()).toBeVisible();
+        await expect(window.getByText("cool").first()).toBeVisible();
+        await expect(window.getByText("minimal").first()).toBeVisible();
+        await expect(window.getByText("Install Theme").first()).toBeVisible();
 
-        // Verify color labels are shown
-        await expect(window.getByText("Primary")).toBeVisible();
-        await expect(window.getByText("Secondary")).toBeVisible();
-
-        // Verify preview section exists
-        await expect(window.getByText("PREVIEW")).toBeVisible();
-
-        // Verify tags are shown
-        await expect(window.getByText("cool")).toBeVisible();
-        await expect(window.getByText("minimal")).toBeVisible();
-
-        // Verify Install Theme button is present
-        await expect(window.getByText("Install Theme")).toBeVisible();
-
-        await goBackToThemeList(window);
+        await backToThemeList(window);
     });
 
-    test("install 3 themes from registry successfully", async () => {
-        await navigateToDiscoverThemes(window);
-
+    // ---- Step 3: install 3 themes ------------------------------------
+    await test.step("install: 3 themes install successfully", async () => {
         for (const themeName of INSTALL_THEMES) {
-            // Click theme in list
-            await window.getByText(themeName, { exact: true }).click();
+            await window.getByText(themeName, { exact: true }).first().click();
             await window.waitForTimeout(500);
 
-            // Click Install Theme
-            const installBtn = window.getByText("Install Theme", {
-                exact: true,
-            });
+            const installBtn = window
+                .getByText("Install Theme", { exact: true })
+                .first();
             await expect(installBtn).toBeVisible({ timeout: 5000 });
             await installBtn.click();
 
-            // Wait for install to complete — success message should appear
             await expect(
-                window.getByText("installed successfully", { exact: false })
+                window
+                    .getByText("installed successfully", { exact: false })
+                    .first()
             ).toBeVisible({ timeout: 15000 });
 
-            // Go back to list for next theme
-            await goBackToThemeList(window);
+            await backToThemeList(window);
         }
     });
 
-    test("installed themes appear in theme list with correct colors", async () => {
-        // Navigate to the main themes section (not Discover Themes)
-        const sidebar = window.locator("aside");
-        await sidebar.getByText("Themes").click();
-        await window.waitForTimeout(1000);
-
-        // Verify installed themes appear in the theme list
-        for (const themeName of INSTALL_THEMES) {
-            await expect(
-                window.getByText(themeName, { exact: true }).first()
-            ).toBeVisible({ timeout: 5000 });
-        }
-    });
-
-    test("no console errors during discovery and install", async () => {
+    // ---- Step 4: console-error sweep while browsing details ----------
+    await test.step("no critical console errors during browse", async () => {
         const consoleErrors = [];
-        window.on("console", (msg) => {
-            if (msg.type() === "error") {
-                consoleErrors.push(msg.text());
-            }
-        });
+        const onConsole = (msg) => {
+            if (msg.type() === "error") consoleErrors.push(msg.text());
+        };
+        window.on("console", onConsole);
 
-        await navigateToDiscoverThemes(window);
-
-        // Browse through a couple of themes
-        await window.getByText("Sakura Blossom", { exact: true }).click();
+        await window
+            .getByText("Sakura Blossom", { exact: true })
+            .first()
+            .click();
         await window.waitForTimeout(500);
-        await goBackToThemeList(window);
-
-        await window.getByText("Volcanic Ash", { exact: true }).click();
+        await backToThemeList(window);
+        await window.getByText("Volcanic Ash", { exact: true }).first().click();
         await window.waitForTimeout(500);
-        await goBackToThemeList(window);
+        await backToThemeList(window);
 
-        // Filter errors — ignore known non-critical console errors
+        window.off("console", onConsole);
+
         const criticalErrors = consoleErrors.filter(
             (e) =>
                 !e.includes("[HMR]") &&
                 !e.includes("DevTools") &&
                 !e.includes("favicon")
         );
-
         expect(criticalErrors).toEqual([]);
+    });
+
+    // ---- Step 5: installed themes appear in main Themes list ---------
+    await test.step("installed themes appear in the Themes section list", async () => {
+        // We're still inside the Settings modal, in Discover Themes.
+        // Click Back to return to the Themes section's main list.
+        await backToThemeList(window);
+        for (const themeName of INSTALL_THEMES) {
+            await expect(
+                window.getByText(themeName, { exact: true }).first()
+            ).toBeVisible({ timeout: 5000 });
+        }
     });
 });
