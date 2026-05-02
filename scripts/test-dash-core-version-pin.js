@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.474, the version where the Dashboard bulk-edit modal
- * (DashboardConfigModal) gains a Notifications tab. (0.1.473 was
- * tagged + published before PR #458 landed, so the tab actually
- * shipped in 0.1.474 — pin floor reflects the version the user can
- * actually see the feature in.)
+ * be at ≥ 0.1.475, the version where the Dashboard bulk-edit modal's
+ * Notifications tab rows show the scoped component id + layout
+ * instance id under the title — so users can tell two same-titled
+ * widgets apart (e.g. two GitHub widgets both showing "GitHub" as
+ * the heading).
  *
- * Lists every widget instance in the current workspace that declares
- * notifications, with per-row toggles + Enable all / Disable all
- * bulk controls + a search box. Toggles persist via the same
- * mainApi.notifications.setPreferences IPC the Settings panel uses,
- * so the two views stay consistent.
- *
- * Also covers prior pins (≥ 0.1.472 Settings → Notifications adds
+ * Also covers prior pins (≥ 0.1.474 the Notifications tab itself —
+ * lists every widget instance in the current workspace that
+ * declares notifications, with per-row toggles + Enable all /
+ * Disable all bulk controls + a search box. Toggles persist via
+ * mainApi.notifications.setPreferences. (0.1.473 was tagged +
+ * published before PR #458 landed, so the tab actually shipped in
+ * 0.1.474.); ≥ 0.1.472 Settings → Notifications adds
  * Dashboard + Package filter dropdowns; ≥ 0.1.471 Settings →
  * Notifications uses the master-detail SectionLayout pattern;
  * ≥ 0.1.470 forEachWidget walks pages before
@@ -64,7 +64,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.474";
+const minRequired = "0.1.475";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -76,9 +76,9 @@ function semverGte(a, b) {
 
 assert.ok(
     semverGte(stripped, minRequired),
-    `@trops/dash-core must be >= ${minRequired} (the version where DashboardConfigModal gains a Notifications tab with bulk Enable/Disable + search). Currently pinned at: ${pinned}`
+    `@trops/dash-core must be >= ${minRequired} (the version where the Notifications tab rows show the scoped component id + layout instance id for disambiguation). Currently pinned at: ${pinned}`
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, DashboardConfigModal gains a Notifications tab)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, Notifications tab rows show component id + instance id)`
 );
