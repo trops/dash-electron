@@ -102,6 +102,25 @@ async function clickSection(win, sectionName) {
 
 const destinations = {
     home: async (_win) => {},
+    newDashboard: async (win) => {
+        // Click "New Dashboard" in sidebar Dashboards group, then dump
+        // whatever modal/picker opens.
+        await win.locator("aside").getByText("New Dashboard").first().click();
+        await win.waitForTimeout(1000);
+    },
+    "newDashboard.blank": async (win) => {
+        // Click sidebar "New Dashboard" → dialog "New Dashboard"
+        // (start from a blank template) → dump next state.
+        await win.locator("aside").getByText("New Dashboard").first().click();
+        await win.waitForTimeout(1000);
+        // The dialog has its own "New Dashboard" button — distinguish via
+        // role + name. Use second `New Dashboard` since the first is the
+        // sidebar button. The dialog button has a fuller name.
+        await win
+            .getByRole("button", { name: /New Dashboard.*blank template/ })
+            .click();
+        await win.waitForTimeout(1000);
+    },
     settings: async (win) => {
         await openSettingsModal(win);
     },
@@ -129,11 +148,17 @@ const destinations = {
         await openSettingsModal(win);
         await clickSection(win, "Widgets");
     },
+    "settings.widgets.installPicker": async (win) => {
+        // After clicking "Install Widgets" — shows the picker with
+        // registry / file / folder install options.
+        await openSettingsModal(win);
+        await clickSection(win, "Widgets");
+        await win.getByText("Install Widgets", { exact: true }).click();
+        await win.waitForTimeout(1000);
+    },
     "settings.widgets.discover": async (win) => {
         await openSettingsModal(win);
         await clickSection(win, "Widgets");
-        // The widgets section's discover entry — best guess; if wrong,
-        // running this destination will tell us the real text.
         const installBtn = win.getByText("Install Widgets", { exact: true });
         if (await installBtn.isVisible().catch(() => false)) {
             await installBtn.click();
@@ -158,9 +183,49 @@ const destinations = {
             await win.waitForTimeout(1000);
         }
     },
+    "settings.folders": async (win) => {
+        await openSettingsModal(win);
+        await clickSection(win, "Folders");
+    },
+    "settings.folders.new": async (win) => {
+        await openSettingsModal(win);
+        await clickSection(win, "Folders");
+        await win.getByText("New Folder", { exact: true }).click();
+        await win.waitForTimeout(500);
+    },
     "settings.providers": async (win) => {
         await openSettingsModal(win);
         await clickSection(win, "Providers");
+    },
+    "settings.notifications": async (win) => {
+        await openSettingsModal(win);
+        await clickSection(win, "Notifications");
+    },
+    "settings.mcpServer": async (win) => {
+        await openSettingsModal(win);
+        await clickSection(win, "MCP Server");
+    },
+    "settings.aiAssistant": async (win) => {
+        await openSettingsModal(win);
+        await clickSection(win, "AI Assistant");
+    },
+    "settings.general": async (win) => {
+        await openSettingsModal(win);
+        await clickSection(win, "General");
+    },
+    "settings.providers.new": async (win) => {
+        await openSettingsModal(win);
+        await clickSection(win, "Providers");
+        await win.getByText("New Provider", { exact: true }).click();
+        await win.waitForTimeout(1000);
+    },
+    "settings.providers.newCredential": async (win) => {
+        await openSettingsModal(win);
+        await clickSection(win, "Providers");
+        await win.getByText("New Provider", { exact: true }).click();
+        await win.waitForTimeout(500);
+        await win.getByRole("button", { name: /Credential.*API key/ }).click();
+        await win.waitForTimeout(500);
     },
     "settings.account": async (win) => {
         await openSettingsModal(win);
