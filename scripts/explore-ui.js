@@ -132,6 +132,13 @@ const destinations = {
         await win.getByText("Add widget", { exact: true }).first().click();
         await win.waitForTimeout(800);
     },
+    "dashboard.viewMode.afterCreateAndSave": async (win) => {
+        // Walk wizard, save via the visible Save button, then dump
+        // the view-mode state with header icon buttons (Edit etc.).
+        await destinations["dashboard.editMode"](win);
+        await win.getByRole("button", { name: "Save", exact: true }).click();
+        await win.waitForTimeout(1500);
+    },
     "dashboard.editMode": async (win) => {
         // Walks the new-dashboard wizard with default selections and
         // lands in the layout-builder edit mode (Save button visible).
