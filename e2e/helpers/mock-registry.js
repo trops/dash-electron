@@ -250,6 +250,35 @@ function buildThemeZip(themeName) {
 }
 
 function seedStockThemes() {
+    // Shape mirrors dash-core/electron/registry/test-registry-index.json
+    // so the renderer's discover/install path treats these like the real
+    // fixture entries (description / author / category / tags / colors).
+    const descriptions = {
+        "nordic-frost":
+            "Cool Scandinavian palette with sky blues and slate accents",
+        "dracula-night":
+            "Dark editor-inspired theme with purple, pink, and cyan tones",
+        "solarized-warm": "Warm autumn palette with amber and orange",
+        "monokai-ember": "Ember-style classic editor palette",
+        "evergreen-pine": "Forest greens and teals",
+        "sakura-blossom": "Soft pinks and roses",
+        "oceanic-breeze": "Cool cyans and seafoam",
+        "volcanic-ash": "Hot reds and oranges",
+        "lavender-haze": "Dreamy violets and indigos",
+        "copper-canyon": "Earthy oranges and ambers",
+    };
+    const tagsByName = {
+        "nordic-frost": ["cool", "minimal"],
+        "dracula-night": ["dark", "editor"],
+        "solarized-warm": ["warm", "classic"],
+        "monokai-ember": ["dark", "editor"],
+        "evergreen-pine": ["natural", "calm"],
+        "sakura-blossom": ["soft", "pastel"],
+        "oceanic-breeze": ["cool", "fresh"],
+        "volcanic-ash": ["bold", "warm"],
+        "lavender-haze": ["soft", "dreamy"],
+        "copper-canyon": ["earthy", "warm"],
+    };
     for (const [name, data] of Object.entries(STOCK_THEMES)) {
         registerPackage({
             type: "theme",
@@ -259,8 +288,11 @@ function seedStockThemes() {
             zipBuffer: buildThemeZip(name),
             metadata: {
                 displayName: data.name,
-                description: `${data.name} theme`,
-                author: "trops",
+                description: descriptions[name] || `${data.name} theme`,
+                author: "johng",
+                category: "general",
+                tags: tagsByName[name] || [],
+                colors: data.colors,
             },
         });
     }
@@ -269,9 +301,19 @@ function seedStockThemes() {
 // ----- HTTP server -------------------------------------------------------
 
 function indexEntryFor(entry) {
+    // dash-core's renderer constructs download URLs as
+    // `/api/packages/${encodeURIComponent(scope)}/${encodeURIComponent(name)}/...`
+    // and the canonical test-registry-index.json stores `scope` with a
+    // leading "@" (e.g. "@trops"). We store scope without "@" internally
+    // for cleaner pkgKey lookups, but emit it WITH "@" in the index
+    // response so the renderer hits this mock's download regex (which
+    // accepts %40 / @ prefixes).
+    const emittedScope = entry.scope.startsWith("@")
+        ? entry.scope
+        : `@${entry.scope}`;
     return {
         name: entry.name,
-        scope: entry.scope,
+        scope: emittedScope,
         packageName: pkgKey(entry.scope, entry.name),
         type: entry.type,
         version: entry.latest,

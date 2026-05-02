@@ -66,12 +66,21 @@ async function stubMcpServer(electronApp, stub) {
 
                 const matchTransport = (transport) => {
                     if (!transport) return null;
-                    const sig = `${
-                        transport._command || transport.command || ""
-                    } ${
-                        Array.isArray(transport._args || transport.args)
-                            ? (transport._args || transport.args).join(" ")
-                            : ""
+                    // The SDK stores constructor params as
+                    // `transport._serverParams = { command, args, env, ... }`.
+                    // Older paths also tried `_command`/`command` directly;
+                    // support both for forward/backward compatibility.
+                    const params =
+                        transport._serverParams || transport.serverParams || {};
+                    const cmd =
+                        params.command ||
+                        transport._command ||
+                        transport.command ||
+                        "";
+                    const argList =
+                        params.args || transport._args || transport.args || [];
+                    const sig = `${cmd} ${
+                        Array.isArray(argList) ? argList.join(" ") : ""
                     }`;
                     for (const entry of global.__dashE2EMcpStubs) {
                         if (
