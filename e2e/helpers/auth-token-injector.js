@@ -5,10 +5,8 @@
  * registry-gated flows (install, publish, owned packages, etc.) without
  * walking the real Cognito hosted-UI flow.
  *
- * Mirrors the pattern that was inlined in registry-theme-install.spec.js
- * (lines 41-67 of the original) so every new spec doesn't reinvent it.
- *
  * Usage:
+ *
  *   const { seedAuthToken, clearAuthToken } = require("./auth-token-injector");
  *
  *   test.beforeAll(async () => {
@@ -20,27 +18,27 @@
  *     await clearAuthToken(electronApp);
  *     await closeApp(electronApp);
  *   });
+ *
+ * Implementation note: Playwright's `electronApp.evaluate(fn, arg)` calls
+ * `fn(electronModule, arg)` — the first param is always the result of
+ * `require('electron')` in the main script. `require()` itself is not
+ * lexically in scope inside the evaluate body (Playwright wraps it in a
+ * fresh `Function` scope), so we use `process.mainModule.require` —
+ * `process` is a true Node global and `mainModule.require` resolves
+ * relative to the launched main script.
  */
 
 const DEFAULT_TOKEN = "test-e2e-token";
 const DEFAULT_USER_ID = "test-user";
 
-/**
- * Pre-seed the registry auth electron-store with a fake token.
- *
- * @param {ElectronApplication} electronApp - Playwright Electron app handle.
- * @param {Object} [opts]
- * @param {string} [opts.token] - Access token value.
- * @param {string} [opts.userId] - User id (drives the registry-cache key).
- * @returns {Promise<void>}
- */
 async function seedAuthToken(electronApp, opts = {}) {
     const token = opts.token || DEFAULT_TOKEN;
     const userId = opts.userId || DEFAULT_USER_ID;
 
     await electronApp.evaluate(
-        async ({ tokenValue, userIdValue }) => {
-            const Store = require("electron-store");
+        async (_electron, { tokenValue, userIdValue }) => {
+            const _require = process.mainModule && process.mainModule.require;
+            const Store = _require("electron-store");
             const s = new Store({
                 name: "dash-registry-auth",
                 encryptionKey: "dash-registry-v1",
@@ -54,18 +52,12 @@ async function seedAuthToken(electronApp, opts = {}) {
     );
 }
 
-/**
- * Wipe the registry auth electron-store. Safe to call from afterAll even
- * if the app is mid-shutdown — errors are swallowed.
- *
- * @param {ElectronApplication} electronApp
- * @returns {Promise<void>}
- */
 async function clearAuthToken(electronApp) {
     if (!electronApp) return;
     await electronApp
-        .evaluate(async () => {
-            const Store = require("electron-store");
+        .evaluate(async (_electron) => {
+            const _require = process.mainModule && process.mainModule.require;
+            const Store = _require("electron-store");
             const s = new Store({
                 name: "dash-registry-auth",
                 encryptionKey: "dash-registry-v1",
