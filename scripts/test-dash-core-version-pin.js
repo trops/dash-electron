@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.475, the version where the Dashboard bulk-edit modal's
- * Notifications tab rows show the scoped component id + layout
- * instance id under the title — so users can tell two same-titled
- * widgets apart (e.g. two GitHub widgets both showing "GitHub" as
- * the heading).
+ * be at ≥ 0.1.476, the version where the Dashboard bulk-edit modal's
+ * Notifications tab dedupes widget instances. WorkspaceModel auto-
+ * migrates legacy non-paged workspaces by aliasing
+ * pages[0].layout = workspace.layout (same reference); without dedup
+ * the visit walked both and pushed every widget twice. Fix mirrors
+ * providerResolution.js forEachWidget's stableId Set pattern.
  *
- * Also covers prior pins (≥ 0.1.474 the Notifications tab itself —
+ * Also covers prior pins (≥ 0.1.475 Notifications tab rows show the
+ * scoped component id + layout instance id under the title — so
+ * users can tell two same-titled widgets apart, e.g. two GitHub
+ * widgets both showing "GitHub" as the heading; ≥ 0.1.474 the
+ * Notifications tab itself —
  * lists every widget instance in the current workspace that
  * declares notifications, with per-row toggles + Enable all /
  * Disable all bulk controls + a search box. Toggles persist via
@@ -64,7 +69,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.475";
+const minRequired = "0.1.476";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
@@ -76,9 +81,9 @@ function semverGte(a, b) {
 
 assert.ok(
     semverGte(stripped, minRequired),
-    `@trops/dash-core must be >= ${minRequired} (the version where the Notifications tab rows show the scoped component id + layout instance id for disambiguation). Currently pinned at: ${pinned}`
+    `@trops/dash-core must be >= ${minRequired} (the version where the Notifications tab dedupes widget instances against the WorkspaceModel pages[0].layout aliasing case). Currently pinned at: ${pinned}`
 );
 
 console.log(
-    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, Notifications tab rows show component id + instance id)`
+    `PASS  @trops/dash-core pinned at ${pinned} (>= ${minRequired}, Notifications tab dedupes widget instances)`
 );
