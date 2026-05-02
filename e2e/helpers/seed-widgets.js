@@ -7,6 +7,14 @@
  * `seedInstalledWidgets()` after launch to install fixture widget
  * packages via the same IPC the "Load from Folder" UI uses.
  *
+ * IMPORTANT: `widget:load-folder` registers each widget with its
+ * SOURCE path. If a test later uninstalls a widget, the registry's
+ * `uninstallWidget` does `fs.rmSync(widget.path, { recursive: true })`
+ * which would DELETE the original fixture files on disk. To prevent
+ * test runs from corrupting tracked fixtures, this helper copies the
+ * fixture dir into the OS temp folder before seeding, so the registry
+ * points at an ephemeral copy. The temp dir is cleaned up by the OS.
+ *
  * The fixture directory must contain one or more widget package
  * subdirectories, each with the standard structure:
  *
@@ -42,6 +50,23 @@
  * on what got installed if they care.
  */
 
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+function copyDirSync(src, dest) {
+    fs.mkdirSync(dest, { recursive: true });
+    for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+        const s = path.join(src, entry.name);
+        const d = path.join(dest, entry.name);
+        if (entry.isDirectory()) {
+            copyDirSync(s, d);
+        } else if (entry.isFile()) {
+            fs.copyFileSync(s, d);
+        }
+    }
+}
+
 /**
  * Install widget packages from one or more fixture directories.
  *
@@ -59,9 +84,16 @@ async function seedInstalledWidgets(window, fixtureDirs) {
 
     const all = [];
     for (const fixtureDir of fixtureDirs) {
+        // Copy into a temp dir so an `Uninstall` from the test (which
+        // rm -rf's `widget.path`) cannot wipe the tracked fixture.
+        const tempDir = fs.mkdtempSync(
+            path.join(os.tmpdir(), "dash-e2e-widgets-")
+        );
+        copyDirSync(fixtureDir, tempDir);
+
         const result = await window.evaluate(
             async (dir) => window.mainApi.widgets.loadFolder(dir),
-            fixtureDir
+            tempDir
         );
         if (Array.isArray(result)) {
             all.push(...result);

@@ -45,7 +45,7 @@ const os = require("os");
 const ROOT = path.resolve(__dirname, "..");
 
 function parseArgs(argv) {
-    const out = { to: "home", hermetic: true };
+    const out = { to: "home", hermetic: true, seedWidgets: [] };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--help" || a === "-h") {
@@ -60,6 +60,13 @@ function parseArgs(argv) {
             out.screenshot = argv[++i];
         } else if (a === "--output") {
             out.output = argv[++i];
+        } else if (a === "--seed-widgets") {
+            // Comma-separated absolute paths to widget fixture
+            // directories (each contains widget package subfolders).
+            out.seedWidgets = (argv[++i] || "")
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean);
         }
     }
     return out;
@@ -227,6 +234,27 @@ const destinations = {
         await openSettingsModal(win);
         await clickSection(win, "Widgets");
     },
+    "settings.widgets.firstSelected": async (win) => {
+        await openSettingsModal(win);
+        await clickSection(win, "Widgets");
+        const widgetBtn = win
+            .getByRole("button", {
+                name: /Current Weather|Weather Alerts|Weekly Forecast/,
+            })
+            .first();
+        if (await widgetBtn.isVisible().catch(() => false)) {
+            await widgetBtn.click();
+            await win.waitForTimeout(500);
+        }
+    },
+    "settings.widgets.uninstallClicked": async (win) => {
+        // Click first widget then Uninstall to see confirm modal.
+        await destinations["settings.widgets.firstSelected"](win);
+        await win
+            .getByRole("button", { name: "Uninstall", exact: true })
+            .click();
+        await win.waitForTimeout(500);
+    },
     "settings.widgets.installPicker": async (win) => {
         // After clicking "Install Widgets" — shows the picker with
         // registry / file / folder install options.
@@ -390,6 +418,20 @@ async function main() {
     await win.waitForSelector("#root > *", { timeout: 30000 });
     await win.waitForTimeout(2000);
     await dismissAutoModal(win);
+
+    // Seed widget packages if requested.
+    if (args.seedWidgets.length > 0) {
+        for (const fixtureDir of args.seedWidgets) {
+            await win.evaluate(
+                async (dir) => window.mainApi.widgets.loadFolder(dir),
+                fixtureDir
+            );
+        }
+        await win.waitForTimeout(800);
+        process.stderr.write(
+            `[explore-ui] seeded widgets from ${args.seedWidgets.length} dir(s)\n`
+        );
+    }
 
     try {
         await dest(win);
