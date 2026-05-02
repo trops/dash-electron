@@ -148,6 +148,12 @@ const destinations = {
         await win.getByText("From Website", { exact: true }).click();
         await win.waitForTimeout(500);
     },
+    "settings.themes.newPicker": async (win) => {
+        await openSettingsModal(win);
+        await clickSection(win, "Themes");
+        await win.getByText("New Theme", { exact: true }).click();
+        await win.waitForTimeout(500);
+    },
     "settings.widgets": async (win) => {
         await openSettingsModal(win);
         await clickSection(win, "Widgets");
@@ -238,6 +244,13 @@ const destinations = {
     "settings.dashboards.section": async (win) => {
         await openSettingsModal(win);
         await clickSection(win, "Dashboards");
+    },
+    aiAssistant: async (win) => {
+        // Click "Open AI Assistant" floating button at bottom-right.
+        await win
+            .getByRole("button", { name: "Open AI Assistant", exact: true })
+            .click();
+        await win.waitForTimeout(1000);
     },
 };
 
