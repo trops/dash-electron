@@ -125,6 +125,68 @@ const destinations = {
             .click();
         await win.waitForTimeout(1000);
     },
+    "dashboard.editMode.addWidgetClicked": async (win) => {
+        // Same as dashboard.editMode but click "Add widget" once we're
+        // there, then dump.
+        await destinations["dashboard.editMode"](win);
+        await win.getByText("Add widget", { exact: true }).first().click();
+        await win.waitForTimeout(800);
+    },
+    "dashboard.editMode": async (win) => {
+        // Walks the new-dashboard wizard with default selections and
+        // lands in the layout-builder edit mode (Save button visible).
+        await win.locator("aside").getByText("New Dashboard").first().click();
+        await win.waitForTimeout(700);
+        await win
+            .getByRole("button", { name: /New Dashboard.*blank template/ })
+            .click();
+        await win.waitForTimeout(700);
+        // Step 1: Name
+        await win
+            .getByRole("textbox", { name: "Dashboard name" })
+            .fill("Explore Dashboard");
+        await win.getByRole("button", { name: "Next", exact: true }).click();
+        await win.waitForTimeout(500);
+        // Steps 2-4: accept defaults; click Next at each. Step 4
+        // (Choose Theme) replaces Next with Create.
+        for (let i = 0; i < 4; i++) {
+            const next = win.getByRole("button", { name: "Next", exact: true });
+            const create = win.getByRole("button", {
+                name: "Create",
+                exact: true,
+            });
+            if (await create.isVisible().catch(() => false)) {
+                await create.click();
+                await win.waitForTimeout(1500);
+                break;
+            }
+            if (await next.isVisible().catch(() => false)) {
+                if (!(await next.isEnabled().catch(() => false))) {
+                    const btns = win.getByRole("dialog").getByRole("button");
+                    const count = await btns.count();
+                    for (let j = 0; j < count; j++) {
+                        const b = btns.nth(j);
+                        const txt = (await b.textContent()) || "";
+                        if (
+                            !/Back|Next|Cancel|Done|Create|^\d$/.test(
+                                txt.trim()
+                            ) &&
+                            (await b.isEnabled().catch(() => false))
+                        ) {
+                            await b.click();
+                            await win.waitForTimeout(200);
+                            break;
+                        }
+                    }
+                }
+                await next.click();
+                await win.waitForTimeout(500);
+            } else {
+                break;
+            }
+        }
+        await win.waitForTimeout(800);
+    },
     settings: async (win) => {
         await openSettingsModal(win);
     },
@@ -228,6 +290,32 @@ const destinations = {
         await clickSection(win, "Providers");
         await win.getByText("New Provider", { exact: true }).click();
         await win.waitForTimeout(1000);
+    },
+    "settings.providers.firstSelected": async (win) => {
+        // Create a provider, then click on it in the list so detail
+        // pane appears. Used for exploring default-toggle UI.
+        await openSettingsModal(win);
+        await clickSection(win, "Providers");
+        await win.getByText("New Provider", { exact: true }).click();
+        await win.waitForTimeout(500);
+        await win.getByRole("button", { name: /Credential.*API key/ }).click();
+        await win.waitForTimeout(500);
+        await win
+            .getByRole("textbox", { name: "Provider name" })
+            .fill("First Provider");
+        await win
+            .getByRole("textbox", {
+                name: "Provider type (e.g. algolia, openai)",
+            })
+            .fill("test-type");
+        await win
+            .getByRole("textbox", { name: "Enter apiKey" })
+            .fill("test-key-1");
+        await win.getByRole("button", { name: "Create", exact: true }).click();
+        await win.waitForTimeout(1000);
+        // Click the created provider in the list to show detail pane.
+        await win.getByText("First Provider", { exact: true }).first().click();
+        await win.waitForTimeout(500);
     },
     "settings.providers.newCredential": async (win) => {
         await openSettingsModal(win);
