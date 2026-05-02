@@ -29,13 +29,12 @@ You'll need a registry account to run the auth-gated parts. If you don't have on
 
 Pick the right artifact from https://github.com/trops/dash-electron/releases/latest:
 
-| OS      | Arch          | File                          |
-| ------- | ------------- | ----------------------------- |
-| macOS   | Intel         | `Dash-x.y.z-darwin-x64.dmg`   |
-| macOS   | Apple Silicon | `Dash-x.y.z-darwin-arm64.dmg` |
-| Windows | x64           | `Dash-x.y.z-Setup.exe`        |
+| OS      | Arch                    | File                   |
+| ------- | ----------------------- | ---------------------- |
+| macOS   | Universal (Intel + ARM) | `Dash.dmg`             |
+| Windows | x64                     | `Dash-x.y.z-Setup.exe` |
 
-Note the version number — you'll need it on every finding.
+The macOS build is a universal binary — same `.dmg` works on both Intel and Apple Silicon. Note the version number from the GitHub release page — you'll need it on every finding.
 
 ### 0.2 First launch
 
