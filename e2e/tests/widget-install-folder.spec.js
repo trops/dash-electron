@@ -1,10 +1,22 @@
 const { test, expect } = require("@playwright/test");
+const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { launchApp, closeApp } = require("../helpers/electron-app");
 const {
     overrideOpenDialog,
     restoreFileDialogs,
 } = require("../helpers/file-dialog-override");
+
+function copyDirSync(src, dest) {
+    fs.mkdirSync(dest, { recursive: true });
+    for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+        const s = path.join(src, entry.name);
+        const d = path.join(dest, entry.name);
+        if (entry.isDirectory()) copyDirSync(s, d);
+        else if (entry.isFile()) fs.copyFileSync(s, d);
+    }
+}
 
 /**
  * Widget install — Load from Folder
@@ -37,12 +49,22 @@ let electronApp;
 let window;
 let tempUserData;
 
+let tempFixtureDir;
+
 test.beforeAll(async () => {
+    // Copy the fixture into a tmp dir so that any subsequent widget
+    // uninstall (which rm -rf's `widget.path`) cannot wipe the
+    // tracked test/fixtures/ source.
+    tempFixtureDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "dash-e2e-fixture-")
+    );
+    copyDirSync(FIXTURE_DIR, tempFixtureDir);
+
     ({ electronApp, window, tempUserData } = await launchApp({
         hermetic: true,
     }));
     await overrideOpenDialog(electronApp, {
-        filePaths: [FIXTURE_DIR],
+        filePaths: [tempFixtureDir],
     });
 });
 
