@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 /**
  * Regression-pin: dash-electron's `@trops/dash-core` dependency must
- * be at ≥ 0.1.473, the version where the Dashboard bulk-edit modal
- * (DashboardConfigModal) gains a Notifications tab. Lists every
- * widget instance in the current workspace that declares
+ * be at ≥ 0.1.474, the version where the Dashboard bulk-edit modal
+ * (DashboardConfigModal) gains a Notifications tab. (0.1.473 was
+ * tagged + published before PR #458 landed, so the tab actually
+ * shipped in 0.1.474 — pin floor reflects the version the user can
+ * actually see the feature in.)
+ *
+ * Lists every widget instance in the current workspace that declares
  * notifications, with per-row toggles + Enable all / Disable all
  * bulk controls + a search box. Toggles persist via the same
  * mainApi.notifications.setPreferences IPC the Settings panel uses,
@@ -60,7 +64,7 @@ assert.ok(
 
 // Strip any leading non-digit chars (e.g. ^, ~, >=) before semver compare.
 const stripped = pinned.replace(/^[^\d]*/, "");
-const minRequired = "0.1.473";
+const minRequired = "0.1.474";
 
 function semverGte(a, b) {
     const [aMajor, aMinor, aPatch] = a.split(".").map(Number);
