@@ -18,6 +18,10 @@ async function launchApp(options = {}) {
         env: {
             ...process.env,
             NODE_ENV: "development",
+            // Tells public/electron.js to expose `require` on globalThis as
+            // `__e2eRequire` so helpers can resolve modules from inside
+            // the evaluate sandbox (where lexical require is unavailable).
+            DASH_E2E: "1",
             ...(options.env || {}),
         },
     });

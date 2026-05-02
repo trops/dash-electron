@@ -97,10 +97,16 @@ test.describe("Google MCP server connectivity", () => {
         }
 
         // Use the app's MCP infrastructure to call the tool
-        const result = await electronApp.evaluate(async ({ ipcMain }) => {
-            // The main process should have mcpController available
-            const controller =
-                require("@trops/dash-core/electron").mcpController;
+        const result = await electronApp.evaluate(async (_electron) => {
+            // require() isn't lexically in scope inside Playwright's
+            // evaluate sandbox — use the bridge installed by
+            // public/electron.js when DASH_E2E=1.
+            const _require =
+                globalThis.__e2eRequire ||
+                (process.mainModule && process.mainModule.require);
+            const controller = _require(
+                "@trops/dash-core/electron"
+            ).mcpController;
             if (!controller) return { skipped: true };
             return controller.callTool(null, "Google Drive", "search", {
                 query: "test",
@@ -123,9 +129,13 @@ test.describe("Google MCP server connectivity", () => {
             return;
         }
 
-        const result = await electronApp.evaluate(async ({ ipcMain }) => {
-            const controller =
-                require("@trops/dash-core/electron").mcpController;
+        const result = await electronApp.evaluate(async (_electron) => {
+            const _require =
+                globalThis.__e2eRequire ||
+                (process.mainModule && process.mainModule.require);
+            const controller = _require(
+                "@trops/dash-core/electron"
+            ).mcpController;
             if (!controller) return { skipped: true };
             return controller.callTool(null, "Gmail", "search_emails", {
                 query: "test",
