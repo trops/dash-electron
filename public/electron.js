@@ -25,6 +25,15 @@ try {
     // dotenv may not be available in packaged builds — that's fine
 }
 
+// E2E test hook: Playwright's `electronApp.evaluate(fn)` wraps `fn` in a
+// fresh Function whose lexical scope loses the per-module `require`. We
+// expose this script's `require` on globalThis so e2e helpers can resolve
+// modules from inside the evaluate sandbox. Gated by DASH_E2E so it has
+// zero effect in normal or packaged runs.
+if (process.env.DASH_E2E === "1") {
+    globalThis.__e2eRequire = require;
+}
+
 const path = require("path");
 const { pathToFileURL } = require("url");
 const {

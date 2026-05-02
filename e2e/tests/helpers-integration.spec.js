@@ -166,7 +166,9 @@ test.describe("E2E helpers — integration smoke", () => {
 
     test("auth-token-injector seeded the registry token", async () => {
         const stored = await electronApp.evaluate(async (_electron) => {
-            const _require = process.mainModule && process.mainModule.require;
+            const _require =
+                globalThis.__e2eRequire ||
+                (process.mainModule && process.mainModule.require);
             const Store = _require("electron-store");
             const s = new Store({
                 name: "dash-registry-auth",
@@ -295,7 +297,9 @@ test.describe("E2E helpers — integration smoke", () => {
 
     test("mock-mcp-transport serves canned tools and call results", async () => {
         const result = await electronApp.evaluate(async (_electron) => {
-            const _require = process.mainModule && process.mainModule.require;
+            const _require =
+                globalThis.__e2eRequire ||
+                (process.mainModule && process.mainModule.require);
             const tryRequire = (id) => {
                 try {
                     return _require(id);

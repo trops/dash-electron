@@ -37,7 +37,9 @@ async function seedAuthToken(electronApp, opts = {}) {
 
     await electronApp.evaluate(
         async (_electron, { tokenValue, userIdValue }) => {
-            const _require = process.mainModule && process.mainModule.require;
+            const _require =
+                globalThis.__e2eRequire ||
+                (process.mainModule && process.mainModule.require);
             const Store = _require("electron-store");
             const s = new Store({
                 name: "dash-registry-auth",
@@ -56,7 +58,9 @@ async function clearAuthToken(electronApp) {
     if (!electronApp) return;
     await electronApp
         .evaluate(async (_electron) => {
-            const _require = process.mainModule && process.mainModule.require;
+            const _require =
+                globalThis.__e2eRequire ||
+                (process.mainModule && process.mainModule.require);
             const Store = _require("electron-store");
             const s = new Store({
                 name: "dash-registry-auth",

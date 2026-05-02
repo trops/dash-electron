@@ -24,7 +24,9 @@
 
 async function stubMcpServer(electronApp, stub) {
     await electronApp.evaluate(async (_electron, stubArg) => {
-        const moduleRequire = process.mainModule && process.mainModule.require;
+        const moduleRequire =
+            globalThis.__e2eRequire ||
+            (process.mainModule && process.mainModule.require);
 
         const tryRequire = (id) => {
             try {
@@ -146,7 +148,8 @@ async function restoreMcpClient(electronApp) {
         .evaluate(async () => {
             if (!global.__dashE2EMcpPatched) return;
             const moduleRequire =
-                process.mainModule && process.mainModule.require;
+                globalThis.__e2eRequire ||
+                (process.mainModule && process.mainModule.require);
             const tryRequire = (id) => {
                 try {
                     return moduleRequire(id);
