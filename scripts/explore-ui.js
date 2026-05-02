@@ -93,7 +93,11 @@ async function openSettingsModal(win) {
 }
 
 async function clickSection(win, sectionName) {
+    // Scope to the Settings dialog so we don't accidentally hit the
+    // app-sidebar "Account" button (which toggles the popover, not
+    // navigates inside the modal).
     await win
+        .getByRole("dialog")
         .getByRole("button", { name: sectionName, exact: true })
         .first()
         .click();
@@ -230,6 +234,10 @@ const destinations = {
     "settings.account": async (win) => {
         await openSettingsModal(win);
         await clickSection(win, "Account");
+    },
+    "settings.dashboards.section": async (win) => {
+        await openSettingsModal(win);
+        await clickSection(win, "Dashboards");
     },
 };
 
