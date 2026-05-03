@@ -646,6 +646,10 @@ function createWindow() {
             contextIsolation: true,
             sandbox: false,
             webSecurity: true,
+            // Disable Blink's auxclick feature so middle-click on a
+            // link can't open a new window via paths that bypass our
+            // setWindowOpenHandler. Defense-in-depth.
+            disableBlinkFeatures: "Auxclick",
         },
     });
     applyWindowHardening(mainWindow);
@@ -1019,6 +1023,7 @@ function createWindow() {
                             webPreferences: {
                                 nodeIntegration: false,
                                 contextIsolation: true,
+                                disableBlinkFeatures: "Auxclick",
                             },
                         });
 
@@ -2816,6 +2821,7 @@ function createPopoutWindow(workspaceId) {
             contextIsolation: true,
             sandbox: false,
             webSecurity: true,
+            disableBlinkFeatures: "Auxclick",
         },
     });
     applyWindowHardening(popoutWin);
@@ -2854,6 +2860,7 @@ function createWidgetPopoutWindow(workspaceId, widgetId) {
             contextIsolation: true,
             sandbox: false,
             webSecurity: true,
+            disableBlinkFeatures: "Auxclick",
         },
     });
     applyWindowHardening(popoutWin);
@@ -2899,6 +2906,7 @@ function createDebugWindow() {
             contextIsolation: true,
             sandbox: false,
             webSecurity: true,
+            disableBlinkFeatures: "Auxclick",
         },
     });
     applyWindowHardening(debugWindow);
