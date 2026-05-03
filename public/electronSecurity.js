@@ -60,13 +60,29 @@ function applyWindowHardening(win) {
         }
         event.preventDefault();
         if (isHttpUrl(url)) {
-            shell.openExternal(url).catch(() => {});
+            shell
+                .openExternal(url)
+                .catch((err) =>
+                    console.warn(
+                        "[electronSecurity] openExternal failed for",
+                        url,
+                        err && err.message
+                    )
+                );
         }
     });
 
     wc.setWindowOpenHandler(({ url }) => {
         if (isHttpUrl(url)) {
-            shell.openExternal(url).catch(() => {});
+            shell
+                .openExternal(url)
+                .catch((err) =>
+                    console.warn(
+                        "[electronSecurity] openExternal failed for",
+                        url,
+                        err && err.message
+                    )
+                );
         }
         return { action: "deny" };
     });

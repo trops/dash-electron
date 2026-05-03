@@ -43,14 +43,16 @@ function getUntrackedFiles() {
             encoding: "utf8",
         });
     } catch (e) {
-        // If git fails for any reason (not a repo, etc.), don't block —
-        // a CI run not in a git context isn't meaningful for this check.
-        console.warn(
-            "check-untracked-sources: git status failed; skipping check. (" +
-                e.message +
-                ")"
+        // ci.sh runs only in a git context (`gh auth setup-git` is part
+        // of the same flow). If `git status` fails here, something is
+        // genuinely wrong (corrupt repo, broken git install,
+        // permissions). Hard-fail so the gate doesn't silently turn
+        // into a no-op exactly when something is already off — the
+        // exact failure mode this script exists to prevent.
+        console.error(
+            "check-untracked-sources: git status failed (" + e.message + ")"
         );
-        return [];
+        process.exit(1);
     }
 
     return out
