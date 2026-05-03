@@ -33,14 +33,10 @@ const {
  *      and the v0.0.46x "always 1.0.0" regression
  *      (publishes-without-bump silently overwrote the registry
  *      record; resolveNextVersion now bumps).
- *
- * Note: the `_registryMeta` persist-back-to-disk step in
- * `themeRegistryController.prepareThemeForPublish` currently uses
- * the wrong call signature for `saveThemeForApplication`, so the
- * post-publish on-disk version stays at its pre-publish value. The
- * publish IPC's returned manifest (result.manifest) is the
- * authoritative source for "what the registry saw" until that bug
- * is fixed in dash-core.
+ *   3. After a successful publish, the theme on disk gains the
+ *      bumped version + `_registryMeta.packageName` so the next
+ *      publish picks up where we left off (dash-core v0.1.477 fix
+ *      to the `saveThemeForApplication` call signature).
  */
 
 const APP_ID = "@trops/dash-electron";
@@ -112,7 +108,7 @@ test.afterAll(async () => {
     } catch (_) {}
 });
 
-test("publishTheme writes a zip and POSTs the manifest with a bumped version", async () => {
+test("publishTheme writes a zip, POSTs the manifest, and persists registry meta on disk", async () => {
     clearHistory();
 
     const result = await window.evaluate(
@@ -160,16 +156,18 @@ test("publishTheme writes a zip and POSTs the manifest with a bumped version", a
         expect(entry.manifest.colors?.primary).toBeTruthy();
     });
 
-    await test.step("publish IPC returns the resolved next version", async () => {
-        // The persist-back-to-disk step (writing version + _registryMeta
-        // onto the theme) currently uses the wrong call signature in
-        // dash-core's themeRegistryController, so the on-disk version
-        // stays at the pre-publish value. We pin the contract that the
-        // PUBLISH IPC saw the bumped version (manifest.version above
-        // and result.manifest here). When the persist call site is
-        // fixed, swap this for the on-disk readback and the regression
-        // becomes visible if it ever flips back.
-        expect(result.manifest?.version).toBe("1.0.1");
-        expect(result.manifest?.scope).toBe(PUBLISHER_USERNAME);
+    await test.step("theme on disk gains _registryMeta after publish", async () => {
+        const list = await window.evaluate(
+            async (appId) =>
+                window.mainApi.themes.listThemesForApplication(appId),
+            APP_ID
+        );
+        const theme = list?.themes?.[THEME_KEY];
+        expect(theme).toBeTruthy();
+        expect(theme.version).toBe("1.0.1");
+        expect(theme._registryMeta?.packageName).toMatch(
+            new RegExp(`^${PUBLISHER_USERNAME}/`)
+        );
+        expect(theme._registryMeta?.lastPublishedVersion).toBe("1.0.1");
     });
 });
