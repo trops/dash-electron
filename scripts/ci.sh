@@ -103,6 +103,10 @@ npm run test:security
 step "Validating Electron runtime version (HIGH advisories closed)"
 npm run test:electron-pin
 
+# 5b2. Untracked-sources gate regression-pin
+step "Validating untracked-sources gate config"
+npm run test:untracked-pin
+
 # 5c. Electronegativity gate — fails on HIGH-severity Electron findings.
 # The audit-pin test enforces config (devDep present, scope = public/,
 # severity = high). The audit itself runs the scanner.
@@ -148,6 +152,12 @@ step "Configuring git credentials via gh"
 gh auth setup-git
 
 # --- Commit ---
+step "Checking for untracked source files"
+# Aborts the release if anything in public/, src/, scripts/, e2e/, etc. is
+# untracked. `git add -u` below only stages tracked-modified files; brand-
+# new files would silently get dropped from the release commit otherwise.
+npm run check:untracked
+
 step "Committing changes"
 # Stage only tracked, modified files — never use git add -A
 git add -u
