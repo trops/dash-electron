@@ -330,6 +330,58 @@ function readBody(req) {
     });
 }
 
+/**
+ * Minimal multipart/form-data parser. Returns the named string fields
+ * we care about (`manifest`) parsed as JSON, and the byte length of
+ * the binary `file` field. Anything else is dropped — this is just
+ * enough to assert on what the publish IPC sent, not a general-
+ * purpose parser.
+ */
+function parseMultipartFields(body, contentType) {
+    const result = { manifest: null, fileBytes: 0 };
+    if (!contentType || !/multipart\/form-data/i.test(contentType)) {
+        return result;
+    }
+    const m = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType);
+    if (!m) return result;
+    const boundary = `--${m[1] || m[2]}`;
+    const boundaryBuf = Buffer.from(boundary);
+    // Split on every boundary occurrence; the trailing `--` marker on
+    // the final boundary just leaves an empty/garbage tail we skip.
+    const parts = [];
+    let i = 0;
+    while (i < body.length) {
+        const start = body.indexOf(boundaryBuf, i);
+        if (start === -1) break;
+        const next = body.indexOf(boundaryBuf, start + boundaryBuf.length);
+        if (next === -1) break;
+        // Skip the boundary line itself (trailing CRLF).
+        const partStart = start + boundaryBuf.length;
+        const partEnd = next - 2; // strip trailing CRLF before next boundary
+        if (partEnd > partStart) parts.push(body.slice(partStart, partEnd));
+        i = next;
+    }
+    for (const part of parts) {
+        const headerEnd = part.indexOf("\r\n\r\n");
+        if (headerEnd === -1) continue;
+        const headers = part.slice(0, headerEnd).toString("utf-8");
+        const data = part.slice(headerEnd + 4);
+        const nameMatch = /name="([^"]+)"/i.exec(headers);
+        if (!nameMatch) continue;
+        const name = nameMatch[1];
+        if (name === "manifest") {
+            try {
+                result.manifest = JSON.parse(data.toString("utf-8"));
+            } catch {
+                /* leave manifest null on parse failure */
+            }
+        } else if (name === "file") {
+            result.fileBytes = data.length;
+        }
+    }
+    return result;
+}
+
 function send(res, status, payload, type = "application/json") {
     const body =
         type === "application/json"
@@ -414,13 +466,19 @@ function createMockRegistryServer() {
         // Publish: POST /api/publish
         if (method === "POST" && /^\/api\/publish\/?$/.test(url)) {
             const body = await readBody(req);
-            // Real endpoint is multipart/form-data with a zip + manifest;
-            // we record raw bytes + headers. Tests can parse if they care.
+            const contentType = req.headers["content-type"] || null;
+            // Real endpoint is multipart/form-data with a zip + manifest.
+            // We extract the `manifest` field (JSON string) so scope-remap
+            // / version-bump tests can assert on the manifest shape; the
+            // `file` field stays opaque (size only).
+            const parsed = parseMultipartFields(body, contentType);
             const entry = {
                 receivedAt: new Date().toISOString(),
                 bodyBytes: body.length,
-                contentType: req.headers["content-type"] || null,
+                contentType,
                 authorization: req.headers["authorization"] || null,
+                manifest: parsed.manifest,
+                fileBytes: parsed.fileBytes,
             };
             publishHistory.push(entry);
             return send(res, 200, {
