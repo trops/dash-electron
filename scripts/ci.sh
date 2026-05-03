@@ -99,6 +99,10 @@ CI=true npx craco build
 step "Validating Electron security hardening"
 npm run test:security
 
+# 5b1. Electron version regression-pin
+step "Validating Electron runtime version (HIGH advisories closed)"
+npm run test:electron-pin
+
 # 5c. Electronegativity gate — fails on HIGH-severity Electron findings.
 # The audit-pin test enforces config (devDep present, scope = public/,
 # severity = high). The audit itself runs the scanner.
