@@ -26,7 +26,6 @@
         "adm-zip": "^0.5.16",
         "algoliasearch": "^4.13.0",
         "algoliasearch-helper": "^3.8.2",
-        "axios": "^0.27.2",
         "croner": "^10.0.1",
         "crypto-js": "^4.1.1",
         "css-select": "^5.1.0",
