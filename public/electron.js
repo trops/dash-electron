@@ -43,8 +43,13 @@ const {
     dialog,
     Menu,
     autoUpdater,
+    session,
 } = require("electron");
 const widgetDrafts = require("./widgetDrafts.cjs");
+const {
+    applyWindowHardening,
+    applySessionHardening,
+} = require("./electronSecurity");
 
 // Handle Squirrel install/uninstall/update events on Windows
 if (require("electron-squirrel-startup")) app.quit();
@@ -643,6 +648,7 @@ function createWindow() {
             webSecurity: true,
         },
     });
+    applyWindowHardening(mainWindow);
 
     mainWindow.loadURL(
         isDev
@@ -1000,6 +1006,12 @@ function createWindow() {
                 const data = await extractionCacheController.get(
                     url,
                     async () => {
+                        // scanWindow is exempt from applyWindowHardening:
+                        // it installs its own scan-specific
+                        // will-navigate handler below that blocks ALL
+                        // navigation (including same-origin auth
+                        // redirects), which is stricter than the
+                        // generic same-origin-only rule used elsewhere.
                         const scanWindow = new BrowserWindow({
                             width: 1280,
                             height: 900,
@@ -2806,6 +2818,7 @@ function createPopoutWindow(workspaceId) {
             webSecurity: true,
         },
     });
+    applyWindowHardening(popoutWin);
 
     const hashRoute = `#/popout/${workspaceId}`;
     popoutWin.loadURL(
@@ -2843,6 +2856,7 @@ function createWidgetPopoutWindow(workspaceId, widgetId) {
             webSecurity: true,
         },
     });
+    applyWindowHardening(popoutWin);
 
     const hashRoute = `#/popout-widget/${workspaceId}/${widgetId}`;
     popoutWin.loadURL(
@@ -2887,6 +2901,7 @@ function createDebugWindow() {
             webSecurity: true,
         },
     });
+    applyWindowHardening(debugWindow);
 
     const hashRoute = "#/debug-console";
     debugWindow.loadURL(
@@ -2931,6 +2946,8 @@ function destroyDebugWindow() {
 }
 
 app.whenReady().then(() => {
+    applySessionHardening(session.defaultSession);
+
     pe.init({
         confirmInstall: async (plugins) => {
             const answer = await dialog.showMessageBox({

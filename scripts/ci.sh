@@ -95,6 +95,10 @@ fi
 step "Running CI build"
 CI=true npx craco build
 
+# 5b. Security hardening regression-pin
+step "Validating Electron security hardening"
+npm run test:security
+
 # 6. Widget tests (disabled — test references stale local modules moved to @trops/dash-core)
 # TODO: update testWidgetIntegration.cjs to import from @trops/dash-core/electron
 # if [[ -f scripts/testWidgetIntegration.cjs ]]; then
