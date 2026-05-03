@@ -391,7 +391,6 @@ const {
     transformFile,
     readJSONFromFile,
     readDataFromURL,
-    extractColorsFromImageURL,
     saveProvider,
     listProviders,
     getProvider,
@@ -505,7 +504,6 @@ const {
     TRANSFORM_FILE,
     READ_JSON,
     READ_DATA_URL,
-    EXTRACT_COLORS_FROM_IMAGE,
     PROVIDER_SAVE,
     PROVIDER_LIST,
     PROVIDER_GET,
@@ -1291,10 +1289,6 @@ function createWindow() {
                 mappingFunctionBody,
                 args
             );
-        });
-        logger.loggedHandle(EXTRACT_COLORS_FROM_IMAGE, (e, message) => {
-            const { url } = message;
-            extractColorsFromImageURL(getSenderWindow(e), url);
         });
         logger.loggedHandle(DATA_SAVE_TO_FILE, (e, message) =>
             saveToFile(
