@@ -117,6 +117,8 @@
         "validate:manifest": "node scripts/validateWidget.cjs",
         "test:widgets": "node scripts/testWidgetIntegration.cjs",
         "test:security": "node scripts/test-electron-security.js",
+        "test:audit-pin": "node scripts/test-electronegativity-pin.js",
+        "audit:electron": "npx -y @doyensec/electronegativity@1.10.3 -i public -s high -r",
         "screenshot": "node scripts/screenshot.js",
         "test:e2e": "npx playwright test --config=e2e/playwright.config.js",
         "test:e2e:headed": "npx playwright test --config=e2e/playwright.config.js --headed",
