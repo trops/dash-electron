@@ -2,7 +2,6 @@ import babel from "@rollup/plugin-babel";
 import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
 import postcss from "rollup-plugin-postcss";
-import filesize from "rollup-plugin-filesize";
 import autoprefixer from "autoprefixer";
 import external from "rollup-plugin-peer-deps-external";
 import { createRequire } from "module";
@@ -49,7 +48,6 @@ const PLUGINS = [
     commonjs({
         include: "node_modules/**",
     }),
-    filesize(),
     // ts({
     //   typescript,
     //   // sourceMap: true,
