@@ -99,6 +99,15 @@ CI=true npx craco build
 step "Validating Electron security hardening"
 npm run test:security
 
+# 5c. Electronegativity gate — fails on HIGH-severity Electron findings.
+# The audit-pin test enforces config (devDep present, scope = public/,
+# severity = high). The audit itself runs the scanner.
+step "Pinning electronegativity gate config"
+npm run test:audit-pin
+
+step "Auditing Electron-specific security (electronegativity)"
+npm run audit:electron
+
 # 6. Widget tests (disabled — test references stale local modules moved to @trops/dash-core)
 # TODO: update testWidgetIntegration.cjs to import from @trops/dash-core/electron
 # if [[ -f scripts/testWidgetIntegration.cjs ]]; then
