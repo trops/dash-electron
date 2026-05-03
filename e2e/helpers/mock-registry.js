@@ -225,6 +225,21 @@ function clearPackages() {
     packages = new Map();
 }
 
+// Profile returned by GET /api/auth/me. Tests that publish need
+// `username` to seed the publishing scope; everything else is
+// cosmetic. `setAuthProfile()` lets a spec override it without
+// restarting the server.
+let authProfile = {
+    username: "trops",
+    displayName: "trops",
+    email: "trops@example.com",
+    id: "test-user",
+};
+
+function setAuthProfile(partial) {
+    authProfile = { ...authProfile, ...partial };
+}
+
 function getPublishHistory() {
     return publishHistory.slice();
 }
@@ -399,6 +414,22 @@ function createMockRegistryServer() {
         const url = req.url || "";
         const method = req.method || "GET";
 
+        // Auth profile: GET /api/auth/me — the publish flows read
+        // `profile.username` to derive the publishing scope, so any
+        // spec that exercises publishWidget / publishTheme needs the
+        // mock to answer here. Returned shape mirrors the real
+        // registry's `{ user: { username, displayName, ... } }`.
+        if (method === "GET" && /^\/api\/auth\/me\/?$/.test(url)) {
+            return send(res, 200, {
+                user: {
+                    username: authProfile.username,
+                    displayName: authProfile.displayName,
+                    email: authProfile.email,
+                    id: authProfile.id,
+                },
+            });
+        }
+
         // Index: GET /api/packages (no scope/name)
         if (method === "GET" && /^\/api\/packages\/?(\?.*)?$/.test(url)) {
             const list = Array.from(packages.values()).map(indexEntryFor);
@@ -538,5 +569,6 @@ module.exports = {
     getPublishHistory,
     getDeleteHistory,
     clearHistory,
+    setAuthProfile,
     THEMES: STOCK_THEMES, // kept for back-compat with existing spec
 };
