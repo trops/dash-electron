@@ -27,7 +27,16 @@ async function main() {
     const electronApp = await electron.launch({
         args: [path.join(ROOT, "public/electron.js")],
         cwd: ROOT,
-        env: { ...process.env, NODE_ENV: "development" },
+        env: {
+            ...process.env,
+            NODE_ENV: "development",
+            // Mirror `npm run dev` / `npm run electron`: when dash-core or
+            // dash-react is symlinked via `link-core` / `link-react`,
+            // require() must resolve from the symlink path so transitive
+            // deps (electron-store, etc.) are found in dash-electron's
+            // node_modules instead of failing inside the linked repo.
+            NODE_OPTIONS: "--preserve-symlinks",
+        },
     });
 
     const window = await electronApp.firstWindow();
