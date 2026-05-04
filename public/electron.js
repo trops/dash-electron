@@ -1391,7 +1391,8 @@ function createWindow() {
                 message.serverName,
                 message.toolName,
                 message.args,
-                message.allowedTools
+                message.allowedTools,
+                message.widgetId
             )
         );
         logger.loggedHandle(MCP_LIST_RESOURCES, (e, message) =>
