@@ -156,6 +156,33 @@ const extendedApi = {
             return () => ipcRenderer.removeListener("debug:log-entry", handler);
         },
     },
+    // Slice-2 widget-MCP user grants. The runtime gate reads these — a
+    // widget with a manifest but no grant is denied (fail-closed).
+    widgetMcp: {
+        getGrant: (widgetId) =>
+            ipcRenderer.invoke("widget-mcp:get-grant", widgetId),
+        setGrant: (widgetId, perms) =>
+            ipcRenderer.invoke("widget-mcp:set-grant", widgetId, perms),
+        revoke: (widgetId) => ipcRenderer.invoke("widget-mcp:revoke", widgetId),
+        revokeServer: (widgetId, serverName) =>
+            ipcRenderer.invoke(
+                "widget-mcp:revoke-server",
+                widgetId,
+                serverName
+            ),
+        listAll: () => ipcRenderer.invoke("widget-mcp:list-all"),
+        // Subscribe to "freshly installed widget needs consent" events
+        // emitted by widgetRegistry's install handlers.
+        onConsentRequired: (callback) => {
+            const handler = (_event, payload) => callback(payload);
+            ipcRenderer.on("widget:mcp-consent-required", handler);
+            return () =>
+                ipcRenderer.removeListener(
+                    "widget:mcp-consent-required",
+                    handler
+                );
+        },
+    },
 };
 
 // Expose the context bridge for renderer -> main communication

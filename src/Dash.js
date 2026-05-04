@@ -24,6 +24,7 @@ import { DebugConsole } from "./DebugConsole";
 import { AiAssistantPanel } from "./AiAssistant/AiAssistantPanel";
 import { WidgetBuilderModal } from "./AiAssistant/WidgetBuilderModal";
 import { InstallExternalMcpModal } from "./AiAssistant/InstallExternalMcpModal";
+import { WidgetMcpConsentModal } from "./AiAssistant/WidgetMcpConsentModal";
 
 // Local widgets that integrate with Dash. We discover every
 // `src/Widgets/<Package>/<Widget>.dash.js` via webpack's require.context
@@ -879,6 +880,7 @@ class App extends React.Component {
                                     regardless of which view the user
                                     is currently in. */}
                                 <InstallExternalMcpModal />
+                                <WidgetMcpConsentModal />
                                 {this.state.isWidgetBuilderOpen && (
                                     <WidgetBuilderModal
                                         isOpen={this.state.isWidgetBuilderOpen}
