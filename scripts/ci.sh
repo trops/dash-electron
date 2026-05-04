@@ -107,6 +107,13 @@ npm run test:electron-pin
 step "Validating untracked-sources gate config"
 npm run test:untracked-pin
 
+# 5b3. Main-process must not require the dash-core renderer bundle.
+# A bare `require("@trops/dash-core")` in public/electron.js pulls the
+# renderer bundle (which assumes window/document) into the main process
+# and throws "ReferenceError: window is not defined" at startup.
+step "Validating main-process imports of dash-core"
+npm run test:no-renderer-in-main
+
 # 5c. Electronegativity gate — fails on HIGH-severity Electron findings.
 # The audit-pin test enforces config (devDep present, scope = public/,
 # severity = high). The audit itself runs the scanner.
