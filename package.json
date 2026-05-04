@@ -1,7 +1,7 @@
 {
     "name": "@trops/dash-electron",
     "productName": "Dash",
-    "version": "0.0.639",
+    "version": "0.0.640",
     "description": "A Dashboard Generator",
     "author": "John P. Giatropoulos",
     "publishConfig": {
@@ -107,6 +107,7 @@
         "test:audit-pin": "node scripts/test-electronegativity-pin.js",
         "test:electron-pin": "node scripts/test-electron-version-pin.js",
         "test:untracked-pin": "node scripts/test-untracked-sources-pin.js",
+        "test:no-renderer-in-main": "node scripts/test-no-renderer-bundle-in-main.js",
         "check:untracked": "node scripts/check-untracked-sources.js",
         "audit:electron": "npx -y @doyensec/electronegativity@1.10.3 -i public -s medium -x sandboxjscheck,preloadjscheck,openexternaljscheck,cspglobalcheck,csphtmlcheck,cspjscheck,remotemodulejscheck -r",
         "screenshot": "node scripts/screenshot.js",

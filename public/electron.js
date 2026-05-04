@@ -608,9 +608,11 @@ const {
 // Widget System
 const { setupWidgetRegistryHandlers } = widgetRegistry;
 
-// Slice-2 widget-MCP user-grant store
+// Slice-2 widget-MCP user-grant store. Use the /electron subpath —
+// the bare "@trops/dash-core" resolves to the renderer bundle which
+// assumes window/document.
 const { setupWidgetMcpGrantsHandlers } =
-    require("@trops/dash-core").widgetMcpGrantsController;
+    require("@trops/dash-core/electron").widgetMcpGrantsController;
 
 /**
  * Create the main window of the application
