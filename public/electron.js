@@ -1383,7 +1383,8 @@ function createWindow() {
                 message.serverName,
                 message.mcpConfig,
                 message.credentials,
-                message.workspaceId
+                message.workspaceId,
+                message.pathScope
             )
         );
         logger.loggedHandle(MCP_STOP_SERVER, (e, message) =>
