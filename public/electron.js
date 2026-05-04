@@ -1382,14 +1382,23 @@ function createWindow() {
                 getSenderWindow(e),
                 message.serverName,
                 message.mcpConfig,
-                message.credentials
+                message.credentials,
+                message.workspaceId
             )
         );
         logger.loggedHandle(MCP_STOP_SERVER, (e, message) =>
-            mcpController.stopServer(getSenderWindow(e), message.serverName)
+            mcpController.stopServer(
+                getSenderWindow(e),
+                message.serverName,
+                message.workspaceId
+            )
         );
         logger.loggedHandle(MCP_LIST_TOOLS, (e, message) =>
-            mcpController.listTools(getSenderWindow(e), message.serverName)
+            mcpController.listTools(
+                getSenderWindow(e),
+                message.serverName,
+                message.workspaceId
+            )
         );
         logger.loggedHandle(MCP_CALL_TOOL, (e, message) =>
             mcpController.callTool(
@@ -1398,23 +1407,30 @@ function createWindow() {
                 message.toolName,
                 message.args,
                 message.allowedTools,
-                message.widgetId
+                message.widgetId,
+                message.workspaceId
             )
         );
         logger.loggedHandle(MCP_LIST_RESOURCES, (e, message) =>
-            mcpController.listResources(getSenderWindow(e), message.serverName)
+            mcpController.listResources(
+                getSenderWindow(e),
+                message.serverName,
+                message.workspaceId
+            )
         );
         logger.loggedHandle(MCP_READ_RESOURCE, (e, message) =>
             mcpController.readResource(
                 getSenderWindow(e),
                 message.serverName,
-                message.uri
+                message.uri,
+                message.workspaceId
             )
         );
         logger.loggedHandle(MCP_SERVER_STATUS, (e, message) =>
             mcpController.getServerStatus(
                 getSenderWindow(e),
-                message.serverName
+                message.serverName,
+                message.workspaceId
             )
         );
         logger.loggedHandle(MCP_GET_CATALOG, (e) =>
