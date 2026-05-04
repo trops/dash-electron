@@ -608,6 +608,10 @@ const {
 // Widget System
 const { setupWidgetRegistryHandlers } = widgetRegistry;
 
+// Slice-2 widget-MCP user-grant store
+const { setupWidgetMcpGrantsHandlers } =
+    require("@trops/dash-core").widgetMcpGrantsController;
+
 /**
  * Create the main window of the application
  */
@@ -1714,6 +1718,7 @@ function createWindow() {
 
         // --- Widget System ---
         setupWidgetRegistryHandlers();
+        setupWidgetMcpGrantsHandlers();
 
         // Ensure @ai-built/ directory exists for the widget builder CLI
         try {
