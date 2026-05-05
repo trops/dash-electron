@@ -69,7 +69,7 @@ export const WidgetMcpConsentModal = () => {
 
     if (!request) return null;
 
-    const { widgetId, declared } = request;
+    const { widgetId, declared, discovered } = request;
     const declaredServers = declared.servers || {};
 
     const toggleEntry = (serverName, kind, key) => {
@@ -108,9 +108,14 @@ export const WidgetMcpConsentModal = () => {
         setError(null);
         setIsSubmitting(true);
         try {
+            const grantBody = buildGrantedPerms();
+            // Tag the persisted grant with how the user got here:
+            //   "discovered" — install-time scan synthesized the manifest
+            //   "declared"   — developer's package.json declared it
+            grantBody.grantOrigin = discovered ? "discovered" : "declared";
             const ok = await window.mainApi?.widgetMcp?.setGrant?.(
                 widgetId,
-                buildGrantedPerms()
+                grantBody
             );
             if (ok === false) {
                 setError("Could not save grant. See main-process logs.");
@@ -130,9 +135,10 @@ export const WidgetMcpConsentModal = () => {
         try {
             // Write an empty-servers grant so the widget is clearly "user
             // decided no" — the gate denies (no servers entry) AND the
-            // install flow doesn't re-prompt.
+            // install flow doesn't re-prompt. Origin tag preserved.
             await window.mainApi?.widgetMcp?.setGrant?.(widgetId, {
                 servers: {},
+                grantOrigin: discovered ? "discovered" : "declared",
             });
             setRequest(null);
         } catch (err) {
@@ -149,22 +155,34 @@ export const WidgetMcpConsentModal = () => {
 
     return (
         <Modal isOpen={!!request} setIsOpen={(open) => !open && handleCancel()}>
-            <div className="flex flex-col w-full max-w-xl">
+            <div
+                className={`flex flex-col w-full max-w-xl ${
+                    discovered ? "ring-2 ring-amber-500" : ""
+                }`}
+            >
                 <div
                     className={`flex items-center gap-3 px-5 py-4 border-b ${borderColor}`}
                 >
                     <FontAwesomeIcon
-                        icon="shield-halved"
-                        className="h-4 w-4 text-amber-400"
+                        icon={
+                            discovered
+                                ? "triangle-exclamation"
+                                : "shield-halved"
+                        }
+                        className={`h-4 w-4 ${
+                            discovered ? "text-amber-500" : "text-amber-400"
+                        }`}
                     />
                     <div>
                         <div className="text-base font-semibold text-gray-100">
-                            Grant MCP permissions: {widgetId}
+                            {discovered
+                                ? `Discovered MCP usage: ${widgetId}`
+                                : `Grant MCP permissions: ${widgetId}`}
                         </div>
                         <div className="text-xs text-gray-400 mt-0.5">
-                            This widget requests access to the MCP servers
-                            below. Only granted items are enforced — uncheck
-                            anything you don't want to allow.
+                            {discovered
+                                ? "This widget did not declare its MCP needs. The list below is from a static scan of the source — it's a best-effort guess, not the developer's declaration. Review carefully before granting."
+                                : "This widget requests access to the MCP servers below. Only granted items are enforced — uncheck anything you don't want to allow."}
                         </div>
                     </div>
                 </div>
