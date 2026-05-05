@@ -614,6 +614,11 @@ const { setupWidgetRegistryHandlers } = widgetRegistry;
 const { setupWidgetMcpGrantsHandlers } =
     require("@trops/dash-core/electron").widgetMcpGrantsController;
 
+// JIT consent (Phase 1) — main process listens for renderer's
+// permission-response IPC and routes to dash-core's jitConsent module.
+const { setupJitConsentHandlers } =
+    require("@trops/dash-core/electron").jitConsent;
+
 /**
  * Create the main window of the application
  */
@@ -1738,6 +1743,7 @@ function createWindow() {
         // --- Widget System ---
         setupWidgetRegistryHandlers();
         setupWidgetMcpGrantsHandlers();
+        setupJitConsentHandlers();
 
         // Ensure @ai-built/ directory exists for the widget builder CLI
         try {

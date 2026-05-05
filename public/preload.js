@@ -156,6 +156,26 @@ const extendedApi = {
             return () => ipcRenderer.removeListener("debug:log-entry", handler);
         },
     },
+    // Just-in-time consent (Phase 1). The main process emits
+    // `widget:permission-required` when a widget's call hits the gate
+    // without a grant; the renderer subscribes via onRequired and
+    // replies via respond.
+    permissions: {
+        onRequired: (callback) => {
+            const handler = (_event, payload) => callback(payload);
+            ipcRenderer.on("widget:permission-required", handler);
+            return () =>
+                ipcRenderer.removeListener(
+                    "widget:permission-required",
+                    handler
+                );
+        },
+        respond: (requestId, decision) =>
+            ipcRenderer.send("widget:permission-response", {
+                requestId,
+                decision,
+            }),
+    },
     // Slice-2 widget-MCP user grants. The runtime gate reads these — a
     // widget with a manifest but no grant is denied (fail-closed).
     widgetMcp: {
