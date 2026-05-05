@@ -50,11 +50,73 @@
 const fs = require("fs");
 const path = require("path");
 
-const INVOKE_RE = /ipcRenderer\.invoke\(\s*([A-Z_][A-Z0-9_]*)\s*[,)]/g;
+// Channel arguments accept three forms:
+//   - ALL_CAPS constant identifier (e.g. THEME_LIST)
+//   - Double-quoted string literal (e.g. "theme-list")
+//   - Single-quoted string literal (e.g. 'theme-list')
+// Each pattern captures into one of three groups so the parser can
+// tell which form was used. The constant form's VALUE is then
+// resolved via the constant map; literal forms are their own value.
+const INVOKE_RE =
+    /ipcRenderer\.invoke\(\s*(?:([A-Z_][A-Z0-9_]*)|"([^"]*)"|'([^']*)')\s*[,)]/g;
 const HANDLER_RE =
-    /(?:logger\.loggedHandle|ipcMain\.handle)\(\s*([A-Z_][A-Z0-9_]*)\s*,/g;
+    /(?:logger\.loggedHandle|ipcMain\.handle)\(\s*(?:([A-Z_][A-Z0-9_]*)|"([^"]*)"|'([^']*)')\s*,/g;
+// const NAME = "value" or const NAME = 'value' — used to build the
+// constant map from electron/events/*.js.
+const CONST_DECL_RE =
+    /const\s+([A-Z_][A-Z0-9_]*)\s*=\s*(?:"([^"]*)"|'([^']*)')\s*;?/g;
 
 const GATE_REFS = ["gateToolCall", "gateFsCall", "_runFsGate"];
+
+// Strip block (`/* … */`) and line (`// …`) comments. Documentation
+// strings often include example handler/invoke calls (e.g.
+// `ipcMain.handle("my-channel", …)` in JSDoc) and the parser would
+// pick those up, polluting the audit. This is a coarse strip — it
+// does not preserve string literals containing comment-like
+// substrings — but it is sufficient for source files in this repo.
+function _stripComments(source) {
+    let out = "";
+    let i = 0;
+    const n = source.length;
+    while (i < n) {
+        const c = source[i];
+        const next = source[i + 1];
+        // Block comment
+        if (c === "/" && next === "*") {
+            const end = source.indexOf("*/", i + 2);
+            i = end === -1 ? n : end + 2;
+            continue;
+        }
+        // Line comment
+        if (c === "/" && next === "/") {
+            const end = source.indexOf("\n", i + 2);
+            i = end === -1 ? n : end;
+            continue;
+        }
+        // String — copy through verbatim so e.g.
+        // `"// not a comment"` is preserved.
+        if (c === '"' || c === "'" || c === "`") {
+            const quote = c;
+            out += c;
+            i++;
+            while (i < n) {
+                const ch = source[i];
+                out += ch;
+                if (ch === "\\" && i + 1 < n) {
+                    out += source[i + 1];
+                    i += 2;
+                    continue;
+                }
+                i++;
+                if (ch === quote) break;
+            }
+            continue;
+        }
+        out += c;
+        i++;
+    }
+    return out;
+}
 
 // Pulled from a handler body: returns the first identifier called via
 // either a bareword or `module.method` form. Examples:
@@ -110,12 +172,56 @@ function classifyEvent({
     return "unknown";
 }
 
-function parseInvokes(source) {
-    const seen = new Set();
-    for (const m of source.matchAll(INVOKE_RE)) {
-        seen.add(m[1]);
+function parseConstantDeclarations(source) {
+    source = _stripComments(source);
+    const map = new Map();
+    CONST_DECL_RE.lastIndex = 0;
+    let m;
+    while ((m = CONST_DECL_RE.exec(source)) !== null) {
+        const name = m[1];
+        const value = m[2] !== undefined ? m[2] : m[3];
+        if (typeof name === "string" && typeof value === "string") {
+            map.set(name, value);
+        }
     }
-    return [...seen];
+    return map;
+}
+
+// Returns array of { displayName, value, isLiteral }. `displayName`
+// is the constant name when one was used (preferred for table
+// readability), or the literal string otherwise. `value` is the
+// resolved channel string used for cross-referencing across api
+// files and handler registrations. `isLiteral` is true when the
+// invoke used an inline string rather than a constant.
+function parseInvokes(source, constantMap) {
+    source = _stripComments(source);
+    const seen = new Map(); // value → entry
+    INVOKE_RE.lastIndex = 0;
+    let m;
+    while ((m = INVOKE_RE.exec(source)) !== null) {
+        const constName = m[1];
+        const dbl = m[2];
+        const sgl = m[3];
+        let displayName;
+        let value;
+        let isLiteral;
+        if (constName) {
+            displayName = constName;
+            value =
+                constantMap && constantMap.has(constName)
+                    ? constantMap.get(constName)
+                    : null;
+            isLiteral = false;
+        } else {
+            displayName = dbl !== undefined ? dbl : sgl;
+            value = displayName;
+            isLiteral = true;
+        }
+        if (!seen.has(displayName)) {
+            seen.set(displayName, { displayName, value, isLiteral });
+        }
+    }
+    return [...seen.values()];
 }
 
 function _extractHandlerBody(source, startIdx) {
@@ -131,16 +237,39 @@ function _extractHandlerBody(source, startIdx) {
     return source.slice(startIdx, i);
 }
 
-function parseHandlers(source) {
+function parseHandlers(source, constantMap) {
+    source = _stripComments(source);
     const out = [];
     HANDLER_RE.lastIndex = 0;
     let m;
     while ((m = HANDLER_RE.exec(source)) !== null) {
-        const channel = m[1];
+        const constName = m[1];
+        const dbl = m[2];
+        const sgl = m[3];
+        let displayName;
+        let value;
+        let isLiteral;
+        if (constName) {
+            displayName = constName;
+            value =
+                constantMap && constantMap.has(constName)
+                    ? constantMap.get(constName)
+                    : null;
+            isLiteral = false;
+        } else {
+            displayName = dbl !== undefined ? dbl : sgl;
+            value = displayName;
+            isLiteral = true;
+        }
         const bodyStart = HANDLER_RE.lastIndex;
         const body = _extractHandlerBody(source, bodyStart);
         out.push({
-            channel,
+            // legacy alias kept for any caller referring to .channel; new
+            // code should read .displayName
+            channel: displayName,
+            displayName,
+            value,
+            isLiteral,
             handlerHasWidgetId: /\bwidgetId\b/.test(body),
             handlerHasGateRef: GATE_REFS.some((id) =>
                 new RegExp("\\b" + id + "\\b").test(body)
@@ -149,6 +278,20 @@ function parseHandlers(source) {
         });
     }
     return out;
+}
+
+// When an invoke side references a constant and the handler side uses
+// an inline string with the same value, prefer the constant name in
+// the audit table — `THEME_LIST` is more readable than `theme-list`
+// and matches the codebase's convention.
+function resolveChannel(invokeEntry, handlerEntry) {
+    const candidates = [invokeEntry, handlerEntry].filter(Boolean);
+    const constantHit = candidates.find((c) => c && c.isLiteral === false);
+    const literalHit = candidates.find((c) => c && c.isLiteral === true);
+    return {
+        displayName: (constantHit || literalHit || candidates[0]).displayName,
+        value: (candidates[0] || {}).value,
+    };
 }
 
 // Walk every dash-core controller file and return a Set<string> of
@@ -220,32 +363,153 @@ function _readApiSources(dashCoreRoot) {
     return out;
 }
 
+// Build the constant-name → string-value map from
+// `dash-core/electron/events/*Events.js`. Required so the audit can
+// resolve `ipcRenderer.invoke(THEME_LIST, …)` to its actual channel
+// value `"theme-list"`, which is how the handler side identifies the
+// channel when it uses an inline string.
+function loadConstantMap(dashCoreRoot) {
+    const map = new Map();
+    const eventsDir = path.join(dashCoreRoot, "electron", "events");
+    if (!fs.existsSync(eventsDir)) return map;
+    for (const file of fs.readdirSync(eventsDir)) {
+        if (!file.endsWith(".js")) continue;
+        const src = fs.readFileSync(path.join(eventsDir, file), "utf8");
+        for (const [name, value] of parseConstantDeclarations(src)) {
+            map.set(name, value);
+        }
+    }
+    return map;
+}
+
+// Walk all .js files under `dash-core/electron/` (skipping node_modules,
+// dist, *.test.js) and aggregate handler registrations. dash-core
+// declares some handlers in utility modules (e.g.
+// `electron/utils/clientCache.js`'s `setupCacheHandlers`) that the
+// dash-electron-only handler scan would miss.
+function _walkJs(dir, out, skipDirs) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            if (skipDirs.has(entry.name)) continue;
+            _walkJs(full, out, skipDirs);
+        } else if (
+            entry.isFile() &&
+            entry.name.endsWith(".js") &&
+            !entry.name.endsWith(".test.js")
+        ) {
+            out.push(full);
+        }
+    }
+}
+
+function _collectHandlersFromDashCore(dashCoreRoot, constantMap) {
+    const electronDir = path.join(dashCoreRoot, "electron");
+    if (!fs.existsSync(electronDir)) return [];
+    const skipDirs = new Set(["node_modules", "dist", "test"]);
+    const files = [];
+    _walkJs(electronDir, files, skipDirs);
+    const handlers = [];
+    for (const file of files) {
+        const src = fs.readFileSync(file, "utf8");
+        // Cheap pre-filter so we don't slice every handler body in
+        // every controller.
+        if (
+            !/(?:logger\.loggedHandle|ipcMain\.handle)\s*\(/.test(src) ||
+            !/(?:logger\.loggedHandle|ipcMain\.handle)\(\s*(?:[A-Z_][A-Z0-9_]*|"[^"]*"|'[^']*')\s*,/.test(
+                src
+            )
+        ) {
+            continue;
+        }
+        for (const h of parseHandlers(src, constantMap)) {
+            handlers.push(h);
+        }
+    }
+    return handlers;
+}
+
 function buildAuditTable(dashElectronRoot, dashCoreRoot) {
+    const constantMap = loadConstantMap(dashCoreRoot);
     const electronJsPath = path.join(dashElectronRoot, "public", "electron.js");
     const electronSrc = fs.readFileSync(electronJsPath, "utf8");
-    const handlers = parseHandlers(electronSrc);
-    const handlerByChannel = new Map();
-    for (const h of handlers) handlerByChannel.set(h.channel, h);
+    const preloadJsPath = path.join(dashElectronRoot, "public", "preload.js");
+    const preloadSrc = fs.existsSync(preloadJsPath)
+        ? fs.readFileSync(preloadJsPath, "utf8")
+        : "";
+
+    // Aggregate handlers from BOTH dash-electron's main script AND
+    // dash-core's electron/ tree. The latter catches setup helpers
+    // like `clientCache.setupCacheHandlers()` that register inline
+    // handlers from inside dash-core.
+    const allHandlers = [
+        ...parseHandlers(electronSrc, constantMap),
+        ..._collectHandlersFromDashCore(dashCoreRoot, constantMap),
+    ];
+
+    // Cross-reference is keyed by channel VALUE (the resolved string),
+    // so a constant-form invoke matches an inline-string handler with
+    // the same value.
+    const handlerByValue = new Map();
+    for (const h of allHandlers) {
+        if (typeof h.value !== "string") continue;
+        // First handler wins; with both dash-electron and dash-core
+        // registering, the dash-electron one is parsed first and is
+        // generally the more specific delegate target.
+        if (!handlerByValue.has(h.value)) handlerByValue.set(h.value, h);
+    }
 
     const gatedDelegates = _collectGatedDelegates(dashCoreRoot);
 
-    const invokes = new Map();
+    // Invokes keyed by value. Each entry remembers the apiFiles it
+    // appeared in plus its preferred displayName (constant form
+    // wins over inline literal).
+    const invokesByValue = new Map();
+    const recordInvoke = (inv, file) => {
+        if (typeof inv.value !== "string") return;
+        let entry = invokesByValue.get(inv.value);
+        if (!entry) {
+            entry = {
+                value: inv.value,
+                displayName: inv.displayName,
+                isLiteral: inv.isLiteral,
+                files: new Set(),
+            };
+            invokesByValue.set(inv.value, entry);
+        }
+        // Prefer the constant form's displayName for readability.
+        if (entry.isLiteral && !inv.isLiteral) {
+            entry.displayName = inv.displayName;
+            entry.isLiteral = false;
+        }
+        entry.files.add(file);
+    };
     for (const { file, source } of _readApiSources(dashCoreRoot)) {
-        for (const ch of parseInvokes(source)) {
-            const entry = invokes.get(ch) || { files: new Set() };
-            entry.files.add(file);
-            invokes.set(ch, entry);
+        for (const inv of parseInvokes(source, constantMap)) {
+            recordInvoke(inv, file);
+        }
+    }
+    // Also scan dash-electron's preload.js — it exposes some
+    // namespaces (clientCache, responseCache, etc.) directly via
+    // inline-string `ipcRenderer.invoke(...)` calls without going
+    // through dash-core's api/* wrappers. Without this scan those
+    // channels would falsely classify as `phantom` (handler exists,
+    // no invoke side).
+    if (preloadSrc) {
+        for (const inv of parseInvokes(preloadSrc, constantMap)) {
+            recordInvoke(inv, "preload.js");
         }
     }
 
-    const allChannels = new Set([
-        ...invokes.keys(),
-        ...handlerByChannel.keys(),
+    const allValues = new Set([
+        ...invokesByValue.keys(),
+        ...handlerByValue.keys(),
     ]);
     const rows = [];
-    for (const channel of allChannels) {
-        const inv = invokes.get(channel);
-        const h = handlerByChannel.get(channel);
+    for (const value of allValues) {
+        const inv = invokesByValue.get(value);
+        const h = handlerByValue.get(value);
+        const display = resolveChannel(inv, h);
         const delegateHasGateRef =
             h && h.delegate ? gatedDelegates.has(h.delegate) : false;
         const classification = classifyEvent({
@@ -256,7 +520,7 @@ function buildAuditTable(dashElectronRoot, dashCoreRoot) {
             delegateHasGateRef,
         });
         rows.push({
-            channel,
+            channel: display.displayName,
             classification,
             apiFiles: inv ? [...inv.files].sort().join(", ") : "—",
             delegate: h && h.delegate ? h.delegate : "—",
@@ -329,6 +593,9 @@ module.exports = {
     classifyEvent,
     parseInvokes,
     parseHandlers,
+    parseConstantDeclarations,
+    resolveChannel,
+    loadConstantMap,
     buildAuditTable,
     rowsToMarkdown,
 };
