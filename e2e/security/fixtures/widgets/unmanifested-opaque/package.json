@@ -1,0 +1,6 @@
+{
+    "name": "@e2e/unmanifested-opaque",
+    "version": "1.0.0",
+    "description": "E2E fixture: no manifest AND dynamic tool name — scanner finds nothing",
+    "main": "widgets/Reader.js"
+}
