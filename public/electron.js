@@ -1320,7 +1320,12 @@ function createWindow() {
             )
         );
         logger.loggedHandle(READ_DATA_URL, (e, message) =>
-            readDataFromURL(getSenderWindow(e), message.url, message.toFilepath)
+            readDataFromURL(
+                getSenderWindow(e),
+                message.url,
+                message.toFilepath,
+                message.widgetId
+            )
         );
 
         // --- Settings ---
@@ -1475,7 +1480,8 @@ function createWindow() {
             webSocketController.connect(
                 getSenderWindow(e),
                 message.providerName,
-                message.config
+                message.config,
+                message.widgetId
             )
         );
         logger.loggedHandle(WS_DISCONNECT, (e, message) =>

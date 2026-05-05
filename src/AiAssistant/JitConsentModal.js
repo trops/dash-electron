@@ -58,7 +58,12 @@ export const JitConsentModal = () => {
     }, []);
 
     if (!request) return null;
-    if (request.domain !== "mcp" && request.domain !== "fs") return null;
+    if (
+        request.domain !== "mcp" &&
+        request.domain !== "fs" &&
+        request.domain !== "network"
+    )
+        return null;
 
     const { requestId, widgetId, args, domain } = request;
 
@@ -125,6 +130,26 @@ export const JitConsentModal = () => {
         },
     });
 
+    // --- network domain (Phase 3) --------------------------------
+    const netAction = args?.action || request.action || "(unknown action)";
+    const netUrl = args?.url || "";
+    let netHost = "(unknown host)";
+    try {
+        if (netUrl) netHost = new URL(netUrl).hostname;
+    } catch {
+        netHost = netUrl || "(unparseable)";
+    }
+
+    const grantNetHost = (host) => ({
+        grantOrigin: "live",
+        domains: { network: { hosts: [host] } },
+    });
+
+    const grantNetAny = () => ({
+        grantOrigin: "live",
+        domains: { network: { hosts: ["*"] } },
+    });
+
     const respond = (decision) => {
         if (!window.mainApi?.permissions?.respond) return;
         window.mainApi.permissions.respond(requestId, decision);
@@ -160,6 +185,24 @@ export const JitConsentModal = () => {
             approve: true,
             scope: "fs+any",
             granted: grantFsAny(),
+        });
+    };
+
+    const handleAllowNetHost = () => {
+        setIsSubmitting(true);
+        respond({
+            approve: true,
+            scope: "network+host",
+            granted: grantNetHost(netHost),
+        });
+    };
+
+    const handleAllowNetAny = () => {
+        setIsSubmitting(true);
+        respond({
+            approve: true,
+            scope: "network+any",
+            granted: grantNetAny(),
         });
     };
 
@@ -199,7 +242,7 @@ export const JitConsentModal = () => {
                                 Permission requested
                             </div>
                             <div className="text-xs text-gray-400 mt-0.5">
-                                {domain === "mcp" ? (
+                                {domain === "mcp" && (
                                     <>
                                         <span className="font-mono">
                                             {widgetId}
@@ -214,7 +257,8 @@ export const JitConsentModal = () => {
                                         </span>
                                         .
                                     </>
-                                ) : (
+                                )}
+                                {domain === "fs" && (
                                     <>
                                         <span className="font-mono">
                                             {widgetId}
@@ -230,6 +274,22 @@ export const JitConsentModal = () => {
                                         .
                                     </>
                                 )}
+                                {domain === "network" && (
+                                    <>
+                                        <span className="font-mono">
+                                            {widgetId}
+                                        </span>{" "}
+                                        wants to{" "}
+                                        <span className="font-mono">
+                                            {netAction}
+                                        </span>{" "}
+                                        on{" "}
+                                        <span className="font-mono">
+                                            {netHost}
+                                        </span>
+                                        .
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -239,7 +299,7 @@ export const JitConsentModal = () => {
                             Request details
                         </div>
                         <div className="rounded bg-gray-950 border border-gray-700 p-3 text-xs font-mono text-gray-200 break-all">
-                            {domain === "mcp" ? (
+                            {domain === "mcp" && (
                                 <>
                                     <div>
                                         <span className="text-gray-500">
@@ -262,7 +322,8 @@ export const JitConsentModal = () => {
                                         </div>
                                     )}
                                 </>
-                            ) : (
+                            )}
+                            {domain === "fs" && (
                                 <>
                                     <div>
                                         <span className="text-gray-500">
@@ -282,6 +343,34 @@ export const JitConsentModal = () => {
                                             filename:
                                         </span>{" "}
                                         {fsFilename}
+                                    </div>
+                                </>
+                            )}
+                            {domain === "network" && (
+                                <>
+                                    <div>
+                                        <span className="text-gray-500">
+                                            domain:
+                                        </span>{" "}
+                                        network
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">
+                                            action:
+                                        </span>{" "}
+                                        {netAction}
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">
+                                            url:
+                                        </span>{" "}
+                                        {netUrl}
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">
+                                            host:
+                                        </span>{" "}
+                                        {netHost}
                                     </div>
                                 </>
                             )}
@@ -357,6 +446,30 @@ export const JitConsentModal = () => {
                                 <Button
                                     title={`Allow ${fsAction} for any filename (broader — risky)`}
                                     onClick={handleAllowFsAny}
+                                    textSize="text-xs"
+                                    padding="py-1.5 px-3"
+                                    backgroundColor="bg-gray-800"
+                                    textColor="text-gray-200"
+                                    hoverBackgroundColor="hover:bg-gray-700"
+                                    disabled={isSubmitting}
+                                />
+                            </>
+                        )}
+                        {domain === "network" && (
+                            <>
+                                <Button
+                                    title={`Allow ${netAction} for ${netHost}`}
+                                    onClick={handleAllowNetHost}
+                                    textSize="text-xs"
+                                    padding="py-1.5 px-3"
+                                    backgroundColor="bg-purple-600"
+                                    textColor="text-white"
+                                    hoverBackgroundColor="hover:bg-purple-500"
+                                    disabled={isSubmitting}
+                                />
+                                <Button
+                                    title={`Allow ${netAction} for any host (broader — risky)`}
+                                    onClick={handleAllowNetAny}
                                     textSize="text-xs"
                                     padding="py-1.5 px-3"
                                     backgroundColor="bg-gray-800"
