@@ -18,6 +18,8 @@ const {
     classifyEvent,
     parseInvokes,
     parseHandlers,
+    parseConstantDeclarations,
+    resolveChannel,
 } = require("./audit-ipc-surface");
 
 test("classifyEvent: invoke + no handler → 'dead'", () => {
@@ -93,20 +95,78 @@ test("classifyEvent: handler without widgetId → 'system'", () => {
     );
 });
 
-test("parseInvokes: extracts ipcRenderer.invoke channel constants", () => {
+test("parseInvokes: extracts both constants and inline-string channels", () => {
     const src = `
     const { CH_ONE, CH_TWO } = require("../events");
     const api = {
       first: () => ipcRenderer.invoke(CH_ONE, {}),
       second: (x) => ipcRenderer.invoke(CH_TWO, { x }),
-      noisy: () => ipcRenderer.invoke("inline-string-channel"),
+      thirdly: () => ipcRenderer.invoke("inline-string-channel"),
+      fourth: () => ipcRenderer.invoke('single-quoted'),
     };
   `;
     const out = parseInvokes(src);
-    assert.deepStrictEqual(out.sort(), ["CH_ONE", "CH_TWO"]);
+    // Each entry: { displayName, value, isLiteral }
+    const byDisplay = Object.fromEntries(out.map((e) => [e.displayName, e]));
+    assert.deepStrictEqual(Object.keys(byDisplay).sort(), [
+        "CH_ONE",
+        "CH_TWO",
+        "inline-string-channel",
+        "single-quoted",
+    ]);
+    assert.strictEqual(byDisplay.CH_ONE.isLiteral, false);
+    assert.strictEqual(byDisplay["inline-string-channel"].isLiteral, true);
+    assert.strictEqual(
+        byDisplay["inline-string-channel"].value,
+        "inline-string-channel"
+    );
+    assert.strictEqual(byDisplay["single-quoted"].value, "single-quoted");
 });
 
-test("parseHandlers: extracts loggedHandle + ipcMain.handle channel constants", () => {
+test("parseInvokes: resolves constant value via the constant map", () => {
+    const src = `ipcRenderer.invoke(THEME_LIST, { appId });`;
+    const constMap = new Map([["THEME_LIST", "theme-list"]]);
+    const out = parseInvokes(src, constMap);
+    assert.strictEqual(out.length, 1);
+    assert.strictEqual(out[0].displayName, "THEME_LIST");
+    assert.strictEqual(out[0].value, "theme-list");
+    assert.strictEqual(out[0].isLiteral, false);
+});
+
+test("parseConstantDeclarations: builds name→value map from events file", () => {
+    const src = `
+    const FOO = "foo-channel";
+    const BAR = 'bar-channel';
+    const BAZ = "baz-channel-complete";
+    module.exports = { FOO, BAR, BAZ };
+  `;
+    const map = parseConstantDeclarations(src);
+    assert.strictEqual(map.get("FOO"), "foo-channel");
+    assert.strictEqual(map.get("BAR"), "bar-channel");
+    assert.strictEqual(map.get("BAZ"), "baz-channel-complete");
+});
+
+test("resolveChannel: prefers constant displayName over literal when same value", () => {
+    // Audit display rule: when invoke side uses a constant and handler
+    // side uses an inline string with the same value, the table shows
+    // the constant name (more readable for the operator).
+    const invoke = {
+        displayName: "THEME_LIST",
+        value: "theme-list",
+        isLiteral: false,
+    };
+    const handler = {
+        displayName: "theme-list",
+        value: "theme-list",
+        isLiteral: true,
+    };
+    assert.strictEqual(
+        resolveChannel(invoke, handler).displayName,
+        "THEME_LIST"
+    );
+});
+
+test("parseHandlers: extracts both constants and inline-string handlers", () => {
     const src = `
     logger.loggedHandle(CH_ONE, (e, message) => {
       const { widgetId, filename } = message;
@@ -115,19 +175,30 @@ test("parseHandlers: extracts loggedHandle + ipcMain.handle channel constants", 
     ipcMain.handle(CH_TWO, (e, message) => {
       return doInternalThing(message.foo);
     });
-    ipcMain.handle("popout-open", () => {});
+    logger.loggedHandle("theme-list", (e, message) => {
+      return listThemesForApplication(getSenderWindow(e), message.appId);
+    });
+    ipcMain.handle('client-cache-invalidate', async (e, { appId }) => {
+      return { success: true };
+    });
   `;
     const out = parseHandlers(src);
-    assert.deepStrictEqual(out.map((h) => h.channel).sort(), [
+    const byDisplay = Object.fromEntries(out.map((h) => [h.displayName, h]));
+    assert.deepStrictEqual(Object.keys(byDisplay).sort(), [
         "CH_ONE",
         "CH_TWO",
+        "client-cache-invalidate",
+        "theme-list",
     ]);
-    const ch1 = out.find((h) => h.channel === "CH_ONE");
-    assert.strictEqual(ch1.handlerHasWidgetId, true, "CH_ONE has widgetId");
-    assert.strictEqual(ch1.handlerHasGateRef, true, "CH_ONE has gate ref");
-    const ch2 = out.find((h) => h.channel === "CH_TWO");
-    assert.strictEqual(ch2.handlerHasWidgetId, false, "CH_TWO has no widgetId");
-    assert.strictEqual(ch2.handlerHasGateRef, false, "CH_TWO has no gate ref");
+    assert.strictEqual(byDisplay.CH_ONE.handlerHasWidgetId, true);
+    assert.strictEqual(byDisplay.CH_ONE.handlerHasGateRef, true);
+    assert.strictEqual(byDisplay.CH_TWO.handlerHasWidgetId, false);
+    assert.strictEqual(byDisplay["theme-list"].isLiteral, true);
+    assert.strictEqual(byDisplay["theme-list"].value, "theme-list");
+    assert.strictEqual(
+        byDisplay["client-cache-invalidate"].value,
+        "client-cache-invalidate"
+    );
 });
 
 test("parseHandlers: handler body slice respects nesting", () => {
@@ -146,6 +217,21 @@ test("parseHandlers: handler body slice respects nesting", () => {
     const out = parseHandlers(src);
     assert.strictEqual(out.length, 1);
     assert.strictEqual(out[0].handlerHasWidgetId, true);
+});
+
+test("parseHandlers: handler body for inline-string channel slices correctly", () => {
+    const src = `
+    ipcMain.handle("client-cache-invalidate", async (e, { appId, providerName }) => {
+      clientCache.invalidate(appId, providerName);
+      responseCache.clear();
+      return { success: true };
+    });
+  `;
+    const out = parseHandlers(src);
+    assert.strictEqual(out.length, 1);
+    assert.strictEqual(out[0].displayName, "client-cache-invalidate");
+    assert.strictEqual(out[0].handlerHasWidgetId, false);
+    assert.strictEqual(out[0].handlerHasGateRef, false);
 });
 
 test("parseHandlers: extracts the delegate function (skips getSenderWindow)", () => {
@@ -171,4 +257,14 @@ test("parseHandlers: bareword delegate", () => {
   `;
     const out = parseHandlers(src);
     assert.strictEqual(out[0].delegate, "saveToFile");
+});
+
+test("parseHandlers: resolves constant displayName via the constant map", () => {
+    const src = `logger.loggedHandle(THEME_LIST, (e, m) => listThemesForApplication(getSenderWindow(e), m.appId));`;
+    const constMap = new Map([["THEME_LIST", "theme-list"]]);
+    const out = parseHandlers(src, constMap);
+    assert.strictEqual(out.length, 1);
+    assert.strictEqual(out[0].displayName, "THEME_LIST");
+    assert.strictEqual(out[0].value, "theme-list");
+    assert.strictEqual(out[0].isLiteral, false);
 });
