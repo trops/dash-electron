@@ -1,0 +1,21 @@
+{
+    "name": "@e2e/declared-filesystem-reader",
+    "version": "1.0.0",
+    "description": "E2E fixture: declares filesystem.read_file in dash.permissions.mcp",
+    "main": "widgets/Reader.js",
+    "dash": {
+        "permissions": {
+            "mcp": {
+                "filesystem": {
+                    "tools": [
+                        "read_file"
+                    ],
+                    "readPaths": [
+                        "/tmp/e2e-allowed"
+                    ],
+                    "writePaths": []
+                }
+            }
+        }
+    }
+}

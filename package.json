@@ -113,6 +113,8 @@
         "screenshot": "node scripts/screenshot.js",
         "test:e2e": "npx playwright test --config=e2e/playwright.config.js",
         "test:e2e:headed": "npx playwright test --config=e2e/playwright.config.js --headed",
+        "test:security:e2e": "npx playwright test --config=e2e/security/playwright.config.js",
+        "test:security:e2e:headed": "npx playwright test --config=e2e/security/playwright.config.js --headed",
         "test:all": "npm run test:widgets && npm run test:e2e",
         "validate:full": "./scripts/validate.sh && npm run test:widgets && npm run test:e2e",
         "prdize": "node scripts/prdize.js",

@@ -1,0 +1,19 @@
+{
+    "name": "@e2e/declared-misaligned",
+    "version": "1.0.0",
+    "description": "E2E fixture: declares read_file in manifest but source ALSO calls delete_file (scanner should flag missing entry)",
+    "main": "widgets/Reader.js",
+    "dash": {
+        "permissions": {
+            "mcp": {
+                "filesystem": {
+                    "tools": [
+                        "read_file"
+                    ],
+                    "readPaths": [],
+                    "writePaths": []
+                }
+            }
+        }
+    }
+}

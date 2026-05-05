@@ -1,0 +1,6 @@
+{
+    "name": "@e2e/unmanifested-detectable",
+    "version": "1.0.0",
+    "description": "E2E fixture: NO dash.permissions.mcp, but source has a literal callTool the scanner can detect",
+    "main": "widgets/Reader.js"
+}
