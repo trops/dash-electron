@@ -6,23 +6,21 @@
  * gate without a matching grant) and presents the user with concrete
  * granularity options for the requested call.
  *
- * The modal is intentionally generic — it accepts a `domain` field on
- * the request payload so future domains (`fs`, `algolia`, `llm`) can
- * plug in by providing a domain-specific body renderer. Phase 1 only
- * handles `domain: "mcp"`.
- *
- * On submit, the user's decision is sent back via
- * `window.mainApi.permissions.respond(requestId, decision)`. The main
- * process's permissionGate then merges the chosen grant shape into the
- * widget's persisted grant and re-evaluates the original call.
+ * Implementation note — portal + fixed positioning. Earlier versions
+ * wrapped this in `<Modal>` from @trops/dash-react. That works in
+ * isolation but composes badly with another Modal already open
+ * (Settings panel, install consent modal): HeadlessUI Dialog stacks
+ * the second one inside the first's flex container, landing it
+ * visibly off-center, and outside-click events leak through to the
+ * underlying Settings modal and close it. Rendering as a portaled
+ * fixed-position overlay with explicit `pointer-events-auto` on the
+ * card and `pointer-events-none` on the centering wrapper keeps the
+ * modal viewport-centered, isolates its event handling, and stacks
+ * above any other Modal via z-50.
  */
-import React, { useEffect, useState, useContext } from "react";
-import {
-    Modal,
-    Button,
-    ThemeContext,
-    FontAwesomeIcon,
-} from "@trops/dash-react";
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { Button, FontAwesomeIcon } from "@trops/dash-react";
 
 const PATH_ARG_KEYS = ["path", "uri", "filepath", "file", "directory"];
 
@@ -42,11 +40,10 @@ function parentDirOf(p) {
     return p.slice(0, idx);
 }
 
-export const JitConsentModal = () => {
-    const { currentTheme } = useContext(ThemeContext);
-    const borderColor =
-        currentTheme?.["border-primary-dark"] || "border-gray-700";
+const WRITE_VERB =
+    /(^|_)(write|create|edit|delete|remove|append|move|rename|chmod|chown|mkdir)/i;
 
+export const JitConsentModal = () => {
     const [request, setRequest] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -68,8 +65,8 @@ export const JitConsentModal = () => {
     const toolName = args?.toolName || "(unknown tool)";
     const innerArgs = args?.args || {};
     const pathArg = findPathArg(innerArgs);
+    const isWriteVerb = WRITE_VERB.test(toolName);
 
-    // Build the grant shapes we'll offer.
     const grantToolOnly = () => ({
         grantOrigin: "live",
         servers: {
@@ -81,22 +78,16 @@ export const JitConsentModal = () => {
         },
     });
 
-    const grantToolWithPath = (p, kind) => {
-        const isWriteVerb =
-            /(^|_)(write|create|edit|delete|remove|append|move|rename|chmod|chown|mkdir)/i.test(
-                toolName
-            );
-        return {
-            grantOrigin: "live",
-            servers: {
-                [serverName]: {
-                    tools: [toolName],
-                    readPaths: kind === "read" || !isWriteVerb ? [p] : [],
-                    writePaths: kind === "write" || isWriteVerb ? [p] : [],
-                },
+    const grantToolWithPath = (p) => ({
+        grantOrigin: "live",
+        servers: {
+            [serverName]: {
+                tools: [toolName],
+                readPaths: !isWriteVerb ? [p] : [],
+                writePaths: isWriteVerb ? [p] : [],
             },
-        };
-    };
+        },
+    });
 
     const respond = (decision) => {
         if (!window.mainApi?.permissions?.respond) return;
@@ -111,14 +102,10 @@ export const JitConsentModal = () => {
 
     const handleAllowToolWithPath = (p) => {
         setIsSubmitting(true);
-        const isWriteVerb =
-            /(^|_)(write|create|edit|delete|remove|append|move|rename|chmod|chown|mkdir)/i.test(
-                toolName
-            );
         respond({
             approve: true,
             scope: "tool+path",
-            granted: grantToolWithPath(p, isWriteVerb ? "write" : "read"),
+            granted: grantToolWithPath(p),
         });
     };
 
@@ -134,115 +121,130 @@ export const JitConsentModal = () => {
 
     const parentPath = pathArg ? parentDirOf(pathArg.value) : null;
 
-    return (
-        <Modal isOpen={!!request} setIsOpen={(open) => !open && handleCancel()}>
+    const overlay = (
+        <>
+            {/* Backdrop — click outside cancels. */}
             <div
-                className={`flex flex-col w-full max-w-xl border-2 border-purple-500 rounded ${borderColor}`}
-            >
-                <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-700">
-                    <FontAwesomeIcon
-                        icon="bolt"
-                        className="h-4 w-4 text-purple-400"
-                    />
-                    <div>
-                        <div className="text-base font-semibold text-gray-100">
-                            Permission requested
-                        </div>
-                        <div className="text-xs text-gray-400 mt-0.5">
-                            <span className="font-mono">{widgetId}</span> wants
-                            to call{" "}
-                            <span className="font-mono">{toolName}</span> on{" "}
-                            <span className="font-mono">{serverName}</span>.
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex flex-col gap-3 px-5 py-4 max-h-96 overflow-y-auto">
-                    <div className="text-xs uppercase tracking-wider text-gray-500">
-                        Request details
-                    </div>
-                    <div className="rounded bg-gray-900 border border-gray-700 p-3 text-xs font-mono text-gray-200 break-all">
-                        <div>
-                            <span className="opacity-60">tool:</span> {toolName}
-                        </div>
-                        <div>
-                            <span className="opacity-60">server:</span>{" "}
-                            {serverName}
-                        </div>
-                        {pathArg && (
-                            <div>
-                                <span className="opacity-60">
-                                    {pathArg.key}:
-                                </span>{" "}
-                                {pathArg.value}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="text-xs text-gray-400">
-                        Choose how broadly to grant this. The grant is saved and
-                        applies to future calls until you revoke it in Settings
-                        → Privacy & Security.
-                    </div>
-                </div>
-
+                className="fixed inset-0 bg-black bg-opacity-70 z-50"
+                onClick={handleCancel}
+            />
+            {/* Centering wrapper — pointer-events-none so backdrop clicks
+                pass through; the inner card re-enables pointer events. */}
+            <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4">
                 <div
-                    className={`flex flex-col gap-2 px-5 py-3 border-t ${borderColor}`}
+                    className="flex flex-col w-full max-w-xl border-2 border-purple-500 rounded bg-gray-900 pointer-events-auto"
+                    onClick={(e) => e.stopPropagation()}
                 >
-                    {pathArg && (
+                    <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-700">
+                        <FontAwesomeIcon
+                            icon="bolt"
+                            className="h-4 w-4 text-purple-400"
+                        />
+                        <div>
+                            <div className="text-base font-semibold text-gray-100">
+                                Permission requested
+                            </div>
+                            <div className="text-xs text-gray-400 mt-0.5">
+                                <span className="font-mono">{widgetId}</span>{" "}
+                                wants to call{" "}
+                                <span className="font-mono">{toolName}</span> on{" "}
+                                <span className="font-mono">{serverName}</span>.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3 px-5 py-4 max-h-96 overflow-y-auto">
+                        <div className="text-xs uppercase tracking-wider text-gray-400">
+                            Request details
+                        </div>
+                        <div className="rounded bg-gray-950 border border-gray-700 p-3 text-xs font-mono text-gray-200 break-all">
+                            <div>
+                                <span className="text-gray-500">tool:</span>{" "}
+                                {toolName}
+                            </div>
+                            <div>
+                                <span className="text-gray-500">server:</span>{" "}
+                                {serverName}
+                            </div>
+                            {pathArg && (
+                                <div>
+                                    <span className="text-gray-500">
+                                        {pathArg.key}:
+                                    </span>{" "}
+                                    {pathArg.value}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="text-xs text-gray-400">
+                            Choose how broadly to grant this. The grant is saved
+                            and applies to future calls until you revoke it in
+                            Settings → Privacy & Security.
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2 px-5 py-3 border-t border-gray-700">
+                        {pathArg && (
+                            <Button
+                                title={`Allow ${toolName} for ${pathArg.value}`}
+                                onClick={() =>
+                                    handleAllowToolWithPath(pathArg.value)
+                                }
+                                textSize="text-xs"
+                                padding="py-1.5 px-3"
+                                backgroundColor="bg-purple-600"
+                                textColor="text-white"
+                                hoverBackgroundColor="hover:bg-purple-500"
+                                disabled={isSubmitting}
+                            />
+                        )}
+                        {pathArg &&
+                            parentPath &&
+                            parentPath !== pathArg.value && (
+                                <Button
+                                    title={`Allow ${toolName} for ${parentPath}/* (broader)`}
+                                    onClick={() =>
+                                        handleAllowToolWithPath(parentPath)
+                                    }
+                                    textSize="text-xs"
+                                    padding="py-1.5 px-3"
+                                    backgroundColor="bg-gray-700"
+                                    textColor="text-gray-100"
+                                    hoverBackgroundColor="hover:bg-gray-600"
+                                    disabled={isSubmitting}
+                                />
+                            )}
                         <Button
-                            title={`Allow ${toolName} for ${pathArg.value}`}
-                            onClick={() =>
-                                handleAllowToolWithPath(pathArg.value)
+                            title={
+                                pathArg
+                                    ? `Allow ${toolName} (no path scope — risky)`
+                                    : `Allow ${toolName}`
                             }
+                            onClick={handleAllowToolOnly}
                             textSize="text-xs"
                             padding="py-1.5 px-3"
-                            backgroundColor="bg-purple-600"
-                            textColor="text-white"
-                            hoverBackgroundColor="hover:bg-purple-500"
+                            backgroundColor="bg-gray-800"
+                            textColor="text-gray-200"
+                            hoverBackgroundColor="hover:bg-gray-700"
                             disabled={isSubmitting}
                         />
-                    )}
-                    {pathArg && parentPath && parentPath !== pathArg.value && (
                         <Button
-                            title={`Allow ${toolName} for ${parentPath}/* (broader)`}
-                            onClick={() => handleAllowToolWithPath(parentPath)}
+                            title="Deny"
+                            onClick={handleDeny}
                             textSize="text-xs"
                             padding="py-1.5 px-3"
-                            backgroundColor="bg-gray-700"
-                            textColor="text-gray-100"
-                            hoverBackgroundColor="hover:bg-gray-600"
+                            backgroundColor="bg-red-700"
+                            textColor="text-white"
+                            hoverBackgroundColor="hover:bg-red-600"
                             disabled={isSubmitting}
                         />
-                    )}
-                    <Button
-                        title={
-                            pathArg
-                                ? `Allow ${toolName} (no path scope — risky)`
-                                : `Allow ${toolName}`
-                        }
-                        onClick={handleAllowToolOnly}
-                        textSize="text-xs"
-                        padding="py-1.5 px-3"
-                        backgroundColor="bg-gray-800"
-                        textColor="text-gray-200"
-                        hoverBackgroundColor="hover:bg-gray-700"
-                        disabled={isSubmitting}
-                    />
-                    <Button
-                        title="Deny"
-                        onClick={handleDeny}
-                        textSize="text-xs"
-                        padding="py-1.5 px-3"
-                        backgroundColor="bg-red-700"
-                        textColor="text-white"
-                        hoverBackgroundColor="hover:bg-red-600"
-                        disabled={isSubmitting}
-                    />
+                    </div>
                 </div>
             </div>
-        </Modal>
+        </>
     );
+
+    return createPortal(overlay, document.body);
 };
 
 export default JitConsentModal;
