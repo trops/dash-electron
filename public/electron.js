@@ -1307,14 +1307,16 @@ function createWindow() {
                 message.data,
                 message.filename,
                 message.append,
-                message.returnEmpty
+                message.returnEmpty,
+                message.widgetId
             )
         );
         logger.loggedHandle(DATA_READ_FROM_FILE, (e, message) =>
             readFromFile(
                 getSenderWindow(e),
                 message.filename,
-                message.returnEmpty
+                message.returnEmpty,
+                message.widgetId
             )
         );
         logger.loggedHandle(READ_DATA_URL, (e, message) =>

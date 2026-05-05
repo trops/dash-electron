@@ -58,9 +58,11 @@ export const JitConsentModal = () => {
     }, []);
 
     if (!request) return null;
-    if (request.domain !== "mcp") return null; // future domains plug in here
+    if (request.domain !== "mcp" && request.domain !== "fs") return null;
 
-    const { requestId, widgetId, args } = request;
+    const { requestId, widgetId, args, domain } = request;
+
+    // --- MCP domain (Slice 1+2 — original) -----------------------
     const serverName = args?.serverName || "(unknown server)";
     const toolName = args?.toolName || "(unknown tool)";
     const innerArgs = args?.args || {};
@@ -89,6 +91,40 @@ export const JitConsentModal = () => {
         },
     });
 
+    // --- fs domain (Phase 2) -------------------------------------
+    const FS_WRITE_ACTIONS = new Set([
+        "saveToFile",
+        "saveData",
+        "convertJsonToCsvFile",
+        "parseXMLStream",
+        "parseCSVStream",
+        "readDataFromURL",
+        "transformFile",
+    ]);
+    const fsAction = args?.action || request.action || "(unknown action)";
+    const fsFilename = args?.filename || "(unknown file)";
+    const fsIsWrite = FS_WRITE_ACTIONS.has(fsAction);
+
+    const grantFsFilename = (filename) => ({
+        grantOrigin: "live",
+        domains: {
+            fs: {
+                readPaths: !fsIsWrite ? [filename] : [],
+                writePaths: fsIsWrite ? [filename] : [],
+            },
+        },
+    });
+
+    const grantFsAny = () => ({
+        grantOrigin: "live",
+        domains: {
+            fs: {
+                readPaths: !fsIsWrite ? ["*"] : [],
+                writePaths: fsIsWrite ? ["*"] : [],
+            },
+        },
+    });
+
     const respond = (decision) => {
         if (!window.mainApi?.permissions?.respond) return;
         window.mainApi.permissions.respond(requestId, decision);
@@ -106,6 +142,24 @@ export const JitConsentModal = () => {
             approve: true,
             scope: "tool+path",
             granted: grantToolWithPath(p),
+        });
+    };
+
+    const handleAllowFsFilename = () => {
+        setIsSubmitting(true);
+        respond({
+            approve: true,
+            scope: "fs+filename",
+            granted: grantFsFilename(fsFilename),
+        });
+    };
+
+    const handleAllowFsAny = () => {
+        setIsSubmitting(true);
+        respond({
+            approve: true,
+            scope: "fs+any",
+            granted: grantFsAny(),
         });
     };
 
@@ -145,10 +199,37 @@ export const JitConsentModal = () => {
                                 Permission requested
                             </div>
                             <div className="text-xs text-gray-400 mt-0.5">
-                                <span className="font-mono">{widgetId}</span>{" "}
-                                wants to call{" "}
-                                <span className="font-mono">{toolName}</span> on{" "}
-                                <span className="font-mono">{serverName}</span>.
+                                {domain === "mcp" ? (
+                                    <>
+                                        <span className="font-mono">
+                                            {widgetId}
+                                        </span>{" "}
+                                        wants to call{" "}
+                                        <span className="font-mono">
+                                            {toolName}
+                                        </span>{" "}
+                                        on{" "}
+                                        <span className="font-mono">
+                                            {serverName}
+                                        </span>
+                                        .
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="font-mono">
+                                            {widgetId}
+                                        </span>{" "}
+                                        wants to{" "}
+                                        <span className="font-mono">
+                                            {fsAction}
+                                        </span>{" "}
+                                        on{" "}
+                                        <span className="font-mono">
+                                            {fsFilename}
+                                        </span>
+                                        .
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -158,21 +239,51 @@ export const JitConsentModal = () => {
                             Request details
                         </div>
                         <div className="rounded bg-gray-950 border border-gray-700 p-3 text-xs font-mono text-gray-200 break-all">
-                            <div>
-                                <span className="text-gray-500">tool:</span>{" "}
-                                {toolName}
-                            </div>
-                            <div>
-                                <span className="text-gray-500">server:</span>{" "}
-                                {serverName}
-                            </div>
-                            {pathArg && (
-                                <div>
-                                    <span className="text-gray-500">
-                                        {pathArg.key}:
-                                    </span>{" "}
-                                    {pathArg.value}
-                                </div>
+                            {domain === "mcp" ? (
+                                <>
+                                    <div>
+                                        <span className="text-gray-500">
+                                            tool:
+                                        </span>{" "}
+                                        {toolName}
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">
+                                            server:
+                                        </span>{" "}
+                                        {serverName}
+                                    </div>
+                                    {pathArg && (
+                                        <div>
+                                            <span className="text-gray-500">
+                                                {pathArg.key}:
+                                            </span>{" "}
+                                            {pathArg.value}
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <div>
+                                        <span className="text-gray-500">
+                                            domain:
+                                        </span>{" "}
+                                        filesystem
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">
+                                            action:
+                                        </span>{" "}
+                                        {fsAction} (
+                                        {fsIsWrite ? "write" : "read"})
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">
+                                            filename:
+                                        </span>{" "}
+                                        {fsFilename}
+                                    </div>
+                                </>
                             )}
                         </div>
 
@@ -184,7 +295,7 @@ export const JitConsentModal = () => {
                     </div>
 
                     <div className="flex flex-col gap-2 px-5 py-3 border-t border-gray-700">
-                        {pathArg && (
+                        {domain === "mcp" && pathArg && (
                             <Button
                                 title={`Allow ${toolName} for ${pathArg.value}`}
                                 onClick={() =>
@@ -198,7 +309,8 @@ export const JitConsentModal = () => {
                                 disabled={isSubmitting}
                             />
                         )}
-                        {pathArg &&
+                        {domain === "mcp" &&
+                            pathArg &&
                             parentPath &&
                             parentPath !== pathArg.value && (
                                 <Button
@@ -214,20 +326,46 @@ export const JitConsentModal = () => {
                                     disabled={isSubmitting}
                                 />
                             )}
-                        <Button
-                            title={
-                                pathArg
-                                    ? `Allow ${toolName} (no path scope — risky)`
-                                    : `Allow ${toolName}`
-                            }
-                            onClick={handleAllowToolOnly}
-                            textSize="text-xs"
-                            padding="py-1.5 px-3"
-                            backgroundColor="bg-gray-800"
-                            textColor="text-gray-200"
-                            hoverBackgroundColor="hover:bg-gray-700"
-                            disabled={isSubmitting}
-                        />
+                        {domain === "mcp" && (
+                            <Button
+                                title={
+                                    pathArg
+                                        ? `Allow ${toolName} (no path scope — risky)`
+                                        : `Allow ${toolName}`
+                                }
+                                onClick={handleAllowToolOnly}
+                                textSize="text-xs"
+                                padding="py-1.5 px-3"
+                                backgroundColor="bg-gray-800"
+                                textColor="text-gray-200"
+                                hoverBackgroundColor="hover:bg-gray-700"
+                                disabled={isSubmitting}
+                            />
+                        )}
+                        {domain === "fs" && (
+                            <>
+                                <Button
+                                    title={`Allow ${fsAction} for ${fsFilename}`}
+                                    onClick={handleAllowFsFilename}
+                                    textSize="text-xs"
+                                    padding="py-1.5 px-3"
+                                    backgroundColor="bg-purple-600"
+                                    textColor="text-white"
+                                    hoverBackgroundColor="hover:bg-purple-500"
+                                    disabled={isSubmitting}
+                                />
+                                <Button
+                                    title={`Allow ${fsAction} for any filename (broader — risky)`}
+                                    onClick={handleAllowFsAny}
+                                    textSize="text-xs"
+                                    padding="py-1.5 px-3"
+                                    backgroundColor="bg-gray-800"
+                                    textColor="text-gray-200"
+                                    hoverBackgroundColor="hover:bg-gray-700"
+                                    disabled={isSubmitting}
+                                />
+                            </>
+                        )}
                         <Button
                             title="Deny"
                             onClick={handleDeny}
