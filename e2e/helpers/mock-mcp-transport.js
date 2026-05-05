@@ -28,41 +28,83 @@ async function stubMcpServer(electronApp, stub) {
             globalThis.__e2eRequire ||
             (process.mainModule && process.mainModule.require);
 
-        const tryRequire = (id) => {
+        const tryRequireFrom = (req, id) => {
             try {
-                return moduleRequire(id);
+                return req(id);
             } catch (_) {
                 return null;
             }
         };
 
+        // Linked package layout: dash-electron has its own copy of
+        // @modelcontextprotocol/sdk, and dash-core (when symlinked into
+        // node_modules) has its own nested copy. The two require()
+        // resolutions return *different* module instances, so patching
+        // one Client prototype leaves dash-core's path untouched and
+        // mcpController.startServer ends up calling the real, unpatched
+        // connect/start (which spawns a real subprocess that fails).
+        // Collect every reachable {Client, Stdio} pair so we patch all
+        // of them.
+        const collectSdkPairs = () => {
+            const pairs = [];
+            const seen = new Set();
+            const addFromReq = (req) => {
+                const c =
+                    tryRequireFrom(
+                        req,
+                        "@modelcontextprotocol/sdk/client/index.js"
+                    ) ||
+                    tryRequireFrom(
+                        req,
+                        "@modelcontextprotocol/sdk/dist/cjs/client/index.js"
+                    );
+                const s =
+                    tryRequireFrom(
+                        req,
+                        "@modelcontextprotocol/sdk/client/stdio.js"
+                    ) ||
+                    tryRequireFrom(
+                        req,
+                        "@modelcontextprotocol/sdk/dist/cjs/client/stdio.js"
+                    );
+                if (!c || !c.Client) return;
+                if (seen.has(c.Client)) return;
+                seen.add(c.Client);
+                pairs.push({
+                    Client: c.Client,
+                    Stdio: s && s.StdioClientTransport,
+                });
+            };
+
+            // 1. dash-electron's main-process require
+            addFromReq(moduleRequire);
+
+            // 2. dash-core's nested copy when linked. Resolve the
+            //    dash-core package main, then build a require() rooted
+            //    there so module resolution walks dash-core's
+            //    node_modules first.
+            try {
+                const Module = moduleRequire("module");
+                const dashCoreMain =
+                    moduleRequire.resolve &&
+                    moduleRequire.resolve("@trops/dash-core");
+                if (dashCoreMain && Module && Module.createRequire) {
+                    addFromReq(Module.createRequire(dashCoreMain));
+                }
+            } catch (_) {
+                /* dash-core not installed or no nested copy — single pair is fine */
+            }
+            return pairs;
+        };
+
         const installPatch = () => {
-            const sdkClient =
-                tryRequire("@modelcontextprotocol/sdk/client/index.js") ||
-                tryRequire(
-                    "@modelcontextprotocol/sdk/dist/cjs/client/index.js"
-                );
-            const sdkStdio =
-                tryRequire("@modelcontextprotocol/sdk/client/stdio.js") ||
-                tryRequire(
-                    "@modelcontextprotocol/sdk/dist/cjs/client/stdio.js"
-                );
-
-            if (!sdkClient || !sdkClient.Client) return false;
-
-            const Client = sdkClient.Client;
-            const Stdio = sdkStdio && sdkStdio.StdioClientTransport;
+            const pairs = collectSdkPairs();
+            if (pairs.length === 0) return false;
 
             global.__dashE2EMcpStubs = global.__dashE2EMcpStubs || [];
 
             if (!global.__dashE2EMcpPatched) {
-                global.__dashE2EMcpOriginalClient = {
-                    connect: Client.prototype.connect,
-                    listTools: Client.prototype.listTools,
-                    callTool: Client.prototype.callTool,
-                    listResources: Client.prototype.listResources,
-                    close: Client.prototype.close,
-                };
+                global.__dashE2EMcpOriginalPairs = [];
 
                 const matchTransport = (transport) => {
                     if (!transport) return null;
@@ -94,50 +136,69 @@ async function stubMcpServer(electronApp, stub) {
                     return null;
                 };
 
-                Client.prototype.connect = async function (transport) {
-                    this.__e2eStub = matchTransport(transport) || {
-                        tools: [],
-                        callResults: {},
-                        resources: [],
+                for (const { Client, Stdio } of pairs) {
+                    const orig = {
+                        Client,
+                        Stdio,
+                        client: {
+                            connect: Client.prototype.connect,
+                            listTools: Client.prototype.listTools,
+                            callTool: Client.prototype.callTool,
+                            listResources: Client.prototype.listResources,
+                            close: Client.prototype.close,
+                        },
+                        stdio:
+                            Stdio && Stdio.prototype
+                                ? {
+                                      start: Stdio.prototype.start,
+                                      close: Stdio.prototype.close,
+                                  }
+                                : null,
                     };
-                };
-                Client.prototype.listTools = async function () {
-                    return { tools: (this.__e2eStub || {}).tools || [] };
-                };
-                Client.prototype.callTool = async function (args) {
-                    const name = (args && args.name) || "";
-                    const map = (this.__e2eStub || {}).callResults || {};
-                    return (
-                        map[name] || {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: `[mock-mcp] no canned result for ${name}`,
-                                },
-                            ],
-                        }
-                    );
-                };
-                Client.prototype.listResources = async function () {
-                    return {
-                        resources: (this.__e2eStub || {}).resources || [],
-                    };
-                };
-                Client.prototype.close = async function () {
-                    /* no-op */
-                };
 
-                if (Stdio && Stdio.prototype) {
-                    global.__dashE2EMcpOriginalStdio = {
-                        start: Stdio.prototype.start,
-                        close: Stdio.prototype.close,
+                    Client.prototype.connect = async function (transport) {
+                        this.__e2eStub = matchTransport(transport) || {
+                            tools: [],
+                            callResults: {},
+                            resources: [],
+                        };
                     };
-                    Stdio.prototype.start = async function () {
-                        /* no-op: do not spawn */
+                    Client.prototype.listTools = async function () {
+                        return { tools: (this.__e2eStub || {}).tools || [] };
                     };
-                    Stdio.prototype.close = async function () {
+                    Client.prototype.callTool = async function (args) {
+                        const name = (args && args.name) || "";
+                        const map = (this.__e2eStub || {}).callResults || {};
+                        return (
+                            map[name] || {
+                                content: [
+                                    {
+                                        type: "text",
+                                        text: `[mock-mcp] no canned result for ${name}`,
+                                    },
+                                ],
+                            }
+                        );
+                    };
+                    Client.prototype.listResources = async function () {
+                        return {
+                            resources: (this.__e2eStub || {}).resources || [],
+                        };
+                    };
+                    Client.prototype.close = async function () {
                         /* no-op */
                     };
+
+                    if (Stdio && Stdio.prototype) {
+                        Stdio.prototype.start = async function () {
+                            /* no-op: do not spawn */
+                        };
+                        Stdio.prototype.close = async function () {
+                            /* no-op */
+                        };
+                    }
+
+                    global.__dashE2EMcpOriginalPairs.push(orig);
                 }
 
                 global.__dashE2EMcpPatched = true;
@@ -156,48 +217,26 @@ async function restoreMcpClient(electronApp) {
     await electronApp
         .evaluate(async () => {
             if (!global.__dashE2EMcpPatched) return;
-            const moduleRequire =
-                globalThis.__e2eRequire ||
-                (process.mainModule && process.mainModule.require);
-            const tryRequire = (id) => {
-                try {
-                    return moduleRequire(id);
-                } catch (_) {
-                    return null;
-                }
-            };
             try {
-                const sdkClient =
-                    tryRequire("@modelcontextprotocol/sdk/client/index.js") ||
-                    tryRequire(
-                        "@modelcontextprotocol/sdk/dist/cjs/client/index.js"
-                    );
-                const sdkStdio =
-                    tryRequire("@modelcontextprotocol/sdk/client/stdio.js") ||
-                    tryRequire(
-                        "@modelcontextprotocol/sdk/dist/cjs/client/stdio.js"
-                    );
-
-                const Client = sdkClient && sdkClient.Client;
-                const orig = global.__dashE2EMcpOriginalClient;
-                if (Client && orig) {
-                    Client.prototype.connect = orig.connect;
-                    Client.prototype.listTools = orig.listTools;
-                    Client.prototype.callTool = orig.callTool;
-                    Client.prototype.listResources = orig.listResources;
-                    Client.prototype.close = orig.close;
-                }
-                const Stdio = sdkStdio && sdkStdio.StdioClientTransport;
-                const origStdio = global.__dashE2EMcpOriginalStdio;
-                if (Stdio && origStdio) {
-                    Stdio.prototype.start = origStdio.start;
-                    Stdio.prototype.close = origStdio.close;
+                const pairs = global.__dashE2EMcpOriginalPairs || [];
+                for (const orig of pairs) {
+                    const { Client, Stdio, client, stdio } = orig;
+                    if (Client && client) {
+                        Client.prototype.connect = client.connect;
+                        Client.prototype.listTools = client.listTools;
+                        Client.prototype.callTool = client.callTool;
+                        Client.prototype.listResources = client.listResources;
+                        Client.prototype.close = client.close;
+                    }
+                    if (Stdio && Stdio.prototype && stdio) {
+                        Stdio.prototype.start = stdio.start;
+                        Stdio.prototype.close = stdio.close;
+                    }
                 }
             } finally {
                 global.__dashE2EMcpStubs = [];
                 global.__dashE2EMcpPatched = false;
-                delete global.__dashE2EMcpOriginalClient;
-                delete global.__dashE2EMcpOriginalStdio;
+                delete global.__dashE2EMcpOriginalPairs;
             }
         })
         .catch(() => {});

@@ -36,32 +36,67 @@ async function installCallRecorder(electronApp) {
         const moduleRequire =
             globalThis.__e2eRequire ||
             (process.mainModule && process.mainModule.require);
-        const tryRequire = (id) => {
+        const tryRequireFrom = (req, id) => {
             try {
-                return moduleRequire(id);
+                return req(id);
             } catch (_) {
                 return null;
             }
         };
 
-        const sdkClient =
-            tryRequire("@modelcontextprotocol/sdk/client/index.js") ||
-            tryRequire("@modelcontextprotocol/sdk/dist/cjs/client/index.js");
-        const Client = sdkClient && sdkClient.Client;
-        if (!Client) return false;
+        // Same dual-resolve as mock-mcp-transport.js — patch every
+        // Client class reachable in the launched main process. Without
+        // this, dash-core's nested @mcp/sdk copy goes un-recorded.
+        const collectClients = () => {
+            const out = [];
+            const seen = new Set();
+            const addFromReq = (req) => {
+                const c =
+                    tryRequireFrom(
+                        req,
+                        "@modelcontextprotocol/sdk/client/index.js"
+                    ) ||
+                    tryRequireFrom(
+                        req,
+                        "@modelcontextprotocol/sdk/dist/cjs/client/index.js"
+                    );
+                if (!c || !c.Client) return;
+                if (seen.has(c.Client)) return;
+                seen.add(c.Client);
+                out.push(c.Client);
+            };
+            addFromReq(moduleRequire);
+            try {
+                const Module = moduleRequire("module");
+                const dashCoreMain =
+                    moduleRequire.resolve &&
+                    moduleRequire.resolve("@trops/dash-core");
+                if (dashCoreMain && Module && Module.createRequire) {
+                    addFromReq(Module.createRequire(dashCoreMain));
+                }
+            } catch (_) {
+                /* dash-core not linked or no nested copy */
+            }
+            return out;
+        };
+
+        const Clients = collectClients();
+        if (Clients.length === 0) return false;
 
         global.__dashE2ESecurityCalls = global.__dashE2ESecurityCalls || [];
 
         if (!global.__dashE2ESecurityRecorderInstalled) {
-            const previous = Client.prototype.callTool;
-            Client.prototype.callTool = async function (args) {
-                global.__dashE2ESecurityCalls.push({
-                    name: (args && args.name) || null,
-                    arguments: (args && args.arguments) || null,
-                    ts: Date.now(),
-                });
-                return previous.call(this, args);
-            };
+            for (const Client of Clients) {
+                const previous = Client.prototype.callTool;
+                Client.prototype.callTool = async function (args) {
+                    global.__dashE2ESecurityCalls.push({
+                        name: (args && args.name) || null,
+                        arguments: (args && args.arguments) || null,
+                        ts: Date.now(),
+                    });
+                    return previous.call(this, args);
+                };
+            }
             global.__dashE2ESecurityRecorderInstalled = true;
         }
         return true;
