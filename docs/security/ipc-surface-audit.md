@@ -177,17 +177,42 @@ handler body nor the delegate references a known gate. Each is one of:
 -   `SCHEDULER_GET_TASKS` (schedulerApi → `getTasks`)
 -   `SCHEDULER_REMOVE_TASKS` (schedulerApi → `removeTasks`)
 
-### dead — cleanup pile (7)
+### dead — cleanup status
 
-Each follows the same pattern as the just-removed `secureStore.{saveData,
-getData}`: an exposed `mainApi.X.method` that quietly returns `undefined`
-because no handler exists. Trap potential for future contributors who wire
-a handler without realising they need a per-widget gate.
+The original baseline classified seven channels as dead. On manual review:
 
--   `ALGOLIA_SAVE_SYNONYMS` (algoliaApi)
--   `CLIENT_CACHE_INVALIDATE`, `CLIENT_CACHE_INVALIDATE_ALL`, `RESPONSE_CACHE_CLEAR`, `RESPONSE_CACHE_STATS` (clientCacheApi)
--   `LAYOUT_SAVE` (layoutApi)
--   `THEME_LIST` (themeApi)
+-   **Six were truly dead and have been removed in dash-core** (see
+    `chore(security): remove 6 dead widget-facing IPC surfaces`):
+    -   `ALGOLIA_SAVE_SYNONYMS` (algoliaApi.saveSynonyms — was invoking
+        `undefined` because the constant itself was never declared)
+    -   `CLIENT_CACHE_INVALIDATE`, `CLIENT_CACHE_INVALIDATE_ALL`,
+        `RESPONSE_CACHE_CLEAR`, `RESPONSE_CACHE_STATS`
+        (clientCacheApi — entire file deleted; dash-electron's preload
+        had been overriding the namespace anyway, but its handlers are
+        also unwired — see follow-up below)
+    -   `LAYOUT_SAVE` (layoutApi.saveLayoutForApplication +
+        layoutController.saveLayoutForApplication)
+-   **One was a false positive**: `THEME_LIST`. The audit script's
+    parser only matches ALL_CAPS constant names in
+    `loggedHandle(NAME, …)`. The actual handler in
+    `dash-electron/public/electron.js` line 986 uses an inline string
+    `loggedHandle("theme-list", (e, message) => …)`. The channel IS
+    wired and has live callers in `dash-core/src/Api/ThemeApi.js` and
+    `dash-core/src/Api/ElectronDashboardApi.ts`. **Kept.**
+
+After this slice the audit's dead-pile drops to **0** for the named-
+constant audit. The script will continue to flag THEME_LIST as `dead`
+on re-run until the parser learns to detect inline-string handlers
+(separate slice, deferred).
+
+### Follow-up: dash-electron's own dead clientCache + responseCache
+
+`dash-electron/public/preload.js` exposes `mainApi.clientCache.{invalidate,
+invalidateAll}` and `mainApi.responseCache.{clear, stats}` via inline
+strings (`"client-cache-invalidate"` etc.), but no main-process handler
+exists for any of them. The `invoke` calls go nowhere. Same pattern as
+the dash-core methods we just removed; the cleanup is symmetric but
+lives in dash-electron and is independent of this slice.
 
 ### Recommended next slices
 
@@ -195,10 +220,11 @@ a handler without realising they need a per-widget gate.
    above. Does the scheduler actually scope by widgetId at the controller
    layer? Notifications? Output: a per-channel verdict appended to this
    doc (same shape as Phase 2's "fs gate" investigation). Probably 1 day.
-2. **Cleanup dead surfaces** — apply the secureStore cleanup pattern to
-   the 7 dead channels. Each is a tiny PR with a regression-pin test that
-   asserts the surface stays absent. Could be batched into one PR or
-   shipped per-API for clean attribution.
+2. **Cleanup dash-electron's own dead namespaces** — apply the same
+   pattern to the preload-exposed `mainApi.clientCache` and
+   `mainApi.responseCache` whose `invoke` channels have no
+   main-process handler. (The dash-core dead pile was cleaned up in
+   the slice referenced above.)
 3. **Network domain JIT** — the original Phase 3 plan: gate
    `READ_DATA_URL`, the `WS_*` family, and `THEME_EXTRACT_FROM_URL` with
    a `domains.network` grant + JIT consent. Architecturally identical to
