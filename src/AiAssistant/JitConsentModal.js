@@ -32,6 +32,21 @@ import {
 
 const PATH_ARG_KEYS = ["path", "uri", "filepath", "file", "directory"];
 
+// Buttons in the modal carry the requested filename/path/host in their
+// title for clarity, but `<Button title>` doesn't wrap — so a long
+// auto-generated filename (e.g. a workspace-uuid prefix + chat
+// transcript filename) overflows the button bounds. The full path is
+// already shown in the request-details panel above the buttons; here
+// we just need a recognizable short form.
+function _truncateForTitle(str, max = 36) {
+    if (typeof str !== "string") return "";
+    if (str.length <= max) return str;
+    // Keep the tail (often the meaningful part — extension, leaf
+    // segment) intact; ellipsis on the front.
+    const keep = max - 1;
+    return "…" + str.slice(str.length - keep);
+}
+
 function findPathArg(args) {
     if (!args || typeof args !== "object") return null;
     for (const key of PATH_ARG_KEYS) {
@@ -466,7 +481,9 @@ export const JitConsentModal = () => {
                         )}
                         {domain === "mcp" && pathArg && (
                             <Button
-                                title={`Allow ${toolName} for ${pathArg.value}`}
+                                title={`Allow ${toolName} for ${_truncateForTitle(
+                                    pathArg.value
+                                )}`}
                                 onClick={() =>
                                     handleAllowToolWithPath(pathArg.value)
                                 }
@@ -483,7 +500,9 @@ export const JitConsentModal = () => {
                             parentPath &&
                             parentPath !== pathArg.value && (
                                 <Button
-                                    title={`Allow ${toolName} for ${parentPath}/* (broader)`}
+                                    title={`Allow ${toolName} for ${_truncateForTitle(
+                                        parentPath
+                                    )}/* (broader)`}
                                     onClick={() =>
                                         handleAllowToolWithPath(parentPath)
                                     }
@@ -514,7 +533,9 @@ export const JitConsentModal = () => {
                         {domain === "fs" && (
                             <>
                                 <Button
-                                    title={`Allow ${fsAction} for ${fsFilename}`}
+                                    title={`Allow ${fsAction} for ${_truncateForTitle(
+                                        fsFilename
+                                    )}`}
                                     onClick={handleAllowFsFilename}
                                     textSize="text-xs"
                                     padding="py-1.5 px-3"
@@ -538,7 +559,9 @@ export const JitConsentModal = () => {
                         {domain === "network" && (
                             <>
                                 <Button
-                                    title={`Allow ${netAction} for ${netHost}`}
+                                    title={`Allow ${netAction} for ${_truncateForTitle(
+                                        netHost
+                                    )}`}
                                     onClick={handleAllowNetHost}
                                     textSize="text-xs"
                                     padding="py-1.5 px-3"
@@ -549,7 +572,9 @@ export const JitConsentModal = () => {
                                 />
                                 {subdomainPattern && (
                                     <Button
-                                        title={`Allow ${netAction} for ${subdomainPattern} (subdomains)`}
+                                        title={`Allow ${netAction} for ${_truncateForTitle(
+                                            subdomainPattern
+                                        )} (subdomains)`}
                                         onClick={handleAllowNetSubdomain}
                                         textSize="text-xs"
                                         padding="py-1.5 px-3"
