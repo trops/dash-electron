@@ -68,6 +68,18 @@ nvm use --delete-prefix v20.20.0
 echo "Node version: $(node -v)"
 echo "npm version: $(npm -v)"
 
+# 1b. IPC surface audit regression gate. Runs BEFORE the @trops
+# dependency update because the audit needs `electron/api/*.js` source
+# files from dash-core, which only exist in the linked-symlink form
+# (the published package ships only `dist/`). After `npm install
+# @trops/dash-core@...` runs at step 2, the link is gone for the rest
+# of the pipeline, so the audit must run here. Soft-skips with a
+# notice when the link isn't present (remote CI without dash-core
+# linked).
+step "Auditing IPC surface (regression gate)"
+node --test scripts/audit-ipc-surface.test.js
+node scripts/audit-ipc-surface.js --check
+
 # 2. Update @trops dependencies to latest published versions
 step "Updating @trops dependencies"
 CORE_LATEST="$(npm view @trops/dash-core version)"

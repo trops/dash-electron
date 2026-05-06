@@ -20,6 +20,7 @@ const {
     parseHandlers,
     parseConstantDeclarations,
     resolveChannel,
+    runCheck,
 } = require("./audit-ipc-surface");
 
 test("classifyEvent: invoke + no handler → 'dead'", () => {
@@ -267,4 +268,100 @@ test("parseHandlers: resolves constant displayName via the constant map", () => 
     assert.strictEqual(out[0].displayName, "THEME_LIST");
     assert.strictEqual(out[0].value, "theme-list");
     assert.strictEqual(out[0].isLiteral, false);
+});
+
+// ---- runCheck (CI regression-gate mode) ------------------------------
+
+test("runCheck: current ⊆ allowlist → no findings, no warnings", () => {
+    const rows = [
+        { channel: "FOO", classification: "dead" },
+        { channel: "bar-pass", classification: "widget-passthru" },
+        { channel: "BAZ_OK", classification: "system" }, // not concerning
+        { channel: "QUX_GATED", classification: "gated" }, // not concerning
+    ];
+    const allowlist = {
+        dead: ["FOO"],
+        "widget-passthru": ["bar-pass"],
+        phantom: [],
+    };
+    const result = runCheck(rows, allowlist);
+    assert.deepStrictEqual(result.newFindings, []);
+    assert.deepStrictEqual(result.staleAllowlist, []);
+});
+
+test("runCheck: new dead entry not in allowlist → flagged as finding", () => {
+    const rows = [
+        { channel: "EXISTING_DEAD", classification: "dead" },
+        { channel: "NEW_DEAD", classification: "dead" },
+    ];
+    const allowlist = {
+        dead: ["EXISTING_DEAD"],
+        "widget-passthru": [],
+        phantom: [],
+    };
+    const result = runCheck(rows, allowlist);
+    assert.strictEqual(result.newFindings.length, 1);
+    assert.strictEqual(result.newFindings[0].channel, "NEW_DEAD");
+    assert.strictEqual(result.newFindings[0].classification, "dead");
+});
+
+test("runCheck: new widget-passthru entry → flagged", () => {
+    const rows = [
+        { channel: "new-passthru", classification: "widget-passthru" },
+    ];
+    const allowlist = { dead: [], "widget-passthru": [], phantom: [] };
+    const result = runCheck(rows, allowlist);
+    assert.strictEqual(result.newFindings.length, 1);
+    assert.strictEqual(result.newFindings[0].channel, "new-passthru");
+});
+
+test("runCheck: stale allowlist entry (channel no longer concerning) → warning, not finding", () => {
+    // Allowlist says "FOO is dead", but current state shows it as gated.
+    // That's an improvement; we warn so the developer can refresh the
+    // allowlist, but we don't fail.
+    const rows = [{ channel: "FOO", classification: "gated" }];
+    const allowlist = { dead: ["FOO"], "widget-passthru": [], phantom: [] };
+    const result = runCheck(rows, allowlist);
+    assert.deepStrictEqual(result.newFindings, []);
+    assert.strictEqual(result.staleAllowlist.length, 1);
+    assert.strictEqual(result.staleAllowlist[0].channel, "FOO");
+    assert.strictEqual(result.staleAllowlist[0].allowlistedAs, "dead");
+    assert.strictEqual(result.staleAllowlist[0].nowClassifiedAs, "gated");
+});
+
+test("runCheck: stale allowlist entry (channel removed entirely) → warning", () => {
+    // Allowlist references a channel that no longer appears at all
+    // (api was deleted; gate still has the entry).
+    const rows = [];
+    const allowlist = {
+        dead: ["GONE_CHANNEL"],
+        "widget-passthru": [],
+        phantom: [],
+    };
+    const result = runCheck(rows, allowlist);
+    assert.deepStrictEqual(result.newFindings, []);
+    assert.strictEqual(result.staleAllowlist.length, 1);
+    assert.strictEqual(result.staleAllowlist[0].channel, "GONE_CHANNEL");
+    assert.strictEqual(result.staleAllowlist[0].nowClassifiedAs, null);
+});
+
+test("runCheck: missing allowlist class falls back to empty list", () => {
+    const rows = [{ channel: "X", classification: "phantom" }];
+    const allowlist = { dead: [], "widget-passthru": [] }; // no "phantom" key
+    const result = runCheck(rows, allowlist);
+    assert.strictEqual(result.newFindings.length, 1);
+    assert.strictEqual(result.newFindings[0].channel, "X");
+});
+
+test("runCheck: ignores `system` and `gated` classifications", () => {
+    // Concerning classes are dead/widget-passthru/phantom only.
+    // New `system` entries (most ordinary feature work) should not
+    // trip the gate.
+    const rows = [
+        { channel: "NEW_SYSTEM", classification: "system" },
+        { channel: "NEW_GATED", classification: "gated" },
+    ];
+    const allowlist = { dead: [], "widget-passthru": [], phantom: [] };
+    const result = runCheck(rows, allowlist);
+    assert.deepStrictEqual(result.newFindings, []);
 });

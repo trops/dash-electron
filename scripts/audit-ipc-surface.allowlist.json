@@ -1,0 +1,22 @@
+{
+    "_comment": "Allowlist for IPC surface audit's --check mode. Lists currently-accepted entries in concerning classes (dead / widget-passthru / phantom). New entries that aren't on this list fail CI; stale entries (channel reclassified or removed) just warn. Refresh by running `node scripts/audit-ipc-surface.js --write-allowlist` after a deliberate change. Do not hand-edit casually — every entry is a security-stack acknowledgement that this surface is acceptable as-is.",
+    "dead": [],
+    "widget-passthru": [
+        "NOTIFICATION_SET_PREFERENCES",
+        "SCHEDULER_GET_PENDING",
+        "SCHEDULER_GET_TASKS",
+        "SCHEDULER_REMOVE_TASKS",
+        "widget-mcp:get-grant",
+        "widget-mcp:list-all",
+        "widget-mcp:revoke",
+        "widget-mcp:revoke-server",
+        "widget-mcp:set-grant",
+        "widget-popout-open",
+        "widget-popout-set-title"
+    ],
+    "phantom": [
+        "CHOOSE_FILE_COMPLETE",
+        "CHOOSE_FILE_ERROR",
+        "SESSION_REMOVE_RECENT"
+    ]
+}
