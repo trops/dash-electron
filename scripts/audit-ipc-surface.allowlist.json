@@ -17,6 +17,8 @@
     "phantom": [
         "CHOOSE_FILE_COMPLETE",
         "CHOOSE_FILE_ERROR",
-        "SESSION_REMOVE_RECENT"
+        "SESSION_REMOVE_RECENT",
+        "framework:register-widget-mount",
+        "framework:unregister-widget-mount"
     ]
 }
