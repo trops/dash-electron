@@ -21,6 +21,7 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button, FontAwesomeIcon } from "@trops/dash-react";
+import { enqueueRequest, dequeueHead } from "./jitConsentQueue";
 
 const PATH_ARG_KEYS = ["path", "uri", "filepath", "file", "directory"];
 
@@ -44,15 +45,21 @@ const WRITE_VERB =
     /(^|_)(write|create|edit|delete|remove|append|move|rename|chmod|chown|mkdir)/i;
 
 export const JitConsentModal = () => {
-    const [request, setRequest] = useState(null);
+    // Queue of pending requests instead of a single one — pre-fix the
+    // modal stored `useState(null)` and overwrote on every IPC event,
+    // silently dropping earlier prompts. See jitConsentQueue.js.
+    const [queue, setQueue] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const request = queue[0] || null;
 
     useEffect(() => {
         if (!window.mainApi?.permissions?.onRequired) return;
         const cleanup = window.mainApi.permissions.onRequired((payload) => {
             if (!payload?.requestId) return;
-            setRequest(payload);
-            setIsSubmitting(false);
+            setQueue((q) => enqueueRequest(q, payload));
+            // isSubmitting is reset by the response/cancel handlers
+            // when they dequeue — incoming events that aren't the
+            // current head shouldn't disturb in-flight submission UI.
         });
         return cleanup;
     }, []);
@@ -171,7 +178,8 @@ export const JitConsentModal = () => {
     const respond = (decision) => {
         if (!window.mainApi?.permissions?.respond) return;
         window.mainApi.permissions.respond(requestId, decision);
-        setRequest(null);
+        setQueue((q) => dequeueHead(q));
+        setIsSubmitting(false);
     };
 
     const handleAllowToolOnly = () => {
@@ -241,7 +249,9 @@ export const JitConsentModal = () => {
 
     const handleCancel = () => {
         // No response sent — main process will time out and reject.
-        setRequest(null);
+        // We still pop the head so the next queued request can render.
+        setQueue((q) => dequeueHead(q));
+        setIsSubmitting(false);
     };
 
     const parentPath = pathArg ? parentDirOf(pathArg.value) : null;
@@ -268,6 +278,9 @@ export const JitConsentModal = () => {
                         <div>
                             <div className="text-base font-semibold text-gray-100">
                                 Permission requested
+                                {queue.length > 1
+                                    ? ` (1 of ${queue.length})`
+                                    : ""}
                             </div>
                             <div className="text-xs text-gray-400 mt-0.5">
                                 {domain === "mcp" && (
