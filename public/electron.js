@@ -441,7 +441,6 @@ const {
     describeImage,
     saveMenuItemForApplication,
     listMenuItemsForApplication,
-    pluginInstall,
     // Theme registry
     prepareThemeForPublish,
     installThemeFromRegistry,
@@ -916,15 +915,6 @@ function createWindow() {
                         };
                     }
                 }
-            )
-        );
-
-        // --- Plugins ---
-        logger.loggedHandle("plugin-install", (e, message) =>
-            pluginInstall(
-                getSenderWindow(e),
-                message.packageName,
-                message.filepath
             )
         );
 
