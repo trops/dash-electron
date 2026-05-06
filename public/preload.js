@@ -203,6 +203,17 @@ const extendedApi = {
                 );
         },
     },
+    // Slice-3 widget mount-token registry. WidgetFactory calls
+    // registerMount at React mount, gets a server-generated token,
+    // and uses it to build a per-mount bound API (`makeBoundApi`)
+    // exposed via WidgetContext. Gates resolve widget identity from
+    // the token rather than trusting renderer-supplied widgetId.
+    framework: {
+        registerMount: (widgetId) =>
+            ipcRenderer.invoke("framework:register-widget-mount", widgetId),
+        unregisterMount: (token) =>
+            ipcRenderer.invoke("framework:unregister-widget-mount", token),
+    },
 };
 
 // Expose the context bridge for renderer -> main communication

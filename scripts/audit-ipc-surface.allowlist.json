@@ -6,6 +6,7 @@
         "SCHEDULER_GET_PENDING",
         "SCHEDULER_GET_TASKS",
         "SCHEDULER_REMOVE_TASKS",
+        "framework:register-widget-mount",
         "widget-mcp:get-grant",
         "widget-mcp:list-all",
         "widget-mcp:revoke",
@@ -17,8 +18,6 @@
     "phantom": [
         "CHOOSE_FILE_COMPLETE",
         "CHOOSE_FILE_ERROR",
-        "SESSION_REMOVE_RECENT",
-        "framework:register-widget-mount",
-        "framework:unregister-widget-mount"
+        "SESSION_REMOVE_RECENT"
     ]
 }
