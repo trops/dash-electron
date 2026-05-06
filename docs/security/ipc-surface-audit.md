@@ -258,7 +258,7 @@ none of their handlers verify the caller's identity. Verdicts:
 
 | Channel                    | Risk                 | Verdict                                                                                                                   |
 | -------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `widget-mcp:set-grant`     | **🚨 Critical**      | A widget can grant **itself** any permissions and bypass every gate. See **Open security gap** below.                     |
+| `widget-mcp:set-grant`     | ⚠️ Hardened (DiD)    | Broadening calls now require an OS-native confirmation (renderer-untamperable). See **Native-dialog hardening** below.    |
 | `widget-mcp:revoke`        | Medium (DoS)         | A widget can wipe another widget's grant. Real gap; same root cause.                                                      |
 | `widget-mcp:revoke-server` | Medium (DoS)         | Partial-revoke variant. Real gap; same root cause.                                                                        |
 | `widget-mcp:get-grant`     | Low                  | Read a grant by widgetId. Grants don't contain secrets, just allowlists. Could leak which permissions other widgets have. |
@@ -266,45 +266,47 @@ none of their handlers verify the caller's identity. Verdicts:
 | `widget-popout-open`       | Low (UX abuse)       | Open a popout for any widget+workspace. Could spam popouts; not a security gap per se.                                    |
 | `widget-popout-set-title`  | Low (cosmetic spoof) | Change another widget's popout title. UX-only.                                                                            |
 
-### ⚠️ Open security gap — `widget-mcp:set-grant` consent bypass
+### ⚠️ Native-dialog hardening for `widget-mcp:set-grant`
 
-`dash-core/electron/controller/widgetMcpGrantsController.js` registers:
+The `widget-mcp:set-grant` handler now runs a diff (`grantDiff.js`)
+between the widget's current grant and the proposed change. If the
+new grant **broadens** permissions in any dimension (new server, new
+tool, new path, new host, `*` wildcard) the handler calls
+`dialog.showMessageBox` — Electron's OS-native modal — listing the
+specific additions and asking the user to confirm. Cancel drops the
+write; Allow proceeds.
+
+**Why native:** the prompt is a system-level dialog; a renderer
+(including a malicious widget in the same JS realm) cannot dismiss it
+programmatically or synthesize clicks against it. This closes the
+previous consent-bypass exploit:
 
 ```js
-ipcMain.handle("widget-mcp:set-grant", (event, widgetId, perms) => {
-    return setGrant(widgetId, perms);
-});
-```
-
-The handler does **zero authorization check**. A malicious widget can
-call:
-
-```js
+// Was a silent total-bypass before this slice; now triggers an
+// OS-native "Allow new permissions for @malicious/self?" dialog.
 mainApi.widgetMcp.setGrant("@malicious/self", {
-    grantOrigin: "manual",
-    servers: {
-        filesystem: {
-            tools: ["read_file", "write_file"],
-            readPaths: ["/"],
-            writePaths: ["/"],
-        },
-    },
-    domains: {
-        fs: { readPaths: ["*"], writePaths: ["*"] },
-        network: { hosts: ["*"] },
-    },
+    servers: { fs: { tools: ["*"], readPaths: ["/"], writePaths: ["/"] } },
+    domains: { network: { hosts: ["*"] } },
 });
 ```
 
-…and then make any fs / MCP / network call — the gate looks up its
-self-written grant, finds wide-open permissions, allows. **Total
-bypass of the consent stack** (Phase 1 MCP, Phase 2 fs, Phase 3
-network).
+**Reductions / equality** (revocations, partial trims, no-ops) pass
+unprompted — the user only sees a confirm when permissions are
+actually being added.
 
-This is the same root cause as the existing widgetId-trust-model
-caveat (renderer-supplied widgetId trusted at face value). It now
-shows up sharper because grant-writing is a control-plane operation,
-not just a data-plane claim.
+**Known limitations** (carried over from the broader trust-model
+caveat — full fix is multi-week per-widget BrowserView refactor):
+
+-   `widget-mcp:revoke` and `widget-mcp:revoke-server` still don't
+    confirm. A malicious widget can DoS another widget's grant. Lower
+    severity than the bypass; not addressed in this slice.
+-   The data-plane widgetId-spoofing remains: a widget can still
+    claim to be another widget at gate-call time. The native-dialog
+    fix is specifically for grant-writing (control plane). The runtime
+    gate stack continues to trust renderer-supplied widgetId.
+-   A malicious widget could DoS the user via repeated `setGrant`
+    calls spamming dialogs. The user will notice immediately and
+    uninstall the widget.
 
 The fix requires either:
 
