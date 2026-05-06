@@ -249,24 +249,76 @@ surface today. Hardening the trust model (e.g. tying `widgetId` to
 `webContents.id` via a registry) is a separate, much larger slice and
 would affect every per-widget gate at once.
 
-### widget-passthru — dash-electron preload entries (pending review)
+### widget-passthru — dash-electron preload verdicts
 
-Surfaced after the parser improvement made inline-string `invoke()` calls
-in `dash-electron/public/preload.js` visible:
+The 7 channels surfaced once the parser learned to read inline-string
+`invoke()` calls in `dash-electron/public/preload.js`. All are exposed
+on `mainApi` to every renderer context — including widget code — and
+none of their handlers verify the caller's identity. Verdicts:
 
--   `widget-mcp:{get-grant, set-grant, revoke, revoke-server, list-all}`
-    — Settings → Privacy & Security panel uses these to read/write
-    grants. The handlers in
-    `dash-electron/public/electron.js` have `widgetId` in their bodies
-    but no named gate; the operations are admin-style (the panel
-    addresses widgets by id). Whether a malicious widget can call
-    these is the open question; needs review.
--   `widget-popout-{open, set-title}` — window control. Probably
-    intentional (widget can control its own popout), but should
-    confirm the panel-vs-widget caller path.
+| Channel                    | Risk                 | Verdict                                                                                                                   |
+| -------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `widget-mcp:set-grant`     | **🚨 Critical**      | A widget can grant **itself** any permissions and bypass every gate. See **Open security gap** below.                     |
+| `widget-mcp:revoke`        | Medium (DoS)         | A widget can wipe another widget's grant. Real gap; same root cause.                                                      |
+| `widget-mcp:revoke-server` | Medium (DoS)         | Partial-revoke variant. Real gap; same root cause.                                                                        |
+| `widget-mcp:get-grant`     | Low                  | Read a grant by widgetId. Grants don't contain secrets, just allowlists. Could leak which permissions other widgets have. |
+| `widget-mcp:list-all`      | Low                  | Whole-store version of `get-grant`. Same low risk.                                                                        |
+| `widget-popout-open`       | Low (UX abuse)       | Open a popout for any widget+workspace. Could spam popouts; not a security gap per se.                                    |
+| `widget-popout-set-title`  | Low (cosmetic spoof) | Change another widget's popout title. UX-only.                                                                            |
 
-These need manual review similar to the dash-core widget-passthru
-verdicts; that's the natural next slice after this one.
+### ⚠️ Open security gap — `widget-mcp:set-grant` consent bypass
+
+`dash-core/electron/controller/widgetMcpGrantsController.js` registers:
+
+```js
+ipcMain.handle("widget-mcp:set-grant", (event, widgetId, perms) => {
+    return setGrant(widgetId, perms);
+});
+```
+
+The handler does **zero authorization check**. A malicious widget can
+call:
+
+```js
+mainApi.widgetMcp.setGrant("@malicious/self", {
+    grantOrigin: "manual",
+    servers: {
+        filesystem: {
+            tools: ["read_file", "write_file"],
+            readPaths: ["/"],
+            writePaths: ["/"],
+        },
+    },
+    domains: {
+        fs: { readPaths: ["*"], writePaths: ["*"] },
+        network: { hosts: ["*"] },
+    },
+});
+```
+
+…and then make any fs / MCP / network call — the gate looks up its
+self-written grant, finds wide-open permissions, allows. **Total
+bypass of the consent stack** (Phase 1 MCP, Phase 2 fs, Phase 3
+network).
+
+This is the same root cause as the existing widgetId-trust-model
+caveat (renderer-supplied widgetId trusted at face value). It now
+shows up sharper because grant-writing is a control-plane operation,
+not just a data-plane claim.
+
+The fix requires either:
+
+1. **WidgetId trust-model tightening** — bind `widgetId` to the
+   caller's `webContents.id` via a registry, and reject IPC calls
+   whose claimed widgetId doesn't match. Closes both this and the
+   existing widgetId-spoofing caveat at once. Multi-day slice.
+2. **Preload split** — move `widgetMcp.*` (and other admin channels)
+   off `mainApi` and onto a separate bridge only the Settings panel /
+   consent modal preload exposes. Requires distinct preloads per
+   BrowserWindow context; possible but invasive.
+
+Until one of those ships, the gap is exploitable. **The
+trust-model slice is now the priority next move.**
 
 ### dead — fully cleaned up
 
@@ -289,23 +341,18 @@ campaign:
 
 ### Recommended next slices
 
-1. **Subdomain wildcards in the network gate** — `*.example.com`
-   matching alongside the existing exact-match and `"*"` (any) cases.
-   Small Phase 3 follow-up; deferred from the original network slice.
-2. **Verify dash-electron preload widget-passthru entries** — review
-   the 7 channels (`widget-mcp:*`, `widget-popout-*`) and decide
-   per channel: scoped / intentional admin-style / real gap. Same
-   shape as the prior verify-passthru slice for dash-core
-   controllers.
-3. **Domain-neutral rename** — `enforceWidgetMcpPermissions` →
+1. **🚨 Tighten the widgetId trust model** (large, multi-day,
+   priority) — today every gate trusts the renderer-supplied
+   `widgetId` at face value, and the same root issue lets a widget
+   call `widget-mcp:set-grant` to escalate its own permissions
+   (see **Open security gap** above). A `widgetId` ↔ `webContents.id`
+   registry, plus rejecting IPC calls whose claimed widgetId doesn't
+   match, would close both at once. Now the highest-impact remaining
+   security work.
+2. **Domain-neutral rename** — `enforceWidgetMcpPermissions` →
    `enforceWidgetPermissions`, `enableJitConsent` stays. Mechanical,
    touches every read-flag site; settings migration required.
-4. **Tighten the widgetId trust model** (large, multi-day) — today
-   every gate trusts the renderer-supplied `widgetId` at face value.
-   A `widgetId` ↔ `webContents.id` registry would harden every gate
-   at once. The only remaining substantive security work after this
-   campaign.
-5. **Manual-grant UX polish** — rework the "Grant Manually" modal in
+3. **Manual-grant UX polish** — rework the "Grant Manually" modal in
    Settings → Privacy & Security so it's not a provider-then-tools
    picker. Pure UI; no security-stack changes.
 
