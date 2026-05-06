@@ -140,9 +140,27 @@ export const JitConsentModal = () => {
         netHost = netUrl || "(unparseable)";
     }
 
+    // Subdomain wildcard pattern. Skip when the host is an IP, has
+    // only one segment (e.g. "localhost"), or is already exactly the
+    // base domain (a wildcard wouldn't broaden the grant). Pattern is
+    // the last two dotted segments — e.g. "api.foo.example.com" →
+    // "*.example.com".
+    const isIPv4 = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(netHost);
+    const isIPv6 = /:/.test(netHost);
+    const segments = netHost.split(".");
+    const canWildcard = !isIPv4 && !isIPv6 && segments.length >= 3;
+    const subdomainPattern = canWildcard
+        ? "*." + segments.slice(-2).join(".")
+        : null;
+
     const grantNetHost = (host) => ({
         grantOrigin: "live",
         domains: { network: { hosts: [host] } },
+    });
+
+    const grantNetSubdomain = (pattern) => ({
+        grantOrigin: "live",
+        domains: { network: { hosts: [pattern] } },
     });
 
     const grantNetAny = () => ({
@@ -194,6 +212,16 @@ export const JitConsentModal = () => {
             approve: true,
             scope: "network+host",
             granted: grantNetHost(netHost),
+        });
+    };
+
+    const handleAllowNetSubdomain = () => {
+        if (!subdomainPattern) return;
+        setIsSubmitting(true);
+        respond({
+            approve: true,
+            scope: "network+subdomain",
+            granted: grantNetSubdomain(subdomainPattern),
         });
     };
 
@@ -467,6 +495,18 @@ export const JitConsentModal = () => {
                                     hoverBackgroundColor="hover:bg-purple-500"
                                     disabled={isSubmitting}
                                 />
+                                {subdomainPattern && (
+                                    <Button
+                                        title={`Allow ${netAction} for ${subdomainPattern} (subdomains)`}
+                                        onClick={handleAllowNetSubdomain}
+                                        textSize="text-xs"
+                                        padding="py-1.5 px-3"
+                                        backgroundColor="bg-gray-700"
+                                        textColor="text-gray-100"
+                                        hoverBackgroundColor="hover:bg-gray-600"
+                                        disabled={isSubmitting}
+                                    />
+                                )}
                                 <Button
                                     title={`Allow ${netAction} for any host (broader — risky)`}
                                     onClick={handleAllowNetAny}
