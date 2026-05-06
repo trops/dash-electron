@@ -22,6 +22,13 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button, FontAwesomeIcon } from "@trops/dash-react";
 import { enqueueRequest, dequeueHead } from "./jitConsentQueue";
+import {
+    buildFsFilenameGrant,
+    buildFsAnyGrant,
+    buildNetHostGrant,
+    buildNetSubdomainGrant,
+    buildNetAnyGrant,
+} from "./jitConsentGrantBuilders";
 
 const PATH_ARG_KEYS = ["path", "uri", "filepath", "file", "directory"];
 
@@ -117,25 +124,15 @@ export const JitConsentModal = () => {
     const fsFilename = args?.filename || "(unknown file)";
     const fsIsWrite = FS_WRITE_ACTIONS.has(fsAction);
 
-    const grantFsFilename = (filename) => ({
-        grantOrigin: "live",
-        domains: {
-            fs: {
-                readPaths: !fsIsWrite ? [filename] : [],
-                writePaths: fsIsWrite ? [filename] : [],
-            },
-        },
-    });
+    const grantFsFilename = (filename) =>
+        buildFsFilenameGrant({
+            action: fsAction,
+            filename,
+            isWrite: fsIsWrite,
+        });
 
-    const grantFsAny = () => ({
-        grantOrigin: "live",
-        domains: {
-            fs: {
-                readPaths: !fsIsWrite ? ["*"] : [],
-                writePaths: fsIsWrite ? ["*"] : [],
-            },
-        },
-    });
+    const grantFsAny = () =>
+        buildFsAnyGrant({ action: fsAction, isWrite: fsIsWrite });
 
     // --- network domain (Phase 3) --------------------------------
     const netAction = args?.action || request.action || "(unknown action)";
@@ -160,20 +157,13 @@ export const JitConsentModal = () => {
         ? "*." + segments.slice(-2).join(".")
         : null;
 
-    const grantNetHost = (host) => ({
-        grantOrigin: "live",
-        domains: { network: { hosts: [host] } },
-    });
+    const grantNetHost = (host) =>
+        buildNetHostGrant({ action: netAction, host });
 
-    const grantNetSubdomain = (pattern) => ({
-        grantOrigin: "live",
-        domains: { network: { hosts: [pattern] } },
-    });
+    const grantNetSubdomain = (pattern) =>
+        buildNetSubdomainGrant({ action: netAction, pattern });
 
-    const grantNetAny = () => ({
-        grantOrigin: "live",
-        domains: { network: { hosts: ["*"] } },
-    });
+    const grantNetAny = () => buildNetAnyGrant({ action: netAction });
 
     const respond = (decision) => {
         if (!window.mainApi?.permissions?.respond) return;
