@@ -57,6 +57,10 @@ export const JitConsentModal = () => {
     // silently dropping earlier prompts. See jitConsentQueue.js.
     const [queue, setQueue] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // Slice 5: opt-in to broader sibling-batch grant. Resets on every
+    // queue-head change (handled below) so a previous "yes, batch it"
+    // doesn't leak into the next request.
+    const [applyToSiblings, setApplyToSiblings] = useState(false);
     const request = queue[0] || null;
 
     useEffect(() => {
@@ -71,6 +75,12 @@ export const JitConsentModal = () => {
         return cleanup;
     }, []);
 
+    // Reset the sibling-batch checkbox whenever the head request id
+    // changes (i.e. user advanced past the previous prompt).
+    useEffect(() => {
+        setApplyToSiblings(false);
+    }, [request?.requestId]);
+
     if (!request) return null;
     if (
         request.domain !== "mcp" &&
@@ -80,6 +90,14 @@ export const JitConsentModal = () => {
         return null;
 
     const { requestId, widgetId, args, domain } = request;
+    // Slice 5: package-scope sibling batch. Defaults preserve single-
+    // widget behavior when the gate's resolveSiblings fell back.
+    const packageId =
+        typeof request.packageId === "string" ? request.packageId : null;
+    const siblingWidgetIds = Array.isArray(request.siblingWidgetIds)
+        ? request.siblingWidgetIds
+        : [widgetId];
+    const showSiblingCheckbox = !!packageId && siblingWidgetIds.length > 1;
 
     // --- MCP domain (Slice 1+2 — original) -----------------------
     const serverName = args?.serverName || "(unknown server)";
@@ -167,7 +185,15 @@ export const JitConsentModal = () => {
 
     const respond = (decision) => {
         if (!window.mainApi?.permissions?.respond) return;
-        window.mainApi.permissions.respond(requestId, decision);
+        // Slice 5: thread the sibling-batch opt-in through every
+        // approval. On deny, the gate ignores it (writes nothing). On
+        // approve, the gate writes the same grant to every sibling
+        // when this is true and resolved siblings count > 1.
+        const finalDecision = {
+            ...decision,
+            applyToSiblings: decision?.approve === true && applyToSiblings,
+        };
+        window.mainApi.permissions.respond(requestId, finalDecision);
         setQueue((q) => dequeueHead(q));
         setIsSubmitting(false);
     };
@@ -415,6 +441,29 @@ export const JitConsentModal = () => {
                     </div>
 
                     <div className="flex flex-col gap-2 px-5 py-3 border-t border-gray-700">
+                        {showSiblingCheckbox && (
+                            <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none pb-1">
+                                <input
+                                    type="checkbox"
+                                    checked={applyToSiblings}
+                                    onChange={(e) =>
+                                        setApplyToSiblings(e.target.checked)
+                                    }
+                                    disabled={isSubmitting}
+                                    className="cursor-pointer"
+                                />
+                                <span>
+                                    Apply to all{" "}
+                                    <span className="font-mono">
+                                        {siblingWidgetIds.length}
+                                    </span>{" "}
+                                    widgets currently installed from{" "}
+                                    <span className="font-mono">
+                                        {packageId}
+                                    </span>
+                                </span>
+                            </label>
+                        )}
                         {domain === "mcp" && pathArg && (
                             <Button
                                 title={`Allow ${toolName} for ${pathArg.value}`}
