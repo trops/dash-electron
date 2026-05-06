@@ -613,6 +613,13 @@ const { setupWidgetRegistryHandlers } = widgetRegistry;
 const { setupWidgetMcpGrantsHandlers } =
     require("@trops/dash-core/electron").widgetMcpGrantsController;
 
+// Slice-3 widget mount-token registry — the trusted source of widget
+// identity at the IPC boundary. WidgetFactory calls
+// `framework:register-widget-mount` at mount and bakes the returned
+// token into its bound API; gates resolve widgetId from the token.
+const { setupWidgetMountTokenHandlers } =
+    require("@trops/dash-core/electron").widgetMountTokenController;
+
 // JIT consent (Phase 1) — main process listens for renderer's
 // permission-response IPC and routes to dash-core's jitConsent module.
 const { setupJitConsentHandlers } =
@@ -1298,7 +1305,8 @@ function createWindow() {
                 message.filename,
                 message.append,
                 message.returnEmpty,
-                message.widgetId
+                message.widgetId,
+                message.token
             )
         );
         logger.loggedHandle(DATA_READ_FROM_FILE, (e, message) =>
@@ -1306,7 +1314,8 @@ function createWindow() {
                 getSenderWindow(e),
                 message.filename,
                 message.returnEmpty,
-                message.widgetId
+                message.widgetId,
+                message.token
             )
         );
         logger.loggedHandle(READ_DATA_URL, (e, message) =>
@@ -1314,7 +1323,8 @@ function createWindow() {
                 getSenderWindow(e),
                 message.url,
                 message.toFilepath,
-                message.widgetId
+                message.widgetId,
+                message.token
             )
         );
 
@@ -1411,7 +1421,8 @@ function createWindow() {
                 message.args,
                 message.allowedTools,
                 message.widgetId,
-                message.workspaceId
+                message.workspaceId,
+                message.token
             )
         );
         logger.loggedHandle(MCP_LIST_RESOURCES, (e, message) =>
@@ -1471,7 +1482,8 @@ function createWindow() {
                 getSenderWindow(e),
                 message.providerName,
                 message.config,
-                message.widgetId
+                message.widgetId,
+                message.token
             )
         );
         logger.loggedHandle(WS_DISCONNECT, (e, message) =>
@@ -1741,6 +1753,7 @@ function createWindow() {
         // --- Widget System ---
         setupWidgetRegistryHandlers();
         setupWidgetMcpGrantsHandlers();
+        setupWidgetMountTokenHandlers();
         setupJitConsentHandlers();
 
         // Ensure @ai-built/ directory exists for the widget builder CLI
