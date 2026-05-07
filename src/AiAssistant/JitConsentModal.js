@@ -21,6 +21,7 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button, FontAwesomeIcon } from "@trops/dash-react";
+import { humanizeAction } from "@trops/dash-core";
 import { enqueueRequest, dequeueHead } from "./jitConsentQueue";
 import {
     buildFsFilenameGrant,
@@ -30,22 +31,16 @@ import {
     buildNetAnyGrant,
 } from "./jitConsentGrantBuilders";
 
-const PATH_ARG_KEYS = ["path", "uri", "filepath", "file", "directory"];
-
-// Buttons in the modal carry the requested filename/path/host in their
-// title for clarity, but `<Button title>` doesn't wrap — so a long
-// auto-generated filename (e.g. a workspace-uuid prefix + chat
-// transcript filename) overflows the button bounds. The full path is
-// already shown in the request-details panel above the buttons; here
-// we just need a recognizable short form.
-function _truncateForTitle(str, max = 36) {
-    if (typeof str !== "string") return "";
-    if (str.length <= max) return str;
-    // Keep the tail (often the meaningful part — extension, leaf
-    // segment) intact; ellipsis on the front.
-    const keep = max - 1;
-    return "…" + str.slice(str.length - keep);
+// Pull the bare component name out of a grant-keyed widgetId
+// ("trops.google-drive.GDriveFileList" → "GDriveFileList") so the
+// header can show a recognizable name instead of the engineering id.
+function _displayWidgetName(widgetId) {
+    if (typeof widgetId !== "string" || !widgetId) return "This widget";
+    const idx = widgetId.lastIndexOf(".");
+    return idx >= 0 ? widgetId.slice(idx + 1) : widgetId;
 }
+
+const PATH_ARG_KEYS = ["path", "uri", "filepath", "file", "directory"];
 
 function findPathArg(args) {
     if (!args || typeof args !== "object") return null;
@@ -316,15 +311,16 @@ export const JitConsentModal = () => {
                             <div className="text-xs text-gray-400 mt-0.5">
                                 {domain === "mcp" && (
                                     <>
-                                        <span className="font-mono">
-                                            {widgetId}
+                                        <span className="font-semibold text-gray-200">
+                                            {_displayWidgetName(widgetId)}
                                         </span>{" "}
-                                        wants to call{" "}
-                                        <span className="font-mono">
+                                        wants to{" "}
+                                        {humanizeAction("mcp", "callTool")}{" "}
+                                        <span className="font-semibold text-gray-200">
                                             {toolName}
                                         </span>{" "}
-                                        on{" "}
-                                        <span className="font-mono">
+                                        tool on{" "}
+                                        <span className="font-semibold text-gray-200">
                                             {serverName}
                                         </span>
                                         .
@@ -332,31 +328,21 @@ export const JitConsentModal = () => {
                                 )}
                                 {domain === "fs" && (
                                     <>
-                                        <span className="font-mono">
-                                            {widgetId}
+                                        <span className="font-semibold text-gray-200">
+                                            {_displayWidgetName(widgetId)}
                                         </span>{" "}
                                         wants to{" "}
-                                        <span className="font-mono">
-                                            {fsAction}
-                                        </span>{" "}
-                                        on{" "}
-                                        <span className="font-mono">
-                                            {fsFilename}
-                                        </span>
-                                        .
+                                        {humanizeAction("fs", fsAction)}.
                                     </>
                                 )}
                                 {domain === "network" && (
                                     <>
-                                        <span className="font-mono">
-                                            {widgetId}
+                                        <span className="font-semibold text-gray-200">
+                                            {_displayWidgetName(widgetId)}
                                         </span>{" "}
                                         wants to{" "}
-                                        <span className="font-mono">
-                                            {netAction}
-                                        </span>{" "}
-                                        on{" "}
-                                        <span className="font-mono">
+                                        {humanizeAction("network", netAction)}{" "}
+                                        <span className="font-semibold text-gray-200">
                                             {netHost}
                                         </span>
                                         .
@@ -468,11 +454,8 @@ export const JitConsentModal = () => {
                                     className="cursor-pointer"
                                 />
                                 <span>
-                                    Apply to all{" "}
-                                    <span className="font-mono">
-                                        {siblingWidgetIds.length}
-                                    </span>{" "}
-                                    widgets currently installed from{" "}
+                                    Also allow this for the other{" "}
+                                    {siblingWidgetIds.length - 1} widgets in{" "}
                                     <span className="font-mono">
                                         {packageId}
                                     </span>
@@ -481,9 +464,7 @@ export const JitConsentModal = () => {
                         )}
                         {domain === "mcp" && pathArg && (
                             <Button
-                                title={`Allow ${toolName} for ${_truncateForTitle(
-                                    pathArg.value
-                                )}`}
+                                title="Allow this once"
                                 onClick={() =>
                                     handleAllowToolWithPath(pathArg.value)
                                 }
@@ -500,9 +481,7 @@ export const JitConsentModal = () => {
                             parentPath &&
                             parentPath !== pathArg.value && (
                                 <Button
-                                    title={`Allow ${toolName} for ${_truncateForTitle(
-                                        parentPath
-                                    )}/* (broader)`}
+                                    title="Allow for any file in this folder"
                                     onClick={() =>
                                         handleAllowToolWithPath(parentPath)
                                     }
@@ -518,7 +497,7 @@ export const JitConsentModal = () => {
                             <Button
                                 title={
                                     pathArg
-                                        ? `Allow ${toolName} (no path scope — risky)`
+                                        ? "Allow without restricting to a file (less safe)"
                                         : `Allow ${toolName}`
                                 }
                                 onClick={handleAllowToolOnly}
@@ -533,9 +512,7 @@ export const JitConsentModal = () => {
                         {domain === "fs" && (
                             <>
                                 <Button
-                                    title={`Allow ${fsAction} for ${_truncateForTitle(
-                                        fsFilename
-                                    )}`}
+                                    title="Allow for this file"
                                     onClick={handleAllowFsFilename}
                                     textSize="text-xs"
                                     padding="py-1.5 px-3"
@@ -545,7 +522,7 @@ export const JitConsentModal = () => {
                                     disabled={isSubmitting}
                                 />
                                 <Button
-                                    title={`Allow ${fsAction} for any filename (broader — risky)`}
+                                    title="Allow for any file (less safe)"
                                     onClick={handleAllowFsAny}
                                     textSize="text-xs"
                                     padding="py-1.5 px-3"
@@ -559,9 +536,7 @@ export const JitConsentModal = () => {
                         {domain === "network" && (
                             <>
                                 <Button
-                                    title={`Allow ${netAction} for ${_truncateForTitle(
-                                        netHost
-                                    )}`}
+                                    title="Allow for this host"
                                     onClick={handleAllowNetHost}
                                     textSize="text-xs"
                                     padding="py-1.5 px-3"
@@ -572,9 +547,7 @@ export const JitConsentModal = () => {
                                 />
                                 {subdomainPattern && (
                                     <Button
-                                        title={`Allow ${netAction} for ${_truncateForTitle(
-                                            subdomainPattern
-                                        )} (subdomains)`}
+                                        title="Allow for this domain and subdomains"
                                         onClick={handleAllowNetSubdomain}
                                         textSize="text-xs"
                                         padding="py-1.5 px-3"
@@ -585,7 +558,7 @@ export const JitConsentModal = () => {
                                     />
                                 )}
                                 <Button
-                                    title={`Allow ${netAction} for any host (broader — risky)`}
+                                    title="Allow for any host (less safe)"
                                     onClick={handleAllowNetAny}
                                     textSize="text-xs"
                                     padding="py-1.5 px-3"
