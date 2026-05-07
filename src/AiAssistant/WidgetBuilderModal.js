@@ -538,6 +538,8 @@ export default function MyWidget() {
 
 DO NOT change the provider class. DO NOT pick a different provider type. DO NOT use \`useMcpProvider\` if the class above is \`credential\`, and vice versa. The user has already configured this provider — your only job is to write a working widget that consumes it.
 
+**MCP permissions auto-detection.** The build system statically scans your code for \`useMcpProvider("<type>")\` and \`callTool("<tool_name>", ...)\` calls and pre-declares those as required permissions in the widget's manifest, so the user is asked once at install time instead of being prompted repeatedly at runtime as new tools are called. Keep both the provider type and the tool name as **literal string arguments** — don't put tool names in variables (\`callTool(toolName, ...)\` can't be detected statically and will fall back to runtime prompts every time).
+
 ## Output protocol
 
 You can output either a single-file widget (component + config) or a multi-file package.

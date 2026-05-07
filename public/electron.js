@@ -2736,6 +2736,27 @@ function createWindow() {
                     "utf8"
                 );
 
+                // Slice 7: statically scan the AI-generated component
+                // code for `useMcpProvider("type")` and
+                // `callTool("name", ...)` to pre-declare MCP
+                // permissions in the manifest. The runtime gate's
+                // `parseManifestPermissions` reads `package.json
+                // .dash.permissions.mcp`, so we write the block to
+                // BOTH dash.json (canonical metadata) and package.json
+                // (where the parser looks). Empty result → no block
+                // written → behavior unchanged from pre-slice.
+                const {
+                    scanWidgetMcpUsage,
+                } = require("../scripts/scanWidgetMcpUsage");
+                const detectedMcpPermissions =
+                    scanWidgetMcpUsage(componentCode);
+                const hasDeclaredPermissions =
+                    detectedMcpPermissions &&
+                    Object.keys(detectedMcpPermissions).length > 0;
+                const dashPermissionsBlock = hasDeclaredPermissions
+                    ? { permissions: { mcp: detectedMcpPermissions } }
+                    : null;
+
                 // Write dash.json manifest
                 fs.writeFileSync(
                     path.join(buildDir, "dash.json"),
@@ -2765,12 +2786,53 @@ function createWindow() {
                                       remixedFrom: remixMeta.remixedFrom,
                                   }
                                 : {}),
+                            ...(dashPermissionsBlock
+                                ? { dash: dashPermissionsBlock }
+                                : {}),
                         },
                         null,
                         2
                     ),
                     "utf8"
                 );
+
+                // Slice 7: also write/merge a package.json carrying
+                // the `dash.permissions.mcp` block since
+                // `parseManifestPermissions` reads from package.json
+                // shape (not dash.json). Preserves any existing
+                // package.json (e.g. AI produced one with `dependencies`)
+                // and overlays the dash block on top.
+                if (hasDeclaredPermissions) {
+                    const pkgJsonPath = path.join(buildDir, "package.json");
+                    let existingPkg = {};
+                    if (fs.existsSync(pkgJsonPath)) {
+                        try {
+                            existingPkg = JSON.parse(
+                                fs.readFileSync(pkgJsonPath, "utf8")
+                            );
+                        } catch (_) {
+                            existingPkg = {};
+                        }
+                    }
+                    const merged = {
+                        name: `@ai-built/${widgetName.toLowerCase()}`,
+                        version: "1.0.0",
+                        private: true,
+                        ...existingPkg,
+                        dash: {
+                            ...(existingPkg.dash || {}),
+                            permissions: {
+                                ...((existingPkg.dash || {}).permissions || {}),
+                                mcp: detectedMcpPermissions,
+                            },
+                        },
+                    };
+                    fs.writeFileSync(
+                        pkgJsonPath,
+                        JSON.stringify(merged, null, 2),
+                        "utf8"
+                    );
+                }
 
                 // Compile via widgetCompiler (from dash-core).
                 // `dashCoreRegistry` was already required at the top of
