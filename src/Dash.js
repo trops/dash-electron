@@ -26,6 +26,7 @@ import { WidgetBuilderModal } from "./AiAssistant/WidgetBuilderModal";
 import { InstallExternalMcpModal } from "./AiAssistant/InstallExternalMcpModal";
 import { WidgetMcpConsentModal } from "./AiAssistant/WidgetMcpConsentModal";
 import { JitConsentModal } from "./AiAssistant/JitConsentModal";
+import { PreflightConsentModal } from "./AiAssistant/PreflightConsentModal";
 
 // Local widgets that integrate with Dash. We discover every
 // `src/Widgets/<Package>/<Widget>.dash.js` via webpack's require.context
@@ -883,6 +884,7 @@ class App extends React.Component {
                                 <InstallExternalMcpModal />
                                 <WidgetMcpConsentModal />
                                 <JitConsentModal />
+                                <PreflightConsentModal />
                                 {this.state.isWidgetBuilderOpen && (
                                     <WidgetBuilderModal
                                         isOpen={this.state.isWidgetBuilderOpen}
