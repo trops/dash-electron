@@ -39,6 +39,10 @@ import { WidgetDraftsList } from "./WidgetDraftsList";
 import { WidgetConsolePane } from "./WidgetConsolePane";
 import { installWidgetConsoleCapture } from "./widgetConsoleCapture";
 import * as transforms from "./widgetCodeTransforms";
+import {
+    extractProviderDeclarations,
+    buildPreviewWidgetData,
+} from "./widgetPreviewData";
 
 /**
  * Wraps the preview widget in the full context stack (AppContext,
@@ -46,33 +50,6 @@ import * as transforms from "./widgetCodeTransforms";
  * Auto-selects the first matching provider for each type declared
  * in the widget config.
  */
-/**
- * Parse `providers: [...]` out of a .dash.js config string. Returns
- * [{ type, providerClass }]. Used by the preview to know which
- * provider declarations the widget has so we can offer a picker.
- */
-function extractProviderDeclarations(configCode) {
-    const providers = [];
-    if (!configCode) return providers;
-    const providerMatch = configCode.match(/providers\s*:\s*\[([\s\S]*?)\]/);
-    if (!providerMatch) return providers;
-    const typeMatches = providerMatch[1].matchAll(
-        /type\s*:\s*["']([^"']+)["']/g
-    );
-    const classMatches = providerMatch[1].matchAll(
-        /providerClass\s*:\s*["']([^"']+)["']/g
-    );
-    const classes = [...classMatches].map((m) => m[1]);
-    let i = 0;
-    for (const m of typeMatches) {
-        providers.push({
-            type: m[1],
-            providerClass: classes[i] || "credential",
-        });
-        i++;
-    }
-    return providers;
-}
 
 /**
  * Small picker strip rendered above the live widget preview. For each
@@ -210,37 +187,22 @@ function PreviewContextWrapper({
     themeCtx,
     editContext,
     previewProviderSelection,
+    previewConfigCode,
     children,
 }) {
-    const widgetData = React.useMemo(() => {
-        const providers = extractProviderDeclarations(
-            editContext?.configCode || ""
-        );
-        // Precedence for the widget's selectedProviders:
-        //   1. Explicit user selection made in the preview picker
-        //   2. editContext.selectedProviders (Edit-with-AI carries over the
-        //      providers already wired to the widget on the dashboard)
-        //   3. Empty — the widget renders its own "not configured" state
-        const selectedProviders = {
-            ...(editContext?.selectedProviders || {}),
-            ...(previewProviderSelection || {}),
-        };
-        // userPrefs from the dashboard widget instance — threaded in
-        // via Edit-with-AI so the preview renders with the same title,
-        // defaults, and configured state the user sees on the live
-        // dashboard instead of blank values.
-        return {
-            providers,
-            selectedProviders,
-            userPrefs: editContext?.userPrefs || null,
-            uuidString: "preview-widget",
-        };
-    }, [
-        editContext?.configCode,
-        editContext?.selectedProviders,
-        editContext?.userPrefs,
-        previewProviderSelection,
-    ]);
+    // Two source paths for declared providers — see buildPreviewWidgetData
+    // in ./widgetPreviewData.js. editContext wins when present (Edit-with-AI
+    // mode), previewConfigCode is the fallback for brand-new widgets being
+    // built in chat.
+    const widgetData = React.useMemo(
+        () =>
+            buildPreviewWidgetData({
+                editContext,
+                previewConfigCode,
+                previewProviderSelection,
+            }),
+        [editContext, previewConfigCode, previewProviderSelection]
+    );
 
     // Stub DashboardContext so widget code that calls
     // `useWidgetEvents()` (the canonical pub/sub hook) doesn't throw
@@ -4764,6 +4726,9 @@ export const WidgetBuilderModal = ({
                                                     }
                                                     previewProviderSelection={
                                                         previewProviderSelection
+                                                    }
+                                                    previewConfigCode={
+                                                        detectedCode.configCode
                                                     }
                                                 >
                                                     <PreviewErrorBoundary
