@@ -130,6 +130,44 @@ These four phases are sequential and cannot be skipped, combined, or reordered.
 
 ---
 
+## ⚠️ MANDATORY: UI Component Rule — Use @trops/dash-react for All UX
+
+`@trops/dash-react` is the UX library for the entire Dash ecosystem. **Every new UI
+element across dash-electron, dash-core, and widgets must come from
+`@trops/dash-react`** so that user theme switches propagate through the app
+without per-component overrides. This is the same rule the AI Widget Builder
+enforces on AI-generated widgets — it applies to hand-written code too.
+
+**Before writing any new component or markup:**
+
+1. Check whether `@trops/dash-react` already provides the primitive (Button,
+   ButtonIcon, Card, Panel, Heading, SubHeading, Paragraph, Tag, Modal,
+   InputText, TextArea, Switch, Toggle, Checkbox, RadioGroup, Slider, Alert,
+   Tabs, Accordion, DataList, EmptyState, Skeleton, Toast, ProgressBar, Table,
+   Menu, MenuItem, DropdownPanel, FontAwesomeIcon, ThemeContext, …).
+2. If yes, use it. Do not duplicate.
+3. If no, the correct fix is to **add the missing primitive to dash-react first**
+   (cross-repo task), then consume it from dash-electron / dash-core. Do not
+   build a local Tailwind-styled `<div>` that bypasses the theme.
+4. For the rare case where you need raw HTML, read theme tokens from
+   `ThemeContext` (e.g. `currentTheme["bg-primary-medium"]`,
+   `currentTheme["text-primary-light"]`). Hardcoded Tailwind classes
+   (`bg-gray-800`, `border-white/10`, `hover:bg-gray-700`) won't follow theme
+   switches and create a visual rift between themed and non-themed surfaces —
+   use them only when both ThemeContext AND a dash-react primitive are
+   genuinely unavailable, and document why.
+
+**Do not invent new Tailwind classes outside the safelist.** dash-electron
+ships a prebuilt CSS bundle; opacity-modifier classes (`bg-white/5`,
+`text-gray-200/40`) and arbitrary values (`text-[10px]`, `w-[440px]`) silently
+fail to render. The right answer is almost always "use a dash-react component"
+or "read a theme token" — not "add a class to the safelist."
+
+The dash-core repo enforces this with `npm run lint:safelist`. Run it locally
+before committing UI changes to dash-core.
+
+---
+
 ## ⚠️ MANDATORY: Cross-Repo Changes
 
 When a task touches dash-core or dash-react AND dash-electron:
