@@ -1813,6 +1813,11 @@ export const WidgetBuilderModal = ({
         selectedProviderForBuildRef.current = selectedProviderForBuild;
     }, [selectedProviderForBuild]);
     const [previewError, setPreviewError] = useState(null);
+    // Slice 17b: surfaces the main process's "we adjusted the AI's provider
+    // config to match your installed provider" rewrite. Cleared whenever
+    // a fresh compile starts so the banner doesn't linger after the AI
+    // gets it right.
+    const [providerCorrection, setProviderCorrection] = useState(null);
     // Structured error metadata from the main process (e.g. an
     // ESBUILD_SPAWN_FAILED with diagnostics). When present we render an
     // expanded diagnostics block under the error message — this is what
@@ -2832,6 +2837,7 @@ export const WidgetBuilderModal = ({
             setIsCompiling(true);
             setPreviewError(null);
             setPreviewComponent(null);
+            setProviderCorrection(null);
             setInstallStatus(null);
             // Console output from a previous bundle is no longer
             // relevant to the new compile — clear so the user only
@@ -2877,6 +2883,14 @@ export const WidgetBuilderModal = ({
                     );
 
                 if (isStale()) return;
+
+                // Slice 17b: capture provider auto-correct so the UI can show
+                // a banner explaining why the rendered preview differs from
+                // what the AI emitted (e.g. AI declared `mcp` but user has
+                // the provider configured as `credential`).
+                if (result?.providerCorrection) {
+                    setProviderCorrection(result.providerCorrection);
+                }
 
                 if (!result?.success) {
                     setPreviewError(result?.error || "Compilation failed");
@@ -3878,6 +3892,25 @@ export const WidgetBuilderModal = ({
                                     {installStatus.widgetName}
                                 </span>
                             )}
+                            {/* Slice 17b: provider auto-correct surface.
+                                Main process snaps the AI's declared
+                                providerClass to whatever the user has
+                                installed; this banner explains why the
+                                preview's providers section may differ
+                                from what the AI emitted. */}
+                            {providerCorrection && !previewError && (
+                                <span
+                                    className="text-xs text-amber-300 flex items-center gap-1"
+                                    title={providerCorrection.reason || ""}
+                                >
+                                    <FontAwesomeIcon
+                                        icon="wrench"
+                                        className="h-3 w-3"
+                                    />
+                                    Provider config auto-corrected to match your
+                                    installed provider
+                                </span>
+                            )}
                             {/* Right-side draft toolbar — Open in Editor +
                                 Save Draft + save status. Visible once
                                 the AI has emitted code AND we're in
@@ -4350,6 +4383,99 @@ export const WidgetBuilderModal = ({
                                                 <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto max-h-32">
                                                     {previewError}
                                                 </pre>
+                                                {/* Slice 17b: pretty-print esbuild's
+                                                    structured errors so users see line
+                                                    numbers + the offending source line
+                                                    instead of bare "SyntaxError: ...". */}
+                                                {Array.isArray(
+                                                    previewErrorMeta
+                                                        ?.diagnostics?.esbuild
+                                                ) &&
+                                                    previewErrorMeta.diagnostics
+                                                        .esbuild.length > 0 && (
+                                                        <div className="text-xs space-y-2">
+                                                            {previewErrorMeta.diagnostics.esbuild.map(
+                                                                (e, idx) => (
+                                                                    <div
+                                                                        key={
+                                                                            idx
+                                                                        }
+                                                                        className="bg-black/30 rounded p-2 space-y-1"
+                                                                    >
+                                                                        <div className="text-red-300 font-medium">
+                                                                            {e
+                                                                                .location
+                                                                                ?.file &&
+                                                                                e.location.file
+                                                                                    .split(
+                                                                                        "/"
+                                                                                    )
+                                                                                    .pop()}
+                                                                            {e
+                                                                                .location
+                                                                                ?.line
+                                                                                ? `:${
+                                                                                      e
+                                                                                          .location
+                                                                                          .line
+                                                                                  }${
+                                                                                      e
+                                                                                          .location
+                                                                                          .column
+                                                                                          ? ":" +
+                                                                                            e
+                                                                                                .location
+                                                                                                .column
+                                                                                          : ""
+                                                                                  }`
+                                                                                : ""}
+                                                                            {e
+                                                                                .location
+                                                                                ?.line
+                                                                                ? "  "
+                                                                                : ""}
+                                                                            {
+                                                                                e.text
+                                                                            }
+                                                                        </div>
+                                                                        {e
+                                                                            .location
+                                                                            ?.lineText && (
+                                                                            <pre className="text-[11px] text-red-200/70 bg-black/30 rounded px-2 py-1 overflow-x-auto whitespace-pre">
+                                                                                {
+                                                                                    e
+                                                                                        .location
+                                                                                        .lineText
+                                                                                }
+                                                                            </pre>
+                                                                        )}
+                                                                    </div>
+                                                                )
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                {/* Slice 17b: heuristic hint for the
+                                                    common "AI emitted utility imports
+                                                    but no File: markers" failure. */}
+                                                {/Could not resolve|cannot find module/i.test(
+                                                    previewError || ""
+                                                ) && (
+                                                    <div className="text-xs text-amber-300/90 bg-amber-900/10 border border-amber-700/30 rounded p-2">
+                                                        This widget references
+                                                        files that weren't
+                                                        included in the AI's
+                                                        response. Ask the AI to
+                                                        emit every imported file
+                                                        as a separate{" "}
+                                                        <code>File:</code>{" "}
+                                                        marker (e.g.{" "}
+                                                        <code>
+                                                            File:
+                                                            widgets/utils.js
+                                                        </code>
+                                                        ).
+                                                    </div>
+                                                )}
                                                 {previewErrorMeta?.diagnostics && (
                                                     <details className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto">
                                                         <summary className="cursor-pointer text-red-400 select-none">
