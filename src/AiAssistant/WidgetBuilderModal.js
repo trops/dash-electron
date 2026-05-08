@@ -5312,43 +5312,121 @@ export const WidgetBuilderModal = ({
                                     />
                                 )}
 
-                            <ChatCore
-                                title=""
-                                model={model}
-                                systemPrompt={(() => {
-                                    if (chatMode === "discover") {
-                                        return DISCOVER_SYSTEM_PROMPT;
+                            {/* Slice 17b.1: provider-aware status row.
+                                Shows the active provider type so users
+                                know what context the AI has — also
+                                offers a quick "Change" button to
+                                re-open the gate. */}
+                            {chatMode === "build" &&
+                                selectedProviderForBuild !== null && (
+                                    <div className="flex flex-row items-center justify-between gap-2 px-3 py-1.5 text-xs border-b border-white/10 bg-indigo-900/10">
+                                        <div className="flex flex-row items-center gap-2 text-indigo-300">
+                                            <FontAwesomeIcon
+                                                icon="bolt"
+                                                className="h-3 w-3"
+                                            />
+                                            <span>
+                                                {selectedProviderForBuild?.sentinel ===
+                                                "none"
+                                                    ? "Building without an external provider"
+                                                    : `Building with ${
+                                                          selectedProviderForBuild?.type ||
+                                                          "(unknown)"
+                                                      }${
+                                                          selectedProviderForBuild?.providerClass
+                                                              ? ` (${selectedProviderForBuild.providerClass})`
+                                                              : ""
+                                                      }`}
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setSelectedProviderForBuild(
+                                                    null
+                                                )
+                                            }
+                                            className="text-indigo-300 hover:text-indigo-100 underline cursor-pointer"
+                                            title="Pick a different provider"
+                                        >
+                                            Change
+                                        </button>
+                                    </div>
+                                )}
+
+                            {/* Render ChatCore only after the provider
+                                gate is resolved (or skipped via edit
+                                mode). Otherwise the AI's first response
+                                is generated against a system prompt
+                                that doesn't know about the user's
+                                pick — locking in a generic "what kind
+                                of widget?" message even after the
+                                user selects. */}
+                            {(chatMode !== "build" ||
+                                selectedProviderForBuild !== null) && (
+                                <ChatCore
+                                    title=""
+                                    model={model}
+                                    systemPrompt={(() => {
+                                        if (chatMode === "discover") {
+                                            return DISCOVER_SYSTEM_PROMPT;
+                                        }
+                                        const base = buildSystemPrompt({
+                                            builtInCatalog,
+                                            knownExternalCatalog,
+                                            installedProviders: providers,
+                                            selectedProvider:
+                                                selectedProviderForBuild,
+                                        });
+                                        if (
+                                            effectiveEditContext?.componentCode
+                                        ) {
+                                            return `${base}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
+                                                effectiveEditContext.componentCode
+                                            }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
+                                                effectiveEditContext.configCode ||
+                                                ""
+                                            }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
+                                        }
+                                        // Slice 17b.1: tailor the first-response
+                                        // instruction to the user's provider pick
+                                        // so the AI's invite isn't generic
+                                        // ("what data source?") when the user has
+                                        // already told us which one.
+                                        {
+                                            const picked =
+                                                selectedProviderForBuild;
+                                            if (picked?.sentinel === "none") {
+                                                return `${base}\n\nIf this is your FIRST response in the conversation, do NOT output code. The user has chosen NOT to use any external provider — reply with 1–2 short sentences asking what they want the widget to do with local-only data or interactions (no provider talk). Keep it under 30 words. No lists, no examples.`;
+                                            }
+                                            if (picked?.type) {
+                                                return `${base}\n\nIf this is your FIRST response in the conversation, do NOT output code. The user has chosen the **${
+                                                    picked.type
+                                                }**${
+                                                    picked.providerClass
+                                                        ? ` (${picked.providerClass})`
+                                                        : ""
+                                                } provider. Reply with 1–2 short sentences acknowledging that and asking what specific data or actions they want the widget to surface from ${
+                                                    picked.type
+                                                }. Keep it under 30 words. No lists, no examples.`;
+                                            }
+                                            return `${base}\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences inviting the user to describe the widget they want to build (what it should show, what data source it pulls from, what interactions it needs). No lists, no bullet points, no examples — keep it under 30 words total.`;
+                                        }
+                                    })()}
+                                    maxToolRounds="10"
+                                    apiKey={apiKey}
+                                    backend={preferredBackend}
+                                    persistKey="dash-widget-builder"
+                                    hideToolsBanner={true}
+                                    initialMessage={
+                                        chatMode === "discover"
+                                            ? "Tell me what kind of widget you're looking for."
+                                            : effectiveEditContext?.componentCode
+                                            ? "Hello, let's make some edits to this widget."
+                                            : "Hi, I'd like to build a new widget."
                                     }
-                                    const base = buildSystemPrompt({
-                                        builtInCatalog,
-                                        knownExternalCatalog,
-                                        installedProviders: providers,
-                                        selectedProvider:
-                                            selectedProviderForBuild,
-                                    });
-                                    if (effectiveEditContext?.componentCode) {
-                                        return `${base}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
-                                            effectiveEditContext.componentCode
-                                        }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
-                                            effectiveEditContext.configCode ||
-                                            ""
-                                        }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
-                                    }
-                                    return `${base}\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences inviting the user to describe the widget they want to build (what it should show, what data source it pulls from, what interactions it needs). No lists, no bullet points, no examples — keep it under 30 words total.`;
-                                })()}
-                                maxToolRounds="10"
-                                apiKey={apiKey}
-                                backend={preferredBackend}
-                                persistKey="dash-widget-builder"
-                                hideToolsBanner={true}
-                                initialMessage={
-                                    chatMode === "discover"
-                                        ? "Tell me what kind of widget you're looking for."
-                                        : effectiveEditContext?.componentCode
-                                        ? "Hello, let's make some edits to this widget."
-                                        : "Hi, I'd like to build a new widget."
-                                }
-                            />
+                                />
+                            )}
                         </div>
                     </div>
                 </div>
