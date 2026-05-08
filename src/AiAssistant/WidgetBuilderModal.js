@@ -1846,7 +1846,10 @@ export const WidgetBuilderModal = ({
     // we aren't in remix mode (remix mode bypasses the list — the
     // user clicked Remix on a specific widget, not Build New). The
     // open-time decision happens in a one-shot effect below.
-    const [viewMode, setViewMode] = useState("builder");
+    // Starts null so the initial render doesn't flash the empty builder UI
+    // before the async drafts check resolves. The drafts-gate useEffect
+    // (~line 2099) sets this to "drafts" or "builder" once it knows.
+    const [viewMode, setViewMode] = useState(null);
     // Current draft session id. Generated lazily on the first
     // parseable AI response; reused across saves within the same
     // session so we update one row, not pile up. Cleared on close /
@@ -2100,6 +2103,9 @@ export const WidgetBuilderModal = ({
         if (!isOpen) {
             draftSessionIdRef.current = null;
             resumedDraftRef.current = null;
+            // Reset to loading sentinel so the next open shows the loading
+            // skeleton instead of whatever view was active when last closed.
+            setViewMode(null);
             return;
         }
         if (effectiveEditContext) {
@@ -2107,6 +2113,9 @@ export const WidgetBuilderModal = ({
             setViewMode("builder");
             return;
         }
+        // Reset to loading on every open so we don't briefly show the
+        // previous view's leftover state before the async check resolves.
+        setViewMode(null);
         let cancelled = false;
         (async () => {
             try {
@@ -3625,6 +3634,16 @@ export const WidgetBuilderModal = ({
                 </div>
             )}
 
+            {/* Loading sentinel — viewMode is null while the async drafts
+                check resolves on open. Without this, the previous viewMode's
+                content briefly flashes before the gate decides between
+                "drafts" and "builder". */}
+            {viewMode === null && (
+                <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-gray-400">
+                    Loading…
+                </div>
+            )}
+
             {/* Drafts entry view — shown on open when the user has
                 unfinished widgets from prior sessions. Resume restores
                 state into the builder; Build New jumps straight in. */}
@@ -4469,9 +4488,15 @@ export const WidgetBuilderModal = ({
                                                     }
                                                 >
                                                     <PreviewErrorBoundary
-                                                        key={
-                                                            lastCompiledCode.current
-                                                        }
+                                                        // resetKey alone clears
+                                                        // error state via
+                                                        // componentDidUpdate
+                                                        // (see line ~298). A
+                                                        // `key` prop here would
+                                                        // force a full remount
+                                                        // on every poll-tick
+                                                        // code change → visible
+                                                        // flash every 2s.
                                                         resetKey={
                                                             lastCompiledCode.current
                                                         }
