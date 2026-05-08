@@ -169,3 +169,41 @@ describe("WidgetBuilderModal system prompt — dash-react component API referenc
         expect(source).toMatch(/NEVER\s\\?`<Button text=/);
     });
 });
+
+/**
+ * Pins the inlined SKILL.md guidance + the explicit "do not invoke
+ * the dash-widget-builder skill" rule in the modal prompt.
+ *
+ * Why this exists: the dash-widget-builder skill auto-loads in the
+ * modal (description-match against the user's "build a widget"
+ * intent), and once loaded triggers Bash/Read/Glob exploration.
+ * Inlining the skill's curated content + telling the AI the skill
+ * is already provided removes the duplication and the auto-load
+ * trigger.
+ */
+describe("WidgetBuilderModal system prompt — inlined SKILL.md guidance", () => {
+    const modalPath = path.join(__dirname, "WidgetBuilderModal.js");
+    const source = fs.readFileSync(modalPath, "utf8");
+
+    test("imports WIDGET_BUILDER_GUIDANCE from skillPromptContent", () => {
+        expect(source).toMatch(
+            /import\s*\{[^}]*WIDGET_BUILDER_GUIDANCE[^}]*\}\s*from\s*["']\.\/skillPromptContent["']/
+        );
+    });
+
+    test("interpolates ${WIDGET_BUILDER_GUIDANCE} in all three prompt branches", () => {
+        const occurrences =
+            source.split("${WIDGET_BUILDER_GUIDANCE}").length - 1;
+        expect(occurrences).toBe(3);
+    });
+
+    test("each branch tells the AI the skill is already provided (3 occurrences)", () => {
+        // Stronger than the existing "Do NOT invoke the dash-widget-builder
+        // skill" line — the new wording explicitly says the skill's
+        // content is INLINED, so the AI doesn't reason "I should call
+        // the skill to get widget-building knowledge."
+        const re = /skill[^.]{0,120}(inlined|already (provided|included))/gi;
+        const matches = source.match(re);
+        expect(matches?.length || 0).toBeGreaterThanOrEqual(3);
+    });
+});
