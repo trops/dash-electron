@@ -115,3 +115,57 @@ describe("WidgetBuilderModal system prompt — credential examples must be hooks
         );
     });
 });
+
+/**
+ * Pins the dash-react component API reference in the system prompt.
+ *
+ * Without these guards, the AI generates widgets that destructure dash-react
+ * primitives (Heading, Button, EmptyState, …) and pass `text=` / `message=`
+ * props that DO NOT EXIST on those components. The components silently
+ * ignore the unknown props and render their empty defaults, producing a
+ * widget tree with the right shape but zero visible content. From the
+ * user's perspective, the preview is "black".
+ *
+ * Verified prop names (read from node_modules/@trops/dash-react/dist/index.js):
+ *   Heading      -> title
+ *   Button       -> title, onClick, disabled
+ *   EmptyState   -> title, description, children (NOT message)
+ *   Alert        -> title, message, children
+ *
+ * The prompt must teach these explicitly so generated widgets render.
+ */
+describe("WidgetBuilderModal system prompt — dash-react component API reference", () => {
+    const modalPath = path.join(__dirname, "WidgetBuilderModal.js");
+    const source = fs.readFileSync(modalPath, "utf8");
+
+    // Specific verbatim anchor strings that the implementation must emit
+    // into the prompt. Loose regexes were tried first and gave false
+    // positives because the prompt body contains widget code examples
+    // like `<Heading text={title} />` (the very pattern we're trying to
+    // forbid) and unrelated mentions of "Heading" near "title". Anchor
+    // strings remove that ambiguity.
+    test("prompt names the dash-react component API reference section", () => {
+        expect(source).toContain("DASH-REACT COMPONENT API");
+    });
+
+    // NOTE on regex: `NEVER` and the JSX example are separated in the
+    // source by a backtick that's escaped for the surrounding template
+    // literal (so source bytes contain `\` + `` ` ``). The regexes
+    // tolerate an optional backslash there so the test reflects what
+    // the AI actually sees in the rendered prompt, not the raw file.
+
+    test("prompt teaches Heading uses `title` (not `text`)", () => {
+        expect(source).toMatch(/`<Heading title=/);
+        expect(source).toMatch(/NEVER\s\\?`<Heading text=/);
+    });
+
+    test("prompt teaches EmptyState uses `title` (not `message`)", () => {
+        expect(source).toMatch(/`<EmptyState title=/);
+        expect(source).toMatch(/NEVER\s\\?`<EmptyState message=/);
+    });
+
+    test("prompt teaches Button uses `title` (not `text`)", () => {
+        expect(source).toMatch(/`<Button title=/);
+        expect(source).toMatch(/NEVER\s\\?`<Button text=/);
+    });
+});

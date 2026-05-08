@@ -413,6 +413,30 @@ function formatInstalledProvidersForPrompt(providersMap) {
         .join("\n");
 }
 
+// Authoritative prop-name reference for the dash-react primitives the AI
+// is expected to use. These components silently ignore unknown props and
+// render their empty defaults — passing the wrong name (e.g. `text=` on
+// Heading or `message=` on EmptyState) produces a widget tree with
+// structure but no visible content, surfacing as a "black preview" with
+// no error. Verified against node_modules/@trops/dash-react/dist/index.js.
+const DASH_REACT_COMPONENT_API = `## DASH-REACT COMPONENT API — exact prop names (read these BEFORE writing JSX)
+
+These dash-react components SILENTLY ignore unknown props and render with empty defaults. Passing the wrong prop name produces a widget tree with structure but zero visible content — the preview looks black with no error in the console. Use these prop names VERBATIM:
+
+- \`<Heading title="..." />\` — visible text goes in the \`title\` prop. NEVER \`<Heading text="..." />\` and NEVER \`<Heading>children</Heading>\` — neither renders.
+- \`<SubHeading title="..." />\` — same shape as Heading. \`title\` prop only.
+- \`<Button title="..." onClick={...} disabled={...} />\` — visible label goes in \`title\`. NEVER \`<Button text="..." />\`. Without \`title\`, Button renders the literal string "Cancel" by default.
+- \`<ButtonIcon icon="..." title="..." onClick={...} />\` — \`icon\` is a FontAwesome name, \`title\` is the visible label / tooltip.
+- \`<EmptyState title="..." description="..." />\` (optional \`children\` for actions). NEVER \`<EmptyState message="..." />\` — \`message\` is not a prop on EmptyState and the component renders empty.
+- \`<Alert title="..." message="..." />\` — both props are valid here. (Alert is the EXCEPTION, not the rule.)
+- \`<ErrorMessage message="..." />\` — \`message\` is the visible error text.
+- \`<Card>...</Card>\`, \`<Panel>...</Panel>\`, \`<Menu>...</Menu>\`, \`<MenuItem>...</MenuItem>\` — all consume \`children\`.
+- \`<Paragraph>text</Paragraph>\` — uses children.
+- \`<Tag title="..." />\` — visible label in \`title\`.
+
+If a primitive isn't listed here, it's safer to use \`<Paragraph>\` + \`<Heading>\` than to guess. Don't fall back to raw \`<h2>\` / \`<button>\` / \`<p>\` — those bypass the theme. Empty-tree-with-structure renders are the #1 cause of "preview is black"; using these props verbatim prevents that class of bug.
+`;
+
 function buildSystemPrompt({
     builtInCatalog = [],
     knownExternalCatalog = [],
@@ -705,6 +729,8 @@ DO NOT add scheduled tasks the user can't see in your response — surfacing the
 
 **What NOT to schedule.** Tasks the user explicitly triggers (button clicks), tasks that need user input each run, anything fast enough to run every render. Only schedule operations that benefit from automatic recurrence.
 
+${DASH_REACT_COMPONENT_API}
+
 ## Critical rules
 
 - Do NOT use Read, Write, Edit, Bash, Glob, or Grep tools.
@@ -864,6 +890,8 @@ scheduledTasks: [
 DO NOT add scheduled tasks the user can't see in your response — surfacing them is non-negotiable, since the user has to know to configure the cadence.
 
 **What NOT to schedule.** Tasks the user explicitly triggers (button clicks), tasks that need user input each run, anything fast enough to run every render. Only schedule operations that benefit from automatic recurrence.
+
+${DASH_REACT_COMPONENT_API}
 
 ## Critical rules
 
@@ -1343,6 +1371,8 @@ DO NOT add scheduled tasks the user can't see in your response — surfacing the
 
 **What NOT to schedule.** Tasks the user explicitly triggers (button clicks), tasks that need user input each run, anything fast enough to run every render. Only schedule operations that benefit from automatic recurrence.
 
+${DASH_REACT_COMPONENT_API}
+
 ## Critical rules
 
 YOU ARE RUNNING INSIDE AN EMBEDDED UI, NOT AN INTERACTIVE TERMINAL:
@@ -1780,6 +1810,14 @@ export const WidgetBuilderModal = ({
     const appContext = useContext(AppContext);
 
     const [previewComponent, setPreviewComponent] = useState(null);
+    // True when the compiled widget mounted but produced a tree with
+    // zero visible text — usually because the AI used wrong dash-react
+    // prop names (e.g. `<Heading text=...>` instead of `title=`). The
+    // detector runs after each preview compile (see useEffect below)
+    // and flips this flag to surface a corrective banner. Without it,
+    // the user just sees a black canvas with no error to act on.
+    const [previewLooksEmpty, setPreviewLooksEmpty] = useState(false);
+    const previewWrapperRef = useRef(null);
     // Default prop values derived from the parsed config's `userConfig`
     // schema. Live widgets receive their userConfig defaultValues as
     // FLAT props (see WidgetFactory.userPrefsForItem in dash-core); for
@@ -3585,6 +3623,30 @@ export const WidgetBuilderModal = ({
         selectedProviderForBuild,
     ]);
 
+    // Empty-render detector. Runs ~700ms after each preview compile and
+    // flips `previewLooksEmpty` when the rendered widget has structure
+    // but no visible text — almost always a prop-name mismatch
+    // (`<Heading text=…>` instead of `title=`, etc.). The hook itself
+    // runs UNCONDITIONALLY at the top level (above the `if (!isOpen)`
+    // early return below) so React's hook-call order stays stable.
+    useEffect(() => {
+        setPreviewLooksEmpty(false);
+        if (!previewComponent || previewError) return undefined;
+        const t = setTimeout(() => {
+            const el = previewWrapperRef.current;
+            if (!el) return;
+            const text = (el.textContent || "").trim();
+            const innerWidget = el.querySelector('[id^="panel-"]') || el;
+            const innerChildCount = innerWidget?.children?.length || 0;
+            // Either zero text, or a wrapper with structural children
+            // but no descendants beyond a single empty inner div.
+            if (text.length === 0 && innerChildCount <= 1) {
+                setPreviewLooksEmpty(true);
+            }
+        }, 700);
+        return () => clearTimeout(t);
+    }, [previewComponent, previewError]);
+
     if (!isOpen) return null;
 
     const PreviewComponent = previewComponent;
@@ -4585,8 +4647,99 @@ export const WidgetBuilderModal = ({
                                                 }
                                             }}
                                         />
+                                        {/* Empty-render banner — surfaces the
+                                        common case where the widget mounted
+                                        but produced no visible content (the
+                                        AI used wrong dash-react prop names,
+                                        e.g. `text=` on Heading). Without
+                                        this the user sees a black canvas
+                                        with no clue what's wrong. */}
+                                        {previewLooksEmpty && (
+                                            <div className="mx-4 mt-2 px-3 py-2 rounded-md border border-amber-700/40 bg-amber-900/20 text-xs text-amber-200 space-y-1">
+                                                <div className="font-semibold text-amber-300">
+                                                    Widget rendered with no
+                                                    visible content
+                                                </div>
+                                                <div className="text-amber-200/80">
+                                                    Most common cause: wrong
+                                                    prop names on dash-react
+                                                    components. Use{" "}
+                                                    <code className="bg-black/30 px-1 rounded">
+                                                        title
+                                                    </code>{" "}
+                                                    on{" "}
+                                                    <code className="bg-black/30 px-1 rounded">
+                                                        Heading
+                                                    </code>
+                                                    /
+                                                    <code className="bg-black/30 px-1 rounded">
+                                                        Button
+                                                    </code>
+                                                    /
+                                                    <code className="bg-black/30 px-1 rounded">
+                                                        EmptyState
+                                                    </code>{" "}
+                                                    (not{" "}
+                                                    <code className="bg-black/30 px-1 rounded">
+                                                        text
+                                                    </code>{" "}
+                                                    or{" "}
+                                                    <code className="bg-black/30 px-1 rounded">
+                                                        message
+                                                    </code>
+                                                    ). Click "Send to AI to fix"
+                                                    and the chat will request a
+                                                    corrected version.
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        try {
+                                                            const raw =
+                                                                localStorage.getItem(
+                                                                    "dash-widget-builder"
+                                                                );
+                                                            const data = raw
+                                                                ? JSON.parse(
+                                                                      raw
+                                                                  )
+                                                                : {
+                                                                      messages:
+                                                                          [],
+                                                                  };
+                                                            const msgs =
+                                                                data?.messages ||
+                                                                [];
+                                                            msgs.push({
+                                                                role: "user",
+                                                                content: `The widget compiled and mounted but rendered no visible content (preview is black). This is almost always a dash-react prop-name mismatch. Please re-emit the component AND config code blocks with corrected prop names: \`<Heading title="...">\` (NOT text=), \`<Button title="...">\` (NOT text=), \`<EmptyState title="..." description="...">\` (NOT message=). Output BOTH the \`\`\`jsx component block and the \`\`\`javascript config block.`,
+                                                            });
+                                                            localStorage.setItem(
+                                                                "dash-widget-builder",
+                                                                JSON.stringify({
+                                                                    ...data,
+                                                                    messages:
+                                                                        msgs,
+                                                                })
+                                                            );
+                                                            setPreviewLooksEmpty(
+                                                                false
+                                                            );
+                                                        } catch {
+                                                            /* ignore */
+                                                        }
+                                                    }}
+                                                    className="mt-1 px-2 py-1 text-xs rounded border border-amber-600/50 bg-amber-700/30 hover:bg-amber-700/50 text-amber-100"
+                                                >
+                                                    Send to AI to fix
+                                                </button>
+                                            </div>
+                                        )}
                                         {/* Widget preview — fills available space */}
-                                        <div className="flex-1 p-4 overflow-auto">
+                                        <div
+                                            ref={previewWrapperRef}
+                                            className="flex-1 p-4 overflow-auto"
+                                        >
                                             <div
                                                 className={`h-full rounded-lg border overflow-hidden shadow-lg ${
                                                     previewThemeCtx
