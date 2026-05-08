@@ -302,6 +302,25 @@ async function loadInstalledWidgets() {
                     widgetPackage,
                     componentName
                 );
+
+                // Defense in depth: a bare-name `widgetPackage` (no scope)
+                // produces a 2-segment id like "pipeline.AutomationHub",
+                // which ComponentManager rejects with "missing origin
+                // metadata" and crashes the whole loop. The dash-core
+                // boot-time folder-dedupe (slice 13f) prevents this at the
+                // source, but stale registry entries on machines that
+                // haven't upgraded yet still hit this path. Skip them
+                // here with a warning instead of taking down the rest
+                // of the registration phase.
+                const looksScoped =
+                    typeof lazyScopedId === "string" &&
+                    lazyScopedId.split(".").length === 3;
+                if (!looksScoped) {
+                    console.warn(
+                        `[Dash.js] Phase 2: Skipping "${componentName}" — derived id "${lazyScopedId}" is not 3-segment (widgetPackage="${widgetPackage}"). The widget's package is missing a scope; reinstall from the registry.`
+                    );
+                    continue;
+                }
                 ComponentManager.registerWidget(
                     {
                         ...config,

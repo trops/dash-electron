@@ -296,59 +296,61 @@ export const JitConsentModal = () => {
                     className="flex flex-col w-full max-w-xl border-2 border-purple-500 rounded bg-gray-900 pointer-events-auto"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-700">
-                        <FontAwesomeIcon
-                            icon="bolt"
-                            className="h-4 w-4 text-purple-400"
-                        />
-                        <div>
-                            <div className="text-base font-semibold text-gray-100">
+                    {/* Header: small "Permission requested" eyebrow above
+                        a centered, larger action sentence. The sentence
+                        is the star — the user just wants to know "who
+                        wants what" at a glance. */}
+                    <div className="flex flex-col items-center text-center gap-3 px-5 py-6 border-b border-gray-700">
+                        <div className="flex items-center gap-2">
+                            <FontAwesomeIcon
+                                icon="bolt"
+                                className="h-3 w-3 text-purple-400"
+                            />
+                            <span className="text-xs uppercase tracking-wider text-purple-400 font-semibold">
                                 Permission requested
                                 {queue.length > 1
                                     ? ` (1 of ${queue.length})`
                                     : ""}
-                            </div>
-                            <div className="text-xs text-gray-400 mt-0.5">
-                                {domain === "mcp" && (
-                                    <>
-                                        <span className="font-semibold text-gray-200">
-                                            {_displayWidgetName(widgetId)}
-                                        </span>{" "}
-                                        wants to{" "}
-                                        {humanizeAction("mcp", "callTool")}{" "}
-                                        <span className="font-semibold text-gray-200">
-                                            {toolName}
-                                        </span>{" "}
-                                        tool on{" "}
-                                        <span className="font-semibold text-gray-200">
-                                            {serverName}
-                                        </span>
-                                        .
-                                    </>
-                                )}
-                                {domain === "fs" && (
-                                    <>
-                                        <span className="font-semibold text-gray-200">
-                                            {_displayWidgetName(widgetId)}
-                                        </span>{" "}
-                                        wants to{" "}
-                                        {humanizeAction("fs", fsAction)}.
-                                    </>
-                                )}
-                                {domain === "network" && (
-                                    <>
-                                        <span className="font-semibold text-gray-200">
-                                            {_displayWidgetName(widgetId)}
-                                        </span>{" "}
-                                        wants to{" "}
-                                        {humanizeAction("network", netAction)}{" "}
-                                        <span className="font-semibold text-gray-200">
-                                            {netHost}
-                                        </span>
-                                        .
-                                    </>
-                                )}
-                            </div>
+                            </span>
+                        </div>
+                        <div className="text-lg text-gray-100 leading-relaxed">
+                            {domain === "mcp" && (
+                                <>
+                                    <span className="font-semibold text-purple-300">
+                                        {_displayWidgetName(widgetId)}
+                                    </span>{" "}
+                                    wants to {humanizeAction("mcp", "callTool")}{" "}
+                                    <span className="font-semibold text-purple-300">
+                                        {toolName}
+                                    </span>{" "}
+                                    tool on{" "}
+                                    <span className="font-semibold text-purple-300">
+                                        {serverName}
+                                    </span>
+                                    .
+                                </>
+                            )}
+                            {domain === "fs" && (
+                                <>
+                                    <span className="font-semibold text-purple-300">
+                                        {_displayWidgetName(widgetId)}
+                                    </span>{" "}
+                                    wants to {humanizeAction("fs", fsAction)}.
+                                </>
+                            )}
+                            {domain === "network" && (
+                                <>
+                                    <span className="font-semibold text-purple-300">
+                                        {_displayWidgetName(widgetId)}
+                                    </span>{" "}
+                                    wants to{" "}
+                                    {humanizeAction("network", netAction)}{" "}
+                                    <span className="font-semibold text-purple-300">
+                                        {netHost}
+                                    </span>
+                                    .
+                                </>
+                            )}
                         </div>
                     </div>
 
