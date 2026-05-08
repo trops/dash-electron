@@ -2537,17 +2537,42 @@ function createWindow() {
                     bundleSource,
                     widgetName,
                     skippedFiles: fileWriteSummary?.skipped || [],
+                    // Slice 17b: surface auto-correct so the renderer
+                    // can show "We adjusted the AI's provider config to
+                    // match your installed provider" instead of leaving
+                    // it as silent main-process magic.
+                    providerCorrection: providerSnap?.rewrote
+                        ? { reason: providerSnap.reason || null }
+                        : null,
                 };
             } catch (err) {
                 // Preserve structured fields from WidgetCompileError so the
                 // renderer can show actionable diagnostics ("native helper
                 // not found at <path>, arch=<arch>") instead of a raw
-                // "spawn ENOENT".
+                // "spawn ENOENT". Also lift esbuild's `errors[]` array
+                // (which carries `location: {file, line, column, lineText}`)
+                // so the renderer can show "Line 12: Unexpected token"
+                // instead of a bare SyntaxError. Slice 17b.
+                const esbuildErrors = Array.isArray(err.errors)
+                    ? err.errors.slice(0, 5).map((e) => ({
+                          text: e.text || "",
+                          location: e.location
+                              ? {
+                                    file: e.location.file || null,
+                                    line: e.location.line || null,
+                                    column: e.location.column || null,
+                                    lineText: e.location.lineText || null,
+                                }
+                              : null,
+                      }))
+                    : null;
                 return {
                     success: false,
                     error: err.message,
                     code: err.code || null,
-                    diagnostics: err.diagnostics || null,
+                    diagnostics:
+                        err.diagnostics ||
+                        (esbuildErrors ? { esbuild: esbuildErrors } : null),
                 };
             }
         });
