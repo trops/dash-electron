@@ -43,6 +43,7 @@ import {
     extractProviderDeclarations,
     buildPreviewWidgetData,
 } from "./widgetPreviewData";
+import { WIDGET_BUILDER_GUIDANCE } from "./skillPromptContent";
 
 /**
  * Wraps the preview widget in the full context stack (AppContext,
@@ -691,12 +692,14 @@ DO NOT add scheduled tasks the user can't see in your response — surfacing the
 
 **What NOT to schedule.** Tasks the user explicitly triggers (button clicks), tasks that need user input each run, anything fast enough to run every render. Only schedule operations that benefit from automatic recurrence.
 
+${WIDGET_BUILDER_GUIDANCE}
+
 ${DASH_REACT_COMPONENT_API}
 
 ## Critical rules
 
 - Do NOT use Read, Write, Edit, Bash, Glob, or Grep tools.
-- Do NOT invoke the dash-widget-builder skill or any other skill.
+- Do NOT invoke the dash-widget-builder skill or any other skill — the skill's guidance is already inlined above as the "Widget Builder Guidance" section. Calling it duplicates context and triggers Bash/Read/Glob auto-exploration which is forbidden in this modal.
 - Do NOT read files, scan directories, or run shell commands.
 - Do NOT call any tools — the provider is already chosen.
 - ONLY output text + code blocks (with optional \`File:\` markers).
@@ -852,6 +855,8 @@ scheduledTasks: [
 DO NOT add scheduled tasks the user can't see in your response — surfacing them is non-negotiable, since the user has to know to configure the cadence.
 
 **What NOT to schedule.** Tasks the user explicitly triggers (button clicks), tasks that need user input each run, anything fast enough to run every render. Only schedule operations that benefit from automatic recurrence.
+
+${WIDGET_BUILDER_GUIDANCE}
 
 ${DASH_REACT_COMPONENT_API}
 
@@ -1333,13 +1338,15 @@ DO NOT add scheduled tasks the user can't see in your response — surfacing the
 
 **What NOT to schedule.** Tasks the user explicitly triggers (button clicks), tasks that need user input each run, anything fast enough to run every render. Only schedule operations that benefit from automatic recurrence.
 
+${WIDGET_BUILDER_GUIDANCE}
+
 ${DASH_REACT_COMPONENT_API}
 
 ## Critical rules
 
 YOU ARE RUNNING INSIDE AN EMBEDDED UI, NOT AN INTERACTIVE TERMINAL:
 - Do NOT use Read, Write, Edit, Bash, Glob, or Grep tools — the app handles file creation and compilation automatically.
-- Do NOT invoke the dash-widget-builder skill or any other skill.
+- Do NOT invoke the dash-widget-builder skill or any other skill — the skill's guidance is already inlined above as the "Widget Builder Guidance" section. Calling it duplicates context and triggers Bash/Read/Glob auto-exploration which is forbidden in this modal.
 - Do NOT read files, scan directories, or run shell commands.
 - The \`install_known_mcp_server\` tool is the ONLY tool you should call, and only when step 2 of the decision tree applies. When step 2 applies, calling that tool BEFORE writing any widget code is required, not optional — the "respond immediately with code" rule below does NOT override the decision tree.
 - ONLY output text + code blocks (with optional \`File:\` markers) — that's how the app receives your widget.
@@ -1364,7 +1371,7 @@ How to respond:
 Hard rules:
 - Do NOT output widget code in any form.
 - Do NOT use Skill, Read, Write, Edit, Bash, Glob, or Grep tools.
-- Do NOT invoke the dash-widget-builder skill.
+- Do NOT invoke the dash-widget-builder skill — the skill's guidance is already inlined above as the "Widget Builder Guidance" section. Its content is provided directly so calling the skill duplicates context and triggers forbidden tool exploration.
 - The only tool you should use is \`search_widgets\`.`;
 
 /**
