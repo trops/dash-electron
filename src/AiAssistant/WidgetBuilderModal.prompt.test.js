@@ -45,7 +45,7 @@ describe("WidgetBuilderModal system prompt — credential examples must be hooks
         // The example block ends at the closing fence of its jsx.
         const block1End = source.indexOf("```", block1Start);
         expect(block1End).toBeGreaterThan(block1Start);
-        const block1 = source.slice(block1Start - 800, block1End);
+        const block1 = source.slice(block1Start - 2500, block1End);
 
         const useProviderClientPos = block1.indexOf(
             "useProviderClient(provider)"
@@ -65,7 +65,7 @@ describe("WidgetBuilderModal system prompt — credential examples must be hooks
             'if (!hasProvider("${pickedType}"))'
         );
         const block1End = source.indexOf("```", block1Start);
-        const block1 = source.slice(block1Start - 800, block1End);
+        const block1 = source.slice(block1Start - 2500, block1End);
 
         const useEffectPos = block1.indexOf("useEffect(");
         const earlyReturnPos = block1.indexOf(
@@ -245,5 +245,121 @@ describe("WidgetBuilderModal — ChatCore lockdown flags", () => {
         const close = source.indexOf("/>", open);
         const block = source.slice(open, close);
         expect(block).toMatch(/disableTools\s*=\s*\{true\}/);
+    });
+});
+
+/**
+ * Pins the provider-API registry injection (slice 17b.12).
+ *
+ * The focused branch of buildSystemPrompt must call
+ * formatProviderApiSection(pickedType) so the AI sees the actual
+ * list of available `window.mainApi.<service>.*` methods. Without
+ * this, the AI hallucinates methods that don't exist (e.g.
+ * algolia.getRules / saveRule / deleteRule), the widget compiles
+ * but throws at runtime, and the rules-manager flow we hit during
+ * testing fails silently with an empty index dropdown.
+ */
+describe("WidgetBuilderModal — provider API registry injection", () => {
+    const modalPath = path.join(__dirname, "WidgetBuilderModal.js");
+    const source = fs.readFileSync(modalPath, "utf8");
+
+    test("imports formatProviderApiSection from providerApiRegistry", () => {
+        expect(source).toMatch(
+            /import\s*\{[^}]*formatProviderApiSection[^}]*\}\s*from\s*["']\.\/providerApiRegistry["']/
+        );
+    });
+
+    test("imports validateProviderApiUsage + buildAiCorrectionMessage from widgetCodeValidator", () => {
+        expect(source).toMatch(
+            /import\s*\{[^}]*validateProviderApiUsage[^}]*\}\s*from\s*["']\.\/widgetCodeValidator["']/
+        );
+        expect(source).toContain("buildAiCorrectionMessage");
+    });
+
+    test("focused-branch prompt interpolates ${formatProviderApiSection(pickedType)}", () => {
+        // The focused branch is unique in having `pickedType` in
+        // scope. Anchoring on that combination locates the right
+        // injection site.
+        expect(source).toContain("${formatProviderApiSection(pickedType)}");
+    });
+
+    test("compile pipeline runs validateProviderApiUsage post-bundle", () => {
+        // The validator is invoked inside the success branch of
+        // compilePreview, gated by `apiCheck.ok`. We assert the
+        // function is called somewhere in the modal source.
+        expect(source).toContain("validateProviderApiUsage(");
+    });
+
+    test("validation failures set previewErrorMeta with kind 'provider-api-hallucination'", () => {
+        expect(source).toContain("provider-api-hallucination");
+    });
+
+    test("Send-error-to-AI button uses buildAiCorrectionMessage's output when present", () => {
+        // The existing button needs to send the validator's
+        // structured correction (which names the bad methods + the
+        // real ones) instead of a generic "fix this error" prompt.
+        expect(source).toMatch(
+            /previewErrorMeta\?\.correction[\s\S]{0,500}msgs\.push/
+        );
+    });
+});
+
+/**
+ * Pins the single-purpose-widget rules + Modal/Dialog/Drawer
+ * forbid (slice 17b.13).
+ */
+describe("WidgetBuilderModal — single-purpose widget rules", () => {
+    const modalPath = path.join(__dirname, "WidgetBuilderModal.js");
+    const source = fs.readFileSync(modalPath, "utf8");
+
+    test("defines the SINGLE_PURPOSE_RULES constant", () => {
+        expect(source).toMatch(/const SINGLE_PURPOSE_RULES\s*=/);
+    });
+
+    test("interpolates ${SINGLE_PURPOSE_RULES} in all three prompt branches", () => {
+        const occurrences = source.split("${SINGLE_PURPOSE_RULES}").length - 1;
+        expect(occurrences).toBe(3);
+    });
+
+    test("rules forbid Modal, Dialog, Drawer inside widgets", () => {
+        // The constant body must explicitly call out all three tags.
+        const constStart = source.indexOf("const SINGLE_PURPOSE_RULES");
+        const constEnd = source.indexOf("`;", constStart);
+        const body = source.slice(constStart, constEnd);
+        expect(body).toMatch(/Modal/);
+        expect(body).toMatch(/Dialog/);
+        expect(body).toMatch(/Drawer/);
+        // And explicitly say "no" / "forbid" / "NOT" near those tags.
+        expect(body).toMatch(/NO\s+`?<Modal|forbidden|NOT/i);
+    });
+
+    test("rules teach inline-Card alternative", () => {
+        const constStart = source.indexOf("const SINGLE_PURPOSE_RULES");
+        const constEnd = source.indexOf("`;", constStart);
+        const body = source.slice(constStart, constEnd);
+        expect(body).toMatch(/INLINE/);
+        expect(body).toMatch(/Card/);
+    });
+
+    test("rules teach cross-widget event coordination", () => {
+        const constStart = source.indexOf("const SINGLE_PURPOSE_RULES");
+        const constEnd = source.indexOf("`;", constStart);
+        const body = source.slice(constStart, constEnd);
+        expect(body).toMatch(/useWidgetEvents/);
+    });
+
+    test("imports validateNoModalUsage + buildNoModalCorrectionMessage", () => {
+        expect(source).toContain("validateNoModalUsage");
+        expect(source).toContain("buildNoModalCorrectionMessage");
+    });
+
+    test("compile pipeline runs validateNoModalUsage", () => {
+        // Validator must be called inside the compilePreview success
+        // branch so a Modal-using widget never mounts.
+        expect(source).toMatch(/validateNoModalUsage\s*\(/);
+    });
+
+    test("validation failures set previewErrorMeta with kind 'modal-in-widget'", () => {
+        expect(source).toContain("modal-in-widget");
     });
 });
