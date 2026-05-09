@@ -2015,6 +2015,25 @@ export const WidgetBuilderModal = ({
     // `mount`, `no-component`, etc.) via `bridge:error`; we collapse
     // them into a friendly message + meta so the existing "Send
     // error to AI" button can post a corrective message to chat.
+    // Slice 17c.5 — drive the empty-render detector from iframe-side
+    // measurements. The shell measures its own DOM (the host can't
+    // query iframe content via the previewWrapperRef because that
+    // ref points at the inline preview div) and posts text length +
+    // descendant count via `bridge:render-stats`. We mirror the same
+    // double-check thresholds the inline detector uses
+    // (`text.length === 0 && childCount <= 1`).
+    const handleIframeRenderStats = useCallback((payload) => {
+        const textLength =
+            (payload && typeof payload.textLength === "number"
+                ? payload.textLength
+                : 0) | 0;
+        const childCount =
+            (payload && typeof payload.childCount === "number"
+                ? payload.childCount
+                : 0) | 0;
+        const looksEmpty = textLength === 0 && childCount <= 1;
+        setPreviewLooksEmpty(looksEmpty);
+    }, []);
     const handleIframePreviewError = useCallback((payload) => {
         const kind = (payload && payload.kind) || "iframe-runtime";
         const message =
@@ -5190,6 +5209,9 @@ export const WidgetBuilderModal = ({
                                                         )}
                                                         onError={
                                                             handleIframePreviewError
+                                                        }
+                                                        onRenderStats={
+                                                            handleIframeRenderStats
                                                         }
                                                     />
                                                 ) : (

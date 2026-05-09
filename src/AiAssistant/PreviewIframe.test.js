@@ -414,3 +414,63 @@ describe("PreviewIframe — context proxy (slice 17c.3)", () => {
         expect(contextMsgs).toEqual([]);
     });
 });
+
+describe("PreviewIframe — render stats (slice 17c.5)", () => {
+    test("forwards bridge:render-stats payloads via onRenderStats", () => {
+        const onRenderStats = jest.fn();
+        render(<PreviewIframe onRenderStats={onRenderStats} />);
+
+        act(() => {
+            window.dispatchEvent(
+                new MessageEvent("message", {
+                    origin: window.location.origin,
+                    data: {
+                        type: "bridge:render-stats",
+                        payload: { textLength: 42, childCount: 3 },
+                    },
+                })
+            );
+        });
+
+        expect(onRenderStats).toHaveBeenCalledWith({
+            textLength: 42,
+            childCount: 3,
+        });
+    });
+
+    test("multiple render-stats messages each fire the callback", () => {
+        const onRenderStats = jest.fn();
+        render(<PreviewIframe onRenderStats={onRenderStats} />);
+
+        // Shell posts twice (1500ms + 3000ms checks). Both should
+        // reach the callback.
+        act(() => {
+            window.dispatchEvent(
+                new MessageEvent("message", {
+                    origin: window.location.origin,
+                    data: {
+                        type: "bridge:render-stats",
+                        payload: { textLength: 0, childCount: 1 },
+                    },
+                })
+            );
+        });
+        act(() => {
+            window.dispatchEvent(
+                new MessageEvent("message", {
+                    origin: window.location.origin,
+                    data: {
+                        type: "bridge:render-stats",
+                        payload: { textLength: 100, childCount: 5 },
+                    },
+                })
+            );
+        });
+
+        expect(onRenderStats).toHaveBeenCalledTimes(2);
+        expect(onRenderStats).toHaveBeenLastCalledWith({
+            textLength: 100,
+            childCount: 5,
+        });
+    });
+});
