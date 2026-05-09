@@ -53,25 +53,32 @@ import {
     buildNoModalCorrectionMessage,
 } from "./widgetCodeValidator";
 
-// Slice 17c.2 — feature flag for the iframe-isolated widget
-// preview. While `false`, the existing inline preview path runs
-// unchanged (zero risk of regression). While `true`, the bundle is
-// rendered inside a sandboxed iframe with its own React tree. The
-// flip from default `false` → `true` happens in slice 17c.6 once
-// theme/provider proxying + error reporting + render stats land.
+// Slice 17c.6 — iframe-isolated preview is now the DEFAULT.
 //
-// Toggle at runtime for testing:
-//   localStorage.setItem("dash:preview-iframe", "1")
-//   then reopen the modal.
+// Background: AI-generated widget code runs as untrusted user
+// code. Slices 17c.1–17c.5 built the iframe path with parity to
+// the inline preview (bundle eval, theme + provider proxy, error
+// reporting, render stats). With this flip, every widget renders
+// inside a sandboxed iframe with its own React tree, DOM, and JS
+// context — render errors, event-handler errors, async rejections,
+// commit-phase failures, CSS leaks, and global pollution are all
+// kernel-isolated from the host React tree.
+//
+// Escape hatch (for the one-release fallback period before slice
+// 17c.7 deletes the inline path entirely): set the localStorage
+// key to "0" and reopen the modal:
+//
+//   localStorage.setItem("dash:preview-iframe", "0")
+//
+// Any other value (or absence) → iframe.
 function readIframePreviewFlag() {
     try {
-        return (
-            typeof window !== "undefined" &&
-            window.localStorage &&
-            window.localStorage.getItem("dash:preview-iframe") === "1"
-        );
+        if (typeof window === "undefined" || !window.localStorage) {
+            return true;
+        }
+        return window.localStorage.getItem("dash:preview-iframe") !== "0";
     } catch {
-        return false;
+        return true;
     }
 }
 
