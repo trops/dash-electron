@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Widget Preview</title>
+        <!--
+          Slice 17c.1 — minimal entry HTML loaded by the widget builder
+          modal's preview iframe. Owns its own JavaScript context, DOM,
+          and React tree so AI-generated widget code is kernel-isolated
+          from the host app: errors, CSS, globals, and memory all stay
+          inside this document.
+
+          Subsequent slices add:
+            17c.2  — React + dash-react bundle loading
+            17c.3  — provider proxy via postMessage
+            17c.4  — error reporting
+            17c.5  — render-stats reporting
+
+          For 17c.1 we just establish the handshake: the page loads,
+          posts `bridge:ready` to the parent, and listens for inbound
+          messages so the host can verify round-trip messaging works
+          before we layer anything on top.
+        -->
+        <style>
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+                background: transparent;
+                color: inherit;
+                font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+            }
+            #root {
+                min-height: 100%;
+            }
+            /* Keep the placeholder visually quiet — the host's preview
+               canvas chrome handles framing. This is just the iframe
+               body before a widget loads. */
+            #placeholder {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                color: #6b7280;
+                font-size: 12px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="root">
+            <div id="placeholder">Preview ready.</div>
+        </div>
+        <script src="widget-preview-shell.js"></script>
+    </body>
+</html>
