@@ -34,6 +34,9 @@ const extendedApi = {
         setSettings: (msg) => ipcRenderer.invoke("algolia-set-settings", msg),
         getAnalyticsForQuery: (msg) =>
             ipcRenderer.invoke("algolia-analytics-for-query", msg),
+        searchRules: (msg) => ipcRenderer.invoke("algolia-search-rules", msg),
+        saveRule: (msg) => ipcRenderer.invoke("algolia-save-rule", msg),
+        deleteRule: (msg) => ipcRenderer.invoke("algolia-delete-rule", msg),
     },
     clientCache: {
         invalidate: (appId, providerName) =>
