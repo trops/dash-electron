@@ -413,6 +413,99 @@ describe("PreviewIframe — context proxy (slice 17c.3)", () => {
         );
         expect(contextMsgs).toEqual([]);
     });
+
+    test("strips functions from themeContext before posting (DataCloneError guard)", () => {
+        // Reproduces the production bug: ThemeContext value carries
+        // `changeCurrentTheme` (a function), which structured-clone
+        // rejects with DataCloneError. The sanitizer must drop it
+        // before the payload reaches postMessage.
+        const themeWithFn = {
+            currentTheme: { "bg-primary-medium": "#111" },
+            currentThemeKey: "dash",
+            changeCurrentTheme: (key) => key,
+        };
+        const { container, rerender } = render(<PreviewIframe />);
+        getPostedMessages(container);
+        dispatchReady();
+
+        rerender(<PreviewIframe themeContext={themeWithFn} />);
+
+        const posted = getPostedMessages(container);
+        const themeMsgs = posted.filter(
+            (m) => m && m.type === "bridge:set-theme"
+        );
+        expect(themeMsgs.length).toBeGreaterThan(0);
+        const last = themeMsgs[themeMsgs.length - 1];
+        expect(last.payload.themeContext.currentTheme).toEqual({
+            "bg-primary-medium": "#111",
+        });
+        expect(last.payload.themeContext.currentThemeKey).toBe("dash");
+        expect(last.payload.themeContext.changeCurrentTheme).toBeUndefined();
+    });
+
+    test("strips functions from appContext before posting", () => {
+        const ctxWithFn = {
+            providers: { "Algolia A": { type: "algolia" } },
+            dashApi: () => "nope",
+        };
+        const { container, rerender } = render(<PreviewIframe />);
+        getPostedMessages(container);
+        dispatchReady();
+
+        rerender(<PreviewIframe appContext={ctxWithFn} />);
+
+        const posted = getPostedMessages(container);
+        const providerMsgs = posted.filter(
+            (m) => m && m.type === "bridge:set-providers"
+        );
+        expect(providerMsgs.length).toBeGreaterThan(0);
+        const last = providerMsgs[providerMsgs.length - 1];
+        expect(last.payload.appContext.providers).toEqual({
+            "Algolia A": { type: "algolia" },
+        });
+        expect(last.payload.appContext.dashApi).toBeUndefined();
+    });
+
+    test("strips functions from widgetData before posting", () => {
+        const wdWithFn = {
+            providers: [],
+            selectedProviders: {},
+            onChange: () => {},
+        };
+        const { container, rerender } = render(<PreviewIframe />);
+        getPostedMessages(container);
+        dispatchReady();
+
+        rerender(<PreviewIframe widgetData={wdWithFn} />);
+
+        const posted = getPostedMessages(container);
+        const wdMsgs = posted.filter(
+            (m) => m && m.type === "bridge:set-widget-context"
+        );
+        expect(wdMsgs.length).toBeGreaterThan(0);
+        const last = wdMsgs[wdMsgs.length - 1];
+        expect(last.payload.widgetData.onChange).toBeUndefined();
+        expect(last.payload.widgetData.providers).toEqual([]);
+    });
+
+    test("falls back to null when sanitization fails (e.g. circular ref)", () => {
+        const circular = { providers: {} };
+        circular.self = circular;
+
+        const { container, rerender } = render(<PreviewIframe />);
+        getPostedMessages(container);
+        dispatchReady();
+
+        rerender(<PreviewIframe appContext={circular} />);
+
+        const posted = getPostedMessages(container);
+        const providerMsgs = posted.filter(
+            (m) => m && m.type === "bridge:set-providers"
+        );
+        expect(providerMsgs.length).toBeGreaterThan(0);
+        const last = providerMsgs[providerMsgs.length - 1];
+        expect(last.payload.appContext).toBeNull();
+    });
 });
 
 describe("PreviewIframe — render stats (slice 17c.5)", () => {
