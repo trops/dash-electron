@@ -27,8 +27,6 @@ import {
 import {
     ChatCore,
     AppContext,
-    DashboardContext,
-    WidgetContext,
     evaluateBundle,
     extractWidgetConfigs,
     makeScopedComponentId,
@@ -53,41 +51,14 @@ import {
     buildNoModalCorrectionMessage,
 } from "./widgetCodeValidator";
 
-// Slice 17c.6 — iframe-isolated preview is now the DEFAULT.
-//
-// Background: AI-generated widget code runs as untrusted user
-// code. Slices 17c.1–17c.5 built the iframe path with parity to
-// the inline preview (bundle eval, theme + provider proxy, error
-// reporting, render stats). With this flip, every widget renders
-// inside a sandboxed iframe with its own React tree, DOM, and JS
-// context — render errors, event-handler errors, async rejections,
-// commit-phase failures, CSS leaks, and global pollution are all
-// kernel-isolated from the host React tree.
-//
-// Escape hatch (for the one-release fallback period before slice
-// 17c.7 deletes the inline path entirely): set the localStorage
-// key to "0" and reopen the modal:
-//
-//   localStorage.setItem("dash:preview-iframe", "0")
-//
-// Any other value (or absence) → iframe.
-function readIframePreviewFlag() {
-    try {
-        if (typeof window === "undefined" || !window.localStorage) {
-            return true;
-        }
-        return window.localStorage.getItem("dash:preview-iframe") !== "0";
-    } catch {
-        return true;
-    }
-}
-
-/**
- * Wraps the preview widget in the full context stack (AppContext,
- * ThemeContext, WidgetContext) so hooks like useMcpProvider work.
- * Auto-selects the first matching provider for each type declared
- * in the widget config.
- */
+// Slice 17c — iframe-isolated preview is the only path. The legacy
+// localStorage opt-out (`dash:preview-iframe = "0"`) used to flip to
+// the inline path; that path is gone now (17c.7) so the helper has
+// been removed too. AI-generated widget code runs in an iframe with
+// its own React tree, DOM, and JS context — render errors,
+// event-handler errors, async rejections, commit-phase failures,
+// CSS leaks, and global pollution are kernel-isolated from the host
+// React tree.
 
 /**
  * Small picker strip rendered above the live widget preview. For each
@@ -374,133 +345,15 @@ function PreviewTestInputsForm({
     );
 }
 
-function PreviewContextWrapper({
-    appCtx,
-    themeCtx,
-    editContext,
-    previewProviderSelection,
-    previewConfigCode,
-    children,
-}) {
-    // Two source paths for declared providers — see buildPreviewWidgetData
-    // in ./widgetPreviewData.js. editContext wins when present (Edit-with-AI
-    // mode), previewConfigCode is the fallback for brand-new widgets being
-    // built in chat.
-    const widgetData = React.useMemo(
-        () =>
-            buildPreviewWidgetData({
-                editContext,
-                previewConfigCode,
-                previewProviderSelection,
-            }),
-        [editContext, previewConfigCode, previewProviderSelection]
-    );
-
-    // Stub DashboardContext so widget code that calls
-    // `useWidgetEvents()` (the canonical pub/sub hook) doesn't throw
-    // in the preview. The hook reads `dashboard.pub` for publishing
-    // and listener registration; we provide a no-op publisher with
-    // the same shape so calls succeed silently — the preview can't
-    // actually broadcast events to other widgets (none are mounted),
-    // but the widget renders without crashing.
-    const previewDashboard = React.useMemo(
-        () => ({
-            pub: {
-                pub: () => {},
-                registerListeners: () => {},
-            },
-        }),
-        []
-    );
-    return (
-        <AppContext.Provider value={appCtx}>
-            <ThemeContext.Provider value={themeCtx}>
-                <DashboardContext.Provider value={previewDashboard}>
-                    <WidgetContext.Provider value={{ widgetData }}>
-                        {children}
-                    </WidgetContext.Provider>
-                </DashboardContext.Provider>
-            </ThemeContext.Provider>
-        </AppContext.Provider>
-    );
-}
-
-/**
- * Error boundary for the live widget preview.
- * Catches runtime errors in the rendered widget without crashing the modal.
- * Shows the error with a "Send error to AI" action to auto-fix.
- */
-class PreviewErrorBoundary extends React.Component {
-    constructor(props) {
-        super(props);
-        this.state = { error: null };
-    }
-
-    static getDerivedStateFromError(error) {
-        return { error: error.message || "Widget render error" };
-    }
-
-    componentDidCatch(err, info) {
-        console.error(
-            "[WidgetBuilderModal] Preview render error:",
-            err,
-            info?.componentStack
-        );
-    }
-
-    // Reset when key changes (new preview compiled via key prop)
-    componentDidUpdate(prevProps) {
-        if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
-            this.setState({ error: null });
-        }
-    }
-
-    sendErrorToAI = () => {
-        const error = this.state.error;
-        if (!error) return;
-        try {
-            const raw = localStorage.getItem("dash-widget-builder");
-            if (raw) {
-                const data = JSON.parse(raw);
-                const msgs = data?.messages || [];
-                msgs.push({
-                    role: "user",
-                    content: `The widget crashed with this runtime error:\n\n${error}\n\nPlease fix the code and output both the corrected jsx component code block and the javascript config code block.`,
-                });
-                localStorage.setItem(
-                    "dash-widget-builder",
-                    JSON.stringify({ ...data, messages: msgs })
-                );
-            }
-        } catch {
-            /* ignore */
-        }
-    };
-
-    render() {
-        if (this.state.error) {
-            return (
-                <div className="flex flex-col items-center justify-center h-full space-y-4">
-                    <div className="w-full max-w-lg rounded-lg border border-red-700/30 bg-red-900/10 p-4 space-y-2">
-                        <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
-                            <span>Runtime Error</span>
-                        </div>
-                        <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto max-h-32">
-                            {this.state.error}
-                        </pre>
-                        <button
-                            onClick={this.sendErrorToAI}
-                            className="text-xs text-indigo-400 hover:text-indigo-300 underline"
-                        >
-                            Send error to AI
-                        </button>
-                    </div>
-                </div>
-            );
-        }
-        return this.props.children;
-    }
-}
+// Slice 17c.7 — `PreviewContextWrapper` and `PreviewErrorBoundary`
+// were the inline-preview wrappers that mounted AI-generated widget
+// code directly in the host React tree. They were replaced by the
+// iframe-isolated preview path (slices 17c.1 — 17c.6) and removed
+// here. The iframe shell now owns the equivalent context wrapping
+// (AppContext, ThemeContext, DashboardContext, WidgetContext) inside
+// its own React tree, and React error boundaries inside the iframe
+// catch render errors that previously needed PreviewErrorBoundary on
+// the host side.
 
 // ─── System prompt builder ──────────────────────────────────────────
 //
@@ -2015,7 +1868,6 @@ export const WidgetBuilderModal = ({
     const [previewBundleSource, setPreviewBundleSource] = useState(null);
     const [previewBundleComponentName, setPreviewBundleComponentName] =
         useState(null);
-    const [iframePreviewEnabled] = useState(() => readIframePreviewFlag());
     // Slice 17c.4 — receive iframe-side errors and surface them
     // through the existing previewError UI. The shell posts every
     // error kind (`uncaught`, `unhandled-rejection`, `bundle-eval`,
@@ -2071,7 +1923,6 @@ export const WidgetBuilderModal = ({
     // and flips this flag to surface a corrective banner. Without it,
     // the user just sees a black canvas with no error to act on.
     const [previewLooksEmpty, setPreviewLooksEmpty] = useState(false);
-    const previewWrapperRef = useRef(null);
     // Default prop values derived from the parsed config's `userConfig`
     // schema. Live widgets receive their userConfig defaultValues as
     // FLAT props (see WidgetFactory.userPrefsForItem in dash-core); for
@@ -3334,6 +3185,13 @@ export const WidgetBuilderModal = ({
                     // them is one extra setState per compile.
                     setPreviewBundleSource(result.bundleSource);
                     setPreviewBundleComponentName(match.key || name);
+                    // Slice 17c.7 — the inline empty-render detector
+                    // useEffect previously reset this on every compile.
+                    // With the inline path gone, do the reset here in
+                    // the same place we set bundle source. Iframe
+                    // render-stats will flip it back true if the
+                    // widget really does render empty.
+                    setPreviewLooksEmpty(false);
                     // Hand the resolved config to the Configure tab so
                     // its form reflects what the AI actually generated
                     // (string-parsing the .dash.js source breaks on
@@ -3969,47 +3827,15 @@ export const WidgetBuilderModal = ({
         selectedProviderForBuild,
     ]);
 
-    // Empty-render detector. Watches the preview wrapper and flips
-    // `previewLooksEmpty` when the rendered widget has DOM structure
-    // but no visible text content — almost always a prop-name mismatch
-    // (`<Heading text=…>` instead of `title=`, etc.). The hook itself
-    // runs UNCONDITIONALLY at the top level (above the `if (!isOpen)`
-    // early return below) so React's hook-call order stays stable.
-    //
-    // Tuned to AVOID false positives: an EmptyState rendered in the
-    // widget's early-return ("Rule Manager" / "No Index Selected") is
-    // genuine visible content and must NOT trip this banner. Earlier
-    // versions used a 700ms one-shot check that fired before React
-    // had committed the EmptyState text. Now we re-check at 1500ms
-    // AND 3000ms; only trip the banner if BOTH checks see the same
-    // empty state. Any visible text or 2+ rendered descendants on
-    // either tick treats the widget as rendered.
-    useEffect(() => {
-        setPreviewLooksEmpty(false);
-        if (!previewComponent || previewError) return undefined;
-        const isStillEmpty = () => {
-            const el = previewWrapperRef.current;
-            if (!el) return false;
-            const text = (el.textContent || "").trim();
-            if (text.length > 0) return false;
-            // If there's deep structure (>2 descendants in the inner
-            // panel), assume it's a real render that just doesn't
-            // happen to have text yet (rare — animated loaders, etc.).
-            const innerWidget = el.querySelector('[id^="panel-"]') || el;
-            const innerChildCount = innerWidget?.children?.length || 0;
-            return innerChildCount <= 1;
-        };
-        const tFirst = setTimeout(() => {
-            if (!isStillEmpty()) return;
-            const tSecond = setTimeout(() => {
-                if (isStillEmpty()) setPreviewLooksEmpty(true);
-            }, 1500);
-            // Park cleanup off the closure; outer cleanup wipes both
-            // by clearing the parent timeout chain.
-            return () => clearTimeout(tSecond);
-        }, 1500);
-        return () => clearTimeout(tFirst);
-    }, [previewComponent, previewError]);
+    // Slice 17c.7 — the inline empty-render detector that read
+    // previewWrapperRef.current.textContent has been removed. With
+    // the iframe preview as the only path, the iframe shell measures
+    // its own DOM after each render commit and posts
+    // `bridge:render-stats`, which the host's
+    // `handleIframeRenderStats` callback turns into the same
+    // `setPreviewLooksEmpty(...)` flip. Cross-document text
+    // measurement isn't needed anymore. Reset on each fresh compile
+    // happens inside the compile success path.
 
     if (!isOpen) return null;
 
@@ -5146,10 +4972,7 @@ export const WidgetBuilderModal = ({
                                             </div>
                                         )}
                                         {/* Widget preview — fills available space */}
-                                        <div
-                                            ref={previewWrapperRef}
-                                            className="flex-1 p-4 overflow-auto"
-                                        >
+                                        <div className="flex-1 p-4 overflow-auto">
                                             <div
                                                 className={`h-full rounded-lg border overflow-hidden shadow-lg ${
                                                     previewThemeCtx
@@ -5163,23 +4986,20 @@ export const WidgetBuilderModal = ({
                                                     ] || "bg-gray-800/30"
                                                 }`}
                                             >
-                                                {iframePreviewEnabled &&
-                                                previewBundleSource ? (
-                                                    /* Slices 17c.2 + 17c.3 —
-                                                       iframe-isolated preview.
-                                                       Bundle source flows through
-                                                       postMessage; module references
-                                                       go via direct cross-window
-                                                       assignment (not serializable).
-                                                       Theme, AppContext.providers, and
-                                                       widgetData (the input shape
-                                                       useWidgetProviders reads) are
-                                                       posted as plain JSON via the
-                                                       bridge — the shell wraps the
-                                                       widget in matching context
-                                                       providers so dash-core hooks
-                                                       resolve correctly inside the
-                                                       iframe's React tree. */
+                                                {/* Slice 17c — iframe-isolated preview is the
+                                                    only path now. Bundle source flows through
+                                                    postMessage; module references go via direct
+                                                    cross-window assignment (not serializable).
+                                                    Theme, AppContext.providers, and widgetData
+                                                    (the shape useWidgetProviders reads) are
+                                                    posted as plain JSON; the iframe shell wraps
+                                                    the widget in matching context providers so
+                                                    dash-core hooks resolve correctly. Errors
+                                                    of every kind (render, event-handler,
+                                                    async, commit-phase, CSS, globals, memory)
+                                                    stay kernel-isolated from the host React
+                                                    tree. */}
+                                                {previewBundleSource && (
                                                     <PreviewIframe
                                                         bundleSource={
                                                             previewBundleSource
@@ -5221,79 +5041,6 @@ export const WidgetBuilderModal = ({
                                                             handleIframeRenderStats
                                                         }
                                                     />
-                                                ) : (
-                                                    <PreviewContextWrapper
-                                                        appCtx={
-                                                            previewAppCtx ||
-                                                            appContext
-                                                        }
-                                                        themeCtx={
-                                                            previewThemeCtx
-                                                        }
-                                                        editContext={
-                                                            effectiveEditContext
-                                                        }
-                                                        previewProviderSelection={
-                                                            previewProviderSelection
-                                                        }
-                                                        previewConfigCode={
-                                                            detectedCode.configCode
-                                                        }
-                                                    >
-                                                        <PreviewErrorBoundary
-                                                            // resetKey alone clears
-                                                            // error state via
-                                                            // componentDidUpdate
-                                                            // (see line ~298). A
-                                                            // `key` prop here would
-                                                            // force a full remount
-                                                            // on every poll-tick
-                                                            // code change → visible
-                                                            // flash every 2s.
-                                                            resetKey={
-                                                                lastCompiledCode.current
-                                                            }
-                                                        >
-                                                            <React.Suspense
-                                                                fallback={
-                                                                    <div className="p-8 text-center text-gray-500 text-sm">
-                                                                        Loading
-                                                                        preview...
-                                                                    </div>
-                                                                }
-                                                            >
-                                                                <PreviewComponent
-                                                                    title={
-                                                                        displayName
-                                                                    }
-                                                                    // Prop precedence (innermost wins):
-                                                                    //   1. userConfig defaults (so a
-                                                                    //      brand-new widget renders
-                                                                    //      with the AI's declared
-                                                                    //      defaultValues instead of
-                                                                    //      `undefined`).
-                                                                    //   2. previewTestInputs (slice
-                                                                    //      17b.9): values the user
-                                                                    //      typed into the in-modal
-                                                                    //      test-inputs form. Override
-                                                                    //      defaults so the user can
-                                                                    //      live-tune the widget.
-                                                                    //   3. effectiveEditContext.userPrefs
-                                                                    //      (Edit-with-AI mode): the
-                                                                    //      saved instance values from
-                                                                    //      the dashboard widget. Wins
-                                                                    //      so editing an existing
-                                                                    //      widget always reflects the
-                                                                    //      user's actual saved state
-                                                                    //      until they change something.
-                                                                    {...previewWidgetDefaults}
-                                                                    {...previewTestInputs}
-                                                                    {...(effectiveEditContext?.userPrefs ||
-                                                                        {})}
-                                                                />
-                                                            </React.Suspense>
-                                                        </PreviewErrorBoundary>
-                                                    </PreviewContextWrapper>
                                                 )}
                                             </div>
                                         </div>
