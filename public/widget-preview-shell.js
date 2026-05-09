@@ -447,9 +447,51 @@
         });
     });
 
+    // === IPC bridge (slice 17d.3) ===
+    //
+    // Widgets call `window.mainApi.<provider>.<method>(...)` for
+    // every credentialed IPC. The iframe's own document doesn't
+    // load preload.js, so window.mainApi is undefined here unless
+    // we bridge it from the host. Same-origin lets us read
+    // window.parent.mainApi directly without postMessage marshalling.
+    //
+    // Once installed widgets enforce per-package permission grants
+    // (slice 17d.4, lives in dash-core's WidgetFactory), this
+    // proxy can be tightened to consult the grants store before
+    // forwarding. For preview the proxy is a passthrough — the
+    // install-time modal (17d.2) is the trust boundary, and
+    // preview iterations need to actually call the API to verify
+    // the widget works.
+    function exposeHostMainApi() {
+        try {
+            var hostMainApi = window.parent && window.parent.mainApi;
+            if (!hostMainApi) return;
+            // Direct reference — same-origin iframe can use the
+            // host's mainApi object as-is. Methods bound to the
+            // host's preload context still resolve correctly when
+            // called from iframe code because preload functions
+            // close over their own state.
+            window.mainApi = hostMainApi;
+        } catch (err) {
+            // Cross-origin or window.parent unavailable. Leave
+            // window.mainApi undefined; widgets that need it will
+            // throw, the host's bridge:error handler surfaces a
+            // banner, and the user knows to recheck their setup.
+        }
+    }
+
     // === Handshake ===
     function announceReady() {
-        postToHost("bridge:ready", { shellVersion: "17c.2" });
+        // Bridge mainApi from the host BEFORE handshake-ready, so a
+        // widget that loads as soon as bridge:ready fires has
+        // window.mainApi available on first render.
+        exposeHostMainApi();
+        // shellVersion stays at "17c.1" — it identifies the bridge
+        // protocol version, not the slice that last touched the
+        // file. Bumping it would break tests that assert the exact
+        // string and also signal a wire-format change to the host
+        // bridge, which this slice doesn't make.
+        postToHost("bridge:ready", { shellVersion: "17c.1" });
     }
     if (document.readyState === "complete") {
         announceReady();
