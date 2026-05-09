@@ -50,6 +50,9 @@ import {
     validateNoModalUsage,
     buildNoModalCorrectionMessage,
 } from "./widgetCodeValidator";
+import { scanCredentialMethodCalls } from "./widgetCredentialPermissionScanner";
+import { setGrants as setCredentialGrants } from "./widgetCredentialGrants";
+import { WidgetCredentialPermissionModal } from "./WidgetCredentialPermissionModal";
 
 // Slice 17c — iframe-isolated preview is the only path. The legacy
 // localStorage opt-out (`dash:preview-iframe = "0"`) used to flip to
@@ -1975,6 +1978,14 @@ export const WidgetBuilderModal = ({
     const [previewErrorMeta, setPreviewErrorMeta] = useState(null);
     const [isCompiling, setIsCompiling] = useState(false);
     const [installStatus, setInstallStatus] = useState(null);
+    // Slice 17d.2 — install-time permission gate. When the AI's
+    // generated widget calls credentialed provider methods, we
+    // pause the install flow, show the permission modal, and only
+    // proceed once the user has explicitly granted (or denied)
+    // each method. `pendingInstallContext` stores the original
+    // install parameters so the actual install can resume after
+    // the user's decision.
+    const [pendingInstallContext, setPendingInstallContext] = useState(null);
     const [detectedCode, setDetectedCode] = useState({
         componentCode: null,
         configCode: null,
@@ -3612,13 +3623,13 @@ export const WidgetBuilderModal = ({
         manualEditRef.current = false;
     }, []);
 
-    const handleInstall = useCallback(async () => {
-        if (!detectedCode.componentCode || !widgetName) return;
-        // Category is required — install button is disabled until picked, but
-        // guard here too in case this is invoked programmatically.
-        if (!selectedCategory) return;
-        setInstallStatus("installing");
-        try {
+    const handleInstall = useCallback(
+        async (opts = {}) => {
+            if (!detectedCode.componentCode || !widgetName) return;
+            // Category is required — install button is disabled until picked, but
+            // guard here too in case this is invoked programmatically.
+            if (!selectedCategory) return;
+
             // Determine install name based on edit mode:
             //   "update" → keep original name (overwrites source in-place)
             //   "remix"  → use the user-chosen remix name (new package)
@@ -3640,192 +3651,244 @@ export const WidgetBuilderModal = ({
                 );
             }
 
-            // Build remix metadata when creating a new copy
-            const remixMeta =
-                isRemixMode && editMode === "remix"
-                    ? {
-                          remixedFrom: {
-                              package:
-                                  effectiveEditContext.originalPackage ||
-                                  "unknown",
-                              component:
-                                  effectiveEditContext.originalComponentName ||
-                                  "unknown",
-                              author:
-                                  effectiveEditContext.manifest?.author ||
-                                  "Unknown",
-                              version:
-                                  effectiveEditContext.manifest?.version ||
-                                  "1.0.0",
-                          },
-                      }
-                    : null;
-
-            // Build the final configCode with the user-selected category baked in.
-            // Two paths:
-            //  - AI generated its own config → inject/replace `category` via regex
-            //  - No config from AI → use the default template, interpolating category
-            let finalConfigCode;
-            if (detectedCode.configCode) {
-                finalConfigCode = injectCategoryIntoConfigCode(
-                    detectedCode.configCode,
-                    selectedCategory
-                );
-                finalConfigCode = dedupProvidersInConfigCode(finalConfigCode);
-                // Update the component reference in config to match the rename
-                if (installName !== widgetName) {
-                    finalConfigCode = finalConfigCode.replace(
-                        new RegExp(
-                            `(component\\s*:\\s*["'])${widgetName}(["'])`,
-                            "g"
-                        ),
-                        `$1${installName}$2`
-                    );
+            // Slice 17d.2 — install-time permission gate. When the
+            // widget calls credentialed provider methods, pause here
+            // and let the user decide which calls to grant. The modal
+            // calls back into handleInstall with `opts.skipPermissionGate`
+            // once the user has decided.
+            if (!opts.skipPermissionGate) {
+                const calls = scanCredentialMethodCalls(installComponentCode);
+                if (calls.length > 0) {
+                    const packageName = `@ai-built/${installName.toLowerCase()}`;
+                    setPendingInstallContext({ packageName, calls });
+                    return;
                 }
-            } else {
-                // Same synthesizer the message-poller uses, with the
-                // user-picked category baked in. Picker selection drives
-                // the providers array.
-                finalConfigCode = synthesizeDefaultConfigCode(
-                    installName,
-                    selectedProviderForBuild
-                );
-                finalConfigCode = injectCategoryIntoConfigCode(
-                    finalConfigCode,
-                    selectedCategory
-                );
             }
 
-            // Build the final multi-file payload. Start from the
-            // detected files[] (which may contain sibling utilities)
-            // and replace the primary widget's component + config with
-            // the post-processed strings (category injected, rename
-            // applied). For legacy two-block responses where files[]
-            // was synthesized from componentCode+configCode, this just
-            // overwrites the same two entries we already had.
-            const finalFiles = (() => {
-                const out = [];
-                const primaryComponentPath = `widgets/${installName}.js`;
-                const primaryConfigPath = `widgets/${installName}.dash.js`;
-                const detectedFiles = Array.isArray(detectedCode.files)
-                    ? detectedCode.files
-                    : [];
-                let wroteComponent = false;
-                let wroteConfig = false;
+            setInstallStatus("installing");
+            try {
+                // Build remix metadata when creating a new copy
+                const remixMeta =
+                    isRemixMode && editMode === "remix"
+                        ? {
+                              remixedFrom: {
+                                  package:
+                                      effectiveEditContext.originalPackage ||
+                                      "unknown",
+                                  component:
+                                      effectiveEditContext.originalComponentName ||
+                                      "unknown",
+                                  author:
+                                      effectiveEditContext.manifest?.author ||
+                                      "Unknown",
+                                  version:
+                                      effectiveEditContext.manifest?.version ||
+                                      "1.0.0",
+                              },
+                          }
+                        : null;
 
-                for (const f of detectedFiles) {
-                    if (!f?.path || f.content == null) continue;
-                    const isPrimaryConfig =
-                        f.path.endsWith(".dash.js") &&
-                        !wroteConfig &&
-                        // Match either the original or the renamed widget
-                        (f.path === primaryConfigPath ||
-                            f.path === `widgets/${widgetName}.dash.js`);
-                    const isPrimaryComponent =
-                        !isPrimaryConfig &&
-                        !f.path.endsWith(".dash.js") &&
-                        !wroteComponent &&
-                        (f.path === primaryComponentPath ||
-                            f.path === `widgets/${widgetName}.js` ||
-                            f.path === `widgets/${widgetName}.jsx`);
-                    if (isPrimaryConfig) {
-                        out.push({
-                            path: primaryConfigPath,
-                            content: finalConfigCode,
-                        });
-                        wroteConfig = true;
-                    } else if (isPrimaryComponent) {
+                // Build the final configCode with the user-selected category baked in.
+                // Two paths:
+                //  - AI generated its own config → inject/replace `category` via regex
+                //  - No config from AI → use the default template, interpolating category
+                let finalConfigCode;
+                if (detectedCode.configCode) {
+                    finalConfigCode = injectCategoryIntoConfigCode(
+                        detectedCode.configCode,
+                        selectedCategory
+                    );
+                    finalConfigCode =
+                        dedupProvidersInConfigCode(finalConfigCode);
+                    // Update the component reference in config to match the rename
+                    if (installName !== widgetName) {
+                        finalConfigCode = finalConfigCode.replace(
+                            new RegExp(
+                                `(component\\s*:\\s*["'])${widgetName}(["'])`,
+                                "g"
+                            ),
+                            `$1${installName}$2`
+                        );
+                    }
+                } else {
+                    // Same synthesizer the message-poller uses, with the
+                    // user-picked category baked in. Picker selection drives
+                    // the providers array.
+                    finalConfigCode = synthesizeDefaultConfigCode(
+                        installName,
+                        selectedProviderForBuild
+                    );
+                    finalConfigCode = injectCategoryIntoConfigCode(
+                        finalConfigCode,
+                        selectedCategory
+                    );
+                }
+
+                // Build the final multi-file payload. Start from the
+                // detected files[] (which may contain sibling utilities)
+                // and replace the primary widget's component + config with
+                // the post-processed strings (category injected, rename
+                // applied). For legacy two-block responses where files[]
+                // was synthesized from componentCode+configCode, this just
+                // overwrites the same two entries we already had.
+                const finalFiles = (() => {
+                    const out = [];
+                    const primaryComponentPath = `widgets/${installName}.js`;
+                    const primaryConfigPath = `widgets/${installName}.dash.js`;
+                    const detectedFiles = Array.isArray(detectedCode.files)
+                        ? detectedCode.files
+                        : [];
+                    let wroteComponent = false;
+                    let wroteConfig = false;
+
+                    for (const f of detectedFiles) {
+                        if (!f?.path || f.content == null) continue;
+                        const isPrimaryConfig =
+                            f.path.endsWith(".dash.js") &&
+                            !wroteConfig &&
+                            // Match either the original or the renamed widget
+                            (f.path === primaryConfigPath ||
+                                f.path === `widgets/${widgetName}.dash.js`);
+                        const isPrimaryComponent =
+                            !isPrimaryConfig &&
+                            !f.path.endsWith(".dash.js") &&
+                            !wroteComponent &&
+                            (f.path === primaryComponentPath ||
+                                f.path === `widgets/${widgetName}.js` ||
+                                f.path === `widgets/${widgetName}.jsx`);
+                        if (isPrimaryConfig) {
+                            out.push({
+                                path: primaryConfigPath,
+                                content: finalConfigCode,
+                            });
+                            wroteConfig = true;
+                        } else if (isPrimaryComponent) {
+                            out.push({
+                                path: primaryComponentPath,
+                                content: installComponentCode,
+                            });
+                            wroteComponent = true;
+                        } else {
+                            out.push({ path: f.path, content: f.content });
+                        }
+                    }
+
+                    if (!wroteComponent) {
                         out.push({
                             path: primaryComponentPath,
                             content: installComponentCode,
                         });
-                        wroteComponent = true;
-                    } else {
-                        out.push({ path: f.path, content: f.content });
                     }
-                }
+                    if (!wroteConfig) {
+                        out.push({
+                            path: primaryConfigPath,
+                            content: finalConfigCode,
+                        });
+                    }
+                    return out;
+                })();
 
-                if (!wroteComponent) {
-                    out.push({
-                        path: primaryComponentPath,
-                        content: installComponentCode,
+                const result = await window.mainApi?.widgetBuilder?.aiBuild(
+                    installName,
+                    installComponentCode,
+                    finalConfigCode,
+                    `AI-generated widget: ${installName}`,
+                    cellContext || null,
+                    process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron",
+                    remixMeta,
+                    finalFiles,
+                    // Provider the user pre-selected — main process
+                    // auto-corrects any drift in the AI's config to match.
+                    selectedProviderForBuild
+                );
+                if (result?.success) {
+                    // The widget is now installed — its draft is no longer
+                    // useful and shouldn't clutter the Drafts list.
+                    const sessionId = draftSessionIdRef.current;
+                    if (sessionId) {
+                        try {
+                            await window.mainApi?.drafts?.delete?.(sessionId);
+                        } catch {
+                            /* ignore */
+                        }
+                        draftSessionIdRef.current = null;
+                        resumedDraftRef.current = null;
+                    }
+                    setInstallStatus({
+                        success: true,
+                        widgetName: result.widgetName,
+                    });
+                    if (onInstalled) {
+                        // Pass the canonical scoped component id (e.g.
+                        // "ai-built.mywidget.MyWidget") — that's the key
+                        // ComponentManager registers under post-v0.1.432
+                        // and the cell-placement handler expects. Passing
+                        // the bare component name lands a layout item
+                        // whose `component:` field doesn't resolve via the
+                        // render-path lookups, so the new widget silently
+                        // doesn't appear on the dashboard. The registry-
+                        // install path was fixed for this in ca166ff; the
+                        // AI-build path was missed.
+                        const scopedRegistryId = result.widgetName
+                            ? makeScopedComponentId(
+                                  result.widgetName,
+                                  installName
+                              )
+                            : installName;
+                        onInstalled(scopedRegistryId, result.widgetName);
+                    }
+                } else {
+                    setInstallStatus({
+                        error: result?.error || "Install failed",
                     });
                 }
-                if (!wroteConfig) {
-                    out.push({
-                        path: primaryConfigPath,
-                        content: finalConfigCode,
-                    });
-                }
-                return out;
-            })();
-
-            const result = await window.mainApi?.widgetBuilder?.aiBuild(
-                installName,
-                installComponentCode,
-                finalConfigCode,
-                `AI-generated widget: ${installName}`,
-                cellContext || null,
-                process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron",
-                remixMeta,
-                finalFiles,
-                // Provider the user pre-selected — main process
-                // auto-corrects any drift in the AI's config to match.
-                selectedProviderForBuild
-            );
-            if (result?.success) {
-                // The widget is now installed — its draft is no longer
-                // useful and shouldn't clutter the Drafts list.
-                const sessionId = draftSessionIdRef.current;
-                if (sessionId) {
-                    try {
-                        await window.mainApi?.drafts?.delete?.(sessionId);
-                    } catch {
-                        /* ignore */
-                    }
-                    draftSessionIdRef.current = null;
-                    resumedDraftRef.current = null;
-                }
-                setInstallStatus({
-                    success: true,
-                    widgetName: result.widgetName,
-                });
-                if (onInstalled) {
-                    // Pass the canonical scoped component id (e.g.
-                    // "ai-built.mywidget.MyWidget") — that's the key
-                    // ComponentManager registers under post-v0.1.432
-                    // and the cell-placement handler expects. Passing
-                    // the bare component name lands a layout item
-                    // whose `component:` field doesn't resolve via the
-                    // render-path lookups, so the new widget silently
-                    // doesn't appear on the dashboard. The registry-
-                    // install path was fixed for this in ca166ff; the
-                    // AI-build path was missed.
-                    const scopedRegistryId = result.widgetName
-                        ? makeScopedComponentId(result.widgetName, installName)
-                        : installName;
-                    onInstalled(scopedRegistryId, result.widgetName);
-                }
-            } else {
-                setInstallStatus({
-                    error: result?.error || "Install failed",
-                });
+            } catch (err) {
+                setInstallStatus({ error: err.message });
             }
-        } catch (err) {
-            setInstallStatus({ error: err.message });
-        }
-    }, [
-        detectedCode,
-        widgetName,
-        selectedCategory,
-        onInstalled,
-        cellContext,
-        effectiveEditContext,
-        isRemixMode,
-        editMode,
-        remixName,
-        selectedProviderForBuild,
-    ]);
+        },
+        [
+            detectedCode,
+            widgetName,
+            selectedCategory,
+            onInstalled,
+            cellContext,
+            effectiveEditContext,
+            isRemixMode,
+            editMode,
+            remixName,
+            selectedProviderForBuild,
+        ]
+    );
+
+    // Slice 17d.2 — install-time permission confirm/cancel handlers.
+    // The user opens the modal by clicking "Install Widget" when
+    // the widget makes credentialed calls. After they choose grants
+    // and click confirm, we persist via the localStorage-backed
+    // grants store (see widgetCredentialGrants.js) and re-enter
+    // handleInstall with `skipPermissionGate: true` to actually
+    // install. Cancel clears the pending state and returns the
+    // user to the build view.
+    const handlePermissionConfirm = useCallback(
+        (grants) => {
+            const ctx = pendingInstallContext;
+            if (!ctx) return;
+            try {
+                setCredentialGrants(ctx.packageName, grants);
+            } catch {
+                // localStorage failure is silent — proceed anyway.
+                // Future runtime gate (slice 17d.3) will re-prompt.
+            }
+            setPendingInstallContext(null);
+            // Resume install — the gate is now satisfied for this run.
+            handleInstall({ skipPermissionGate: true });
+        },
+        [pendingInstallContext, handleInstall]
+    );
+
+    const handlePermissionCancel = useCallback(() => {
+        setPendingInstallContext(null);
+        setInstallStatus(null);
+    }, []);
 
     // Slice 17c.7 — the inline empty-render detector that read
     // previewWrapperRef.current.textContent has been removed. With
@@ -5830,6 +5893,20 @@ export const WidgetBuilderModal = ({
                     </div>
                 </div>
             )}
+            {/* Slice 17d.2 — install-time permission gate. Renders
+                via createPortal at fixed-position overlay (same
+                pattern JitConsentModal uses) so it stacks above
+                the widget-builder Modal without HeadlessUI Dialog
+                stacking issues. Self-managing isOpen via the
+                `pendingInstallContext` state so it only mounts when
+                the install flow has actually paused for consent. */}
+            <WidgetCredentialPermissionModal
+                isOpen={!!pendingInstallContext}
+                packageName={pendingInstallContext?.packageName || ""}
+                calls={pendingInstallContext?.calls || []}
+                onConfirm={handlePermissionConfirm}
+                onCancel={handlePermissionCancel}
+            />
         </Modal>
     );
 };
