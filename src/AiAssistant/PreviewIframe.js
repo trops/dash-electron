@@ -61,6 +61,17 @@ export function PreviewIframe({
     componentName,
     props,
     hostModules,
+    // Slice 17c.3 — context proxying. `themeContext` is the shape
+    // dash-react's ThemeContext expects (`{ currentTheme }`).
+    // `appContext` is the shape dash-core's AppContext expects
+    // (`{ providers, credentials, ... }`). `widgetData` is the
+    // shape `useWidgetProviders` reads (`{ providers, selectedProviders, userPrefs, uuidString }`,
+    // see dash-core/src/hooks/useWidgetProviders.js). All three
+    // omit functions and other unserializable values — the bridge
+    // posts them as plain JSON.
+    themeContext,
+    appContext,
+    widgetData,
     onReady,
     onMounted,
     onError,
@@ -148,6 +159,35 @@ export function PreviewIframe({
         if (!bridgeRef.current) return;
         bridgeRef.current.send("bridge:set-props", { props: props || {} });
     }, [props, status]);
+
+    // Slice 17c.3 — send context updates as they change. The shell
+    // re-renders the current widget on every context update so React
+    // context propagation reaches the widget tree. Each context is
+    // a separate message so changes batch coarsely (a theme change
+    // doesn't churn provider context, etc.).
+    useEffect(() => {
+        if (status !== "mounted" && status !== "ready") return;
+        if (!bridgeRef.current) return;
+        bridgeRef.current.send("bridge:set-theme", {
+            themeContext: themeContext || null,
+        });
+    }, [themeContext, status]);
+
+    useEffect(() => {
+        if (status !== "mounted" && status !== "ready") return;
+        if (!bridgeRef.current) return;
+        bridgeRef.current.send("bridge:set-providers", {
+            appContext: appContext || null,
+        });
+    }, [appContext, status]);
+
+    useEffect(() => {
+        if (status !== "mounted" && status !== "ready") return;
+        if (!bridgeRef.current) return;
+        bridgeRef.current.send("bridge:set-widget-context", {
+            widgetData: widgetData || null,
+        });
+    }, [widgetData, status]);
 
     return (
         <iframe

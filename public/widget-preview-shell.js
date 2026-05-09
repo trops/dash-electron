@@ -133,6 +133,24 @@
     var currentRoot = null;
     var currentProps = {};
     var currentComponent = null;
+    // Slice 17c.3 — context state mirrored from the host. We
+    // populate these via bridge:set-theme / bridge:set-providers /
+    // bridge:set-widget-context messages, then re-render the
+    // current component so React's context propagation reaches
+    // the widget on every change.
+    var currentTheme = null;
+    var currentAppCtx = null;
+    var currentWidgetData = null;
+    // No-op dashboard pub/sub — widgets that call useWidgetEvents
+    // expect dashboard.pub to exist with `pub` + `registerListeners`.
+    // The preview can't actually broadcast events to other widgets
+    // (none are mounted), but the call must succeed silently.
+    var stubDashboard = {
+        pub: {
+            pub: function () {},
+            registerListeners: function () {},
+        },
+    };
 
     function unmountCurrent() {
         if (currentRoot && typeof currentRoot.unmount === "function") {
@@ -147,9 +165,59 @@
         clearRoot();
     }
 
+    // Build the React tree wrapping the widget component in the
+    // contexts dash-core / dash-react hooks read from. Contexts that
+    // are missing on the host module map (because dash-core's API
+    // changed, or the iframe loaded with an older host bundle)
+    // are skipped — the widget falls back to whatever defaults the
+    // hooks ship with, which is what the inline preview does too.
+    function buildTree(React, Component, props) {
+        var hostModules = window.__hostModules || {};
+        var dashCore = hostModules["@trops/dash-core"] || {};
+        var dashReact = hostModules["@trops/dash-react"] || {};
+        var element = React.createElement(Component, props);
+        if (dashCore.WidgetContext && dashCore.WidgetContext.Provider) {
+            element = React.createElement(
+                dashCore.WidgetContext.Provider,
+                { value: { widgetData: currentWidgetData || {} } },
+                element
+            );
+        }
+        if (dashCore.DashboardContext && dashCore.DashboardContext.Provider) {
+            element = React.createElement(
+                dashCore.DashboardContext.Provider,
+                { value: stubDashboard },
+                element
+            );
+        }
+        if (dashReact.ThemeContext && dashReact.ThemeContext.Provider) {
+            element = React.createElement(
+                dashReact.ThemeContext.Provider,
+                { value: currentTheme || { currentTheme: {} } },
+                element
+            );
+        }
+        if (dashCore.AppContext && dashCore.AppContext.Provider) {
+            element = React.createElement(
+                dashCore.AppContext.Provider,
+                { value: currentAppCtx || {} },
+                element
+            );
+        }
+        return element;
+    }
+
     function renderWith(React, Component, props) {
         if (!currentRoot) return;
-        currentRoot.render(React.createElement(Component, props));
+        currentRoot.render(buildTree(React, Component, props));
+    }
+
+    function reRenderCurrent() {
+        if (!currentRoot || !currentComponent) return;
+        var hostModules = window.__hostModules || {};
+        var React = hostModules.react;
+        if (!React) return;
+        renderWith(React, currentComponent, currentProps);
     }
 
     function mountWidget(payload) {
@@ -286,6 +354,31 @@
         }
         if (type === "bridge:set-props") {
             applyProps(payload);
+            return;
+        }
+        if (type === "bridge:set-theme") {
+            currentTheme = (payload && payload.themeContext) || null;
+            reRenderCurrent();
+            return;
+        }
+        if (type === "bridge:set-providers") {
+            // The host posts the bits of AppContext that the widget
+            // hooks read: `providers` map (keyed by name) plus any
+            // companion fields (credentials, appId, etc.). The shell
+            // doesn't need to know the exact shape — it just stores
+            // what arrives and feeds it into AppContext.Provider.
+            currentAppCtx = (payload && payload.appContext) || null;
+            reRenderCurrent();
+            return;
+        }
+        if (type === "bridge:set-widget-context") {
+            // widgetData is the shape `useWidgetProviders` reads —
+            // see dash-core/src/hooks/useWidgetProviders.js. Built on
+            // the host side via `buildPreviewWidgetData` and shipped
+            // as a serializable object (no functions; provider data
+            // is plain values resolved from AppContext.providers).
+            currentWidgetData = (payload && payload.widgetData) || null;
+            reRenderCurrent();
             return;
         }
         if (type === "bridge:load-bundle") {
