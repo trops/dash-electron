@@ -44,6 +44,13 @@ import {
     buildPreviewWidgetData,
 } from "./widgetPreviewData";
 import { WIDGET_BUILDER_GUIDANCE } from "./skillPromptContent";
+import { formatProviderApiSection } from "./providerApiRegistry";
+import {
+    validateProviderApiUsage,
+    buildAiCorrectionMessage,
+    validateNoModalUsage,
+    buildNoModalCorrectionMessage,
+} from "./widgetCodeValidator";
 
 /**
  * Wraps the preview widget in the full context stack (AppContext,
@@ -554,6 +561,35 @@ These dash-react components SILENTLY ignore unknown props and render with empty 
 If a primitive isn't listed here, it's safer to use \`<Paragraph>\` + \`<Heading>\` than to guess. Don't fall back to raw \`<h2>\` / \`<button>\` / \`<p>\` — those bypass the theme. Empty-tree-with-structure renders are the #1 cause of "preview is black"; using these props verbatim prevents that class of bug.
 `;
 
+// Slice 17b.13 — widgets are single-purpose and never pop chrome.
+// Lives next to DASH_REACT_COMPONENT_API because the two are sister
+// rules: one defines the visual primitives, this one defines how
+// they compose into a unit. The validator (widgetCodeValidator.js)
+// rejects \`<Modal>\` / \`<Dialog>\` / \`<Drawer>\` JSX before mount; the
+// rules below explain WHY so the AI doesn't keep relearning them.
+const SINGLE_PURPOSE_RULES = `## SINGLE-PURPOSE WIDGETS — composition rules
+
+A Dash widget is a small, single-purpose UI unit that shares dashboard real-estate with other widgets. The user assembles workflows by dropping multiple widgets on a dashboard and wiring them together via the cross-widget event channel — the "assembly line" pattern. Widgets that try to do too much break this contract.
+
+**HARD RULES — enforced by the validator at compile time:**
+
+- **NO \`<Modal>\`, \`<Dialog>\`, or \`<Drawer>\` inside a widget.** Those are app-level chrome. Popping them from inside a widget hijacks dashboard real-estate, fights z-index against actual app modals, and produces the runtime "open prop must be boolean" error. Compile fails if these tags appear in widget JSX.
+- **Multi-step UX renders INLINE.** A "click button to reveal a form" pattern uses a collapsible \`<Card>\` in the widget's flat surface, NOT a Modal. Example:
+
+\`\`\`jsx
+{showForm && (
+  <Card>
+    {/* the form, inline — scrolls with the rest of the widget */}
+  </Card>
+)}
+\`\`\`
+
+- **One widget = one job.** "Manage Algolia rules" is one job (list + inline create/edit form). "Manage rules + index settings + analytics + records" is four jobs — emit four widgets, one per job, and tell the user which events flow between them.
+- **Cross-widget coordination uses \`useWidgetEvents\`.** When two genuinely-separate widgets need to talk, widget A publishes an event on user action, widget B listens and renders. Example: a "Rule List" widget publishes \`ruleSelected\` on row-click; a sibling "Rule Editor" widget listens for \`ruleSelected\` and shows the form for that id. The user wires the two together via Settings → Configure → Event Handlers.
+
+**When emitting multiple widgets** (multi-file output via \`File:\` markers), name the events explicitly in your chat response — one line per event, naming the publisher widget, the listener widget, and what data flows. The user uses this to wire the dashboard.
+`;
+
 function buildSystemPrompt({
     builtInCatalog = [],
     knownExternalCatalog = [],
@@ -625,8 +661,9 @@ export default function MyWidget({ title }) {
   const provider = getProvider("${pickedType}");
   const pc = useProviderClient(provider);
   // pc is { providerHash, providerName, dashboardAppId }
-  // For provider-specific API calls, use the host IPC, e.g. for algolia:
-  //   const result = await window.mainApi.algolia.search(pc, { indexName, query });
+  // For provider-specific API calls, use the host IPC. See the
+  // AVAILABLE METHODS section below for the EXACT list of methods
+  // available on window.mainApi.${pickedType} — never invent new ones.
   // If no host IPC exists for this type yet, leave a TODO comment in the
   // call site — the user will wire it.
   const [data, setData] = useState(null);
@@ -850,6 +887,10 @@ ${WIDGET_BUILDER_GUIDANCE}
 
 ${DASH_REACT_COMPONENT_API}
 
+${SINGLE_PURPOSE_RULES}
+
+${formatProviderApiSection(pickedType)}
+
 ## Critical rules
 
 - Do NOT use Read, Write, Edit, Bash, Glob, or Grep tools.
@@ -1013,6 +1054,8 @@ DO NOT add scheduled tasks the user can't see in your response — surfacing the
 ${WIDGET_BUILDER_GUIDANCE}
 
 ${DASH_REACT_COMPONENT_API}
+
+${SINGLE_PURPOSE_RULES}
 
 ## Critical rules
 
@@ -1495,6 +1538,8 @@ DO NOT add scheduled tasks the user can't see in your response — surfacing the
 ${WIDGET_BUILDER_GUIDANCE}
 
 ${DASH_REACT_COMPONENT_API}
+
+${SINGLE_PURPOSE_RULES}
 
 ## Critical rules
 
@@ -3123,6 +3168,77 @@ export const WidgetBuilderModal = ({
                     // ghosting into the new widget's props).
                     setPreviewTestInputs({});
 
+                    // Provider API hallucination guardrail (slice
+                    // 17b.12). Walk the AI's component code looking
+                    // for `window.mainApi.<service>.<method>(` calls
+                    // where <method> isn't in the registry. If the
+                    // AI invented a method (e.g. algolia.getRules,
+                    // saveRule, deleteRule), set previewError with
+                    // a corrective message instead of mounting a
+                    // widget that's guaranteed to fail at runtime.
+                    // Use `code.componentCode` (the param) rather than
+                    // `detectedCode.componentCode` (closed-over state) so
+                    // we don't need to add detectedCode to this
+                    // useCallback's deps — recompiling the callback on
+                    // every keystroke during streaming is unnecessary.
+                    const componentSrc = code.componentCode || "";
+
+                    // Slice 17b.13: widgets must not contain Modal /
+                    // Dialog / Drawer chrome. Run BEFORE the provider-
+                    // API check so a Modal-using widget surfaces the
+                    // single-purpose rule first (it's the more
+                    // architectural fix; the prop-API hallucination
+                    // is downstream of choosing the wrong shape).
+                    const modalCheck = validateNoModalUsage(componentSrc);
+                    if (!modalCheck.ok) {
+                        const list = modalCheck.errors
+                            .map(
+                                (e) =>
+                                    `\`<${e.tag}>\` (line ${e.line}) — ${e.suggestion}`
+                            )
+                            .join("\n");
+                        setPreviewError(
+                            "Widget uses popup chrome that's forbidden inside widgets:\n" +
+                                list +
+                                '\n\nClick "Send error to AI" to request a corrected version.'
+                        );
+                        setPreviewErrorMeta({
+                            kind: "modal-in-widget",
+                            errors: modalCheck.errors,
+                            correction: buildNoModalCorrectionMessage(
+                                modalCheck.errors
+                            ),
+                        });
+                        setPreviewComponent(null);
+                        setPreviewParsedConfig(match.config);
+                        return;
+                    }
+
+                    const apiCheck = validateProviderApiUsage(componentSrc);
+                    if (!apiCheck.ok) {
+                        const list = apiCheck.errors
+                            .map(
+                                (e) =>
+                                    `\`mainApi.${e.service}.${e.method}\` (line ${e.line}) — try: ${e.suggestion}`
+                            )
+                            .join("\n");
+                        setPreviewError(
+                            "Widget calls provider methods that don't exist:\n" +
+                                list +
+                                '\n\nClick "Send error to AI" to request a corrected version.'
+                        );
+                        setPreviewErrorMeta({
+                            kind: "provider-api-hallucination",
+                            errors: apiCheck.errors,
+                            correction: buildAiCorrectionMessage(
+                                apiCheck.errors
+                            ),
+                        });
+                        setPreviewComponent(null);
+                        setPreviewParsedConfig(match.config);
+                        return;
+                    }
+
                     // Let PreviewErrorBoundary catch runtime errors in React's context
                     setPreviewComponent(() => match.config.component);
                     // Hand the resolved config to the Configure tab so
@@ -4749,9 +4865,22 @@ export const WidgetBuilderModal = ({
                                                                 const msgs =
                                                                     data?.messages ||
                                                                     [];
+                                                                // Slice 17b.12: when the
+                                                                // validator detected a
+                                                                // hallucinated provider
+                                                                // method, send its specific
+                                                                // correction message
+                                                                // (with method names +
+                                                                // available alternatives)
+                                                                // instead of the generic
+                                                                // "fix this error" prompt.
+                                                                const content =
+                                                                    previewErrorMeta?.correction
+                                                                        ? previewErrorMeta.correction
+                                                                        : `Fix this compilation error:\n\n${previewError}\n\nPlease output both the corrected jsx component code block and the javascript config code block.`;
                                                                 msgs.push({
                                                                     role: "user",
-                                                                    content: `Fix this compilation error:\n\n${previewError}\n\nPlease output both the corrected jsx component code block and the javascript config code block.`,
+                                                                    content,
                                                                 });
                                                                 localStorage.setItem(
                                                                     "dash-widget-builder",
