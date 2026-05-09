@@ -56,6 +56,22 @@ function buildDefaultHostModules() {
     };
 }
 
+// Strip non-cloneable values (functions, symbols, undefined, DOM
+// nodes) so the result survives structured-clone in postMessage.
+// ThemeContext / AppContext values include functions like
+// `changeCurrentTheme` and `dashApi` — passing them raw throws
+// DataCloneError. JSON.parse(JSON.stringify(...)) drops functions
+// and undefined silently; circular refs throw and we fall back to
+// null rather than crash the host.
+function toCloneable(value) {
+    if (value == null) return value;
+    try {
+        return JSON.parse(JSON.stringify(value));
+    } catch (_e) {
+        return null;
+    }
+}
+
 export function PreviewIframe({
     bundleSource,
     componentName,
@@ -175,7 +191,7 @@ export function PreviewIframe({
         if (status !== "mounted" && status !== "ready") return;
         if (!bridgeRef.current) return;
         bridgeRef.current.send("bridge:set-theme", {
-            themeContext: themeContext || null,
+            themeContext: toCloneable(themeContext) || null,
         });
     }, [themeContext, status]);
 
@@ -183,7 +199,7 @@ export function PreviewIframe({
         if (status !== "mounted" && status !== "ready") return;
         if (!bridgeRef.current) return;
         bridgeRef.current.send("bridge:set-providers", {
-            appContext: appContext || null,
+            appContext: toCloneable(appContext) || null,
         });
     }, [appContext, status]);
 
@@ -191,7 +207,7 @@ export function PreviewIframe({
         if (status !== "mounted" && status !== "ready") return;
         if (!bridgeRef.current) return;
         bridgeRef.current.send("bridge:set-widget-context", {
-            widgetData: widgetData || null,
+            widgetData: toCloneable(widgetData) || null,
         });
     }, [widgetData, status]);
 
