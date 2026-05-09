@@ -207,3 +207,43 @@ describe("WidgetBuilderModal system prompt — inlined SKILL.md guidance", () =>
         expect(matches?.length || 0).toBeGreaterThanOrEqual(3);
     });
 });
+
+/**
+ * Pins the per-call lockdown flags on the modal's ChatCore mount.
+ *
+ * Why these are required: prompt-level "do not invoke the skill"
+ * rules were not enough — Claude Code's default system prompt
+ * (kept active by `--append-system-prompt`) advertises the Skill
+ * tool, and the AI invoked the dash-widget-builder skill anyway,
+ * which then ran Bash/Read/Glob inside the modal where only text
+ * + code-block output is wanted. The fix is at the CLI invocation
+ * layer: replace the default system prompt entirely, and disable
+ * every built-in tool.
+ *
+ * Both flags must be on the modal's ChatCore mount, and only on
+ * that one — the AssistantPanel mount is unrelated and must keep
+ * the legacy behavior.
+ */
+describe("WidgetBuilderModal — ChatCore lockdown flags", () => {
+    const modalPath = path.join(__dirname, "WidgetBuilderModal.js");
+    const source = fs.readFileSync(modalPath, "utf8");
+
+    test("ChatCore mount sets replaceSystemPrompt={true}", () => {
+        // Slice the ChatCore JSX block by anchoring on the opening
+        // and closing of the mount. This avoids matching the prop
+        // name in any unrelated comment.
+        const open = source.indexOf("<ChatCore");
+        expect(open).toBeGreaterThan(-1);
+        const close = source.indexOf("/>", open);
+        expect(close).toBeGreaterThan(open);
+        const block = source.slice(open, close);
+        expect(block).toMatch(/replaceSystemPrompt\s*=\s*\{true\}/);
+    });
+
+    test("ChatCore mount sets disableTools={true}", () => {
+        const open = source.indexOf("<ChatCore");
+        const close = source.indexOf("/>", open);
+        const block = source.slice(open, close);
+        expect(block).toMatch(/disableTools\s*=\s*\{true\}/);
+    });
+});

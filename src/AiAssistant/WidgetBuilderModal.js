@@ -3629,6 +3629,12 @@ export const WidgetBuilderModal = ({
             width="w-11/12"
             height="h-5/6"
         >
+            {/* e2e anchor — `data-testid="widget-builder-modal"` lets the
+                Playwright spec wait for the modal to be in the DOM after
+                dispatching `dash:open-widget-builder`. Bound to a wrapper
+                div instead of `<Modal>` because dash-react's Modal does
+                not forward arbitrary HTML attributes to its root. */}
+            <div data-testid="widget-builder-modal" className="contents"></div>
             {/* Header */}
             <div
                 className={`flex items-center justify-between px-4 py-3 border-b ${borderColor} ${bgDark} shrink-0`}
@@ -5492,6 +5498,17 @@ export const WidgetBuilderModal = ({
                                 <ChatCore
                                     title=""
                                     model={model}
+                                    // Lock the modal's CLI invocation: replace
+                                    // Claude Code's default system prompt
+                                    // (which advertises tools + auto-loads
+                                    // project skills by description match)
+                                    // with ours, and disable all built-in
+                                    // tools. Without this, the
+                                    // dash-widget-builder skill auto-loads
+                                    // here and the AI uses Bash/Read/Glob
+                                    // despite the prompt forbidding them.
+                                    replaceSystemPrompt={true}
+                                    disableTools={true}
                                     systemPrompt={(() => {
                                         if (chatMode === "discover") {
                                             return DISCOVER_SYSTEM_PROMPT;
