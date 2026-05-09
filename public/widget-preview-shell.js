@@ -210,6 +210,7 @@
     function renderWith(React, Component, props) {
         if (!currentRoot) return;
         currentRoot.render(buildTree(React, Component, props));
+        scheduleRenderStats();
     }
 
     function reRenderCurrent() {
@@ -218,6 +219,43 @@
         var React = hostModules.react;
         if (!React) return;
         renderWith(React, currentComponent, currentProps);
+    }
+
+    // Slice 17c.5 — measure the rendered widget's text content +
+    // descendant count and post `bridge:render-stats` so the host's
+    // empty-render detector can flip its banner. We schedule TWO
+    // checks (short + longer) to mirror the host's existing
+    // double-check pattern: components with async data fetches
+    // legitimately render empty for a beat before content arrives,
+    // and a one-shot check trips a false positive on those.
+    var statsTimers = [];
+    function scheduleRenderStats() {
+        // Cancel any in-flight measurements from a previous render.
+        for (var i = 0; i < statsTimers.length; i++) {
+            clearTimeout(statsTimers[i]);
+        }
+        statsTimers = [];
+        statsTimers.push(setTimeout(measureAndPostStats, 1500));
+        statsTimers.push(setTimeout(measureAndPostStats, 3000));
+    }
+    function measureAndPostStats() {
+        var root = document.getElementById("root");
+        if (!root) {
+            postToHost("bridge:render-stats", {
+                textLength: 0,
+                childCount: 0,
+            });
+            return;
+        }
+        // Look at the inner widget if dash-react Panel rendered one
+        // (id="panel-NNNN"). Otherwise the wrapper is the metric.
+        var inner = root.querySelector('[id^="panel-"]') || root;
+        var text = (inner.textContent || "").trim();
+        var childCount = inner.children ? inner.children.length : 0;
+        postToHost("bridge:render-stats", {
+            textLength: text.length,
+            childCount: childCount,
+        });
     }
 
     function mountWidget(payload) {

@@ -415,3 +415,40 @@ describe("WidgetBuilderModal — iframe error reporting (slice 17c.4)", () => {
         );
     });
 });
+
+/**
+ * Pins the iframe render-stats wiring (slice 17c.5).
+ *
+ * The iframe shell measures its own DOM after each render commit
+ * (host can't query iframe content via previewWrapperRef in
+ * cross-document mode) and posts `bridge:render-stats`. The host
+ * uses these to drive the existing `previewLooksEmpty` banner.
+ */
+describe("WidgetBuilderModal — iframe render stats (slice 17c.5)", () => {
+    const modalPath = path.join(__dirname, "WidgetBuilderModal.js");
+    const source = fs.readFileSync(modalPath, "utf8");
+
+    test("defines a handleIframeRenderStats callback", () => {
+        expect(source).toMatch(
+            /handleIframeRenderStats\s*=\s*useCallback\s*\(/
+        );
+    });
+
+    test("the callback flips previewLooksEmpty based on text + child count", () => {
+        const start = source.indexOf("handleIframeRenderStats");
+        expect(start).toBeGreaterThan(-1);
+        const block = source.slice(start, start + 1500);
+        expect(block).toContain("setPreviewLooksEmpty");
+        expect(block).toMatch(/textLength\s*===\s*0/);
+        expect(block).toMatch(/childCount\s*<=?\s*1/);
+    });
+
+    test("PreviewIframe mount passes onRenderStats={handleIframeRenderStats}", () => {
+        const open = source.indexOf("<PreviewIframe");
+        const close = source.indexOf("/>", open);
+        const block = source.slice(open, close);
+        expect(block).toMatch(
+            /onRenderStats\s*=\s*\{\s*handleIframeRenderStats\s*\}/
+        );
+    });
+});

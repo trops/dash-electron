@@ -75,6 +75,7 @@ export function PreviewIframe({
     onReady,
     onMounted,
     onError,
+    onRenderStats,
     className,
     style,
 }) {
@@ -123,15 +124,20 @@ export function PreviewIframe({
             if (typeof onError === "function") onError(payload);
         });
 
+        const offStats = bridge.on("bridge:render-stats", (payload) => {
+            if (typeof onRenderStats === "function") onRenderStats(payload);
+        });
+
         return () => {
             offReady();
             offMounted();
             offError();
+            offStats();
             bridge.destroy();
             bridgeRef.current = null;
             readyRef.current = false;
         };
-    }, [onReady, onMounted, onError, writeHostModules]);
+    }, [onReady, onMounted, onError, onRenderStats, writeHostModules]);
 
     // Send bridge:load-bundle when the bundle source / component
     // name change AND the iframe handshake has completed.
