@@ -30,6 +30,14 @@ export function ChatCore({
     api,
     uuid,
     backend = "anthropic",
+    // Lockdown flags forwarded to the Claude Code CLI invocation.
+    // Defaults preserve the existing AssistantPanel behavior (default
+    // system prompt + tools available + MCP wired). The widget-builder
+    // modal opts both true to lock the AI to text + code-block output
+    // with no Skill/Bash/Read/etc. invocations. Ignored on the
+    // anthropic backend.
+    replaceSystemPrompt = false,
+    disableTools = false,
 }) {
     const { publishEvent } = useWidgetEvents();
     const mainApi = window.mainApi;
@@ -296,6 +304,8 @@ export function ChatCore({
                 systemPrompt,
                 maxToolRounds: parseInt(maxToolRounds, 10) || 10,
                 widgetUuid: uuid,
+                replaceSystemPrompt,
+                disableTools,
             });
         },
         [
@@ -312,6 +322,8 @@ export function ChatCore({
             publishEvent,
             backend,
             isAnthropicBackend,
+            replaceSystemPrompt,
+            disableTools,
         ]
     );
 
