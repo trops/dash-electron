@@ -105,6 +105,38 @@ export const PROVIDER_API_REGISTRY = {
             ],
             desc: "Fetch analytics for a single query (count, click-through, conversion).",
         },
+        searchRules: {
+            args: [
+                "providerHash",
+                "dashboardAppId",
+                "providerName",
+                "indexName",
+                "query",
+                "hitsPerPage",
+                "page",
+            ],
+            desc: "List/search query rules on an index. `query` defaults to '' (returns all rules). `hitsPerPage` and `page` are optional pagination. Returns the standard Algolia rules-search response (`{ hits, nbHits, page, nbPages }`).",
+        },
+        saveRule: {
+            args: [
+                "providerHash",
+                "dashboardAppId",
+                "providerName",
+                "indexName",
+                "rule",
+            ],
+            desc: "Create or update (upsert) a single query rule. `rule` is the full rule object including `objectID`. There is no separate createRule/updateRule — saveRule does both.",
+        },
+        deleteRule: {
+            args: [
+                "providerHash",
+                "dashboardAppId",
+                "providerName",
+                "indexName",
+                "objectID",
+            ],
+            desc: "Delete a query rule by `objectID`. Destructive — every install of an `@ai-built/*` widget that calls this triggers the install-time permission gate.",
+        },
     },
 };
 

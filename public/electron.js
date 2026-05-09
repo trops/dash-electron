@@ -858,6 +858,85 @@ function createWindow() {
             }
         );
 
+        // --- Algolia Query Rules CRUD (slice 17d.6) ---
+        // Read-side cached; mutations invalidate the search-rules cache so
+        // the next searchRules call returns fresh data. The install-time
+        // permission gate (slice 17d.2) is what makes the destructive
+        // saveRule / deleteRule safe to expose — every @ai-built/* widget
+        // that calls them prompts the user before installing.
+        logger.loggedHandle(
+            "algolia-search-rules",
+            responseCache.cachedHandler(
+                "algolia-search-rules",
+                async (
+                    e,
+                    {
+                        providerHash,
+                        dashboardAppId,
+                        providerName,
+                        indexName,
+                        query,
+                        hitsPerPage,
+                        page,
+                    }
+                ) => {
+                    const client = await clientCache.getClient(
+                        providerHash,
+                        dashboardAppId,
+                        providerName
+                    );
+                    const index = client.initIndex(indexName);
+                    return await index.searchRules({
+                        query: query || "",
+                        ...(hitsPerPage != null ? { hitsPerPage } : {}),
+                        ...(page != null ? { page } : {}),
+                    });
+                }
+            )
+        );
+
+        logger.loggedHandle(
+            "algolia-save-rule",
+            async (
+                e,
+                { providerHash, dashboardAppId, providerName, indexName, rule }
+            ) => {
+                const client = await clientCache.getClient(
+                    providerHash,
+                    dashboardAppId,
+                    providerName
+                );
+                const index = client.initIndex(indexName);
+                const result = await index.saveRule(rule);
+                responseCache.invalidatePrefix("algolia-search-rules:");
+                return result;
+            }
+        );
+
+        logger.loggedHandle(
+            "algolia-delete-rule",
+            async (
+                e,
+                {
+                    providerHash,
+                    dashboardAppId,
+                    providerName,
+                    indexName,
+                    objectID,
+                }
+            ) => {
+                const client = await clientCache.getClient(
+                    providerHash,
+                    dashboardAppId,
+                    providerName
+                );
+                const index = client.initIndex(indexName);
+                const result = await index.deleteRule(objectID);
+                responseCache.invalidatePrefix("algolia-search-rules:");
+                return result;
+            }
+        );
+
         logger.loggedHandle(
             ALGOLIA_ANALYTICS_FOR_QUERY,
             responseCache.cachedHandler(
