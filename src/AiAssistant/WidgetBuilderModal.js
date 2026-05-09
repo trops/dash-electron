@@ -44,6 +44,7 @@ import {
     buildPreviewWidgetData,
 } from "./widgetPreviewData";
 import { WIDGET_BUILDER_GUIDANCE } from "./skillPromptContent";
+import { PreviewIframe } from "./PreviewIframe";
 import { formatProviderApiSection } from "./providerApiRegistry";
 import {
     validateProviderApiUsage,
@@ -51,6 +52,28 @@ import {
     validateNoModalUsage,
     buildNoModalCorrectionMessage,
 } from "./widgetCodeValidator";
+
+// Slice 17c.2 — feature flag for the iframe-isolated widget
+// preview. While `false`, the existing inline preview path runs
+// unchanged (zero risk of regression). While `true`, the bundle is
+// rendered inside a sandboxed iframe with its own React tree. The
+// flip from default `false` → `true` happens in slice 17c.6 once
+// theme/provider proxying + error reporting + render stats land.
+//
+// Toggle at runtime for testing:
+//   localStorage.setItem("dash:preview-iframe", "1")
+//   then reopen the modal.
+function readIframePreviewFlag() {
+    try {
+        return (
+            typeof window !== "undefined" &&
+            window.localStorage &&
+            window.localStorage.getItem("dash:preview-iframe") === "1"
+        );
+    } catch {
+        return false;
+    }
+}
 
 /**
  * Wraps the preview widget in the full context stack (AppContext,
@@ -1978,6 +2001,14 @@ export const WidgetBuilderModal = ({
     const appContext = useContext(AppContext);
 
     const [previewComponent, setPreviewComponent] = useState(null);
+    // Slice 17c.2 — the raw esbuild bundle source string + the
+    // component name the iframe should mount. Populated by the
+    // compile pipeline alongside `previewComponent`. Only consumed
+    // when the iframe-preview feature flag is on.
+    const [previewBundleSource, setPreviewBundleSource] = useState(null);
+    const [previewBundleComponentName, setPreviewBundleComponentName] =
+        useState(null);
+    const [iframePreviewEnabled] = useState(() => readIframePreviewFlag());
     // True when the compiled widget mounted but produced a tree with
     // zero visible text — usually because the AI used wrong dash-react
     // prop names (e.g. `<Heading text=...>` instead of `title=`). The
@@ -3241,6 +3272,13 @@ export const WidgetBuilderModal = ({
 
                     // Let PreviewErrorBoundary catch runtime errors in React's context
                     setPreviewComponent(() => match.config.component);
+                    // Slice 17c.2 — also store the raw bundle source +
+                    // component name so the iframe-preview path can
+                    // ship them to the iframe when the flag is on.
+                    // Inline path doesn't read these; cost of carrying
+                    // them is one extra setState per compile.
+                    setPreviewBundleSource(result.bundleSource);
+                    setPreviewBundleComponentName(match.key || name);
                     // Hand the resolved config to the Configure tab so
                     // its form reflects what the AI actually generated
                     // (string-parsing the .dash.js source breaks on
@@ -5070,76 +5108,105 @@ export const WidgetBuilderModal = ({
                                                     ] || "bg-gray-800/30"
                                                 }`}
                                             >
-                                                <PreviewContextWrapper
-                                                    appCtx={
-                                                        previewAppCtx ||
-                                                        appContext
-                                                    }
-                                                    themeCtx={previewThemeCtx}
-                                                    editContext={
-                                                        effectiveEditContext
-                                                    }
-                                                    previewProviderSelection={
-                                                        previewProviderSelection
-                                                    }
-                                                    previewConfigCode={
-                                                        detectedCode.configCode
-                                                    }
-                                                >
-                                                    <PreviewErrorBoundary
-                                                        // resetKey alone clears
-                                                        // error state via
-                                                        // componentDidUpdate
-                                                        // (see line ~298). A
-                                                        // `key` prop here would
-                                                        // force a full remount
-                                                        // on every poll-tick
-                                                        // code change → visible
-                                                        // flash every 2s.
-                                                        resetKey={
-                                                            lastCompiledCode.current
+                                                {iframePreviewEnabled &&
+                                                previewBundleSource ? (
+                                                    /* Slice 17c.2 — iframe-isolated preview.
+                                                       Bundle source goes to the iframe via
+                                                       postMessage; module references go via
+                                                       direct cross-window assignment (not
+                                                       serializable). Theme + provider proxying
+                                                       lands in 17c.3; for 17c.2 the iframe
+                                                       sees defaults/testInputs/userPrefs
+                                                       merged into a single props object. */
+                                                    <PreviewIframe
+                                                        bundleSource={
+                                                            previewBundleSource
+                                                        }
+                                                        componentName={
+                                                            previewBundleComponentName
+                                                        }
+                                                        props={{
+                                                            title: displayName,
+                                                            ...previewWidgetDefaults,
+                                                            ...previewTestInputs,
+                                                            ...(effectiveEditContext?.userPrefs ||
+                                                                {}),
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <PreviewContextWrapper
+                                                        appCtx={
+                                                            previewAppCtx ||
+                                                            appContext
+                                                        }
+                                                        themeCtx={
+                                                            previewThemeCtx
+                                                        }
+                                                        editContext={
+                                                            effectiveEditContext
+                                                        }
+                                                        previewProviderSelection={
+                                                            previewProviderSelection
+                                                        }
+                                                        previewConfigCode={
+                                                            detectedCode.configCode
                                                         }
                                                     >
-                                                        <React.Suspense
-                                                            fallback={
-                                                                <div className="p-8 text-center text-gray-500 text-sm">
-                                                                    Loading
-                                                                    preview...
-                                                                </div>
+                                                        <PreviewErrorBoundary
+                                                            // resetKey alone clears
+                                                            // error state via
+                                                            // componentDidUpdate
+                                                            // (see line ~298). A
+                                                            // `key` prop here would
+                                                            // force a full remount
+                                                            // on every poll-tick
+                                                            // code change → visible
+                                                            // flash every 2s.
+                                                            resetKey={
+                                                                lastCompiledCode.current
                                                             }
                                                         >
-                                                            <PreviewComponent
-                                                                title={
-                                                                    displayName
+                                                            <React.Suspense
+                                                                fallback={
+                                                                    <div className="p-8 text-center text-gray-500 text-sm">
+                                                                        Loading
+                                                                        preview...
+                                                                    </div>
                                                                 }
-                                                                // Prop precedence (innermost wins):
-                                                                //   1. userConfig defaults (so a
-                                                                //      brand-new widget renders
-                                                                //      with the AI's declared
-                                                                //      defaultValues instead of
-                                                                //      `undefined`).
-                                                                //   2. previewTestInputs (slice
-                                                                //      17b.9): values the user
-                                                                //      typed into the in-modal
-                                                                //      test-inputs form. Override
-                                                                //      defaults so the user can
-                                                                //      live-tune the widget.
-                                                                //   3. effectiveEditContext.userPrefs
-                                                                //      (Edit-with-AI mode): the
-                                                                //      saved instance values from
-                                                                //      the dashboard widget. Wins
-                                                                //      so editing an existing
-                                                                //      widget always reflects the
-                                                                //      user's actual saved state
-                                                                //      until they change something.
-                                                                {...previewWidgetDefaults}
-                                                                {...previewTestInputs}
-                                                                {...(effectiveEditContext?.userPrefs ||
-                                                                    {})}
-                                                            />
-                                                        </React.Suspense>
-                                                    </PreviewErrorBoundary>
-                                                </PreviewContextWrapper>
+                                                            >
+                                                                <PreviewComponent
+                                                                    title={
+                                                                        displayName
+                                                                    }
+                                                                    // Prop precedence (innermost wins):
+                                                                    //   1. userConfig defaults (so a
+                                                                    //      brand-new widget renders
+                                                                    //      with the AI's declared
+                                                                    //      defaultValues instead of
+                                                                    //      `undefined`).
+                                                                    //   2. previewTestInputs (slice
+                                                                    //      17b.9): values the user
+                                                                    //      typed into the in-modal
+                                                                    //      test-inputs form. Override
+                                                                    //      defaults so the user can
+                                                                    //      live-tune the widget.
+                                                                    //   3. effectiveEditContext.userPrefs
+                                                                    //      (Edit-with-AI mode): the
+                                                                    //      saved instance values from
+                                                                    //      the dashboard widget. Wins
+                                                                    //      so editing an existing
+                                                                    //      widget always reflects the
+                                                                    //      user's actual saved state
+                                                                    //      until they change something.
+                                                                    {...previewWidgetDefaults}
+                                                                    {...previewTestInputs}
+                                                                    {...(effectiveEditContext?.userPrefs ||
+                                                                        {})}
+                                                                />
+                                                            </React.Suspense>
+                                                        </PreviewErrorBoundary>
+                                                    </PreviewContextWrapper>
+                                                )}
                                             </div>
                                         </div>
                                         {/* Registry-preview footer (shown when user is browsing a registry widget) */}
