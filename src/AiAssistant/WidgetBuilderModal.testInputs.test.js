@@ -33,10 +33,14 @@ describe("WidgetBuilderModal — test-inputs form (slice 17b.9)", () => {
         // userConfig schema, test inputs override them, but a saved
         // userPrefs from Edit-with-AI mode wins so editing an
         // existing widget shows the user's actual saved state.
-        const componentMount = source.indexOf("<PreviewComponent");
-        const componentEnd = source.indexOf("/>", componentMount);
-        expect(componentMount).toBeGreaterThan(-1);
-        const block = source.slice(componentMount, componentEnd);
+        //
+        // Slice 17c.7 — the inline `<PreviewComponent>` mount was
+        // removed; props now flow through the `<PreviewIframe>`
+        // mount's `props={{ ... }}` attribute.
+        const iframeMount = source.indexOf("<PreviewIframe");
+        const iframeEnd = source.indexOf("/>", iframeMount);
+        expect(iframeMount).toBeGreaterThan(-1);
+        const block = source.slice(iframeMount, iframeEnd);
 
         const defaultsPos = block.indexOf("...previewWidgetDefaults");
         const testInputsPos = block.indexOf("...previewTestInputs");
@@ -80,26 +84,47 @@ describe("WidgetBuilderModal — test-inputs form (slice 17b.9)", () => {
     });
 });
 
-describe("WidgetBuilderModal — empty-render detector tuning (slice 17b.9)", () => {
-    test("detector double-checks at 1500ms before tripping", () => {
-        // Earlier 700ms one-shot check produced false positives on
-        // widgets rendering their own EmptyState. The new detector
-        // requires the empty condition to hold across two checks
-        // (~3s total) before flipping the banner.
-        const detectorComment = source.indexOf("Empty-render detector");
-        expect(detectorComment).toBeGreaterThan(-1);
-        const block = source.slice(detectorComment, detectorComment + 2200);
-        // At least one 1500ms timeout (the new tuning) is present.
-        expect(block).toMatch(/setTimeout\([^,]+,\s*1500\)/);
-        // Old 700ms one-shot must be gone.
-        expect(block).not.toMatch(/setTimeout\([^,]+,\s*700\)/);
+describe("widget-preview-shell — empty-render detector timing (slice 17b.9 + 17c.5)", () => {
+    // Slice 17c.7 — the inline empty-render detector that read
+    // previewWrapperRef.current.textContent has been removed from
+    // WidgetBuilderModal.js. The same double-check timing now lives
+    // in the iframe shell; the host receives the result via
+    // `bridge:render-stats`. These tests pin the shell's timing.
+    const shellPath = path.join(
+        __dirname,
+        "..",
+        "..",
+        "public",
+        "widget-preview-shell.js"
+    );
+    const shellSource = fs.readFileSync(shellPath, "utf8");
+
+    test("shell schedules render-stats checks at 1500ms and 3000ms", () => {
+        // Both timing values must appear in the schedule helper —
+        // any earlier check fires before React commits text content
+        // and produces false-positive empty banners.
+        expect(shellSource).toMatch(
+            /setTimeout\(\s*measureAndPostStats\s*,\s*1500\s*\)/
+        );
+        expect(shellSource).toMatch(
+            /setTimeout\(\s*measureAndPostStats\s*,\s*3000\s*\)/
+        );
     });
 
-    test("detector requires both checks to see the same empty state", () => {
-        const detectorComment = source.indexOf("Empty-render detector");
-        const block = source.slice(detectorComment, detectorComment + 2200);
-        // The double-check pattern: a helper isStillEmpty() called
-        // by both the outer and inner setTimeout.
-        expect(block).toMatch(/isStillEmpty\s*\(/);
+    test("shell measures text length + child count of the rendered widget", () => {
+        // The measurement must return both fields the host's
+        // handleIframeRenderStats threshold reads. (textLength === 0
+        // && childCount <= 1 → looksEmpty.)
+        expect(shellSource).toMatch(/textLength\s*:\s*[a-zA-Z]/);
+        expect(shellSource).toMatch(/childCount\s*:\s*[a-zA-Z]/);
+    });
+
+    test("host's handleIframeRenderStats applies the detector threshold", () => {
+        const start = source.indexOf("handleIframeRenderStats");
+        expect(start).toBeGreaterThan(-1);
+        const block = source.slice(start, start + 1500);
+        expect(block).toMatch(/textLength\s*===\s*0/);
+        expect(block).toMatch(/childCount\s*<=?\s*1/);
+        expect(block).toContain("setPreviewLooksEmpty");
     });
 });
