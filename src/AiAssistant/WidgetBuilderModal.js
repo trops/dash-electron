@@ -2009,6 +2009,35 @@ export const WidgetBuilderModal = ({
     const [previewBundleComponentName, setPreviewBundleComponentName] =
         useState(null);
     const [iframePreviewEnabled] = useState(() => readIframePreviewFlag());
+    // Slice 17c.4 — receive iframe-side errors and surface them
+    // through the existing previewError UI. The shell posts every
+    // error kind (`uncaught`, `unhandled-rejection`, `bundle-eval`,
+    // `mount`, `no-component`, etc.) via `bridge:error`; we collapse
+    // them into a friendly message + meta so the existing "Send
+    // error to AI" button can post a corrective message to chat.
+    const handleIframePreviewError = useCallback((payload) => {
+        const kind = (payload && payload.kind) || "iframe-runtime";
+        const message =
+            (payload && payload.message) || "Widget runtime error in iframe";
+        const stack = (payload && payload.stack) || null;
+        const friendly = `Widget preview error (${kind}): ${message}`;
+        setPreviewError(friendly);
+        setPreviewErrorMeta({
+            kind: "iframe-error",
+            iframeErrorKind: kind,
+            message,
+            stack,
+            // The Send-to-AI button reads previewErrorMeta.correction
+            // (set by slice 17b.12 for hallucinated-method errors).
+            // For iframe runtime errors we synthesize a similar
+            // message so the button works the same way.
+            correction:
+                "The widget you generated threw a runtime error inside the iframe-isolated preview:\n\n" +
+                friendly +
+                (stack ? "\n\nStack:\n" + stack : "") +
+                "\n\nFix the bug and re-emit BOTH the component and config code blocks. Trace through the user's first interaction (the dropdown selection, the form submit, etc.) and verify every hook, every async call, every prop access is null-safe.",
+        });
+    }, []);
     // True when the compiled widget mounted but produced a tree with
     // zero visible text — usually because the AI used wrong dash-react
     // prop names (e.g. `<Heading text=...>` instead of `title=`). The
@@ -5159,6 +5188,9 @@ export const WidgetBuilderModal = ({
                                                                 previewProviderSelection,
                                                             }
                                                         )}
+                                                        onError={
+                                                            handleIframePreviewError
+                                                        }
                                                     />
                                                 ) : (
                                                     <PreviewContextWrapper

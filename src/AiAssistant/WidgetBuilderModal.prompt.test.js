@@ -363,3 +363,55 @@ describe("WidgetBuilderModal — single-purpose widget rules", () => {
         expect(source).toContain("modal-in-widget");
     });
 });
+
+/**
+ * Pins the iframe error-reporting wiring (slice 17c.4).
+ *
+ * The PreviewIframe component dispatches `bridge:error` payloads to
+ * its `onError` callback. WidgetBuilderModal must route those into
+ * the existing previewError UI so the user gets a friendly banner
+ * (and the "Send error to AI" button works) for runtime errors
+ * thrown inside the iframe — same UX as inline-preview render
+ * errors caught by PreviewErrorBoundary.
+ */
+describe("WidgetBuilderModal — iframe error reporting (slice 17c.4)", () => {
+    const modalPath = path.join(__dirname, "WidgetBuilderModal.js");
+    const source = fs.readFileSync(modalPath, "utf8");
+
+    test("defines a handleIframePreviewError callback", () => {
+        expect(source).toMatch(
+            /handleIframePreviewError\s*=\s*useCallback\s*\(/
+        );
+    });
+
+    test("the callback sets previewError + previewErrorMeta", () => {
+        // Slice the function body and confirm both setters are
+        // called inside.
+        const start = source.indexOf("handleIframePreviewError");
+        expect(start).toBeGreaterThan(-1);
+        const block = source.slice(start, start + 2000);
+        expect(block).toContain("setPreviewError(");
+        expect(block).toContain("setPreviewErrorMeta(");
+    });
+
+    test("the meta carries kind: 'iframe-error' and a correction message", () => {
+        const start = source.indexOf("handleIframePreviewError");
+        const block = source.slice(start, start + 2000);
+        expect(block).toContain('kind: "iframe-error"');
+        expect(block).toContain("correction:");
+    });
+
+    test("PreviewIframe mount passes onError={handleIframePreviewError}", () => {
+        const open = source.indexOf("<PreviewIframe");
+        expect(open).toBeGreaterThan(-1);
+        const close = source.indexOf("/>", open);
+        const block = source.slice(open, close);
+        // Tolerate prettier's multi-line JSX expression formatting:
+        //   onError={
+        //       handleIframePreviewError
+        //   }
+        expect(block).toMatch(
+            /onError\s*=\s*\{\s*handleIframePreviewError\s*\}/
+        );
+    });
+});
