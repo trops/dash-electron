@@ -5110,14 +5110,21 @@ export const WidgetBuilderModal = ({
                                             >
                                                 {iframePreviewEnabled &&
                                                 previewBundleSource ? (
-                                                    /* Slice 17c.2 — iframe-isolated preview.
-                                                       Bundle source goes to the iframe via
-                                                       postMessage; module references go via
-                                                       direct cross-window assignment (not
-                                                       serializable). Theme + provider proxying
-                                                       lands in 17c.3; for 17c.2 the iframe
-                                                       sees defaults/testInputs/userPrefs
-                                                       merged into a single props object. */
+                                                    /* Slices 17c.2 + 17c.3 —
+                                                       iframe-isolated preview.
+                                                       Bundle source flows through
+                                                       postMessage; module references
+                                                       go via direct cross-window
+                                                       assignment (not serializable).
+                                                       Theme, AppContext.providers, and
+                                                       widgetData (the input shape
+                                                       useWidgetProviders reads) are
+                                                       posted as plain JSON via the
+                                                       bridge — the shell wraps the
+                                                       widget in matching context
+                                                       providers so dash-core hooks
+                                                       resolve correctly inside the
+                                                       iframe's React tree. */
                                                     <PreviewIframe
                                                         bundleSource={
                                                             previewBundleSource
@@ -5132,6 +5139,26 @@ export const WidgetBuilderModal = ({
                                                             ...(effectiveEditContext?.userPrefs ||
                                                                 {}),
                                                         }}
+                                                        themeContext={
+                                                            previewThemeCtx
+                                                        }
+                                                        appContext={{
+                                                            providers:
+                                                                (
+                                                                    previewAppCtx ||
+                                                                    appContext
+                                                                )?.providers ||
+                                                                {},
+                                                        }}
+                                                        widgetData={buildPreviewWidgetData(
+                                                            {
+                                                                editContext:
+                                                                    effectiveEditContext,
+                                                                previewConfigCode:
+                                                                    detectedCode.configCode,
+                                                                previewProviderSelection,
+                                                            }
+                                                        )}
                                                     />
                                                 ) : (
                                                     <PreviewContextWrapper

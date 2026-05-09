@@ -303,3 +303,114 @@ describe("PreviewIframe — bundle pipeline (slice 17c.2)", () => {
         });
     });
 });
+
+describe("PreviewIframe — context proxy (slice 17c.3)", () => {
+    function getPostedMessages(container) {
+        const iframe = container.querySelector("iframe");
+        if (!iframe || !iframe.contentWindow) return [];
+        const win = iframe.contentWindow;
+        if (!win.__recorded) {
+            win.__recorded = [];
+            win.postMessage = (msg) => win.__recorded.push(msg);
+        }
+        return win.__recorded;
+    }
+
+    function dispatchReady() {
+        act(() => {
+            window.dispatchEvent(
+                new MessageEvent("message", {
+                    origin: window.location.origin,
+                    data: { type: "bridge:ready", payload: {} },
+                })
+            );
+        });
+    }
+
+    test("posts bridge:set-theme when themeContext changes", () => {
+        const theme1 = { currentTheme: { x: 1 } };
+        const theme2 = { currentTheme: { x: 2 } };
+        const { container, rerender } = render(
+            <PreviewIframe themeContext={theme1} />
+        );
+        getPostedMessages(container);
+        dispatchReady();
+
+        rerender(<PreviewIframe themeContext={theme2} />);
+
+        const posted = getPostedMessages(container);
+        const themeMsgs = posted.filter(
+            (m) => m && m.type === "bridge:set-theme"
+        );
+        expect(themeMsgs.length).toBeGreaterThan(0);
+        const last = themeMsgs[themeMsgs.length - 1];
+        expect(last.payload).toEqual({ themeContext: theme2 });
+    });
+
+    test("posts bridge:set-providers when appContext changes", () => {
+        const ctx1 = { providers: { "Algolia A": { type: "algolia" } } };
+        const ctx2 = {
+            providers: {
+                "Algolia A": { type: "algolia" },
+                "Algolia B": { type: "algolia" },
+            },
+        };
+        const { container, rerender } = render(
+            <PreviewIframe appContext={ctx1} />
+        );
+        getPostedMessages(container);
+        dispatchReady();
+
+        rerender(<PreviewIframe appContext={ctx2} />);
+
+        const posted = getPostedMessages(container);
+        const providerMsgs = posted.filter(
+            (m) => m && m.type === "bridge:set-providers"
+        );
+        expect(providerMsgs.length).toBeGreaterThan(0);
+        const last = providerMsgs[providerMsgs.length - 1];
+        expect(last.payload).toEqual({ appContext: ctx2 });
+    });
+
+    test("posts bridge:set-widget-context when widgetData changes", () => {
+        const wd1 = { providers: [], selectedProviders: {} };
+        const wd2 = {
+            providers: [{ type: "algolia", providerClass: "credential" }],
+            selectedProviders: { algolia: "Algolia A" },
+        };
+        const { container, rerender } = render(
+            <PreviewIframe widgetData={wd1} />
+        );
+        getPostedMessages(container);
+        dispatchReady();
+
+        rerender(<PreviewIframe widgetData={wd2} />);
+
+        const posted = getPostedMessages(container);
+        const wdMsgs = posted.filter(
+            (m) => m && m.type === "bridge:set-widget-context"
+        );
+        expect(wdMsgs.length).toBeGreaterThan(0);
+        const last = wdMsgs[wdMsgs.length - 1];
+        expect(last.payload).toEqual({ widgetData: wd2 });
+    });
+
+    test("does NOT post context messages until handshake completes", () => {
+        const { container } = render(
+            <PreviewIframe
+                themeContext={{ currentTheme: {} }}
+                appContext={{ providers: {} }}
+                widgetData={{ providers: [], selectedProviders: {} }}
+            />
+        );
+        const posted = getPostedMessages(container);
+        const contextMsgs = posted.filter(
+            (m) =>
+                m &&
+                (m.type === "bridge:set-theme" ||
+                    m.type === "bridge:set-providers" ||
+                    m.type === "bridge:set-widget-context")
+        );
+        expect(contextMsgs).toEqual([]);
+    });
+});
