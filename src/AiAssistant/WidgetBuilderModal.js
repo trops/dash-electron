@@ -183,6 +183,160 @@ function PreviewProviderPicker({
     );
 }
 
+/**
+ * PreviewTestInputsForm
+ *
+ * Renders one input per userConfig field the AI declared, so the user
+ * can fill in test values (e.g. `indexName="airports"`) and watch the
+ * previewed widget re-render against real data — without leaving the
+ * modal. Decoupled from the parent: parent owns the values state,
+ * this component is a controlled view.
+ *
+ * Field types map to inputs:
+ *   - text / number / password / color → <input>
+ *   - textarea                         → <textarea>
+ *   - boolean                          → <input type="checkbox">
+ *   - select (with options[])          → <select>
+ *   - anything else                    → falls back to <input>
+ *
+ * Empty / missing userConfig hides the form entirely (no chrome
+ * shown for widgets that don't take inputs).
+ */
+function PreviewTestInputsForm({
+    userConfig,
+    defaults,
+    values,
+    onChange,
+    onReset,
+}) {
+    const fields = userConfig
+        ? Object.entries(userConfig).filter(
+              ([, spec]) => spec && typeof spec === "object"
+          )
+        : [];
+    if (fields.length === 0) return null;
+
+    const dirty = values && Object.keys(values).length > 0;
+    const valueFor = (fieldName, spec) => {
+        if (values && Object.prototype.hasOwnProperty.call(values, fieldName)) {
+            return values[fieldName];
+        }
+        if (
+            defaults &&
+            Object.prototype.hasOwnProperty.call(defaults, fieldName)
+        ) {
+            return defaults[fieldName];
+        }
+        if (spec && "defaultValue" in spec) return spec.defaultValue;
+        return "";
+    };
+
+    return (
+        <div className="px-4 pt-2 pb-3 border-b border-gray-800/60 shrink-0 space-y-2">
+            <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                    Test inputs
+                </span>
+                {dirty && (
+                    <button
+                        type="button"
+                        onClick={onReset}
+                        className="text-[10px] text-gray-500 hover:text-gray-300 underline"
+                    >
+                        Reset to defaults
+                    </button>
+                )}
+            </div>
+            <div className="space-y-1.5">
+                {fields.map(([fieldName, spec]) => {
+                    const label = spec.displayName || fieldName;
+                    const v = valueFor(fieldName, spec);
+                    const t = spec.type || "text";
+                    const common = {
+                        value: v == null ? "" : v,
+                        onChange: (e) => onChange(fieldName, e.target.value),
+                        className:
+                            "flex-1 max-w-md px-2 py-1 bg-gray-800/70 border border-gray-700/50 rounded text-xs text-gray-200 focus:border-indigo-500/50 focus:outline-none",
+                    };
+                    let input;
+                    if (t === "boolean") {
+                        input = (
+                            <input
+                                type="checkbox"
+                                checked={Boolean(v)}
+                                onChange={(e) =>
+                                    onChange(fieldName, e.target.checked)
+                                }
+                                className="w-4 h-4"
+                            />
+                        );
+                    } else if (t === "textarea") {
+                        input = <textarea rows={2} {...common} />;
+                    } else if (t === "select" && Array.isArray(spec.options)) {
+                        input = (
+                            <select {...common}>
+                                {spec.options.map((opt) => {
+                                    const optVal =
+                                        typeof opt === "object" && opt !== null
+                                            ? opt.value
+                                            : opt;
+                                    const optLabel =
+                                        typeof opt === "object" && opt !== null
+                                            ? opt.displayName ||
+                                              opt.label ||
+                                              opt.value
+                                            : opt;
+                                    return (
+                                        <option key={optVal} value={optVal}>
+                                            {optLabel}
+                                        </option>
+                                    );
+                                })}
+                            </select>
+                        );
+                    } else if (t === "number") {
+                        input = (
+                            <input
+                                type="number"
+                                value={v == null ? "" : v}
+                                onChange={(e) => {
+                                    const n = e.target.value;
+                                    onChange(
+                                        fieldName,
+                                        n === "" ? "" : Number(n)
+                                    );
+                                }}
+                                className={common.className}
+                            />
+                        );
+                    } else {
+                        input = (
+                            <input
+                                type={t === "password" ? "password" : "text"}
+                                {...common}
+                            />
+                        );
+                    }
+                    return (
+                        <label
+                            key={fieldName}
+                            className="flex items-center gap-2 text-xs"
+                        >
+                            <span
+                                className="text-gray-400 shrink-0"
+                                style={{ minWidth: "8rem" }}
+                            >
+                                {label}:
+                            </span>
+                            {input}
+                        </label>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
 function PreviewContextWrapper({
     appCtx,
     themeCtx,
@@ -1820,6 +1974,12 @@ export const WidgetBuilderModal = ({
         selectedProviderForBuildRef.current = selectedProviderForBuild;
     }, [selectedProviderForBuild]);
     const [previewError, setPreviewError] = useState(null);
+    // Test-inputs form state (slice 17b.9). One key per userConfig
+    // field — the user types values here to exercise the previewed
+    // widget with real data without leaving the modal. Reset when
+    // a new config compiles so a stale value from a previous widget
+    // doesn't leak into the new one.
+    const [previewTestInputs, setPreviewTestInputs] = useState({});
     // Slice 17b: surfaces the main process's "we adjusted the AI's provider
     // config to match your installed provider" rewrite. Cleared whenever
     // a fresh compile starts so the banner doesn't linger after the AI
@@ -2955,6 +3115,13 @@ export const WidgetBuilderModal = ({
                         }
                     }
                     setPreviewWidgetDefaults(defaults);
+                    // Reset the test-inputs form to the new defaults
+                    // so a stale value from a previous widget can't
+                    // leak into this one (e.g. the previous widget had
+                    // an `indexName` field set to "airports", new
+                    // widget has none — we don't want "airports"
+                    // ghosting into the new widget's props).
+                    setPreviewTestInputs({});
 
                     // Let PreviewErrorBoundary catch runtime errors in React's context
                     setPreviewComponent(() => match.config.component);
@@ -2966,6 +3133,7 @@ export const WidgetBuilderModal = ({
                     setPreviewError(null);
                 } else {
                     setPreviewWidgetDefaults({});
+                    setPreviewTestInputs({});
                     setPreviewParsedConfig(null);
                     setPreviewError(
                         "Could not resolve widget component from bundle."
@@ -3592,28 +3760,46 @@ export const WidgetBuilderModal = ({
         selectedProviderForBuild,
     ]);
 
-    // Empty-render detector. Runs ~700ms after each preview compile and
-    // flips `previewLooksEmpty` when the rendered widget has structure
-    // but no visible text — almost always a prop-name mismatch
+    // Empty-render detector. Watches the preview wrapper and flips
+    // `previewLooksEmpty` when the rendered widget has DOM structure
+    // but no visible text content — almost always a prop-name mismatch
     // (`<Heading text=…>` instead of `title=`, etc.). The hook itself
     // runs UNCONDITIONALLY at the top level (above the `if (!isOpen)`
     // early return below) so React's hook-call order stays stable.
+    //
+    // Tuned to AVOID false positives: an EmptyState rendered in the
+    // widget's early-return ("Rule Manager" / "No Index Selected") is
+    // genuine visible content and must NOT trip this banner. Earlier
+    // versions used a 700ms one-shot check that fired before React
+    // had committed the EmptyState text. Now we re-check at 1500ms
+    // AND 3000ms; only trip the banner if BOTH checks see the same
+    // empty state. Any visible text or 2+ rendered descendants on
+    // either tick treats the widget as rendered.
     useEffect(() => {
         setPreviewLooksEmpty(false);
         if (!previewComponent || previewError) return undefined;
-        const t = setTimeout(() => {
+        const isStillEmpty = () => {
             const el = previewWrapperRef.current;
-            if (!el) return;
+            if (!el) return false;
             const text = (el.textContent || "").trim();
+            if (text.length > 0) return false;
+            // If there's deep structure (>2 descendants in the inner
+            // panel), assume it's a real render that just doesn't
+            // happen to have text yet (rare — animated loaders, etc.).
             const innerWidget = el.querySelector('[id^="panel-"]') || el;
             const innerChildCount = innerWidget?.children?.length || 0;
-            // Either zero text, or a wrapper with structural children
-            // but no descendants beyond a single empty inner div.
-            if (text.length === 0 && innerChildCount <= 1) {
-                setPreviewLooksEmpty(true);
-            }
-        }, 700);
-        return () => clearTimeout(t);
+            return innerChildCount <= 1;
+        };
+        const tFirst = setTimeout(() => {
+            if (!isStillEmpty()) return;
+            const tSecond = setTimeout(() => {
+                if (isStillEmpty()) setPreviewLooksEmpty(true);
+            }, 1500);
+            // Park cleanup off the closure; outer cleanup wipes both
+            // by clearing the parent timeout chain.
+            return () => clearTimeout(tSecond);
+        }, 1500);
+        return () => clearTimeout(tFirst);
     }, [previewComponent, previewError]);
 
     if (!isOpen) return null;
@@ -4622,6 +4808,33 @@ export const WidgetBuilderModal = ({
                                                 }
                                             }}
                                         />
+                                        {/* Test-inputs form (slice 17b.9) —
+                                        renders one row per userConfig field
+                                        the AI declared, so the user can
+                                        type values into the widget without
+                                        leaving the modal (e.g. set
+                                        indexName="airports" on an Algolia
+                                        rules manager and watch the preview
+                                        fetch real data). Empty when the
+                                        widget declares no userConfig. */}
+                                        <PreviewTestInputsForm
+                                            userConfig={
+                                                previewParsedConfig?.userConfig
+                                            }
+                                            defaults={previewWidgetDefaults}
+                                            values={previewTestInputs}
+                                            onChange={(field, value) =>
+                                                setPreviewTestInputs(
+                                                    (prev) => ({
+                                                        ...prev,
+                                                        [field]: value,
+                                                    })
+                                                )
+                                            }
+                                            onReset={() =>
+                                                setPreviewTestInputs({})
+                                            }
+                                        />
                                         {/* Empty-render banner — surfaces the
                                         common case where the widget mounted
                                         but produced no visible content (the
@@ -4770,15 +4983,28 @@ export const WidgetBuilderModal = ({
                                                                 title={
                                                                     displayName
                                                                 }
-                                                                // userConfig defaults first
-                                                                // (so brand-new widgets render
-                                                                // with the AI's defaults
-                                                                // instead of undefined), then
-                                                                // userPrefs from the edit
-                                                                // context (so editing-an-
-                                                                // existing-widget shows the
-                                                                // user's saved values).
+                                                                // Prop precedence (innermost wins):
+                                                                //   1. userConfig defaults (so a
+                                                                //      brand-new widget renders
+                                                                //      with the AI's declared
+                                                                //      defaultValues instead of
+                                                                //      `undefined`).
+                                                                //   2. previewTestInputs (slice
+                                                                //      17b.9): values the user
+                                                                //      typed into the in-modal
+                                                                //      test-inputs form. Override
+                                                                //      defaults so the user can
+                                                                //      live-tune the widget.
+                                                                //   3. effectiveEditContext.userPrefs
+                                                                //      (Edit-with-AI mode): the
+                                                                //      saved instance values from
+                                                                //      the dashboard widget. Wins
+                                                                //      so editing an existing
+                                                                //      widget always reflects the
+                                                                //      user's actual saved state
+                                                                //      until they change something.
                                                                 {...previewWidgetDefaults}
+                                                                {...previewTestInputs}
                                                                 {...(effectiveEditContext?.userPrefs ||
                                                                     {})}
                                                             />
