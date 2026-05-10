@@ -26,6 +26,7 @@
  */
 
 import { PROVIDER_API_REGISTRY } from "./providerApiRegistry";
+import { DASH_REACT_COMPONENTS } from "./dashReactComponentRegistry";
 
 /**
  * Find every `(window.)?mainApi.<service>.<method>(` call in the
@@ -175,6 +176,156 @@ export function buildNoModalCorrectionMessage(errors) {
     lines.push("");
     lines.push(
         "Re-emit BOTH code blocks (component + config). Replace `<Modal>` / `<Dialog>` / `<Drawer>` with INLINE rendering: a `{showThing && <Card>{thing}</Card>}` collapsible inside the widget's flat surface. Widgets are single-purpose, share dashboard real-estate, and must not pop chrome over other widgets. If the flow legitimately needs two separate widgets, split it: emit the second widget as a separate File: block and coordinate via `useWidgetEvents` (publish on action in widget A, listen + render in widget B)."
+    );
+    return lines.join("\n");
+}
+
+/**
+ * Find every JSX `<UpperCaseName ...` reference where the name is
+ * neither imported in the file nor exported by @trops/dash-react.
+ *
+ * Why this exists: when the AI hallucinates a component name (typo,
+ * wrong library, outdated training data), React fails at render time
+ * with `Element type is invalid: expected a string ... but got:
+ * undefined`. The error originates deep in the reconciler, far from
+ * the JSX line that caused it. Catching it at compile time means the
+ * user never sees the broken render — they get a clean "Component X
+ * is not imported" message with a "Send to AI to fix" affordance.
+ *
+ * Detection:
+ *   1. Collect every PascalCase JSX tag reference.
+ *   2. Subtract names declared in the file (imports OR locally-defined
+ *      function/const/let/var bindings). These are user code; trust them.
+ *   3. Subtract dash-react exports (the registry).
+ *   4. Anything left is rejected.
+ *
+ * Edge cases:
+ *   - JSX member expressions (`<Tabs.Panel>`, `<React.Fragment>`) —
+ *     check the root identifier (`Tabs`, `React`) only.
+ *   - Fragment shorthand `<>` — no name, skipped by the regex.
+ *   - All-caps constants (`<MY_CONST>`) — rare in JSX; treat like
+ *     other identifiers.
+ *
+ * Returns: { ok, errors: [{ name, line, suggestion }] }.
+ */
+export function validateComponentReferences(componentCode) {
+    if (!componentCode || typeof componentCode !== "string") {
+        return { ok: true, errors: [] };
+    }
+
+    const declared = collectDeclaredNames(componentCode);
+    const errors = [];
+    const seen = new Set();
+
+    // Match opening JSX tags: `<Foo `, `<Foo>`, `<Foo/>`, `<Foo.Bar`,
+    // `<Foo\n`. Anchor on `<` followed by an uppercase letter.
+    // Capture the root identifier (everything up to whitespace, `>`,
+    // `/`, or `.`).
+    const tagPattern = /<([A-Z][A-Za-z0-9_$]*)(?=[\s/>.])/g;
+    const matches = componentCode.matchAll(tagPattern);
+    for (const m of matches) {
+        const name = m[1];
+        if (declared.has(name)) continue;
+        if (DASH_REACT_COMPONENTS.has(name)) continue;
+        if (seen.has(name)) continue;
+        seen.add(name);
+        const line = lineOf(componentCode, m.index);
+        errors.push({
+            name,
+            line,
+            suggestion: suggestionForComponent(name),
+        });
+    }
+    return { ok: errors.length === 0, errors };
+}
+
+/**
+ * Collect every name declared in the file — imports + local
+ * function/const/let/var bindings — so we can subtract them from
+ * the JSX-tag set before flagging unknowns.
+ */
+function collectDeclaredNames(source) {
+    const names = new Set();
+
+    // Default + namespace imports: `import Foo from "..."`,
+    //                              `import * as Foo from "..."`.
+    const defaultImports = source.matchAll(
+        /import\s+(?:\*\s+as\s+)?([A-Za-z_$][\w$]*)\s*(?:,\s*\{[^}]*\})?\s*from\s*["']/g
+    );
+    for (const m of defaultImports) names.add(m[1]);
+
+    // Named imports: `import { Foo, Bar as Baz } from "..."`. The
+    // locally-bound name is `Foo` and `Baz` (the alias wins).
+    const namedImports = source.matchAll(
+        /import\s+(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]+)\}\s*from\s*["']/g
+    );
+    for (const m of namedImports) {
+        for (const entry of m[1].split(",")) {
+            const trimmed = entry.trim();
+            if (!trimmed) continue;
+            const aliasMatch = trimmed.match(/\s+as\s+([A-Za-z_$][\w$]*)$/);
+            const local = aliasMatch
+                ? aliasMatch[1]
+                : trimmed.split(/\s+/)[0].replace(/^\*$/, "");
+            if (local) names.add(local);
+        }
+    }
+
+    // Local function declarations: `function FooBar(...)`.
+    const fnDecls = source.matchAll(/\bfunction\s+([A-Z][A-Za-z0-9_$]*)/g);
+    for (const m of fnDecls) names.add(m[1]);
+
+    // Local const/let/var bindings whose value is a function or
+    // expression: `const FooBar = ...`. Catches arrow components.
+    const varDecls = source.matchAll(
+        /\b(?:const|let|var)\s+([A-Z][A-Za-z0-9_$]*)\s*=/g
+    );
+    for (const m of varDecls) names.add(m[1]);
+
+    return names;
+}
+
+function suggestionForComponent(name) {
+    // Find dash-react exports that look close to the unknown — helps
+    // catch typos like `Heding` → `Heading`. Three signals, any one
+    // counts:
+    //   1. substring overlap (either direction)
+    //   2. shared first 2 chars (catches single-char-misspelling
+    //      typos where the 3rd char differs, e.g. `heding` vs `heading`)
+    //   3. Levenshtein-ish: same length ±1 AND >50% chars in common
+    const lc = name.toLowerCase();
+    const close = [...DASH_REACT_COMPONENTS].filter((r) => {
+        const rlc = r.toLowerCase();
+        if (rlc.includes(lc) || lc.includes(rlc)) return true;
+        if (lc.length >= 2 && rlc.startsWith(lc.slice(0, 2))) {
+            // Within 2 chars of the same length keeps prefix-match
+            // tight — `Heading2` matches `Heding`, but `Header3000`
+            // wouldn't match `He`.
+            if (Math.abs(lc.length - rlc.length) <= 2) return true;
+        }
+        return false;
+    });
+    if (close.length > 0 && close.length <= 8) {
+        return `did you mean ${close.map((c) => `<${c}>`).join(" or ")}?`;
+    }
+    return `not imported and not exported by @trops/dash-react. If you meant to define it locally, add a function/const declaration.`;
+}
+
+/**
+ * Build a corrective-message string the modal can post into the chat
+ * history so the AI fixes a hallucinated / typo'd component name.
+ */
+export function buildComponentReferenceCorrectionMessage(errors) {
+    if (!errors || errors.length === 0) return "";
+    const lines = [
+        "The widget you generated uses component names that don't exist:",
+    ];
+    for (const e of errors) {
+        lines.push(`- \`<${e.name}>\` on line ${e.line} — ${e.suggestion}`);
+    }
+    lines.push("");
+    lines.push(
+        "Re-emit BOTH code blocks (component + config). Use ONLY components imported from `@trops/dash-react` (see the dash-react-components.md skill reference for the full list) or components you define locally in the same file. Don't invent component names. If you genuinely need a component that doesn't exist, fall back to a `<Panel>` + `<Heading>` + `<Paragraph>` composition."
     );
     return lines.join("\n");
 }
