@@ -47,7 +47,11 @@ function formatTime(ts) {
     return `${hh}:${mm}:${ss}.${ms}`;
 }
 
-export const WidgetConsolePane = ({ events = [], onClear }) => {
+export const WidgetConsolePane = ({
+    events = [],
+    onClear,
+    onSendErrorToAI,
+}) => {
     const [errorsOnly, setErrorsOnly] = useState(false);
     const filtered = useMemo(
         () =>
@@ -126,6 +130,18 @@ export const WidgetConsolePane = ({ events = [], onClear }) => {
                                         </span>
                                     ))}
                                 </div>
+                                {evt.severity === "error" &&
+                                    typeof onSendErrorToAI === "function" && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onSendErrorToAI(evt)}
+                                            className="flex-shrink-0 text-[10px] text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                                            data-testid="console-send-to-ai"
+                                            title="Push this error into the chat as a fix request"
+                                        >
+                                            Send error to AI
+                                        </button>
+                                    )}
                             </div>
                         </div>
                     ))}

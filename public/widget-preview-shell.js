@@ -427,25 +427,125 @@
 
     // === Error reporting (broad catch-all) ===
     window.addEventListener("error", function (event) {
+        var message = event && event.message ? event.message : "unknown error";
+        var stack =
+            event && event.error && event.error.stack ? event.error.stack : "";
         postToHost("bridge:error", {
             kind: "uncaught",
-            message: event && event.message ? event.message : "unknown error",
-            stack:
-                event && event.error && event.error.stack
-                    ? event.error.stack
-                    : null,
+            message: message,
+            stack: stack || null,
+        });
+        // Slice 19G.2 — also feed the modal's Console tab so the user
+        // sees runtime errors alongside their console.* output (and
+        // can hit "Send to AI to fix" inline).
+        postToHost("bridge:console", {
+            severity: "error",
+            source: "window.error",
+            args: [message],
+            timestamp: Date.now(),
+            stack: stack,
         });
     });
     window.addEventListener("unhandledrejection", function (event) {
         var reason = event && event.reason;
+        var message =
+            (reason && reason.message) ||
+            (typeof reason === "string" ? reason : "unhandled rejection");
+        var stack = reason && reason.stack ? reason.stack : "";
         postToHost("bridge:error", {
             kind: "unhandled-rejection",
-            message:
-                (reason && reason.message) ||
-                (typeof reason === "string" ? reason : "unhandled rejection"),
-            stack: reason && reason.stack ? reason.stack : null,
+            message: message,
+            stack: stack || null,
+        });
+        postToHost("bridge:console", {
+            severity: "error",
+            source: "unhandledrejection",
+            args: [message],
+            timestamp: Date.now(),
+            stack: stack,
         });
     });
+
+    // === Console forwarding (slice 19G.2) ===
+    //
+    // The widget runs inside this iframe's JavaScript context, so its
+    // console.log/warn/error/info/debug calls don't reach the host
+    // window. Forward them via postMessage so the modal's Console tab
+    // can display them alongside the existing bridge:error feed.
+    //
+    // We pass through to the original console first so devtools still
+    // logs everything when developing — this is purely additive.
+    //
+    // Cap each serialized arg at 4096 chars to avoid postMessage
+    // bloat. Long objects truncate with a marker.
+    (function installConsoleForwarder() {
+        var SEVERITIES = ["log", "warn", "error", "info", "debug"];
+        var MAX_ARG_CHARS = 4096;
+        function serializeArg(arg) {
+            if (arg === null) return null;
+            if (arg === undefined) return undefined;
+            var t = typeof arg;
+            if (t === "string" || t === "number" || t === "boolean") return arg;
+            if (arg instanceof Error) {
+                return {
+                    __isError: true,
+                    name: arg.name,
+                    message: arg.message,
+                    stack: arg.stack || "",
+                };
+            }
+            try {
+                var s = JSON.stringify(arg);
+                if (s && s.length > MAX_ARG_CHARS) {
+                    return s.slice(0, MAX_ARG_CHARS) + "…[truncated]";
+                }
+                return arg;
+            } catch (_e) {
+                // Circular ref, BigInt, or other non-serializable.
+                try {
+                    return String(arg);
+                } catch (_e2) {
+                    return "(unserializable)";
+                }
+            }
+        }
+        for (var i = 0; i < SEVERITIES.length; i++) {
+            (function (sev) {
+                var orig = window.console[sev];
+                window.console[sev] = function () {
+                    // Pass through first — never delay the real log.
+                    try {
+                        if (typeof orig === "function") {
+                            orig.apply(window.console, arguments);
+                        }
+                    } catch (_e) {
+                        /* ignore */
+                    }
+                    var args = [];
+                    for (var j = 0; j < arguments.length; j++) {
+                        args.push(serializeArg(arguments[j]));
+                    }
+                    var stack = "";
+                    try {
+                        stack = new Error().stack || "";
+                    } catch (_e) {
+                        /* ignore */
+                    }
+                    try {
+                        postToHost("bridge:console", {
+                            severity: sev,
+                            source: "console",
+                            args: args,
+                            timestamp: Date.now(),
+                            stack: stack,
+                        });
+                    } catch (_e) {
+                        /* never let a postMessage failure break logging */
+                    }
+                };
+            })(SEVERITIES[i]);
+        }
+    })();
 
     // === IPC bridge (slice 17d.3) ===
     //

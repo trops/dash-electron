@@ -35,7 +35,11 @@ import { WidgetConfigureTab } from "./WidgetConfigureTab";
 import { ChatProviderGate } from "./ChatProviderGate";
 import { WidgetDraftsList } from "./WidgetDraftsList";
 import { WidgetConsolePane } from "./WidgetConsolePane";
-import { installWidgetConsoleCapture } from "./widgetConsoleCapture";
+// Slice 19G.2: installWidgetConsoleCapture is no longer wired into
+// production — widgets render in an iframe so host-window capture
+// can't see them. The module file stays for its tests + any future
+// inline-render surface; we simply don't install it here anymore.
+// (Kept as a comment to make the absence intentional.)
 import * as transforms from "./widgetCodeTransforms";
 import {
     extractProviderDeclarations,
@@ -1214,6 +1218,64 @@ export const WidgetBuilderModal = ({
         setConsoleEvents([]);
     }, []);
 
+    // Slice 19G.2 — push a "fix this runtime error" user message into
+    // the ChatCore conversation so the AI re-emits with the bug fixed.
+    // Same chat-localStorage path the compile-error banner already
+    // uses (search for "previewErrorMeta?.correction" below).
+    const handleSendConsoleErrorToAI = useCallback((evt) => {
+        try {
+            const raw = localStorage.getItem("dash-widget-builder");
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            const msgs = data?.messages || [];
+            // Serialize args defensively: strings stay; non-strings
+            // get JSON.stringify'd; truncate any single arg to 1000
+            // chars so the chat message stays terse.
+            const argsText = (evt.args || [])
+                .map((a) => {
+                    if (typeof a === "string") return a;
+                    if (a && typeof a === "object" && a.__isError) {
+                        return `${a.name || "Error"}: ${a.message || ""}`;
+                    }
+                    try {
+                        return JSON.stringify(a);
+                    } catch {
+                        return String(a);
+                    }
+                })
+                .map((s) => (s.length > 1000 ? s.slice(0, 1000) + "…" : s))
+                .join(" ");
+            // Trim the stack to the first 8 frames — full stacks are
+            // noisy and most of the signal is in the top frames.
+            const stackTrim = (evt.stack || "")
+                .split("\n")
+                .slice(0, 8)
+                .join("\n");
+            const sourceLabel =
+                evt.source === "window.error"
+                    ? "uncaught error"
+                    : evt.source === "unhandledrejection"
+                    ? "unhandled promise rejection"
+                    : `console.${evt.severity || "error"}`;
+            const content = `Runtime ${sourceLabel} in your widget:
+
+\`\`\`
+${argsText}
+\`\`\`
+
+${
+    stackTrim ? `Stack (top 8 frames):\n\`\`\`\n${stackTrim}\n\`\`\`\n\n` : ""
+}Re-emit BOTH code blocks (component + config) with the bug fixed. Add defensive guards (typeof / Array.isArray / optional chaining) so the same input doesn't crash again. If a \`catch\` block was silently swallowing the error, render it via \`<ErrorMessage message={err.message} />\` instead. Do not just retry the same code path.`;
+            msgs.push({ role: "user", content });
+            localStorage.setItem(
+                "dash-widget-builder",
+                JSON.stringify({ ...data, messages: msgs })
+            );
+        } catch {
+            /* localStorage unavailable — fall through; user can retry */
+        }
+    }, []);
+
     // Surface auto-save activity in the build view: timestamp of the
     // last successful draft save + transient state so the user sees
     // their work is being persisted.
@@ -1400,23 +1462,16 @@ export const WidgetBuilderModal = ({
         }
     }, [isOpen]);
 
-    // Capture widget-scoped console.* + window.error + unhandledrejection
-    // while the modal is open. Drives the Console tab. Stack-filtered
-    // so framework / modal-internal logs don't pollute the user's view.
-    // The existing window.error suppression effect (further down) ALSO
-    // listens, but it short-circuits the bubble; our capture installs in
-    // the capture phase too and only records — they coexist.
-    useEffect(() => {
-        if (!isOpen) return undefined;
-        const uninstall = installWidgetConsoleCapture(appendConsoleEvent);
-        return () => {
-            try {
-                uninstall();
-            } catch {
-                /* ignore */
-            }
-        };
-    }, [isOpen, appendConsoleEvent]);
+    // Slice 19G.2 — host-side console / error capture is OBSOLETE.
+    // Widgets render in an isolated iframe (slice 17c+); the host
+    // window's console.* and window.error never see widget-scoped
+    // events. The Console tab is now driven entirely by
+    // `bridge:console` events forwarded from inside the iframe via
+    // <PreviewIframe onConsoleEvent={appendConsoleEvent} />, wired
+    // below where PreviewIframe is rendered. The
+    // installWidgetConsoleCapture import + tests stay (they're still
+    // useful for any future inline-rendering surface), but production
+    // installs nothing on the host.
 
     // On open: decide whether to show the Drafts list or jump straight
     // into the builder. Skip the list in remix mode (the user clicked
@@ -4298,6 +4353,9 @@ export const WidgetBuilderModal = ({
                                                         onRenderStats={
                                                             handleIframeRenderStats
                                                         }
+                                                        onConsoleEvent={
+                                                            appendConsoleEvent
+                                                        }
                                                     />
                                                 )}
                                             </div>
@@ -4892,6 +4950,7 @@ export const WidgetBuilderModal = ({
                             <WidgetConsolePane
                                 events={consoleEvents}
                                 onClear={clearConsoleEvents}
+                                onSendErrorToAI={handleSendConsoleErrorToAI}
                             />
                         )}
                     </div>

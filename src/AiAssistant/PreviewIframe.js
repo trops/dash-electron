@@ -92,6 +92,10 @@ export function PreviewIframe({
     onMounted,
     onError,
     onRenderStats,
+    // Slice 19G.2 — every console.* + window.error + unhandledrejection
+    // event the iframe shell forwards via `bridge:console` lands here.
+    // Caller (the widget builder modal) feeds it into the Console tab.
+    onConsoleEvent,
     className,
     style,
 }) {
@@ -144,16 +148,28 @@ export function PreviewIframe({
             if (typeof onRenderStats === "function") onRenderStats(payload);
         });
 
+        const offConsole = bridge.on("bridge:console", (payload) => {
+            if (typeof onConsoleEvent === "function") onConsoleEvent(payload);
+        });
+
         return () => {
             offReady();
             offMounted();
             offError();
             offStats();
+            offConsole();
             bridge.destroy();
             bridgeRef.current = null;
             readyRef.current = false;
         };
-    }, [onReady, onMounted, onError, onRenderStats, writeHostModules]);
+    }, [
+        onReady,
+        onMounted,
+        onError,
+        onRenderStats,
+        onConsoleEvent,
+        writeHostModules,
+    ]);
 
     // Send bridge:load-bundle when the bundle source / component
     // name change AND the iframe handshake has completed.
