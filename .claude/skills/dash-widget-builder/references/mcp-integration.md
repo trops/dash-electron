@@ -1,37 +1,73 @@
-# MCP Integration
+# Provider Integration (MCP and Credential)
+
+> **Two equal paths.** A widget connects to an external service via either
+> MCP (`useMcpProvider`) or direct IPC (`useWidgetProviders` +
+> `useProviderClient`). The path depends on what the project ships for that
+> service. **Don't assume MCP is always the answer** — Algolia, OpenAI, and
+> several others are credential-class providers with direct IPC.
 
 ## Table of Contents
 
-1. Why MCP is Central to Dash Widgets
-2. MCP Research Strategy
-3. The MCP Architecture in Dash
-4. Using `useMcpProvider` in Widgets
-5. Provider Configuration for Credentials
-6. Mapping MCP Tools to Widget UI
-7. Common MCP Servers and Their Tools
+1. Provider Class — Credential vs MCP
+2. Why Both Architectures Exist
+3. MCP Research Strategy
+4. The MCP Architecture in Dash
+5. Using `useMcpProvider` in Widgets (mcp class)
+6. Using `useWidgetProviders` + IPC in Widgets (credential class)
+7. Provider Configuration for Credentials
+8. Mapping Provider Capabilities to Widget UI
+9. Common Services and Their Provider Class
 
 ---
 
-## 1. Why MCP is Central to Dash Widgets
+## 1. Provider Class — Credential vs MCP
+
+Every widget that uses an external service declares one of two `providerClass`
+values in its `.dash.js`:
+
+| Class        | Hook                                       | When                                                                                        | IPC surface                                         |
+| ------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `credential` | `useWidgetProviders` + `useProviderClient` | Service has a custom MCP server in dash-electron's main process exposing direct IPC methods | `window.mainApi.<service>.<method>(...)`            |
+| `mcp`        | `useMcpProvider`                           | Service is reached via a generic MCP server                                                 | `mcp.callTool(name, args)` / `mcp.getResource(uri)` |
+
+Look up the project's `src/AiAssistant/providerApiRegistry.js` to see which
+services are `credential`-class and what methods they expose. Anything not in
+the registry is `mcp`-class (or doesn't exist yet — ask the user).
+
+---
+
+## 2. Why Both Architectures Exist
+
+---
 
 Dash widgets are installed into the Electron app at runtime — they load without
-recompiling the application. This means widgets can't bundle native dependencies or
-make direct API calls easily. Instead, they communicate through **MCP (Model Context
-Protocol)** servers, which the Electron main process brokers.
+recompiling the application. This means widgets can't bundle native dependencies
+or make direct API calls easily. Instead, they communicate through one of two
+broker layers in the Electron main process:
 
-This architecture provides:
+-   **MCP servers** (Model Context Protocol) for generic services. Same shape as
+    the broader MCP ecosystem; widgets call `mcp.callTool(...)` and
+    `mcp.getResource(...)`.
+-   **Custom main-process IPC** for `credential`-class services where dash-electron
+    ships a tailored backend (Algolia, OpenAI, etc.). Widgets call
+    `window.mainApi.<service>.<method>(...)`. The IPC surface is registered in
+    `src/AiAssistant/providerApiRegistry.js` and validated at compile time.
+
+Both architectures provide:
 
 -   **Runtime extensibility** — install new widgets without rebuilding
 -   **Credential isolation** — the main process holds secrets, widgets never see raw keys
--   **Uniform interface** — every external service looks the same to widget code
--   **Offline capability** — MCP servers can cache and queue requests
+-   **Uniform interface within each class** — every MCP-class service looks the same to widget code; every credential-class service follows the same `useProviderClient` triplet pattern
+-   **Offline capability** — both layers can cache responses
 
-**Bottom line**: Before writing any widget code, you need to know which MCP server
-provides the data and what tools it exposes. This research phase is not optional.
+**Bottom line**: Before writing widget code, decide which class your service is
+(see Section 1) and look up its capabilities. **Don't reach for `useMcpProvider`
+by default** — if the service is `credential`-class, the MCP hook returns
+nothing useful and you'll waste a build cycle.
 
 ---
 
-## 2. MCP Research Strategy
+## 3. MCP Research Strategy
 
 When the user says "I want a widget for [Service X]", follow this process:
 
@@ -75,7 +111,7 @@ Dash's provider system (see Section 5).
 
 ---
 
-## 3. The MCP Architecture in Dash
+## 4. The MCP Architecture in Dash
 
 ```
 Widget (renderer)          Main Process              External Service
@@ -100,7 +136,7 @@ Widget (renderer)          Main Process              External Service
 
 ---
 
-## 4. Using `useMcpProvider` in Widgets
+## 5. Using `useMcpProvider` in Widgets (mcp class)
 
 The `useMcpProvider` hook is the primary way widgets interact with MCP servers:
 
@@ -139,7 +175,106 @@ The hook handles:
 
 ---
 
-## 5. Provider Configuration — App-Level, Not Widget-Level
+## 6. Using `useWidgetProviders` + IPC in Widgets (credential class)
+
+For services that ship a custom main-process backend in dash-electron — Algolia,
+OpenAI, etc. — the widget calls `window.mainApi.<service>.<method>(...)`
+directly. The pattern:
+
+```javascript
+import React, { useState, useEffect } from "react";
+import {
+    Panel,
+    Heading,
+    EmptyState,
+    ErrorMessage,
+    Skeleton,
+} from "@trops/dash-react";
+import { useWidgetProviders, useProviderClient } from "@trops/dash-core";
+
+export default function AlgoliaIndexList({ title = "Algolia indices" }) {
+    // Hooks first — Rules of Hooks. getProvider returns null when the provider
+    // isn't configured yet, and useProviderClient(null) is safe (returns a
+    // null-shaped handle).
+    const { hasProvider, getProvider } = useWidgetProviders();
+    const provider = getProvider("algolia");
+    const pc = useProviderClient(provider);
+    // pc.providerHash, pc.providerName, pc.dashboardAppId — pass these three
+    // to every IPC method call. The credentials triplet identifies which
+    // configured provider's credentials the main process should use.
+
+    const [indices, setIndices] = useState(null);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        if (!pc?.providerHash) return; // bail INSIDE the effect, not above
+        let cancelled = false;
+        window.mainApi.algolia
+            .listIndices({
+                providerHash: pc.providerHash,
+                dashboardAppId: pc.dashboardAppId,
+                providerName: pc.providerName,
+            })
+            .then((rows) => {
+                if (!cancelled) setIndices(Array.isArray(rows) ? rows : []);
+            })
+            .catch((err) => {
+                if (!cancelled) setError(err);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [pc?.providerHash]);
+
+    // Conditional render goes AFTER all hooks have run.
+    if (!hasProvider("algolia")) {
+        return (
+            <Panel>
+                <EmptyState
+                    title="No Algolia provider"
+                    description="Configure one in Settings → Providers"
+                />
+            </Panel>
+        );
+    }
+    if (error)
+        return (
+            <Panel>
+                <ErrorMessage message={error.message || String(error)} />
+            </Panel>
+        );
+    if (indices === null)
+        return (
+            <Panel>
+                <Skeleton />
+            </Panel>
+        );
+    return (
+        <Panel>
+            <Heading title={title} />
+            {/* render indices */}
+        </Panel>
+    );
+}
+```
+
+### The credentials triplet
+
+`useProviderClient(provider)` returns `{ providerHash, providerName,
+dashboardAppId }`. **Always pass all three to the IPC method**. The main
+process uses them to look up the matching configured provider's credentials.
+
+### Method names are validated at compile time
+
+Every `window.mainApi.<service>.<method>(` call is checked against
+`src/AiAssistant/providerApiRegistry.js`. **Hallucinated method names are
+rejected at compile time** with a "Send error to AI" affordance for the user
+to ask for a corrected version. Don't invent names — look up the registry first
+(see SKILL.md "Available IPC Methods" section).
+
+---
+
+## 7. Provider Configuration — App-Level, Not Widget-Level
 
 This is a common misconception to get right: **providers are configured once in the
 Electron app, not in individual widgets.**
@@ -186,7 +321,7 @@ https://github.com/trops/dash-core/blob/master/docs/WIDGET_PROVIDER_CONFIGURATIO
 
 ---
 
-## 6. Mapping MCP Tools to Widget UI
+## 8. Mapping Provider Capabilities to Widget UI
 
 This is the creative part — deciding which dash-react components best represent the
 data from each MCP tool. Here are common patterns:
@@ -239,22 +374,28 @@ When in doubt:
 
 ---
 
-## 7. Common MCP Servers and Their Tools
+## 9. Common Services and Their Provider Class
 
-When researching MCP servers, these are common ones that Dash widgets integrate with.
-Always verify current availability — MCP servers are actively developed and new ones
-appear frequently.
+> **Authoritative source.** This table is illustrative — the project's
+> `src/AiAssistant/providerApiRegistry.js` is the source of truth for which
+> services are `credential`-class and what methods they expose. Always check
+> the registry first.
 
-| Service          | MCP Server (typical)                        | Key Tools                                           |
-| ---------------- | ------------------------------------------- | --------------------------------------------------- |
-| Algolia          | `@modelcontextprotocol/server-algolia`      | `search`, `browse_index`, `get_object`              |
-| Slack            | `@modelcontextprotocol/server-slack`        | `search_messages`, `send_message`, `list_channels`  |
-| Google Drive     | `@modelcontextprotocol/server-google-drive` | `list_files`, `get_file`, `search_files`            |
-| GitHub           | `@modelcontextprotocol/server-github`       | `search_repos`, `get_file_contents`, `create_issue` |
-| Contentful       | Community servers                           | `get_entries`, `get_content_types`, `search`        |
-| Gmail            | Community / Google workspace                | `search_emails`, `get_email`, `send_email`          |
-| OpenAI / ChatGPT | Various community servers                   | `chat_completion`, `create_embedding`               |
+| Service          | Typical class | Notes                                                                                                       |
+| ---------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
+| Algolia          | `credential`  | Direct IPC: `listIndices`, `search`, `getSettings`, `setSettings`, `searchRules`, `saveRule`, `deleteRule`. |
+| OpenAI / ChatGPT | `credential`  | Direct IPC for chat / embeddings.                                                                           |
+| Slack            | `mcp`         | `@modelcontextprotocol/server-slack` — `search_messages`, `send_message`, `list_channels`.                  |
+| Google Drive     | `mcp`         | `@modelcontextprotocol/server-google-drive` — `list_files`, `get_file`, `search_files`.                     |
+| GitHub           | `mcp`         | `@modelcontextprotocol/server-github` — `search_repos`, `get_file_contents`, `create_issue`.                |
+| Gmail            | `mcp`         | Community / Google Workspace MCP servers.                                                                   |
+| Contentful       | `mcp`         | Community servers — `get_entries`, `get_content_types`.                                                     |
 
-**Research is essential.** Don't assume these exact package names or tool names — always
-search npm and GitHub to find the current, actively-maintained MCP server for the target
-service. The MCP ecosystem evolves quickly.
+**Research is essential.** Don't assume these exact package names or tool
+names — always search npm and GitHub for the current, actively-maintained
+MCP server for the target service. The MCP ecosystem evolves quickly.
+
+**For credential-class services**, the registry tells you which methods
+exist; assume nothing beyond it. If the user asks for a method that's not in
+the registry, ask before fabricating one — adding new IPC methods is a
+separate change to dash-electron's main process.
