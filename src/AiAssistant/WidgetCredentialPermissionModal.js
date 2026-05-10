@@ -24,7 +24,6 @@
  *     suspicious.
  */
 import React, { useState, useMemo } from "react";
-import { createPortal } from "react-dom";
 import { groupByProvider } from "./widgetCredentialPermissionScanner";
 
 export function WidgetCredentialPermissionModal({
@@ -208,5 +207,17 @@ export function WidgetCredentialPermissionModal({
         </div>
     );
 
-    return createPortal(overlay, document.body);
+    // Slice 19F: NOT portaled to document.body anymore. The widget
+    // builder's parent <Modal> is built on @headlessui/react v1.4
+    // Dialog, which detects "click outside" via DOM containment —
+    // not React-tree containment. createPortal escapes the DOM, so
+    // any click inside the portal'd modal looked "outside" the
+    // Dialog and tripped its onClose, taking the whole widget
+    // builder down with it. Rendering inline keeps the modal as a
+    // DOM descendant of the Dialog — HeadlessUI sees clicks as
+    // "inside" and leaves the parent Modal alone. Fixed-position
+    // overlay still works fine; z-50 beats the dash-react Modal's
+    // z-40 visually, and the inline render order means it paints
+    // on top.
+    return overlay;
 }
