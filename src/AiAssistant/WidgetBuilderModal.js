@@ -41,9 +41,7 @@ import {
     extractProviderDeclarations,
     buildPreviewWidgetData,
 } from "./widgetPreviewData";
-import { WIDGET_BUILDER_GUIDANCE } from "./skillPromptContent";
 import { PreviewIframe } from "./PreviewIframe";
-import { formatProviderApiSection } from "./providerApiRegistry";
 import {
     validateProviderApiUsage,
     buildAiCorrectionMessage,
@@ -360,54 +358,29 @@ function PreviewTestInputsForm({
 
 // ─── System prompt builder ──────────────────────────────────────────
 //
-// The widget-builder system prompt is assembled at modal-mount time so we
-// can splice in dynamic context — specifically the live MCP catalogs —
-// alongside the static rules. The static parts (component cheatsheet,
-// styling guardrails, multi-file protocol, MCP-first decision tree)
-// don't change between sessions, but they all live here as one builder
-// so the entire prompt is in one place when reading or auditing.
+// Slice 19B: the modal's system prompt was a ~1000-line monster that
+// duplicated everything the project's dash-widget-builder skill
+// already covers. Now it's a thin pointer. The cliController spawns
+// claude-p with the parent process's cwd inherited (project root in
+// dev, app.getAppPath() in packaged), so the project's
+// .claude/skills/dash-widget-builder/ auto-loads. The skill carries
+// the canonical guidance (tailwind safelist, dash-react prop names,
+// providerApiRegistry, single-task widgets, defensive coding,
+// install-time permission gate, etc.). This builder only contributes
+// runtime context the skill can't know:
+//   - which provider the user pre-selected (focused branch)
+//   - which providers are installed at all (legacy branch)
+//   - first-response style guidance ("ask one short question, then
+//     output code")
 //
-// Sections in order (static unless marked DYNAMIC):
-//   1. Output protocol (single- or multi-file via `File:` markers)
-//   2. Component-library cheatsheet (dash-react)
-//   3. Styling rules (Tailwind safelist guardrails)
-//   4. Provider integration pattern
-//   5. ## Available MCP providers (built-in) — DYNAMIC, from local catalog
-//   6. ## Other known MCP servers — DYNAMIC, from curated allow-list
-//   7. ## When the user asks for a widget that needs external data
-//      (the MCP-first decision tree)
-//   8. Critical rules (no tools, no skills, etc.)
-
-function formatBuiltInCatalogForPrompt(servers) {
-    if (!Array.isArray(servers) || servers.length === 0) {
-        return "(none configured — only build widgets that don't need external services until the user adds providers)";
-    }
-    return servers
-        .map((s) => {
-            const credKeys = Object.keys(s.credentialSchema || {});
-            const credNote =
-                credKeys.length > 0
-                    ? `requires: ${credKeys.join(", ")}`
-                    : "no credentials needed";
-            return `- ${s.id} — ${s.name}: ${
-                s.description || ""
-            } (${credNote})`;
-        })
-        .join("\n");
-}
-
-function formatKnownExternalForPrompt(servers) {
-    if (!Array.isArray(servers) || servers.length === 0) return "(none)";
-    return servers
-        .map((s) => `- ${s.id} — ${s.name}: ${s.description || ""}`)
-        .join("\n");
-}
+// The DISCOVER_SYSTEM_PROMPT constant below is unchanged — it's for
+// the modal's other mode (browse the registry), not the build mode.
 
 /**
  * Format the user's currently-installed providers for the prompt.
- * The AI uses this to detect "this widget needs algolia, the user
- * already has an algolia provider, no install required" — saving the
- * user from reconfiguring credentials they've already set up.
+ * Tells the AI "this widget needs algolia, the user already has an
+ * algolia provider, no install required" — saving the user from
+ * reconfiguring credentials they've already set up.
  */
 function formatInstalledProvidersForPrompt(providersMap) {
     if (!providersMap || typeof providersMap !== "object") return "(none)";
@@ -423,71 +396,19 @@ function formatInstalledProvidersForPrompt(providersMap) {
         .join("\n");
 }
 
-// Authoritative prop-name reference for the dash-react primitives the AI
-// is expected to use. These components silently ignore unknown props and
-// render their empty defaults — passing the wrong name (e.g. `text=` on
-// Heading or `message=` on EmptyState) produces a widget tree with
-// structure but no visible content, surfacing as a "black preview" with
-// no error. Verified against node_modules/@trops/dash-react/dist/index.js.
-const DASH_REACT_COMPONENT_API = `## DASH-REACT COMPONENT API — exact prop names (read these BEFORE writing JSX)
-
-These dash-react components SILENTLY ignore unknown props and render with empty defaults. Passing the wrong prop name produces a widget tree with structure but zero visible content — the preview looks black with no error in the console. Use these prop names VERBATIM:
-
-- \`<Heading title="..." />\` — visible text goes in the \`title\` prop. NEVER \`<Heading text="..." />\` and NEVER \`<Heading>children</Heading>\` — neither renders.
-- \`<SubHeading title="..." />\` — same shape as Heading. \`title\` prop only.
-- \`<Button title="..." onClick={...} disabled={...} />\` — visible label goes in \`title\`. NEVER \`<Button text="..." />\`. Without \`title\`, Button renders the literal string "Cancel" by default.
-- \`<ButtonIcon icon="..." title="..." onClick={...} />\` — \`icon\` is a FontAwesome name, \`title\` is the visible label / tooltip.
-- \`<EmptyState title="..." description="..." />\` (optional \`children\` for actions). NEVER \`<EmptyState message="..." />\` — \`message\` is not a prop on EmptyState and the component renders empty.
-- \`<Alert title="..." message="..." />\` — both props are valid here. (Alert is the EXCEPTION, not the rule.)
-- \`<ErrorMessage message="..." />\` — \`message\` is the visible error text.
-- \`<Card>...</Card>\`, \`<Panel>...</Panel>\`, \`<Menu>...</Menu>\`, \`<MenuItem>...</MenuItem>\` — all consume \`children\`.
-- \`<Paragraph>text</Paragraph>\` — uses children.
-- \`<Tag title="..." />\` — visible label in \`title\`.
-
-If a primitive isn't listed here, it's safer to use \`<Paragraph>\` + \`<Heading>\` than to guess. Don't fall back to raw \`<h2>\` / \`<button>\` / \`<p>\` — those bypass the theme. Empty-tree-with-structure renders are the #1 cause of "preview is black"; using these props verbatim prevents that class of bug.
-`;
-
-// Slice 17b.13 — widgets are single-purpose and never pop chrome.
-// Lives next to DASH_REACT_COMPONENT_API because the two are sister
-// rules: one defines the visual primitives, this one defines how
-// they compose into a unit. The validator (widgetCodeValidator.js)
-// rejects \`<Modal>\` / \`<Dialog>\` / \`<Drawer>\` JSX before mount; the
-// rules below explain WHY so the AI doesn't keep relearning them.
-const SINGLE_PURPOSE_RULES = `## SINGLE-PURPOSE WIDGETS — composition rules
-
-A Dash widget is a small, single-purpose UI unit that shares dashboard real-estate with other widgets. The user assembles workflows by dropping multiple widgets on a dashboard and wiring them together via the cross-widget event channel — the "assembly line" pattern. Widgets that try to do too much break this contract.
-
-**HARD RULES — enforced by the validator at compile time:**
-
-- **NO \`<Modal>\`, \`<Dialog>\`, or \`<Drawer>\` inside a widget.** Those are app-level chrome. Popping them from inside a widget hijacks dashboard real-estate, fights z-index against actual app modals, and produces the runtime "open prop must be boolean" error. Compile fails if these tags appear in widget JSX.
-- **Multi-step UX renders INLINE.** A "click button to reveal a form" pattern uses a collapsible \`<Card>\` in the widget's flat surface, NOT a Modal. Example:
-
-\`\`\`jsx
-{showForm && (
-  <Card>
-    {/* the form, inline — scrolls with the rest of the widget */}
-  </Card>
-)}
-\`\`\`
-
-- **One widget = one job.** "Manage Algolia rules" is one job (list + inline create/edit form). "Manage rules + index settings + analytics + records" is four jobs — emit four widgets, one per job, and tell the user which events flow between them.
-- **Cross-widget coordination uses \`useWidgetEvents\`.** When two genuinely-separate widgets need to talk, widget A publishes an event on user action, widget B listens and renders. Example: a "Rule List" widget publishes \`ruleSelected\` on row-click; a sibling "Rule Editor" widget listens for \`ruleSelected\` and shows the form for that id. The user wires the two together via Settings → Configure → Event Handlers.
-
-**When emitting multiple widgets** (multi-file output via \`File:\` markers), name the events explicitly in your chat response — one line per event, naming the publisher widget, the listener widget, and what data flows. The user uses this to wire the dashboard.
-`;
-
+/**
+ * Build the modal's system prompt. The skill (auto-loaded via cwd)
+ * provides every architectural constraint; this function only emits
+ * the runtime context the skill can't know statically.
+ */
 function buildSystemPrompt({
+    // eslint-disable-next-line no-unused-vars
     builtInCatalog = [],
+    // eslint-disable-next-line no-unused-vars
     knownExternalCatalog = [],
     installedProviders = {},
     selectedProvider = null,
 } = {}) {
-    // The user picks a provider TYPE via the ChatProviderGate BEFORE
-    // sending a chat message. When a type is selected, the prompt
-    // gets a single focused "use this exact provider" section and the
-    // catalogs + decision tree + HARD RULE are dropped entirely. This
-    // takes the provider-selection decision out of the LLM's hands so
-    // it can stop wavering between MCP/credential and just write code.
     const hasPicked =
         selectedProvider &&
         (selectedProvider.sentinel === "none" ||
@@ -496,953 +417,59 @@ function buildSystemPrompt({
     const pickedType = selectedProvider?.type;
     const pickedClass = selectedProvider?.providerClass;
 
-    // Catalogs are still useful when no specific provider is picked
-    // yet — keep the legacy decision-tree path so the modal still
-    // works during the brief window between modal-open and picker-
-    // selection. Once the picker fires, the focused branch wins.
-    const installedTypeSet = new Set();
-    for (const p of Object.values(installedProviders || {})) {
-        if (p && typeof p === "object" && p.type) {
-            installedTypeSet.add(p.type);
-        }
-    }
-    const filteredBuiltIn = (builtInCatalog || []).filter(
-        (s) => s && !installedTypeSet.has(s.id)
-    );
-    const filteredKnownExternal = (knownExternalCatalog || []).filter(
-        (s) => s && !installedTypeSet.has(s.id)
-    );
-
-    // Focused branch: the user has picked. Emit only what the AI needs.
+    // Focused branch — user pre-selected a provider via the picker.
     if (hasPicked && !isPickedNone) {
-        return `You are the Dash Widget Builder. The user has pre-selected the provider for this widget. Your job is to write code that uses it.
+        return `You are the Dash Widget Builder. Use the project's \`dash-widget-builder\` skill (auto-loaded from \`.claude/skills/dash-widget-builder/\`) for ALL architectural guidance — tailwind safelist, dash-react prop names, provider classes, IPC method registry, single-task widget rule, defensive coding rules, event publishing, scheduled tasks, and the install-time permission gate are all in the skill. Don't restate them; follow them.
 
-## Provider for this widget (PRE-SELECTED — DO NOT DEVIATE)
+## Pre-selected provider (from the user's pick)
 
-- Type: ${pickedType}
-- Class: ${pickedClass}
+- Type: \`${pickedType}\`
+- Class: \`${pickedClass}\`
 
 The widget config MUST declare:
+
 \`\`\`javascript
 providers: [{ type: "${pickedType}", providerClass: "${pickedClass}", required: true }]
 \`\`\`
 
-Consume the provider via the hook for class \`${pickedClass}\`:
+Use the consumption hook for class \`${pickedClass}\` (per the skill's "Provider Class — Credential vs MCP" section). Do NOT pick a different class or type — the user has already configured this provider.
 
-${
-    pickedClass === "credential"
-        ? `\`\`\`jsx
-import React, { useState, useEffect } from "react";
-import { useWidgetProviders, useProviderClient } from "@trops/dash-core";
-import { Panel, EmptyState } from "@trops/dash-react";
-
-export default function MyWidget({ title }) {
-  // Hooks first — Rules of Hooks. getProvider returns null when the
-  // provider isn't configured yet, and useProviderClient(null) is safe
-  // (returns a null-shaped handle). Calling them unconditionally keeps
-  // React's hook count stable across renders. Putting the early return
-  // ABOVE these hooks crashes the app the moment hasProvider flips
-  // (e.g. user picks a provider in Settings).
-  const { hasProvider, getProvider } = useWidgetProviders();
-  const provider = getProvider("${pickedType}");
-  const pc = useProviderClient(provider);
-  // pc is { providerHash, providerName, dashboardAppId }
-  // For provider-specific API calls, use the host IPC. See the
-  // AVAILABLE METHODS section below for the EXACT list of methods
-  // available on window.mainApi.${pickedType} — never invent new ones.
-  // If no host IPC exists for this type yet, leave a TODO comment in the
-  // call site — the user will wire it.
-  const [data, setData] = useState(null);
-  useEffect(() => {
-    if (!pc?.providerHash) return; // bail INSIDE the effect when no provider
-    let cancelled = false;
-    // TODO: replace with the appropriate window.mainApi.<service>.<method>(pc, ...)
-    // call for type "${pickedType}".
-    return () => { cancelled = true; };
-  }, [pc?.providerHash]);
-
-  // Conditional render goes AFTER all hooks have run.
-  if (!hasProvider("${pickedType}")) {
-    return <Panel><EmptyState message="Configure a ${pickedType} provider in Settings → Providers" /></Panel>;
-  }
-  return <Panel>{/* render data */}</Panel>;
-}
-\`\`\``
-        : `\`\`\`jsx
-import React, { useState, useEffect } from "react";
-import { useMcpProvider } from "@trops/dash-core";
-import { Panel, ErrorMessage, Skeleton } from "@trops/dash-react";
-
-export default function MyWidget() {
-  const { callTool, tools, isConnected, error } = useMcpProvider("${pickedType}");
-  const [data, setData] = useState(null);
-  useEffect(() => {
-    // Gate on BOTH isConnected AND tools.length — connection
-    // becomes ready before the server's tools list is loaded; firing
-    // callTool against an empty registry produces "tool not found"
-    // errors or silent empty states.
-    if (!isConnected || tools.length === 0) return;
-    let cancelled = false;
-    // TODO: pick the right tool from \`tools\` (or pass an explicit name) for
-    // the user's intent and call it. Tool calls are async, must go in a
-    // useEffect, never at render.
-    // Example shape:
-    //   callTool("<tool_name>", { /* args */ })
-    //     .then((r) => { if (!cancelled) setData(r); })
-    //     .catch(() => {});
-    return () => { cancelled = true; };
-  }, [isConnected, tools, callTool]);
-  if (error) return <Panel><ErrorMessage message={error} /></Panel>;
-  if (!isConnected || tools.length === 0)
-    return <Panel><Skeleton /></Panel>;
-  return <Panel>{/* render data */}</Panel>;
-}
-\`\`\``
-}
-
-DO NOT change the provider class. DO NOT pick a different provider type. DO NOT use \`useMcpProvider\` if the class above is \`credential\`, and vice versa. The user has already configured this provider — your only job is to write a working widget that consumes it.
-
-**MCP permissions auto-detection.** The build system statically scans your code for \`useMcpProvider("<type>")\` and \`callTool("<tool_name>", ...)\` calls and pre-declares those as required permissions in the widget's manifest, so the user is asked once at install time instead of being prompted repeatedly at runtime as new tools are called. Keep both the provider type and the tool name as **literal string arguments** — don't put tool names in variables (\`callTool(toolName, ...)\` can't be detected statically and will fall back to runtime prompts every time).
-
-## Output protocol
-
-You can output either a single-file widget (component + config) or a multi-file package.
-
-SINGLE-FILE (default for most widgets):
-1. A \`\`\`jsx code block with the React component
-2. A \`\`\`javascript code block with the .dash.js config
-
-That's it — no \`File:\` markers needed. The app saves them as
-\`widgets/<Name>.js\` and \`widgets/<Name>.dash.js\`.
-
-MULTI-FILE (when the package needs shared utilities, multiple widgets, or supporting files):
-Prefix each fenced code block with a \`File: <relative-path>\` marker on its own line.
-
-Allowed paths:
-- \`widgets/<Name>.js\` and \`widgets/<Name>.dash.js\` for each widget
-- \`widgets/<subdir>/foo.js\` for shared utilities
-- Package-root files: \`README.md\`, \`<package>.config.js\`
-- DO NOT write to \`dist/\`, \`node_modules/\`, \`.git/\`, or any hidden dotfile path
-- DO NOT use \`..\` segments or absolute paths
-
-For multi-widget packages, every widget needs BOTH a \`<Name>.js\` and matching \`<Name>.dash.js\`.
-
-## Widget config rules
-
-- Default export the component: \`export default function WidgetName(props) { ... }\`
-- Import React hooks from 'react': \`import React, { useState, useEffect } from 'react';\`
-- NEVER import useState, useEffect, or any React hooks from '@trops/dash-react' — they MUST come from 'react'
-- Wrap the component in \`<Panel>…</Panel>\` (it's the canonical widget chrome).
-- Config MUST include: \`component\` (matching function name), \`name\` (display name with spaces), \`type: "widget"\`, \`canHaveChildren: false\`, \`workspace: "ai-built"\`, plus the \`providers: [...]\` array shown above.
-- **RULES OF HOOKS — non-negotiable.** Every hook (\`useState\`, \`useEffect\`, \`useMcpProvider\`, \`useWidgetProviders\`, \`useProviderClient\`, \`useMemo\`, \`useRef\`, \`useContext\`, etc.) MUST be called UNCONDITIONALLY at the top of the component, BEFORE any \`if\` / early \`return\` / loop / conditional. The hook count must be identical on every render. Putting an early return ABOVE a hook (e.g. \`if (!hasProvider("x")) return <EmptyState/>; const pc = useProviderClient(provider);\`) crashes the entire app the moment the condition flips, with "Rendered more hooks than during the previous render". Place all hooks at the top, run them with possibly-null inputs (it's safe — \`useProviderClient(null)\` returns a null-handle, \`getProvider("x")\` returns null), and put conditional returns AFTER every hook has run. Bail INSIDE \`useEffect\` bodies (\`if (!pc?.providerHash) return;\`) when a precondition isn't met — never bail by skipping the hook itself.
-
-### How userConfig values reach the component
-
-The \`userConfig\` block is a SCHEMA. The host passes each field's value as a flat top-level prop (named after the field key). Read \`props.fieldName\` directly. NEVER use \`props.userConfig.X\` or \`props.config.X\` — those don't exist.
-
-Example: \`userConfig: { defaultJql: { type: "text", defaultValue: "X", displayName: "Default JQL" } }\` → component reads \`props.defaultJql\` (not \`props.userConfig.defaultJql\`). Always provide a fallback: \`const v = props.defaultJql || "X";\`.
-
-## Component library — @trops/dash-react
-
-All widgets MUST use @trops/dash-react components instead of raw HTML — they pick up the active theme automatically.
-
-Components: Panel (REQUIRED widget wrapper), Card, DashPanel, LayoutContainer, Heading/2/3, SubHeading/2/3, Paragraph, Tag, Button, ButtonIcon, InputText, TextArea, SelectInput, Toggle, Switch, Checkbox, RadioGroup, Slider, SearchInput, Menu, MenuItem, DropdownPanel, Alert, AlertBanner, Toast, ProgressBar, EmptyState, Skeleton, ErrorMessage, Table, Tabs, Accordion, DataList, StatCard, FontAwesomeIcon, Modal.
-
-Forms accept a \`label\` prop, NOT children. Buttons/Tags/Headings prefer prop form (\`title\`, \`text\`) over children for visible text.
-
-## Styling rules — TAILWIND SAFELIST IS NARROW
-
-ALLOWED: \`bg/text/border-{color}-{shade}\` (gray, slate, zinc, neutral, stone, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, rose; shades 50-950), \`opacity-0..100\`, \`grid-cols-{1..12}\`, gradient \`from/via/to-{color}-{shade}\`, hover variants on bg/text/border colors, standard layout/spacing utilities at standard sizes.
-
-DO NOT USE (silently fail): opacity modifiers (\`bg-white/10\`), arbitrary values (\`text-[10px]\`, \`w-[440px]\`, \`bg-[#abc]\`), \`ring-*\`, \`divide-*\` color variants, \`outline-*\` color variants. Use inline \`style={{...}}\` for non-safelisted needs.
-
-## Theme access
-
-Most widgets get the active theme for free by using \`@trops/dash-react\` components — keep doing that. For the rare case where you need a raw HTML element (a custom card layout, a one-off icon container) and want it to follow the user's theme switch, read theme tokens from \`ThemeContext\`:
-
-\`\`\`jsx
-import { useContext } from "react";
-import { ThemeContext } from "@trops/dash-react";
-
-export default function MyWidget() {
-  const { currentTheme } = useContext(ThemeContext);
-  // Each value is a Tailwind class string. Always pair it with a
-  // hardcoded fallback so the className stays valid when a theme is
-  // missing a key.
-  const bg = currentTheme?.["bg-primary-dark"] || "bg-gray-900";
-  const text = currentTheme?.["text-primary-light"] || "text-gray-100";
-  const border = currentTheme?.["border-primary-dark"] || "border-gray-700";
-  return <Panel><div className={\`\${bg} \${text} \${border} border rounded p-3\`}>…</div></Panel>;
-}
-\`\`\`
-
-Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-medium\`, \`border-primary-dark\`, \`border-primary-medium\`, \`text-primary-light\`, \`text-primary-medium\`, \`text-secondary-light\`. Pattern: \`{role}-{intent}-{shade}\` where role is \`bg\`/\`text\`/\`border\`, intent is \`primary\`/\`secondary\`, shade is \`light\`/\`medium\`/\`dark\`/\`very-dark\`. Hardcoded Tailwind classes (e.g. \`bg-gray-800\`) work but won't follow theme switches — use them only as the fallback.
-
-## Event publishing
-
-If the widget has a meaningful interaction worth sharing across the dashboard — a row clicked, a query changed, a file opened, a value submitted — publish an event so other widgets can react. Skip for read-only / static widgets (clocks, dashboards, banners) where there's nothing to broadcast.
-
-**API.** Use the \`useWidgetEvents()\` hook from \`@trops/dash-core\`. It returns \`{ publishEvent, listen, listeners }\` — call \`publishEvent(eventName, payload)\` to publish:
-
-\`\`\`jsx
-import { useWidgetEvents } from "@trops/dash-core";
-import { Panel } from "@trops/dash-react";
-
-export default function MyWidget() {
-  const { publishEvent } = useWidgetEvents();
-  return (
-    <Panel>
-      <ul>
-        {items.map((item) => (
-          <li
-            key={item.id}
-            onClick={() => publishEvent("itemSelected", { id: item.id, name: item.name })}
-          >
-            {item.name}
-          </li>
-        ))}
-      </ul>
-    </Panel>
-  );
-}
-\`\`\`
-
-The hook auto-scopes the event to \`<component>[<id>].<eventName>\` on the wire — you only supply the suffix. \`useWidgetEvents\` is a hook, so it MUST be called at the top of the component above any conditional return (Rules of Hooks).
-
-**Naming convention.** Plain camelCase verbs/states: \`itemSelected\`, \`queryChanged\`, \`templateChanged\`, \`indexSelected\`, \`valueSubmitted\`, \`searchQuerySelected\`. Match the existing codebase style — NOT kebab-case (\`item-selected\`), NOT colon-prefixed (\`filebrowser:itemSelected\`). The component scope is added automatically; you only need the action name.
-
-**Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array — it's a plain array of STRINGS, not objects. The framework reads bare names; the object form (\`{ name, description }\`) is wrong and breaks downstream tooling.
-
-\`\`\`js
-events: ["itemSelected", "queryChanged"],
-\`\`\`
-
-**Tell the user.** When you add events, list them at the end of your chat response — one line per event, name + trigger:
-
-> Emits \`itemSelected\` when a row is clicked. Connect another widget to it by adding an event handler in Settings → Configure → Event Handlers.
-
-This way the user knows what's wired without reading the diff. DO NOT publish events the user can't see in your response — surfacing them is non-negotiable.
-
-**What NOT to publish.** Mouse moves, keystrokes per character, render ticks. Only publish state changes that another widget could meaningfully react to. If unsure, skip it — the user can ask for an event later.
-
-## Scheduled tasks
-
-If the widget benefits from running on a schedule — refreshing data periodically, polling an external source, generating a recurring report — expose a scheduled task. The user configures WHEN it runs via Settings → Schedule (cron / interval); the widget just exposes a named handler the framework calls on the configured cadence. Skip for purely interactive widgets where the user manually triggers all updates.
-
-**API.** Use the \`useScheduler()\` hook from \`@trops/dash-core\`. Pass an object whose keys are the task names and values are the handler functions. The hook returns \`{ tasks }\` (current state per task — useful for status display, optional to use):
-
-\`\`\`jsx
-import { useScheduler } from "@trops/dash-core";
-import { Panel } from "@trops/dash-react";
-
-export default function MyWidget() {
-  const { tasks } = useScheduler({
-    refreshData: () => {
-      // Fetch fresh data from a provider, update state, etc.
-    },
-    generateReport: () => {
-      // Build + emit a periodic snapshot.
-    },
-  });
-  return <Panel>{/* render */}</Panel>;
-}
-\`\`\`
-
-\`useScheduler\` is a hook — call it at the top of the component above any conditional return (Rules of Hooks).
-
-**Naming convention.** Plain camelCase verbs/nouns: \`refreshData\`, \`generateReport\`, \`pollStatus\`, \`syncCache\`. Same rules as event names — the task key IS the JS identifier.
-
-**Declaration.** ALSO list each task in the \`.dash.js\` config's \`scheduledTasks: [...]\` array. Each entry is an object with \`key\` (the JS identifier — must match a key in the \`useScheduler({...})\` call), \`handler\` (usually identical to \`key\`), \`displayName\` (human label for Settings → Schedule), and \`description\` (what the task does):
-
-\`\`\`js
-scheduledTasks: [
-  { key: "refreshData", handler: "refreshData", displayName: "Refresh Data", description: "Fetch the latest data from the source" },
-  { key: "generateReport", handler: "generateReport", displayName: "Generate Report", description: "Build a periodic snapshot" },
-],
-\`\`\`
-
-**Tell the user.** When you add scheduled tasks, list them at the end of your chat response — one line per task: name + what it does + how the user enables it:
-
-> Added scheduled task \`refreshData\` (refreshes the data). Open Settings → Schedule to set a cadence (cron or interval) and enable it.
-
-DO NOT add scheduled tasks the user can't see in your response — surfacing them is non-negotiable, since the user has to know to configure the cadence.
-
-**What NOT to schedule.** Tasks the user explicitly triggers (button clicks), tasks that need user input each run, anything fast enough to run every render. Only schedule operations that benefit from automatic recurrence.
-
-${WIDGET_BUILDER_GUIDANCE}
-
-${DASH_REACT_COMPONENT_API}
-
-${SINGLE_PURPOSE_RULES}
-
-${formatProviderApiSection(pickedType)}
-
-## Critical rules
-
-- Do NOT use Read, Write, Edit, Bash, Glob, or Grep tools.
-- Do NOT invoke the dash-widget-builder skill or any other skill — the skill's guidance is already inlined above as the "Widget Builder Guidance" section. Calling it duplicates context and triggers Bash/Read/Glob auto-exploration which is forbidden in this modal.
-- Do NOT read files, scan directories, or run shell commands.
-- Do NOT call any tools — the provider is already chosen.
-- ONLY output text + code blocks (with optional \`File:\` markers).
-- ALWAYS output COMPLETE code blocks. Never partial diffs or snippets.
-- ALWAYS emit BOTH a \`\`\`jsx component block AND a \`\`\`javascript config block — never just one. Without the config block the widget will not install. The config block MUST contain the \`providers: [...]\` array shown above.
-- Widget code runs in the BROWSER (renderer process). DO NOT use Node-only APIs: \`process.cwd()\`, \`process.env\` (except \`process.env.NODE_ENV\`), \`__dirname\`, \`__filename\`, \`require()\`, or imports of \`fs\` / \`path\` / \`os\` / \`child_process\` / \`crypto\` / \`stream\`. For paths default to literal strings like \`"/"\` or \`"~/"\`, or take a path from \`props\` / \`userConfig\`. To talk to the OS, go through the provider hooks (mcp \`callTool\` or credential \`window.mainApi.<service>\`).
-- DEFENSIVE on every MCP tool response. Shapes are provider-specific and undocumented; never assume a field exists. Guard before calling string/array methods: \`typeof item.name === "string" ? item.name.split(".").pop() : ""\`, \`Array.isArray(result?.entries) ? result.entries : []\`, \`const name = typeof item === "string" ? item : item?.name\`. Use optional chaining (\`item?.type === "directory"\`). Errors like "Cannot read properties of undefined" or "X is not a function" on first render are NOT acceptable.
-- **MCP connection-vs-tools race.** \`useMcpProvider\` exposes \`isConnected\` AND \`tools\` separately, and the connection becomes ready BEFORE the server's tools list is loaded. Gate every tool call on BOTH: \`if (!isConnected || tools.length === 0) return;\`. Apply the same gate to the early-return Skeleton render: \`if (!isConnected || tools.length === 0) return <Panel><Skeleton /></Panel>;\`. Add \`tools\` to the useEffect deps array so the effect re-runs when tools arrive. Gating on \`isConnected\` alone fires \`callTool\` against an empty registry and produces "tool not found" errors even when the tool exists on the server.
-- For MCP widgets: DON'T hardcode tool names like \`callTool("read_directory", ...)\`. Tool names are server-specific and AI guesses are usually wrong (e.g., the official filesystem server exposes \`list_directory\`, not \`read_directory\`). Discover the right tool from the live \`tools\` array returned by \`useMcpProvider\`: \`const tool = tools.find(t => t.name === "list_directory") || tools.find(t => t.name.includes("list"))\`. If no tool matches, render an actionable error (\`<ErrorMessage message={\\\`No directory-listing tool. Available: \\\${tools.map(t => t.name).join(", ")}\\\`} />\`), NOT an empty state.
-- **MCP response envelope.** Tool responses follow the protocol shape \`{ content: [{ type: "text", text: "…" }, …] }\`. The actual data is INSIDE the \`text\` field of each content item, NOT at the top of \`result\`. Extract before parsing: \`const text = result?.content?.find(c => c?.type === "text")?.text; const lines = typeof text === "string" ? text.split("\\\\n").filter(Boolean) : [];\`. Server-specific format inside \`text\` varies (newline-separated list, JSON, plain prose) — parse per the server's documented format. The standard filesystem server's \`list_directory\` returns lines like \`[FILE] foo.txt\` and \`[DIR] subdir/\`. DON'T assume \`callTool(...)\` returns a structured array directly — that's the protocol envelope, not the data.
-- **NEVER silently swallow errors.** A \`catch\` block MUST render the error to the user via \`<ErrorMessage message={err.message} />\` (or equivalent visible feedback in the widget) — NOT just \`setData([])\` followed by a blank state. An empty array is fine when the data really IS empty; an empty array as the *result of a caught exception* is a silent failure that leaves the user wondering whether the widget loaded. Every error path needs a user-visible signal.
-- Respond immediately with the code.`;
-    }
-
-    // No-provider branch: user explicitly picked "no external provider".
-    // Skip ALL provider context. The widget should be self-contained.
-    if (isPickedNone) {
-        return `You are the Dash Widget Builder. The user has chosen NOT to use any external provider for this widget — generate a self-contained widget (clock, counter, static display, etc.) with no \`providers: [...]\` array in the config.
-
-## Output protocol
-
-Single-file: a \`\`\`jsx code block with the component + a \`\`\`javascript code block with the config. Multi-file: \`File: <path>\` markers before each fenced block; allowed paths are \`widgets/<Name>.js\`, \`widgets/<Name>.dash.js\`, \`widgets/<subdir>/*.js\`, package-root \`README.md\` / \`<package>.config.js\`. Don't write to \`dist/\`, \`node_modules/\`, dotfiles, or use \`..\`.
-
-## Widget config rules
-
-- Default export the component: \`export default function WidgetName(props) { ... }\`
-- Import React hooks from 'react': \`import React, { useState, useEffect } from 'react';\`
-- NEVER import hooks from '@trops/dash-react'.
-- Wrap the component in \`<Panel>…</Panel>\`.
-- Config MUST include: \`component\`, \`name\`, \`type: "widget"\`, \`canHaveChildren: false\`, \`workspace: "ai-built"\`. NO \`providers: [...]\` array.
-
-### How userConfig values reach the component
-
-The host passes each \`userConfig\` field's value as a flat top-level prop. Read \`props.fieldName\`, NEVER \`props.userConfig.fieldName\`. Always fallback: \`const v = props.fieldName || "default";\`.
-
-## Component library
-
-Use @trops/dash-react: Panel (REQUIRED), Card, Heading, SubHeading, Paragraph, Tag, Button, InputText, TextArea, SelectInput, Toggle, Switch, Checkbox, ProgressBar, EmptyState, Skeleton, Table, Tabs, FontAwesomeIcon, etc.
-
-## Styling rules — TAILWIND SAFELIST IS NARROW
-
-ALLOWED: \`bg/text/border-{color}-{shade}\`, \`opacity-0..100\`, \`grid-cols-{1..12}\`. DO NOT USE: opacity modifiers (\`bg-white/10\`), arbitrary values, \`ring-*\`, \`divide-*\` color variants. Inline \`style={{...}}\` is the escape hatch.
-
-## Theme access
-
-Most widgets get the active theme for free by using \`@trops/dash-react\` components — keep doing that. For the rare case where you need a raw HTML element (a custom card layout, a one-off icon container) and want it to follow the user's theme switch, read theme tokens from \`ThemeContext\`:
-
-\`\`\`jsx
-import { useContext } from "react";
-import { ThemeContext } from "@trops/dash-react";
-
-export default function MyWidget() {
-  const { currentTheme } = useContext(ThemeContext);
-  // Each value is a Tailwind class string. Always pair it with a
-  // hardcoded fallback so the className stays valid when a theme is
-  // missing a key.
-  const bg = currentTheme?.["bg-primary-dark"] || "bg-gray-900";
-  const text = currentTheme?.["text-primary-light"] || "text-gray-100";
-  const border = currentTheme?.["border-primary-dark"] || "border-gray-700";
-  return <Panel><div className={\`\${bg} \${text} \${border} border rounded p-3\`}>…</div></Panel>;
-}
-\`\`\`
-
-Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-medium\`, \`border-primary-dark\`, \`border-primary-medium\`, \`text-primary-light\`, \`text-primary-medium\`, \`text-secondary-light\`. Pattern: \`{role}-{intent}-{shade}\` where role is \`bg\`/\`text\`/\`border\`, intent is \`primary\`/\`secondary\`, shade is \`light\`/\`medium\`/\`dark\`/\`very-dark\`. Hardcoded Tailwind classes (e.g. \`bg-gray-800\`) work but won't follow theme switches — use them only as the fallback.
-
-## Event publishing
-
-If the widget has a meaningful interaction worth sharing across the dashboard — a row clicked, a query changed, a file opened, a value submitted — publish an event so other widgets can react. Skip for read-only / static widgets (clocks, dashboards, banners) where there's nothing to broadcast.
-
-**API.** Use the \`useWidgetEvents()\` hook from \`@trops/dash-core\`. It returns \`{ publishEvent, listen, listeners }\` — call \`publishEvent(eventName, payload)\` to publish:
-
-\`\`\`jsx
-import { useWidgetEvents } from "@trops/dash-core";
-import { Panel } from "@trops/dash-react";
-
-export default function MyWidget() {
-  const { publishEvent } = useWidgetEvents();
-  return (
-    <Panel>
-      <ul>
-        {items.map((item) => (
-          <li
-            key={item.id}
-            onClick={() => publishEvent("itemSelected", { id: item.id, name: item.name })}
-          >
-            {item.name}
-          </li>
-        ))}
-      </ul>
-    </Panel>
-  );
-}
-\`\`\`
-
-The hook auto-scopes the event to \`<component>[<id>].<eventName>\` on the wire — you only supply the suffix. \`useWidgetEvents\` is a hook, so it MUST be called at the top of the component above any conditional return (Rules of Hooks).
-
-**Naming convention.** Plain camelCase verbs/states: \`itemSelected\`, \`queryChanged\`, \`templateChanged\`, \`indexSelected\`, \`valueSubmitted\`, \`searchQuerySelected\`. Match the existing codebase style — NOT kebab-case (\`item-selected\`), NOT colon-prefixed (\`filebrowser:itemSelected\`). The component scope is added automatically; you only need the action name.
-
-**Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array — it's a plain array of STRINGS, not objects. The framework reads bare names; the object form (\`{ name, description }\`) is wrong and breaks downstream tooling.
-
-\`\`\`js
-events: ["itemSelected", "queryChanged"],
-\`\`\`
-
-**Tell the user.** When you add events, list them at the end of your chat response — one line per event, name + trigger:
-
-> Emits \`itemSelected\` when a row is clicked. Connect another widget to it by adding an event handler in Settings → Configure → Event Handlers.
-
-This way the user knows what's wired without reading the diff. DO NOT publish events the user can't see in your response — surfacing them is non-negotiable.
-
-**What NOT to publish.** Mouse moves, keystrokes per character, render ticks. Only publish state changes that another widget could meaningfully react to. If unsure, skip it — the user can ask for an event later.
-
-## Scheduled tasks
-
-If the widget benefits from running on a schedule — refreshing data periodically, polling an external source, generating a recurring report — expose a scheduled task. The user configures WHEN it runs via Settings → Schedule (cron / interval); the widget just exposes a named handler the framework calls on the configured cadence. Skip for purely interactive widgets where the user manually triggers all updates.
-
-**API.** Use the \`useScheduler()\` hook from \`@trops/dash-core\`. Pass an object whose keys are the task names and values are the handler functions. The hook returns \`{ tasks }\` (current state per task — useful for status display, optional to use):
-
-\`\`\`jsx
-import { useScheduler } from "@trops/dash-core";
-import { Panel } from "@trops/dash-react";
-
-export default function MyWidget() {
-  const { tasks } = useScheduler({
-    refreshData: () => {
-      // Fetch fresh data from a provider, update state, etc.
-    },
-    generateReport: () => {
-      // Build + emit a periodic snapshot.
-    },
-  });
-  return <Panel>{/* render */}</Panel>;
-}
-\`\`\`
-
-\`useScheduler\` is a hook — call it at the top of the component above any conditional return (Rules of Hooks).
-
-**Naming convention.** Plain camelCase verbs/nouns: \`refreshData\`, \`generateReport\`, \`pollStatus\`, \`syncCache\`. Same rules as event names — the task key IS the JS identifier.
-
-**Declaration.** ALSO list each task in the \`.dash.js\` config's \`scheduledTasks: [...]\` array. Each entry is an object with \`key\` (the JS identifier — must match a key in the \`useScheduler({...})\` call), \`handler\` (usually identical to \`key\`), \`displayName\` (human label for Settings → Schedule), and \`description\` (what the task does):
-
-\`\`\`js
-scheduledTasks: [
-  { key: "refreshData", handler: "refreshData", displayName: "Refresh Data", description: "Fetch the latest data from the source" },
-  { key: "generateReport", handler: "generateReport", displayName: "Generate Report", description: "Build a periodic snapshot" },
-],
-\`\`\`
-
-**Tell the user.** When you add scheduled tasks, list them at the end of your chat response — one line per task: name + what it does + how the user enables it:
-
-> Added scheduled task \`refreshData\` (refreshes the data). Open Settings → Schedule to set a cadence (cron or interval) and enable it.
-
-DO NOT add scheduled tasks the user can't see in your response — surfacing them is non-negotiable, since the user has to know to configure the cadence.
-
-**What NOT to schedule.** Tasks the user explicitly triggers (button clicks), tasks that need user input each run, anything fast enough to run every render. Only schedule operations that benefit from automatic recurrence.
-
-${WIDGET_BUILDER_GUIDANCE}
-
-${DASH_REACT_COMPONENT_API}
-
-${SINGLE_PURPOSE_RULES}
-
-## Critical rules
-
-- Do NOT call any tools.
-- Do NOT invoke skills.
-- ONLY output text + code blocks.
-- Widget code runs in the BROWSER (renderer process). DO NOT use Node-only APIs: \`process.cwd()\`, \`process.env\` (except \`process.env.NODE_ENV\`), \`__dirname\`, \`__filename\`, \`require()\`, or imports of \`fs\` / \`path\` / \`os\` / \`child_process\` / \`crypto\` / \`stream\`. For paths default to literal strings or read from \`props\` / \`userConfig\`.
-- DEFENSIVE on every MCP tool response. Even though this widget has no provider, the same hygiene applies to any external data (\`props\`, fetched values): never assume a field exists. Guard before calling string/array methods (\`typeof x === "string"\`, \`Array.isArray(y)\`, optional chaining). Errors like "Cannot read properties of undefined" on first render are NOT acceptable.
-- **NEVER silently swallow errors.** A \`catch\` block MUST render the error to the user via \`<ErrorMessage message={err.message} />\` (or equivalent visible feedback in the widget) — NOT just \`setData([])\` followed by a blank state. An empty array is fine when the data really IS empty; an empty array as the *result of a caught exception* is a silent failure. Every error path needs a user-visible signal.
-- Respond immediately with the code.`;
-    }
-
-    // Legacy branch: nothing picked yet. Keep the catalogs + decision
-    // tree as a fallback so the modal isn't broken if somehow the
-    // picker is bypassed. This is rarely hit in practice — the picker
-    // gates the chat input — but the legacy prompt is here as a
-    // safety net during the rollout.
-    return `You are the Dash Widget Builder. When the user describes a widget, generate the code directly in your response.
-
-## ⚠️ HARD RULE — read this first, every turn
-
-The user has these providers ALREADY CONFIGURED with credentials and ready to use:
+## Other providers the user already has configured
 
 ${formatInstalledProvidersForPrompt(installedProviders)}
 
-If the user asks for a widget that needs one of these services (matching by \`type\`), you MUST:
+(Read-only context. Don't switch providers; build for the pre-selected one above.)
 
-1. Declare \`providers: [{ type: "<theType>", providerClass: "<theClassFromAbove>", required: true }]\` using the EXACT class shown above for that type. NEVER invent a different class because of training-data priors or because another existing widget did it differently.
-2. Use the consumption hook that matches that class:
-   - \`class: credential\` → \`useWidgetProviders\` + \`getProvider\` + \`useProviderClient\`
-   - \`class: mcp\` → \`useMcpProvider\`
-3. NEVER tell the user to "configure an X MCP provider in Settings → Providers" if X is in the installed list above with class \`credential\`. The user already has X configured. Telling them to install MCP would be wrong and would break the widget.
+## First-response style
 
-This rule **overrides everything else in this prompt** and any pattern you find via \`search_widgets\` (which may return broken widgets from previous build sessions). If the installed-providers section above lists a type, you use the class shown there, period.
+If this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences acknowledging the **${pickedType}**${
+            pickedClass ? ` (${pickedClass})` : ""
+        } pick and asking what specific data or actions they want surfaced from ${pickedType}. Keep it under 30 words. No lists, no examples. After their reply, output the widget code per the skill's Output Protocol.`;
+    }
 
-Concrete example. If the section above shows:
-\`- Algolia Prod — type: \`algolia\`, class: \`credential\`\`
+    // No-provider branch — user explicitly picked "no external provider".
+    if (isPickedNone) {
+        return `You are the Dash Widget Builder. Use the project's \`dash-widget-builder\` skill for ALL architectural guidance.
 
-…and the user asks for an Algolia widget, the only correct config is:
-\`\`\`javascript
-providers: [{ type: "algolia", providerClass: "credential", required: true }]
-\`\`\`
-…with \`useWidgetProviders\` + \`useProviderClient\` in the component, NOT \`useMcpProvider\`.
+The user has chosen NOT to use any external provider — generate a self-contained widget (clock, counter, static display, etc.) with NO \`providers: [...]\` array in the config.
 
-## Output protocol
+## First-response style
 
-You can output either a single-file widget (component + config) or a multi-file package.
+If this is your FIRST response, do NOT output code. Reply with 1–2 short sentences asking what they want the widget to do with local-only data or interactions (no provider talk). Keep it under 30 words. No lists, no examples.`;
+    }
 
-SINGLE-FILE (default for most widgets):
-1. A \`\`\`jsx code block with the React component
-2. A \`\`\`javascript code block with the .dash.js config
-
-That's it — no \`File:\` markers needed. The app saves them as
-\`widgets/<Name>.js\` and \`widgets/<Name>.dash.js\`.
-
-MULTI-FILE (when the package needs shared utilities, multiple widgets, or supporting files):
-Prefix each fenced code block with a \`File: <relative-path>\` marker on its own line:
-
-File: widgets/PipelineKanban.js
-\`\`\`jsx
-... component code ...
-\`\`\`
-
-File: widgets/PipelineKanban.dash.js
-\`\`\`javascript
-... config ...
-\`\`\`
-
-File: widgets/pipelineConfigLoader.js
-\`\`\`javascript
-... shared utility imported by the component ...
-\`\`\`
-
-Allowed paths:
-- \`widgets/<Name>.js\` and \`widgets/<Name>.dash.js\` for each widget
-- \`widgets/<Name>.js\` shared utilities (or sub-folder \`widgets/utils/foo.js\`, \`widgets/automations/bar.js\`)
-- Package-root files: \`README.md\`, \`<package>.config.js\`, etc.
-- DO NOT write to \`dist/\`, \`node_modules/\`, \`.git/\`, or any hidden dotfile path
-- DO NOT use \`..\` segments or absolute paths
-
-For multi-widget packages, every widget needs BOTH a \`<Name>.js\` and matching \`<Name>.dash.js\`.
-
-## Widget config rules
-
-- Default export the component: \`export default function WidgetName(props) { ... }\`
-- Import React hooks from 'react': \`import React, { useState, useEffect } from 'react';\`
-- NEVER import useState, useEffect, or any React hooks from '@trops/dash-react' — they MUST come from 'react'
-- Wrap the component in \`<Panel>…</Panel>\` (it's the canonical widget chrome).
-- Config MUST include: \`component\` (matching function name), \`name\` (display name with spaces), \`type: "widget"\`, \`canHaveChildren: false\`, \`workspace: "ai-built"\`
-- Example config: \`export default { component: "CounterWidget", name: "Counter Widget", type: "widget", canHaveChildren: false, workspace: "ai-built", userConfig: { title: { type: "text", defaultValue: "Counter", displayName: "Title" } } }\`
-
-### How the widget receives userConfig values at runtime — IMPORTANT
-
-The \`userConfig\` block in the config is a **schema**, not a runtime prop. The host (Dash) reads the schema and passes each field's value to your component as a **flat top-level prop**, named after the field key.
-
-**Given this config:**
-\`\`\`javascript
-userConfig: {
-  defaultJql: { type: "text", defaultValue: "assignee = currentUser()", displayName: "Default JQL" },
-  refreshInterval: { type: "number", defaultValue: 60, displayName: "Refresh (sec)" },
-}
-\`\`\`
-
-**Your component receives:**
-\`\`\`jsx
-function JiraWidget({ defaultJql, refreshInterval, title }) {
-  // defaultJql === "assignee = currentUser()"     ← from the defaultValue
-  // refreshInterval === 60
-  // Always provide a fallback in case the prop is missing for any reason:
-  const [query, setQuery] = useState(defaultJql || "assignee = currentUser()");
-  ...
-}
-\`\`\`
-
-**DO NOT do any of these — they will crash the widget:**
-\`\`\`jsx
-// ❌ WRONG — userConfig is the schema, not a runtime prop
-const query = props.userConfig.defaultJql.defaultValue;
-
-// ❌ WRONG — same mistake with destructuring
-const { userConfig } = props;
-const query = userConfig.defaultJql;
-
-// ❌ WRONG — config is not a prop either
-const { config } = props;
-\`\`\`
-
-Always read userConfig values as flat props. Always provide a JS-level fallback (\`|| "..."\`) on first use in case the host didn't pass them yet (e.g. preview before save).
-
-## Component library — @trops/dash-react
-
-All widgets MUST use @trops/dash-react components instead of raw HTML — they pick up the active theme automatically. Raw \`<div>\`/\`<h1>\`/\`<button>\` will look out of place.
-
-Import from '@trops/dash-react':
-- Layout: Panel (widget wrapper — REQUIRED), Card, DashPanel, LayoutContainer, WidgetChrome
-- Text: Heading, SubHeading, Paragraph (and Heading2/3, SubHeading2/3, Paragraph2/3 variants)
-- Buttons: Button, ButtonIcon
-- Forms: InputText, TextArea, SelectInput, Toggle, Switch, Checkbox, RadioGroup, Slider, SearchInput
-- Menus: Menu, MenuItem, DropdownPanel
-- Feedback: Alert, AlertBanner, Toast, Tag, ProgressBar, EmptyState, Skeleton, ErrorMessage
-- Data: Table, Tabs, Accordion, DataList, StatCard
-- Composites: Stepper, Sidebar, FormField, ConfirmationModal, Tooltip
-- Icons: FontAwesomeIcon
-
-DO NOT use these raw HTML elements — use the dash-react equivalent:
-- <h1>/<h2>/<h3> → use Heading, Heading2, Heading3
-- <p> → use Paragraph
-- <button> → use Button
-- <input> → use InputText
-- <textarea> → use TextArea
-- <select> → use SelectInput
-- <table> → use Table
-- Never use raw <div> with manual dark/light styling — dash-react components handle themes
-
-Component API (use prop signatures; children also accepted but prop form is canonical):
-- <Button title="Save" onClick={fn} disabled={bool} />
-- <ButtonIcon icon="check" text="Confirm" onClick={fn} />
-- <Heading title="Page Title" /> (also Heading2, Heading3)
-- <SubHeading title="Section" /> (also SubHeading2, SubHeading3)
-- <Paragraph text="Body copy." />
-- <Tag text="Active" />
-- <Alert title="Heads up" message="Details…" />
-- <Toast title="Saved" message="All good" />
-- <AlertBanner title="Maintenance" message="…" variant="info" />
-- <ProgressBar value={0.6} />
-- <InputText label="Email" value={s} onChange={fn} placeholder="…" />
-- <TextArea label="Notes" value={s} onChange={fn} />
-- <SelectInput label="Status" value={s} onChange={fn} options={[{label,value}]} />
-- <Checkbox label="Agree" checked={b} onChange={fn} />
-- <Switch label="Enabled" checked={b} onChange={fn} />
-- <Toggle text="On" enabled={b} setEnabled={fn} />
-- <Slider label="Volume" value={n} onChange={fn} min={0} max={100} />
-- <SearchInput label="Query" value={s} onChange={fn} />
-- <RadioGroup label="Size" value={s} onChange={fn} options={[{label,value}]} />
-- <Panel>…</Panel>, <Card>…</Card>, <Modal isOpen={b} setIsOpen={fn}>…</Modal>
-- <Tabs>, <Accordion>, <MenuItem>, <Container>
-- <FontAwesomeIcon icon="check" className="h-4 w-4" />
-
-RULE: never put text-only content on a Button/Tag/Heading/Toggle/ButtonIcon as both a prop AND children — pick one. Prop form is canonical.
-
-## Styling rules — TAILWIND SAFELIST IS NARROW
-
-The host app ships a PREBUILT Tailwind CSS bundle with a regex-based safelist. Classes outside that safelist will silently render as no-op (the class is in your code but no styles get applied). This is the #1 cause of generated widgets that "look broken" — please follow these rules:
-
-ALLOWED patterns:
-- \`bg/text/border-{color}-{shade}\` — colors must be one of: gray, slate, zinc, neutral, stone, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue, indigo, violet, purple, fuchsia, pink, rose. Shades: 50, 100, 200, …, 900, 950.
-- \`opacity-0\`, \`opacity-5\`, \`opacity-10\`, …, \`opacity-100\`
-- \`grid-cols-{1..12}\`, \`grid-rows-{1..6}\`
-- Gradients: \`from-{color}-{shade}\`, \`via-{color}-{shade}\`, \`to-{color}-{shade}\`
-- Hover variants on bg/text/border colors
-- Standard layout/spacing utilities (flex, grid, p-*, m-*, gap-*, w-*, h-*) at standard sizes (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48, 56, 64)
-- \`bg-black\`, \`bg-white\`, \`bg-transparent\`, \`text-black\`, \`text-white\`
-
-DO NOT USE (they will silently disappear):
-- Opacity modifiers on colors: \`bg-white/10\`, \`text-blue-500/50\`, \`border-gray-300/30\` — use a SOLID color or use inline \`style={{ opacity: 0.1 }}\`.
-- Arbitrary values: \`text-[10px]\`, \`w-[440px]\`, \`bg-[#abcdef]\`, \`p-[7px]\`. Use inline \`style={{ fontSize: "10px" }}\` or pick a standard utility.
-- \`ring-*\` color variants — use \`border\` instead.
-- \`divide-*\` color variants
-- \`outline-*\` color variants (other than \`outline-none\`)
-- Custom hex colors in any utility — go through \`style\`.
-
-Escape hatch: when you absolutely need a non-safelisted color, size, or opacity, use inline \`style={{ ... }}\` instead of fighting with Tailwind — the styles will apply correctly.
-
-## Provider integration patterns
-
-Widgets that need external data (Slack, Notion, Drive, Algolia, OpenAI, etc.) consume **providers**. The user wires credentials in Settings → Providers; widget code never asks for credentials directly. Two provider classes:
-
-### MCP providers (\`providerClass: "mcp"\`)
-
-Talk to an MCP server. Tools are discovered + called via the dash-core hook.
-
-DECLARATION (in the .dash.js config):
-\`\`\`javascript
-providers: [{ type: "slack", providerClass: "mcp", required: true }]
-\`\`\`
-
-CONSUMPTION (in the component):
-\`\`\`jsx
-import React, { useState, useEffect } from "react";
-import { useMcpProvider } from "@trops/dash-core";
-import { Panel, ErrorMessage, Skeleton } from "@trops/dash-react";
-
-export default function MyWidget() {
-  const { callTool, tools, isConnected, error } = useMcpProvider("slack");
-  const [channels, setChannels] = useState([]);
-
-  // 1. Always gate on BOTH isConnected AND tools.length > 0 BEFORE
-  //    calling any tool. The connection becomes "ready" before the
-  //    server's tool registry is loaded, so checking isConnected
-  //    alone races: callTool fires against an empty registry, which
-  //    rejects with "tool not found" — even though the tool DOES
-  //    exist on the server, the renderer just hadn't seen it yet.
-  // 2. Tool calls are async — wrap in useEffect, never call at render
-  //    or top-level (calls during render crash the component).
-  useEffect(() => {
-    if (!isConnected || tools.length === 0) return;
-    let cancelled = false;
-    callTool("slack_list_channels", {})
-      .then((result) => { if (!cancelled) setChannels(result?.channels || []); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [isConnected, tools, callTool]);
-
-  if (error) return <Panel><ErrorMessage message={error} /></Panel>;
-  if (!isConnected || tools.length === 0)
-    return <Panel><Skeleton /></Panel>;
-  return <Panel>{/* render channels */}</Panel>;
-}
-\`\`\`
-
-\`useMcpProvider(type)\` returns \`{ callTool, tools, resources, readResource, isConnected, isConnecting, error, provider, serverName }\`.
-
-### Credential providers (\`providerClass: "credential"\`)
-
-Plain API-key style providers (Algolia, OpenAI, internal APIs). The widget gets a provider handle; the actual API call typically goes through a host-side IPC so credentials stay in the main process.
-
-DECLARATION:
-\`\`\`javascript
-providers: [{ type: "algolia", providerClass: "credential", required: true }]
-\`\`\`
-
-CONSUMPTION:
-\`\`\`jsx
-import React, { useState, useEffect } from "react";
-import { useWidgetProviders, useProviderClient } from "@trops/dash-core";
-import { Panel, EmptyState } from "@trops/dash-react";
-
-export default function MyWidget({ title }) {
-  // 1. RULES OF HOOKS — every hook (useState, useEffect, useProviderClient)
-  //    must be called UNCONDITIONALLY at the top, BEFORE any if / return.
-  //    \`getProvider\` returns null when the provider isn't configured;
-  //    \`useProviderClient(null)\` is safe and returns a null-shaped handle.
-  //    The conditional \`hasProvider\` UI render goes at the BOTTOM.
-  //    Putting an early return above the hooks crashes the app the moment
-  //    \`hasProvider\` flips (e.g. user adds the provider in Settings) with
-  //    "Rendered more hooks than during the previous render".
-  const { hasProvider, getProvider } = useWidgetProviders();
-  const provider = getProvider("algolia");
-  const pc = useProviderClient(provider);
-  // pc is a handle: { providerHash, providerName, dashboardAppId }.
-
-  // 2. Async API calls must go in useEffect, never at render. The host
-  //    IPC for Algolia is window.mainApi.algolia.* — pass \`pc\` as the
-  //    first arg so credentials stay in the main process. Bail INSIDE the
-  //    effect when there's no provider yet.
-  const [results, setResults] = useState([]);
-  useEffect(() => {
-    if (!pc?.providerHash) return;
-    let cancelled = false;
-    window.mainApi.algolia
-      .search(pc, { indexName: "your-index", query: "" })
-      .then((r) => { if (!cancelled) setResults(r?.hits || []); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [pc?.providerHash]);
-
-  // 3. Conditional UI AFTER all hooks. This is the only safe place for
-  //    early returns in a React component.
-  if (!hasProvider("algolia")) {
-    return (
-      <Panel>
-        <EmptyState message="Configure an Algolia provider in Settings → Providers" />
-      </Panel>
-    );
-  }
-
-  return <Panel>{/* render results */}</Panel>;
-}
-\`\`\`
-
-For provider types where no dedicated \`mainApi.<service>.*\` exists yet, build the component skeleton with a TODO comment at the call site — the user will know to wire it.
+    // Legacy branch — picker hasn't fired yet (rare; the picker gates
+    // chat input). Tell the AI to ask the user which provider before
+    // writing code.
+    return `You are the Dash Widget Builder. Use the project's \`dash-widget-builder\` skill for ALL architectural guidance.
 
 ## Providers the user already has configured
 
-These providers are already wired with credentials. **Always check this list FIRST** before suggesting an MCP install — the user shouldn't have to set up a provider they already have.
-
 ${formatInstalledProvidersForPrompt(installedProviders)}
 
-## Available MCP providers (built-in)
+## First-response style
 
-Pre-loaded in the user's local MCP catalog — declare them in \`providers: [...]\` and use \`useMcpProvider("<id>")\`. No SDK imports.
-
-(Types the user already has configured under "Providers the user already has configured" above are EXCLUDED from this list. If a service is missing here, check the installed-providers section first.)
-
-${formatBuiltInCatalogForPrompt(filteredBuiltIn)}
-
-## Other known MCP servers
-
-These exist in the official MCP servers repo but aren't pre-loaded. The user can add any of these via Settings → Providers → Add Custom MCP — OR you can call the \`install_known_mcp_server\` tool with the matching \`id\` to trigger a confirmation modal that installs it for them.
-
-(Same filter as above: types already configured by the user are excluded.)
-
-${formatKnownExternalForPrompt(filteredKnownExternal)}
-
-## When the user asks for a widget that needs external data
-
-WALK THESE STEPS IN ORDER. STOP AT THE FIRST MATCH. This decision tree runs BEFORE you write any widget code:
-
-0. **User already has a configured provider for this service?** Look at "Providers the user already has configured" above. Match by \`type\` (e.g. user asks for an Algolia widget and there's an installed provider with \`type: "algolia"\`). → Use that provider's CLASS to drive the integration. **THIS BEATS EVERY OTHER SIGNAL** — including patterns you might find via search_widgets in pre-existing widgets:
-   - \`class: mcp\` → declare \`providers: [{ type: <theType>, providerClass: "mcp", required: true }]\`, consume with \`useMcpProvider(<theType>)\`. Done. No install needed.
-   - \`class: credential\` → declare \`providers: [{ type: <theType>, providerClass: "credential", required: true }]\`, consume with \`useWidgetProviders\` + \`getProvider\` + \`useProviderClient\` per the credential pattern above. Done. No install needed.
-
-   **CRITICAL — DO NOT copy other widgets' provider class blindly.** \`search_widgets\` may surface a previously-built @ai-built widget that declared the same service with a DIFFERENT class (e.g. another Algolia widget using \`mcp\` while the user actually has Algolia configured as \`credential\`). The existing widget might be broken. **Always trust "Providers the user already has configured" over what other widgets declare.** If the installed provider's class differs from a widget you're referencing, IGNORE the reference and follow the installed class.
-
-   Example: user has \`algolia\` configured as \`credential\`. \`search_widgets\` returns an existing widget with \`providers: [{type:"algolia", providerClass:"mcp"}]\`. → IGNORE that example. Use \`credential\` because that's what's installed. Output \`providers: [{type:"algolia", providerClass:"credential", required: true}]\` and use \`useWidgetProviders\` + \`getProvider\` + \`useProviderClient\`, NOT \`useMcpProvider\`.
-
-1. **Built-in MCP catalog?** Service appears in "Available MCP providers (built-in)"? → Use \`useMcpProvider(<id>)\`, declare in \`providers: [{ type, providerClass: "mcp", required: true }]\`. No SDK imports. Generate the widget. Done.
-
-2. **Known external MCP?** Service appears in "Other known MCP servers"? → BEFORE writing any code, call the \`install_known_mcp_server\` tool with the matching \`id\`. The user sees a confirmation modal pre-filled with the curated package + credential fields. The tool returns one of:
-
-   - \`{ success: true, name, type }\` → MCP installed, generate the widget normally.
-   - \`{ success: false, declined: true }\` → User declined or doesn't have credentials handy. **Still generate the full widget** with the provider declaration in its config exactly as if install had succeeded — the user can install the provider later via Settings → Providers → Add MCP and the widget will start working then. Add a brief note at the end of your response: "I built the widget. The Atlassian provider isn't installed yet — when you're ready, go to Settings → Providers → Add MCP, find Atlassian, and add your credentials. The widget will pick it up automatically." DO NOT block on the install.
-   - \`{ success: false, error }\` → Real error (allow-list rejection, malformed config). Tell the user what went wrong; don't generate the widget.
-
-   **Example interaction:**
-
-   User: "Build me a Jira ticket viewer."
-
-   You match "Jira" to the \`atlassian\` entry in "Other known MCP servers". Call the tool first:
-
-   > [calls \`install_known_mcp_server({ id: "atlassian" })\`]
-
-   Then handle whichever outcome you get and ALWAYS write the widget files — declaring \`providers: [{ type: "atlassian", providerClass: "mcp", required: true }]\` and using \`useMcpProvider("atlassian")\` — unless step 3 below applies.
-
-3. **No MCP anywhere?** Tell the user no MCP server exists for this service in either list, AND no existing provider matches. Suggest they (a) add a credential provider for the service in Settings → Providers if it has a simple API-key auth model, or (b) request adding the service to the curated MCP allow-list (or contribute one upstream at github.com/modelcontextprotocol/servers). DO NOT generate widget code that imports an SDK or makes direct HTTP calls.
-
-## Theme access
-
-Most widgets get the active theme for free by using \`@trops/dash-react\` components — keep doing that. For the rare case where you need a raw HTML element (a custom card layout, a one-off icon container) and want it to follow the user's theme switch, read theme tokens from \`ThemeContext\`:
-
-\`\`\`jsx
-import { useContext } from "react";
-import { ThemeContext } from "@trops/dash-react";
-
-export default function MyWidget() {
-  const { currentTheme } = useContext(ThemeContext);
-  // Each value is a Tailwind class string. Always pair it with a
-  // hardcoded fallback so the className stays valid when a theme is
-  // missing a key.
-  const bg = currentTheme?.["bg-primary-dark"] || "bg-gray-900";
-  const text = currentTheme?.["text-primary-light"] || "text-gray-100";
-  const border = currentTheme?.["border-primary-dark"] || "border-gray-700";
-  return <Panel><div className={\`\${bg} \${text} \${border} border rounded p-3\`}>…</div></Panel>;
-}
-\`\`\`
-
-Common theme keys: \`bg-primary-dark\`, \`bg-primary-medium\`, \`bg-secondary-medium\`, \`border-primary-dark\`, \`border-primary-medium\`, \`text-primary-light\`, \`text-primary-medium\`, \`text-secondary-light\`. Pattern: \`{role}-{intent}-{shade}\` where role is \`bg\`/\`text\`/\`border\`, intent is \`primary\`/\`secondary\`, shade is \`light\`/\`medium\`/\`dark\`/\`very-dark\`. Hardcoded Tailwind classes (e.g. \`bg-gray-800\`) work but won't follow theme switches — use them only as the fallback.
-
-## Event publishing
-
-If the widget has a meaningful interaction worth sharing across the dashboard — a row clicked, a query changed, a file opened, a value submitted — publish an event so other widgets can react. Skip for read-only / static widgets (clocks, dashboards, banners) where there's nothing to broadcast.
-
-**API.** Use the \`useWidgetEvents()\` hook from \`@trops/dash-core\`. It returns \`{ publishEvent, listen, listeners }\` — call \`publishEvent(eventName, payload)\` to publish:
-
-\`\`\`jsx
-import { useWidgetEvents } from "@trops/dash-core";
-import { Panel } from "@trops/dash-react";
-
-export default function MyWidget() {
-  const { publishEvent } = useWidgetEvents();
-  return (
-    <Panel>
-      <ul>
-        {items.map((item) => (
-          <li
-            key={item.id}
-            onClick={() => publishEvent("itemSelected", { id: item.id, name: item.name })}
-          >
-            {item.name}
-          </li>
-        ))}
-      </ul>
-    </Panel>
-  );
-}
-\`\`\`
-
-The hook auto-scopes the event to \`<component>[<id>].<eventName>\` on the wire — you only supply the suffix. \`useWidgetEvents\` is a hook, so it MUST be called at the top of the component above any conditional return (Rules of Hooks).
-
-**Naming convention.** Plain camelCase verbs/states: \`itemSelected\`, \`queryChanged\`, \`templateChanged\`, \`indexSelected\`, \`valueSubmitted\`, \`searchQuerySelected\`. Match the existing codebase style — NOT kebab-case (\`item-selected\`), NOT colon-prefixed (\`filebrowser:itemSelected\`). The component scope is added automatically; you only need the action name.
-
-**Declaration.** ALSO list each event in the \`.dash.js\` config's \`events: [...]\` array — it's a plain array of STRINGS, not objects. The framework reads bare names; the object form (\`{ name, description }\`) is wrong and breaks downstream tooling.
-
-\`\`\`js
-events: ["itemSelected", "queryChanged"],
-\`\`\`
-
-**Tell the user.** When you add events, list them at the end of your chat response — one line per event, name + trigger:
-
-> Emits \`itemSelected\` when a row is clicked. Connect another widget to it by adding an event handler in Settings → Configure → Event Handlers.
-
-This way the user knows what's wired without reading the diff. DO NOT publish events the user can't see in your response — surfacing them is non-negotiable.
-
-**What NOT to publish.** Mouse moves, keystrokes per character, render ticks. Only publish state changes that another widget could meaningfully react to. If unsure, skip it — the user can ask for an event later.
-
-## Scheduled tasks
-
-If the widget benefits from running on a schedule — refreshing data periodically, polling an external source, generating a recurring report — expose a scheduled task. The user configures WHEN it runs via Settings → Schedule (cron / interval); the widget just exposes a named handler the framework calls on the configured cadence. Skip for purely interactive widgets where the user manually triggers all updates.
-
-**API.** Use the \`useScheduler()\` hook from \`@trops/dash-core\`. Pass an object whose keys are the task names and values are the handler functions. The hook returns \`{ tasks }\` (current state per task — useful for status display, optional to use):
-
-\`\`\`jsx
-import { useScheduler } from "@trops/dash-core";
-import { Panel } from "@trops/dash-react";
-
-export default function MyWidget() {
-  const { tasks } = useScheduler({
-    refreshData: () => {
-      // Fetch fresh data from a provider, update state, etc.
-    },
-    generateReport: () => {
-      // Build + emit a periodic snapshot.
-    },
-  });
-  return <Panel>{/* render */}</Panel>;
-}
-\`\`\`
-
-\`useScheduler\` is a hook — call it at the top of the component above any conditional return (Rules of Hooks).
-
-**Naming convention.** Plain camelCase verbs/nouns: \`refreshData\`, \`generateReport\`, \`pollStatus\`, \`syncCache\`. Same rules as event names — the task key IS the JS identifier.
-
-**Declaration.** ALSO list each task in the \`.dash.js\` config's \`scheduledTasks: [...]\` array. Each entry is an object with \`key\` (the JS identifier — must match a key in the \`useScheduler({...})\` call), \`handler\` (usually identical to \`key\`), \`displayName\` (human label for Settings → Schedule), and \`description\` (what the task does):
-
-\`\`\`js
-scheduledTasks: [
-  { key: "refreshData", handler: "refreshData", displayName: "Refresh Data", description: "Fetch the latest data from the source" },
-  { key: "generateReport", handler: "generateReport", displayName: "Generate Report", description: "Build a periodic snapshot" },
-],
-\`\`\`
-
-**Tell the user.** When you add scheduled tasks, list them at the end of your chat response — one line per task: name + what it does + how the user enables it:
-
-> Added scheduled task \`refreshData\` (refreshes the data). Open Settings → Schedule to set a cadence (cron or interval) and enable it.
-
-DO NOT add scheduled tasks the user can't see in your response — surfacing them is non-negotiable, since the user has to know to configure the cadence.
-
-**What NOT to schedule.** Tasks the user explicitly triggers (button clicks), tasks that need user input each run, anything fast enough to run every render. Only schedule operations that benefit from automatic recurrence.
-
-${WIDGET_BUILDER_GUIDANCE}
-
-${DASH_REACT_COMPONENT_API}
-
-${SINGLE_PURPOSE_RULES}
-
-## Critical rules
-
-YOU ARE RUNNING INSIDE AN EMBEDDED UI, NOT AN INTERACTIVE TERMINAL:
-- Do NOT use Read, Write, Edit, Bash, Glob, or Grep tools — the app handles file creation and compilation automatically.
-- Do NOT invoke the dash-widget-builder skill or any other skill — the skill's guidance is already inlined above as the "Widget Builder Guidance" section. Calling it duplicates context and triggers Bash/Read/Glob auto-exploration which is forbidden in this modal.
-- Do NOT read files, scan directories, or run shell commands.
-- The \`install_known_mcp_server\` tool is the ONLY tool you should call, and only when step 2 of the decision tree applies. When step 2 applies, calling that tool BEFORE writing any widget code is required, not optional — the "respond immediately with code" rule below does NOT override the decision tree.
-- ONLY output text + code blocks (with optional \`File:\` markers) — that's how the app receives your widget.
-- ALWAYS output COMPLETE code blocks. Never partial diffs or snippets, even for small changes — re-emit the full file.
-- Widget code runs in the BROWSER (renderer process). DO NOT use Node-only APIs: \`process.cwd()\`, \`process.env\` (except \`process.env.NODE_ENV\`), \`__dirname\`, \`__filename\`, \`require()\`, or imports of \`fs\` / \`path\` / \`os\` / \`child_process\` / \`crypto\` / \`stream\`. For paths default to literal strings like \`"/"\` or \`"~/"\`, or take a path from \`props\` / \`userConfig\`. To talk to the OS, go through the provider hooks (mcp \`callTool\` or credential \`window.mainApi.<service>\`).
-- DEFENSIVE on every MCP tool response. Shapes are provider-specific and undocumented; never assume a field exists. Guard before calling string/array methods: \`typeof item.name === "string" ? item.name.split(".").pop() : ""\`, \`Array.isArray(result?.entries) ? result.entries : []\`, \`const name = typeof item === "string" ? item : item?.name\`. Use optional chaining (\`item?.type === "directory"\`). Errors like "Cannot read properties of undefined" or "X is not a function" on first render are NOT acceptable.
-- **MCP connection-vs-tools race.** \`useMcpProvider\` exposes \`isConnected\` AND \`tools\` separately, and the connection becomes ready BEFORE the server's tools list is loaded. Gate every tool call on BOTH: \`if (!isConnected || tools.length === 0) return;\`. Apply the same gate to the early-return Skeleton render: \`if (!isConnected || tools.length === 0) return <Panel><Skeleton /></Panel>;\`. Add \`tools\` to the useEffect deps array so the effect re-runs when tools arrive. Gating on \`isConnected\` alone fires \`callTool\` against an empty registry and produces "tool not found" errors even when the tool exists on the server.
-- For MCP widgets: DON'T hardcode tool names like \`callTool("read_directory", ...)\`. Tool names are server-specific and AI guesses are usually wrong (e.g., the official filesystem server exposes \`list_directory\`, not \`read_directory\`). Discover the right tool from the live \`tools\` array returned by \`useMcpProvider\`: \`const tool = tools.find(t => t.name === "list_directory") || tools.find(t => t.name.includes("list"))\`. If no tool matches, render an actionable error (\`<ErrorMessage message={\\\`No directory-listing tool. Available: \\\${tools.map(t => t.name).join(", ")}\\\`} />\`), NOT an empty state.
-- **MCP response envelope.** Tool responses follow the protocol shape \`{ content: [{ type: "text", text: "…" }, …] }\`. The actual data is INSIDE the \`text\` field of each content item, NOT at the top of \`result\`. Extract before parsing: \`const text = result?.content?.find(c => c?.type === "text")?.text; const lines = typeof text === "string" ? text.split("\\\\n").filter(Boolean) : [];\`. Server-specific format inside \`text\` varies (newline-separated list, JSON, plain prose) — parse per the server's documented format. The standard filesystem server's \`list_directory\` returns lines like \`[FILE] foo.txt\` and \`[DIR] subdir/\`. DON'T assume \`callTool(...)\` returns a structured array directly — that's the protocol envelope, not the data.
-- **NEVER silently swallow errors.** A \`catch\` block MUST render the error to the user via \`<ErrorMessage message={err.message} />\` (or equivalent visible feedback in the widget) — NOT just \`setData([])\` followed by a blank state. An empty array is fine when the data really IS empty; an empty array as the *result of a caught exception* is a silent failure that leaves the user wondering whether the widget loaded. Every error path needs a user-visible signal.
-- Respond immediately with the code — do not plan, research, or scaffold first. EXCEPTION: if the decision tree directs you to call \`install_known_mcp_server\` first, do that first, then immediately output the code once the tool returns.`;
+If this is your FIRST response, do NOT output code. Reply with 1–2 short sentences inviting the user to describe the widget they want — what it should show, what data source it pulls from, what interactions it needs. No lists, no examples — keep it under 30 words.`;
 }
 
 const DISCOVER_SYSTEM_PROMPT = `You are helping the user DISCOVER existing widgets in the Dash registry. Your only job this conversation is to search and describe registry matches. You MUST NOT generate widget code.
@@ -5827,7 +4854,20 @@ export const WidgetBuilderModal = ({
                                     // dash-widget-builder skill auto-loads
                                     // here and the AI uses Bash/Read/Glob
                                     // despite the prompt forbidding them.
+                                    // Replace Claude Code's default preamble
+                                    // with the modal's terse skill-pointer
+                                    // prompt — the dash-widget-builder skill
+                                    // (auto-loaded from .claude/skills/) does
+                                    // the heavy lifting; the default preamble
+                                    // would otherwise override our concise
+                                    // first-response guidance.
                                     replaceSystemPrompt={true}
+                                    // Skip auto-wiring the dash MCP — the
+                                    // widget builder doesn't need
+                                    // dashboard-management tools while
+                                    // generating a widget. (No effect on
+                                    // CLI argv as of slice 19B; gates the
+                                    // dash MCP plumbing only.)
                                     disableTools={true}
                                     systemPrompt={(() => {
                                         if (chatMode === "discover") {
@@ -5840,6 +4880,15 @@ export const WidgetBuilderModal = ({
                                             selectedProvider:
                                                 selectedProviderForBuild,
                                         });
+                                        // Edit mode: append the existing
+                                        // widget source so the AI sees what
+                                        // it's modifying. The new
+                                        // buildSystemPrompt handles
+                                        // first-response style for build
+                                        // mode; edit mode needs its own
+                                        // first-response wording (confirm by
+                                        // name, ask what to change) so it
+                                        // appends here.
                                         if (
                                             effectiveEditContext?.componentCode
                                         ) {
@@ -5850,30 +4899,7 @@ export const WidgetBuilderModal = ({
                                                 ""
                                             }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
                                         }
-                                        // Slice 17b.1: tailor the first-response
-                                        // instruction to the user's provider pick
-                                        // so the AI's invite isn't generic
-                                        // ("what data source?") when the user has
-                                        // already told us which one.
-                                        {
-                                            const picked =
-                                                selectedProviderForBuild;
-                                            if (picked?.sentinel === "none") {
-                                                return `${base}\n\nIf this is your FIRST response in the conversation, do NOT output code. The user has chosen NOT to use any external provider — reply with 1–2 short sentences asking what they want the widget to do with local-only data or interactions (no provider talk). Keep it under 30 words. No lists, no examples.`;
-                                            }
-                                            if (picked?.type) {
-                                                return `${base}\n\nIf this is your FIRST response in the conversation, do NOT output code. The user has chosen the **${
-                                                    picked.type
-                                                }**${
-                                                    picked.providerClass
-                                                        ? ` (${picked.providerClass})`
-                                                        : ""
-                                                } provider. Reply with 1–2 short sentences acknowledging that and asking what specific data or actions they want the widget to surface from ${
-                                                    picked.type
-                                                }. Keep it under 30 words. No lists, no examples.`;
-                                            }
-                                            return `${base}\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences inviting the user to describe the widget they want to build (what it should show, what data source it pulls from, what interactions it needs). No lists, no bullet points, no examples — keep it under 30 words total.`;
-                                        }
+                                        return base;
                                     })()}
                                     maxToolRounds="10"
                                     apiKey={apiKey}

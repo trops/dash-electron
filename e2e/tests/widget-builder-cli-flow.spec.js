@@ -1,42 +1,30 @@
 const { test, expect } = require("@playwright/test");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
 const { launchApp, closeApp } = require("../helpers/electron-app");
 
-// e2e-only argv capture file written by dash-core's cliController when
-// DASH_E2E=1 (the helper sets it). Asserting on this file is what
-// makes this test a deterministic regression catch for the
-// ChatCore → IPC → cliController chain (slice 18b).
-const E2E_LAST_SPAWN_LOG_PATH = path.join(
-    os.tmpdir(),
-    "dash-cli-last-spawn.e2e.json"
-);
-
 /**
- * Widget Builder — REAL end-to-end (Claude CLI backend)
+ * Widget Builder — REAL end-to-end (Claude CLI backend, skill-driven)
  *
- * Verifies slice 17b.6's CLI lockdown by driving the actual flow:
+ * Slice 19B replaced the flag-based lockdown with the project's
+ * dash-widget-builder skill (auto-loaded from .claude/skills/ when
+ * the spawned CLI inherits the parent process's cwd). The modal's
+ * system prompt shrank from ~1000 inline lines to a thin pointer.
+ * The skill carries every constraint the lockdown was trying to
+ * impose — single-task widgets, dash-react prop names, tailwind
+ * safelist, defensive coding, and "don't tour the project."
+ *
+ * What this test still checks (the user-visible contract):
  *   1. Open the widget builder.
- *   2. Skip the provider gate (no-provider branch — same CLI flags
- *      apply to all three branches; we don't need to seed a provider
- *      to verify the lockdown). The CLI subprocess this launches
- *      uses `--system-prompt` (replace) + `--tools ""` per the new
- *      buildClaudeCliArgs helper in dash-core.
+ *   2. Skip the provider gate (no-provider branch).
  *   3. Send a build message.
  *   4. Wait for the AI to respond.
- *   5. Assert the chat does NOT contain any of:
- *        - "Skill via Claude Code"
- *        - "Bash via Claude Code"
- *        - "Read via Claude Code"
- *        - "Glob via Claude Code"
+ *   5. Assert the chat does NOT contain "Bash / Read / Glob via
+ *      Claude Code" — the skill says "no project tour, output code"
+ *      and the AI should comply. (We no longer assert against
+ *      "Skill via Claude Code" — the skill itself loads via the
+ *      Skill tool when relevant; that's a feature now, not a leak.)
  *
- * If those tool-call indicators appear, the lockdown failed and we
- * have more work. If not, the fix is verified end-to-end.
- *
- * Cost: this spawns a real Claude CLI subprocess and consumes a
- * small amount of API tokens. Worth it — we've been chasing this
- * by hand for hours.
+ * Cost: spawns a real Claude CLI subprocess and consumes a small
+ * amount of API tokens. Worth it for end-to-end confidence.
  */
 
 let electronApp;
@@ -44,13 +32,6 @@ let window;
 let tempUserData;
 
 test.beforeAll(async () => {
-    // Clear any stale capture file from a prior run so the assertion
-    // can't accidentally pass on yesterday's argv.
-    try {
-        fs.unlinkSync(E2E_LAST_SPAWN_LOG_PATH);
-    } catch (_) {
-        /* fine if missing */
-    }
     ({ electronApp, window, tempUserData } = await launchApp({
         hermetic: true,
     }));
@@ -65,7 +46,7 @@ test.afterAll(async () => {
 // + setup steps push us over the default budget.
 test.setTimeout(180000);
 
-test("CLI-backed build flow does not invoke Skill / Bash / Read / Glob tools", async () => {
+test("CLI-backed build flow does not tour the user's project (no Bash / Read / Glob)", async () => {
     const consoleErrors = [];
     window.on("console", (msg) => {
         if (msg.type() === "error") consoleErrors.push(msg.text());
@@ -134,52 +115,24 @@ test("CLI-backed build flow does not invoke Skill / Bash / Read / Glob tools", a
         );
     });
 
-    await test.step("assert: cliController received the lockdown flags (deterministic chain check)", async () => {
-        // The chain ChatCore → IPC → cliController dropped these for
-        // months (slice 18a discovery). Asserting on the captured argv
-        // means the next chain break fails this test immediately
-        // instead of waiting for the AI to happen to invoke a tool.
-        expect(fs.existsSync(E2E_LAST_SPAWN_LOG_PATH)).toBe(true);
-        const captured = JSON.parse(
-            fs.readFileSync(E2E_LAST_SPAWN_LOG_PATH, "utf8")
-        );
-        console.log("[forensics] captured argv flag value:", {
-            disableTools: captured.disableTools,
-            hasBare: captured.args.includes("--bare"),
-            hasStrictMcp: captured.args.includes("--strict-mcp-config"),
-            hasDisallowed: captured.args.includes("--disallowed-tools"),
-            hasPluginDir: captured.args.includes("--plugin-dir"),
-            hasTools: captured.args.includes("--tools"),
-            hasSystemPrompt: captured.args.includes("--system-prompt"),
-            hasAppendSystemPrompt: captured.args.includes(
-                "--append-system-prompt"
-            ),
-        });
-        // The flag value as RECEIVED at the spawn site. If this is
-        // false, the chain dropped it somewhere — which is exactly
-        // the bug slice 18a discovered.
-        expect(captured.disableTools).toBe(true);
-        // Every lockdown flag must be present in argv.
-        expect(captured.args).toContain("--bare");
-        expect(captured.args).toContain("--strict-mcp-config");
-        expect(captured.args).toContain("--disallowed-tools");
-        expect(captured.args).toContain("--plugin-dir");
-        expect(captured.args).toContain("--tools");
-        expect(captured.args).toContain("--system-prompt");
-        // And the legacy default that the lockdown REPLACES must NOT
-        // be present — replaceSystemPrompt: true means we use
-        // --system-prompt, not --append-system-prompt.
-        expect(captured.args).not.toContain("--append-system-prompt");
-    });
-
-    await test.step("assert: no Skill / Bash / Read / Glob tool calls fire", async () => {
+    await test.step("assert: AI does not tour the project (no Bash / Read / Glob)", async () => {
+        // Slice 19B: the lockdown is gone — the dash-widget-builder
+        // skill instead tells the AI "skip discovery, output code."
+        // We no longer assert against "Skill via Claude Code" because
+        // the skill itself loads via the Skill tool when the model
+        // decides to invoke it for skill-prescribed work — that's a
+        // feature now, not a leak. Bash / Read / Glob remain
+        // forbidden because they only fire when the AI tries to scan
+        // the user's filesystem, which the skill explicitly forbids
+        // in build mode (the modal pre-supplies all the context the
+        // AI needs).
         const modalText = await window
             .locator('[data-testid="widget-builder-modal"]')
             .first()
             .textContent({ timeout: 5000 })
             .catch(() => "");
 
-        const forbiddenTools = ["Skill", "Bash", "Read", "Glob"];
+        const forbiddenTools = ["Bash", "Read", "Glob"];
         const found = forbiddenTools.filter((t) =>
             new RegExp(`${t}\\s*via Claude Code`, "i").test(modalText)
         );

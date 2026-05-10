@@ -258,23 +258,36 @@ Write the widget code using the scaffold from Phase 1 and the MCP mapping from P
 
 **Read:** `references/widget-development.md` (Section 11)
 
-`@ai-built/` widgets are loaded at runtime by the widget registry, not the dev server.
-After scaffolding, restart the Dash app to trigger widget discovery, then add the
-widget from the widget picker.
+`@ai-built/` widgets are loaded at runtime by the widget registry. **Don't
+restart the Dash app** — the registry handles dynamic registration:
+
+-   **Modal flow** (the user is building inside the Dash app's Widget Builder
+    modal): clicking **Install** registers the widget and broadcasts
+    `widget:installed` to every open window. The widget picker refreshes in
+    place; the modal stays open so the user can iterate. No restart.
+-   **Terminal flow** (the user ran `widgetize --output-dir` writing to
+    `@ai-built/`): open the Dash app's widget picker. The registry scans
+    `@ai-built/` on picker-open and the new widget appears. If it doesn't,
+    click the picker's refresh affordance. No restart.
 
 ```bash
-npm run dev
+# In dev (app already running):
+npm run dev   # only if the dev server isn't already up
 ```
 
-Verify:
+**Restart is a last resort.** Only if the widget genuinely fails to appear
+after the picker is re-opened — and that usually means a syntax error in
+`dash.json` or the widget's `*.dash.js`, not a registration issue.
+
+Verify after install:
 
 -   Widget appears in the widget picker and renders in the dashboard
--   MCP connection establishes correctly
--   Data flows from MCP server → widget UI
--   User interactions trigger the right MCP tool calls
+-   Provider connection (MCP or credential IPC) establishes correctly
+-   Data flows from the provider into the widget UI
+-   User interactions trigger the right provider calls
 -   Widget state persists across reloads via `api.storeData`
--   Error states handled gracefully (MCP server down, auth failures, etc.)
--   Themed components inherit the user's chosen colors
+-   Error states render visibly (no silent `setData([])` after a `catch`)
+-   Themed components inherit the user's chosen theme
 
 ### Phase 5: Package & Distribute
 
