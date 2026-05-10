@@ -258,36 +258,40 @@ Write the widget code using the scaffold from Phase 1 and the MCP mapping from P
 
 **Read:** `references/widget-development.md` (Section 11)
 
-`@ai-built/` widgets are loaded at runtime by the widget registry. **Don't
-restart the Dash app** — the registry handles dynamic registration:
+`@ai-built/` widgets are loaded at runtime by the widget registry — testing
+is what happens AFTER the user installs the widget. Your job during the
+build conversation is to **finish the code**; the user does the testing.
+
+> ⚠️ **Do NOT run `npm run dev`, `npm run start`, or any other shell command
+> to "test the widget."** The Dash app is already running — that's where the
+> widget builder modal you're talking to lives. Spawning another dev server
+> would conflict with the running one and cause duplicate-port errors. There
+> is nothing for you to spin up. Output the widget code; the user clicks
+> **Install**; the widget shows in the picker. That's the entire test loop.
+
+How widget loading actually works (no restart, no rebuild):
 
 -   **Modal flow** (the user is building inside the Dash app's Widget Builder
     modal): clicking **Install** registers the widget and broadcasts
     `widget:installed` to every open window. The widget picker refreshes in
-    place; the modal stays open so the user can iterate. No restart.
+    place; the modal stays open so the user can iterate.
 -   **Terminal flow** (the user ran `widgetize --output-dir` writing to
-    `@ai-built/`): open the Dash app's widget picker. The registry scans
-    `@ai-built/` on picker-open and the new widget appears. If it doesn't,
-    click the picker's refresh affordance. No restart.
+    `@ai-built/`): the user opens the Dash app's widget picker. The registry
+    scans `@ai-built/` on picker-open and the new widget appears. If it
+    doesn't, the user clicks the picker's refresh affordance.
 
-```bash
-# In dev (app already running):
-npm run dev   # only if the dev server isn't already up
-```
+The user, NOT you, will then verify these things in the dashboard:
 
-**Restart is a last resort.** Only if the widget genuinely fails to appear
-after the picker is re-opened — and that usually means a syntax error in
-`dash.json` or the widget's `*.dash.js`, not a registration issue.
-
-Verify after install:
-
--   Widget appears in the widget picker and renders in the dashboard
+-   Widget appears in the widget picker and renders
 -   Provider connection (MCP or credential IPC) establishes correctly
 -   Data flows from the provider into the widget UI
 -   User interactions trigger the right provider calls
 -   Widget state persists across reloads via `api.storeData`
 -   Error states render visibly (no silent `setData([])` after a `catch`)
 -   Themed components inherit the user's chosen theme
+
+If the user reports a problem in any of those, treat that as the signal to
+edit the widget — don't pre-emptively run the app yourself.
 
 ### Phase 5: Package & Distribute
 
