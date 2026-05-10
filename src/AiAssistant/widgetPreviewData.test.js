@@ -142,4 +142,64 @@ describe("extractProviderDeclarations", () => {
         expect(result[0].type).toBe("algolia");
         expect(result[1].type).toBe("slack");
     });
+
+    // Slice 19C bug: the regex was matching ALL `type: "..."` inside
+    // the providers array — including the field types nested in
+    // `credentialSchema` (`appId: { type: "text" }`,
+    // `apiKey: { type: "password" }`). One algolia provider with a
+    // 2-field credentialSchema rendered as THREE picker rows in the
+    // modal: Algolia provider, Text provider, Password provider.
+    // Field-type strings inside credentialSchema must NOT be
+    // misinterpreted as provider declarations.
+    test("ignores field types nested in credentialSchema", () => {
+        const code = `export default {
+            providers: [
+                {
+                    type: "algolia",
+                    providerClass: "credential",
+                    required: true,
+                    credentialSchema: {
+                        appId: { type: "text", required: true, displayName: "App ID" },
+                        apiKey: { type: "password", required: true, displayName: "API Key" },
+                    },
+                },
+            ],
+        };`;
+        const result = extractProviderDeclarations(code);
+        expect(result).toEqual([
+            { type: "algolia", providerClass: "credential" },
+        ]);
+    });
+
+    test("ignores field types nested in credentialSchema across multiple providers", () => {
+        const code = `export default {
+            providers: [
+                {
+                    type: "algolia",
+                    providerClass: "credential",
+                    credentialSchema: {
+                        appId: { type: "text" },
+                        apiKey: { type: "password" },
+                    },
+                },
+                {
+                    type: "slack",
+                    providerClass: "credential",
+                    credentialSchema: {
+                        botToken: { type: "password" },
+                    },
+                },
+            ],
+        };`;
+        const result = extractProviderDeclarations(code);
+        expect(result).toHaveLength(2);
+        expect(result[0]).toEqual({
+            type: "algolia",
+            providerClass: "credential",
+        });
+        expect(result[1]).toEqual({
+            type: "slack",
+            providerClass: "credential",
+        });
+    });
 });

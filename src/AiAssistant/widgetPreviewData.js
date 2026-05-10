@@ -13,26 +13,67 @@
  *
  * Returns [] for any falsy / non-string input or when no providers
  * array is found.
+ *
+ * Implementation note: a naive `type\s*:\s*["']...["']/g` regex over the
+ * whole array body would also match field-type entries nested in
+ * `credentialSchema` (`appId: { type: "text" }`,
+ * `apiKey: { type: "password" }`) — making one provider with a
+ * 2-field credentialSchema look like three provider declarations
+ * (Algolia, Text, Password) in the picker. To avoid that we walk the
+ * array body brace-counting to slice out each top-level `{...}`
+ * entry, then strip nested `{...}` blocks from the entry before
+ * matching `type:` and `providerClass:`. That way only top-level keys
+ * of each provider entry are captured.
  */
 export function extractProviderDeclarations(configCode) {
     const providers = [];
     if (!configCode || typeof configCode !== "string") return providers;
     const providerMatch = configCode.match(/providers\s*:\s*\[([\s\S]*?)\]/);
     if (!providerMatch) return providers;
-    const typeMatches = providerMatch[1].matchAll(
-        /type\s*:\s*["']([^"']+)["']/g
-    );
-    const classMatches = providerMatch[1].matchAll(
-        /providerClass\s*:\s*["']([^"']+)["']/g
-    );
-    const classes = [...classMatches].map((m) => m[1]);
-    let i = 0;
-    for (const m of typeMatches) {
-        providers.push({
-            type: m[1],
-            providerClass: classes[i] || "credential",
-        });
-        i++;
+
+    // Walk the providers-array body, brace-counting to extract each
+    // top-level `{...}` entry verbatim.
+    const body = providerMatch[1];
+    const entries = [];
+    let depth = 0;
+    let entryStart = -1;
+    for (let i = 0; i < body.length; i++) {
+        const ch = body[i];
+        if (ch === "{") {
+            if (depth === 0) entryStart = i;
+            depth++;
+        } else if (ch === "}") {
+            depth--;
+            if (depth === 0 && entryStart !== -1) {
+                entries.push(body.slice(entryStart + 1, i));
+                entryStart = -1;
+            }
+        }
+    }
+
+    for (const entry of entries) {
+        // Collapse nested `{...}` blocks (deepest first) so that
+        // `type:` keys inside credentialSchema field entries are
+        // erased before the regex match. Iterate until no more
+        // innermost braces remain — handles arbitrary nesting depth
+        // (e.g. credentialSchema → fieldEntry → nested validator).
+        let stripped = entry;
+        let prev;
+        do {
+            prev = stripped;
+            stripped = stripped.replace(/\{[^{}]*\}/g, "");
+        } while (stripped !== prev);
+
+        const typeMatch = stripped.match(/type\s*:\s*["']([^"']+)["']/);
+        const classMatch = stripped.match(
+            /providerClass\s*:\s*["']([^"']+)["']/
+        );
+        if (typeMatch) {
+            providers.push({
+                type: typeMatch[1],
+                providerClass: classMatch ? classMatch[1] : "credential",
+            });
+        }
     }
     return providers;
 }

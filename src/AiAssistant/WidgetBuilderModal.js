@@ -396,6 +396,27 @@ function formatInstalledProvidersForPrompt(providersMap) {
         .join("\n");
 }
 
+// Modal-specific context that prepends every branch of the system
+// prompt. The skill is shared with terminal flows where running
+// `npm run dev` and `widgetize` is appropriate; in the modal those
+// would conflict with the running Dash app or be no-ops. Make the
+// no-shell rule explicit so the AI doesn't take the skill's bash
+// examples literally.
+const MODAL_CONTEXT_PREAMBLE = `## You are inside the running Dash app
+
+You are running inside the Dash Widget Builder modal. The Dash app is ALREADY running — that's where this modal lives. The widget you produce will be installed by the user clicking the **Install** button below this chat; it then registers dynamically and appears in the widget picker. There is nothing for you to spin up, restart, scaffold, or compile.
+
+**Hard rules for this context:**
+
+- Do NOT run shell commands. No \`npm run dev\`, no \`npm run start\`, no \`widgetize\`, no \`ls\`, no \`cat\`, no \`grep\`. The skill mentions some of these — those instructions are for users running \`claude\` in a terminal, NOT for you here. You have all the context you need from this prompt and the skill.
+- Do NOT scaffold files via Bash or Write. The widget builder writes the files itself when the user clicks Install. Your output is the widget code IN-CHAT (text + code blocks), nothing on disk.
+- Do NOT explore the user's filesystem. The skill provides architectural guidance; this prompt provides the runtime context (which provider was picked, what providers are installed). That's everything.
+- The Skill tool is allowed when the dash-widget-builder skill prescribes it — that's the skill's job. Other tools (Bash / Read / Write / Edit / Glob / Grep / Task / WebFetch / WebSearch) should not fire in this conversation.
+
+Output format: text replies + fenced \`\`\`jsx and \`\`\`javascript code blocks per the skill's Output Protocol. The user copies nothing manually — the widget builder parses your code blocks and installs them.
+
+`;
+
 /**
  * Build the modal's system prompt. The skill (auto-loaded via cwd)
  * provides every architectural constraint; this function only emits
@@ -419,7 +440,7 @@ function buildSystemPrompt({
 
     // Focused branch — user pre-selected a provider via the picker.
     if (hasPicked && !isPickedNone) {
-        return `You are the Dash Widget Builder. Use the project's \`dash-widget-builder\` skill (auto-loaded from \`.claude/skills/dash-widget-builder/\`) for ALL architectural guidance — tailwind safelist, dash-react prop names, provider classes, IPC method registry, single-task widget rule, defensive coding rules, event publishing, scheduled tasks, and the install-time permission gate are all in the skill. Don't restate them; follow them.
+        return `${MODAL_CONTEXT_PREAMBLE}You are the Dash Widget Builder. Use the project's \`dash-widget-builder\` skill (auto-loaded from \`.claude/skills/dash-widget-builder/\`) for ALL architectural guidance — tailwind safelist, dash-react prop names, provider classes, IPC method registry, single-task widget rule, defensive coding rules, event publishing, scheduled tasks, and the install-time permission gate are all in the skill. Don't restate them; follow them.
 
 ## Pre-selected provider (from the user's pick)
 
@@ -449,7 +470,7 @@ If this is your FIRST response in the conversation, do NOT output code. Reply wi
 
     // No-provider branch — user explicitly picked "no external provider".
     if (isPickedNone) {
-        return `You are the Dash Widget Builder. Use the project's \`dash-widget-builder\` skill for ALL architectural guidance.
+        return `${MODAL_CONTEXT_PREAMBLE}You are the Dash Widget Builder. Use the project's \`dash-widget-builder\` skill for ALL architectural guidance.
 
 The user has chosen NOT to use any external provider — generate a self-contained widget (clock, counter, static display, etc.) with NO \`providers: [...]\` array in the config.
 
@@ -461,7 +482,7 @@ If this is your FIRST response, do NOT output code. Reply with 1–2 short sente
     // Legacy branch — picker hasn't fired yet (rare; the picker gates
     // chat input). Tell the AI to ask the user which provider before
     // writing code.
-    return `You are the Dash Widget Builder. Use the project's \`dash-widget-builder\` skill for ALL architectural guidance.
+    return `${MODAL_CONTEXT_PREAMBLE}You are the Dash Widget Builder. Use the project's \`dash-widget-builder\` skill for ALL architectural guidance.
 
 ## Providers the user already has configured
 
