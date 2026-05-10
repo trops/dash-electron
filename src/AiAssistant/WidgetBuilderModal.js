@@ -223,47 +223,146 @@ function PreviewTestInputsForm({
               ([, spec]) => spec && typeof spec === "object"
           )
         : [];
+
+    // Slice 19D: buffer changes locally and only commit on Apply.
+    // Live-as-you-type updates would fire one IPC call per keystroke
+    // (e.g., listIndices/searchRules) since widgets typically run a
+    // useEffect keyed on the userConfig prop. Per-keystroke API spam
+    // is worse than an extra click.
+    //
+    // The committed snapshot — what's actually applied to the iframe
+    // preview — is the parent's `values` prop. Local draft state is
+    // independent until the user clicks Apply.
+    const valueFor = React.useCallback(
+        (fieldName, spec) => {
+            if (
+                values &&
+                Object.prototype.hasOwnProperty.call(values, fieldName)
+            ) {
+                return values[fieldName];
+            }
+            if (
+                defaults &&
+                Object.prototype.hasOwnProperty.call(defaults, fieldName)
+            ) {
+                return defaults[fieldName];
+            }
+            if (spec && "defaultValue" in spec) return spec.defaultValue;
+            return "";
+        },
+        [values, defaults]
+    );
+
+    // Initialize local draft from currently-effective values.
+    const initialDraft = React.useMemo(() => {
+        const draft = {};
+        for (const [fieldName, spec] of fields) {
+            draft[fieldName] = valueFor(fieldName, spec);
+        }
+        return draft;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userConfig]);
+
+    const [localValues, setLocalValues] = React.useState(initialDraft);
+
+    // Re-sync the local draft whenever the parent commits new values
+    // (Apply, Reset, or external swap of userConfig). Non-dirty fields
+    // pick up the latest effective value; dirty in-progress edits get
+    // overwritten — by design, since the user just confirmed a commit
+    // (or reset).
+    React.useEffect(() => {
+        const next = {};
+        for (const [fieldName, spec] of fields) {
+            next[fieldName] = valueFor(fieldName, spec);
+        }
+        setLocalValues(next);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [values, defaults, userConfig]);
+
+    const appliedSnapshot = React.useMemo(() => {
+        const snap = {};
+        for (const [fieldName, spec] of fields) {
+            snap[fieldName] = valueFor(fieldName, spec);
+        }
+        return snap;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [values, defaults, userConfig]);
+
+    // All hooks above this line — early return goes BELOW so
+    // useMemo / useEffect / useState always run in the same order
+    // every render.
     if (fields.length === 0) return null;
 
-    const dirty = values && Object.keys(values).length > 0;
-    const valueFor = (fieldName, spec) => {
-        if (values && Object.prototype.hasOwnProperty.call(values, fieldName)) {
-            return values[fieldName];
+    const valuesEqual = (a, b) => {
+        const ak = Object.keys(a || {});
+        const bk = Object.keys(b || {});
+        if (ak.length !== bk.length) return false;
+        for (const k of ak) {
+            if (a[k] !== b[k]) return false;
         }
-        if (
-            defaults &&
-            Object.prototype.hasOwnProperty.call(defaults, fieldName)
-        ) {
-            return defaults[fieldName];
+        return true;
+    };
+
+    const isDirtyLocal = !valuesEqual(localValues, appliedSnapshot);
+    const hasAppliedOverrides = values && Object.keys(values).length > 0;
+
+    const setLocal = (fieldName, value) => {
+        setLocalValues((prev) => ({ ...prev, [fieldName]: value }));
+    };
+
+    const handleApply = () => {
+        for (const [fieldName] of fields) {
+            const localVal = localValues[fieldName];
+            const appliedVal = appliedSnapshot[fieldName];
+            if (localVal !== appliedVal) {
+                onChange(fieldName, localVal);
+            }
         }
-        if (spec && "defaultValue" in spec) return spec.defaultValue;
-        return "";
     };
 
     return (
         <div className="px-4 pt-2 pb-3 border-b border-gray-800/60 shrink-0 space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
                 <span className="text-[10px] uppercase tracking-wider text-gray-500">
                     Test inputs
+                    {isDirtyLocal && (
+                        <span className="ml-2 text-amber-400 normal-case tracking-normal">
+                            • unapplied changes
+                        </span>
+                    )}
                 </span>
-                {dirty && (
+                <div className="flex items-center gap-2">
+                    {hasAppliedOverrides && (
+                        <button
+                            type="button"
+                            onClick={onReset}
+                            className="text-[10px] text-gray-500 hover:text-gray-300 underline"
+                        >
+                            Reset to defaults
+                        </button>
+                    )}
                     <button
                         type="button"
-                        onClick={onReset}
-                        className="text-[10px] text-gray-500 hover:text-gray-300 underline"
+                        onClick={handleApply}
+                        disabled={!isDirtyLocal}
+                        className={
+                            isDirtyLocal
+                                ? "text-[11px] px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white"
+                                : "text-[11px] px-2 py-1 rounded bg-gray-700/40 text-gray-500 cursor-not-allowed"
+                        }
                     >
-                        Reset to defaults
+                        Apply to preview
                     </button>
-                )}
+                </div>
             </div>
             <div className="space-y-1.5">
                 {fields.map(([fieldName, spec]) => {
                     const label = spec.displayName || fieldName;
-                    const v = valueFor(fieldName, spec);
+                    const v = localValues[fieldName];
                     const t = spec.type || "text";
                     const common = {
                         value: v == null ? "" : v,
-                        onChange: (e) => onChange(fieldName, e.target.value),
+                        onChange: (e) => setLocal(fieldName, e.target.value),
                         className:
                             "flex-1 max-w-md px-2 py-1 bg-gray-800/70 border border-gray-700/50 rounded text-xs text-gray-200 focus:border-indigo-500/50 focus:outline-none",
                     };
@@ -274,7 +373,7 @@ function PreviewTestInputsForm({
                                 type="checkbox"
                                 checked={Boolean(v)}
                                 onChange={(e) =>
-                                    onChange(fieldName, e.target.checked)
+                                    setLocal(fieldName, e.target.checked)
                                 }
                                 className="w-4 h-4"
                             />
@@ -310,10 +409,16 @@ function PreviewTestInputsForm({
                                 value={v == null ? "" : v}
                                 onChange={(e) => {
                                     const n = e.target.value;
-                                    onChange(
+                                    setLocal(
                                         fieldName,
                                         n === "" ? "" : Number(n)
                                     );
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" && isDirtyLocal) {
+                                        e.preventDefault();
+                                        handleApply();
+                                    }
                                 }}
                                 className={common.className}
                             />
@@ -323,6 +428,12 @@ function PreviewTestInputsForm({
                             <input
                                 type={t === "password" ? "password" : "text"}
                                 {...common}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" && isDirtyLocal) {
+                                        e.preventDefault();
+                                        handleApply();
+                                    }
+                                }}
                             />
                         );
                     }
