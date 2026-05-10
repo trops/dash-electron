@@ -1,5 +1,17 @@
 const { test, expect } = require("@playwright/test");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const { launchApp, closeApp } = require("../helpers/electron-app");
+
+// e2e-only argv capture file written by dash-core's cliController when
+// DASH_E2E=1 (the helper sets it). Asserting on this file is what
+// makes this test a deterministic regression catch for the
+// ChatCore → IPC → cliController chain (slice 18b).
+const E2E_LAST_SPAWN_LOG_PATH = path.join(
+    os.tmpdir(),
+    "dash-cli-last-spawn.e2e.json"
+);
 
 /**
  * Widget Builder — REAL end-to-end (Claude CLI backend)
@@ -32,6 +44,13 @@ let window;
 let tempUserData;
 
 test.beforeAll(async () => {
+    // Clear any stale capture file from a prior run so the assertion
+    // can't accidentally pass on yesterday's argv.
+    try {
+        fs.unlinkSync(E2E_LAST_SPAWN_LOG_PATH);
+    } catch (_) {
+        /* fine if missing */
+    }
     ({ electronApp, window, tempUserData } = await launchApp({
         hermetic: true,
     }));
@@ -113,6 +132,44 @@ test("CLI-backed build flow does not invoke Skill / Bash / Read / Glob tools", a
             "[forensics] modal text (first 3000 chars):",
             modalText?.slice(0, 3000)
         );
+    });
+
+    await test.step("assert: cliController received the lockdown flags (deterministic chain check)", async () => {
+        // The chain ChatCore → IPC → cliController dropped these for
+        // months (slice 18a discovery). Asserting on the captured argv
+        // means the next chain break fails this test immediately
+        // instead of waiting for the AI to happen to invoke a tool.
+        expect(fs.existsSync(E2E_LAST_SPAWN_LOG_PATH)).toBe(true);
+        const captured = JSON.parse(
+            fs.readFileSync(E2E_LAST_SPAWN_LOG_PATH, "utf8")
+        );
+        console.log("[forensics] captured argv flag value:", {
+            disableTools: captured.disableTools,
+            hasBare: captured.args.includes("--bare"),
+            hasStrictMcp: captured.args.includes("--strict-mcp-config"),
+            hasDisallowed: captured.args.includes("--disallowed-tools"),
+            hasPluginDir: captured.args.includes("--plugin-dir"),
+            hasTools: captured.args.includes("--tools"),
+            hasSystemPrompt: captured.args.includes("--system-prompt"),
+            hasAppendSystemPrompt: captured.args.includes(
+                "--append-system-prompt"
+            ),
+        });
+        // The flag value as RECEIVED at the spawn site. If this is
+        // false, the chain dropped it somewhere — which is exactly
+        // the bug slice 18a discovered.
+        expect(captured.disableTools).toBe(true);
+        // Every lockdown flag must be present in argv.
+        expect(captured.args).toContain("--bare");
+        expect(captured.args).toContain("--strict-mcp-config");
+        expect(captured.args).toContain("--disallowed-tools");
+        expect(captured.args).toContain("--plugin-dir");
+        expect(captured.args).toContain("--tools");
+        expect(captured.args).toContain("--system-prompt");
+        // And the legacy default that the lockdown REPLACES must NOT
+        // be present — replaceSystemPrompt: true means we use
+        // --system-prompt, not --append-system-prompt.
+        expect(captured.args).not.toContain("--append-system-prompt");
     });
 
     await test.step("assert: no Skill / Bash / Read / Glob tool calls fire", async () => {
