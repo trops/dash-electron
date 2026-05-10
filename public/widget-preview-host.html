@@ -5,6 +5,16 @@
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Widget Preview</title>
         <!--
+          Same prebuilt Tailwind CSS the host shell loads. Without
+          this link, dash-react components inside the iframe render
+          with no classes defined — buttons, inputs, headings all
+          fall back to browser defaults and the preview looks "raw."
+          Same-origin (the iframe is served alongside the host page),
+          so the absolute /tailwind.css path resolves identically in
+          dev and packaged builds.
+        -->
+        <link rel="stylesheet" href="/tailwind.css" />
+        <!--
           Slice 17c.1 — minimal entry HTML loaded by the widget builder
           modal's preview iframe. Owns its own JavaScript context, DOM,
           and React tree so AI-generated widget code is kernel-isolated
