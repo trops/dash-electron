@@ -29,6 +29,31 @@ This compiles built-in widgets into distributable bundles for npm packages.
 To promote an AI-built widget for registry distribution, use Settings > Widgets
 in the Dash app.
 
+### Install-Time Permission Gate (`@ai-built/*` widgets only)
+
+When the user installs an `@ai-built/*` widget, the widget builder modal scans
+the widget's code for `window.mainApi.<service>.<method>(` calls and shows an
+**install-time permission modal** listing every credentialed method with
+grant/deny checkboxes. The user picks per-method what the widget is allowed
+to do:
+
+-   Granted methods → run normally at runtime
+-   Denied methods → throw a runtime permission error when called
+
+The grants are persisted per-widget under the user's Dash storage. They can be
+revoked or re-granted later via Settings → Widgets → Permissions (slice 17d.5).
+
+**Implications for widget design:**
+
+-   Make method use deliberate. A widget that calls `algolia.deleteRule` on
+    mount is a worse UX than one that calls it only on a button click — the
+    user is more likely to grant the permission they understand.
+-   Mention destructive methods (`saveRule`, `deleteRule`,
+    `partialUpdateObjectsFromDirectory`, etc.) in your chat response when you
+    output the widget so the user isn't surprised by the consent modal.
+-   Render a clear "permission denied" state for any method that could be
+    denied, instead of crashing.
+
 ---
 
 ## 2. Publishing as an npm Package

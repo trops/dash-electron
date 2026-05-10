@@ -163,6 +163,15 @@ can communicate via pub/sub events (see Section 6).
 
 ## 4. Widget Components and dash-react
 
+> **For exact prop names, read
+> [`dash-react-components.md`](./dash-react-components.md) BEFORE writing JSX.**
+> dash-react components silently ignore unknown props and render with empty
+> defaults. The wrong prop name produces a "preview is black" widget with
+> no console error. Common gotchas:
+> `<Heading title="..." />` (NOT `text=`),
+> `<Button title="..." />` (NOT `text=`),
+> `<EmptyState title="..." description="..." />` (NOT `message=`).
+
 ### Widget Component Structure
 
 ```javascript
@@ -197,8 +206,8 @@ export const MyWidget = ({
     return (
         <Widget {...props}>
             <Panel>
-                <Heading text={title} />
-                {subtitle && <SubHeading text={subtitle} />}
+                <Heading title={title} />
+                {subtitle && <SubHeading title={subtitle} />}
                 <button onClick={handleSave}>Save</button>
             </Panel>
         </Widget>
@@ -254,8 +263,8 @@ import {
 ```javascript
 <Widget {...props}>
     <Panel>
-        <Heading text={title} />
-        <SubHeading text={subtitle} />
+        <Heading title={title} />
+        <SubHeading title={subtitle} />
         <Text>Some content here</Text>
     </Panel>
 </Widget>
@@ -266,7 +275,7 @@ import {
 ```javascript
 <Widget {...props}>
     <Panel>
-        <Heading text="Items" />
+        <Heading title="Items" />
         <Menu>
             {items.map((item) => (
                 <MenuItem key={item.id} onClick={() => handleSelect(item)}>
@@ -283,7 +292,7 @@ import {
 ```javascript
 <Widget {...props}>
     <Panel>
-        <Heading text="Search" />
+        <Heading title="Search" />
         <InputText
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -291,7 +300,7 @@ import {
         />
         {results.map((result) => (
             <DashPanel key={result.id}>
-                <Heading text={result.title} />
+                <Heading title={result.title} />
                 <Text>{result.description}</Text>
             </DashPanel>
         ))}
@@ -305,7 +314,7 @@ import {
 <Widget {...props}>
     <Panel>
         <Header>
-            <Heading text={item.title} />
+            <Heading title={item.title} />
             <ButtonIcon icon="edit" onClick={handleEdit} />
         </Header>
         <MainContent>
@@ -391,8 +400,19 @@ useEffect(() => {
 }, []);
 ```
 
-**Event naming convention**: Use kebab-case, scoped to your widget namespace:
-`"algolia-search-results"`, `"slack-channel-selected"`, `"drive-file-opened"`.
+**Event naming convention**: Plain **camelCase** verbs/states scoped to the
+event's purpose: `itemSelected`, `queryChanged`, `templateChanged`,
+`indexSelected`, `valueSubmitted`, `searchQuerySelected`. NOT kebab-case
+(`item-selected`), NOT colon-prefixed (`filebrowser:itemSelected`). When
+using `useWidgetEvents` from dash-core, the component scope is added
+automatically — you only supply the action suffix.
+
+> **Note on `api.publishEvent` vs `useWidgetEvents`**: The `api` prop's
+> `publishEvent` was the original API; `useWidgetEvents` is the modern hook.
+> Prefer `useWidgetEvents` for new widgets — see the SKILL.md
+> "Cross-Widget Events" section for the full pattern. The `api.publishEvent`
+> path still works for existing widgets and accepts arbitrary string event
+> names; consistent camelCase scoping applies either way.
 
 ---
 
