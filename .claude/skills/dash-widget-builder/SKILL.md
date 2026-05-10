@@ -745,6 +745,51 @@ Widget code runs in the browser (renderer process). Rules:
     the component, then any early-return for "not configured" / "loading"
     states. Putting an early-return ABOVE a hook crashes the app the moment
     the condition flips.
+-   **`userConfig` values are LIVE props, not initial state.** When the user
+    edits a userConfig field — via the dashboard's Settings → Configure
+    dialog on an installed widget, or via the widget builder's "Apply to
+    preview" in Test Inputs — the widget receives a new prop value and
+    re-renders. **Don't freeze the prop in `useState(propName)` like this:**
+
+    ```jsx
+    // ❌ Broken: captures the value at FIRST RENDER only.
+    // Future userConfig saves and Test Input applies are ignored.
+    export default function MyWidget({ selectedIndex = "" }) {
+        const [currentIndex, setCurrentIndex] = useState(selectedIndex);
+        // ...
+    }
+    ```
+
+    Two correct patterns:
+
+    ```jsx
+    // ✅ Pattern A: read the prop directly. Simplest when the prop
+    //    drives an effect.
+    export default function MyWidget({ selectedIndex = "" }) {
+        const [data, setData] = useState(null);
+        useEffect(() => {
+            if (!selectedIndex) return;
+            // fetch / load using selectedIndex directly
+        }, [selectedIndex]);
+        // render against `selectedIndex` directly, no local mirror needed
+    }
+
+    // ✅ Pattern B: sync prop → state when the prop changes. Use this
+    //    when you also need a setter for in-widget overrides (e.g.,
+    //    a dropdown that lets the user change index without leaving
+    //    the widget).
+    export default function MyWidget({ selectedIndex = "" }) {
+        const [currentIndex, setCurrentIndex] = useState(selectedIndex);
+        useEffect(() => {
+            setCurrentIndex(selectedIndex);
+        }, [selectedIndex]);
+    }
+    ```
+
+    The frozen-prop bug is invisible in production because users typically
+    save once and don't re-edit. The widget builder's live preview makes it
+    visible immediately because every "Apply to preview" click is a prop
+    update.
 
 ---
 

@@ -6,6 +6,28 @@
 > — the preview looks black with no console error. This is the #1 cause
 > of "preview is black" bugs.
 
+## ⚠️ Hard rule — only the props in the table below are valid
+
+These components do NOT accept the props you might know from other React
+component libraries (Material UI, shadcn, Bootstrap, Ant Design, Chakra,
+Radix). The following are **NOT real props** on any dash-react primitive:
+
+-   `variant=` (no `"primary"` / `"secondary"` / `"outline"` / `"danger"` etc.)
+-   `size=` (no `"sm"` / `"md"` / `"lg"`)
+-   `color=` (no `"success"` / `"warning"` / `"error"` etc.)
+-   `text=` (the prop is `title=` everywhere except `<Alert>` and `<ErrorMessage>` which use `message=`)
+-   `appearance=`, `intent=`, `tone=`, `kind=`, `theme=`
+
+If you want different visual treatment, **choose a different component**
+(`<ButtonIcon>` for an inline action button, `<Tag>` for a small inline
+label) — don't pass invented props. If you genuinely need styling that no
+listed component provides, fall through to inline `style={{...}}` on a
+wrapping `<div>` (with theme tokens from `ThemeContext`, see Section 6).
+
+Passing an unknown prop produces NO console error — the component just
+renders empty. If your preview is blank, the first thing to check is
+whether you typed `variant=` / `size=` / `text=` / `color=` anywhere.
+
 ## Table of Contents
 
 1. Component Prop Reference
