@@ -47,6 +47,8 @@ import {
     buildAiCorrectionMessage,
     validateNoModalUsage,
     buildNoModalCorrectionMessage,
+    validateComponentReferences,
+    buildComponentReferenceCorrectionMessage,
 } from "./widgetCodeValidator";
 import { scanCredentialMethodCalls } from "./widgetCredentialPermissionScanner";
 import { setGrants as setCredentialGrants } from "./widgetCredentialGrants";
@@ -2340,6 +2342,40 @@ export const WidgetBuilderModal = ({
                             correction: buildAiCorrectionMessage(
                                 apiCheck.errors
                             ),
+                        });
+                        setPreviewComponent(null);
+                        setPreviewParsedConfig(match.config);
+                        return;
+                    }
+
+                    // Slice 19G — catch hallucinated / typo'd JSX
+                    // component names BEFORE the iframe tries to
+                    // render. React's "Element type is invalid" error
+                    // shows up deep in the reconciler with no
+                    // line-pointer; a static check on the AI's source
+                    // gives the user a clean "<Bogus> doesn't exist"
+                    // message + Send-to-AI fix.
+                    const componentCheck =
+                        validateComponentReferences(componentSrc);
+                    if (!componentCheck.ok) {
+                        const list = componentCheck.errors
+                            .map(
+                                (e) =>
+                                    `\`<${e.name}>\` (line ${e.line}) — ${e.suggestion}`
+                            )
+                            .join("\n");
+                        setPreviewError(
+                            "Widget uses component names that don't exist:\n" +
+                                list +
+                                '\n\nClick "Send error to AI" to request a corrected version.'
+                        );
+                        setPreviewErrorMeta({
+                            kind: "component-name-hallucination",
+                            errors: componentCheck.errors,
+                            correction:
+                                buildComponentReferenceCorrectionMessage(
+                                    componentCheck.errors
+                                ),
                         });
                         setPreviewComponent(null);
                         setPreviewParsedConfig(match.config);
