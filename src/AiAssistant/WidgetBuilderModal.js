@@ -1218,46 +1218,40 @@ export const WidgetBuilderModal = ({
         setConsoleEvents([]);
     }, []);
 
-    // Slice 19G.2 — push a "fix this runtime error" user message into
-    // the ChatCore conversation so the AI re-emits with the bug fixed.
-    // Same chat-localStorage path the compile-error banner already
-    // uses (search for "previewErrorMeta?.correction" below).
+    // Slice 19G.2 + 19H — push a "fix this runtime error" user
+    // message into the ChatCore conversation via the
+    // dash:chat-core-send CustomEvent. ChatCore subscribes to this
+    // event and calls handleSend on match (dash-core >= 0.1.553).
+    // The previous localStorage-write approach silently dropped
+    // messages because ChatCore only reads localStorage at mount.
     const handleSendConsoleErrorToAI = useCallback((evt) => {
-        try {
-            const raw = localStorage.getItem("dash-widget-builder");
-            if (!raw) return;
-            const data = JSON.parse(raw);
-            const msgs = data?.messages || [];
-            // Serialize args defensively: strings stay; non-strings
-            // get JSON.stringify'd; truncate any single arg to 1000
-            // chars so the chat message stays terse.
-            const argsText = (evt.args || [])
-                .map((a) => {
-                    if (typeof a === "string") return a;
-                    if (a && typeof a === "object" && a.__isError) {
-                        return `${a.name || "Error"}: ${a.message || ""}`;
-                    }
-                    try {
-                        return JSON.stringify(a);
-                    } catch {
-                        return String(a);
-                    }
-                })
-                .map((s) => (s.length > 1000 ? s.slice(0, 1000) + "…" : s))
-                .join(" ");
-            // Trim the stack to the first 8 frames — full stacks are
-            // noisy and most of the signal is in the top frames.
-            const stackTrim = (evt.stack || "")
-                .split("\n")
-                .slice(0, 8)
-                .join("\n");
-            const sourceLabel =
-                evt.source === "window.error"
-                    ? "uncaught error"
-                    : evt.source === "unhandledrejection"
-                    ? "unhandled promise rejection"
-                    : `console.${evt.severity || "error"}`;
-            const content = `Runtime ${sourceLabel} in your widget:
+        // Serialize args defensively: strings stay; non-strings get
+        // JSON.stringify'd; truncate any single arg to 1000 chars so
+        // the chat message stays terse.
+        const argsText = (evt.args || [])
+            .map((a) => {
+                if (typeof a === "string") return a;
+                if (a && typeof a === "object" && a.__isError) {
+                    return `${a.name || "Error"}: ${a.message || ""}`;
+                }
+                try {
+                    return JSON.stringify(a);
+                } catch {
+                    return String(a);
+                }
+            })
+            .map((s) => (s.length > 1000 ? s.slice(0, 1000) + "…" : s))
+            .join(" ");
+        // Trim the stack to the first 8 frames — full stacks are
+        // noisy and most of the signal is in the top frames.
+        const stackTrim = (evt.stack || "").split("\n").slice(0, 8).join("\n");
+        const sourceLabel =
+            evt.source === "window.error"
+                ? "uncaught error"
+                : evt.source === "unhandledrejection"
+                ? "unhandled promise rejection"
+                : `console.${evt.severity || "error"}`;
+        const content = `Runtime ${sourceLabel} in your widget:
 
 \`\`\`
 ${argsText}
@@ -1266,13 +1260,17 @@ ${argsText}
 ${
     stackTrim ? `Stack (top 8 frames):\n\`\`\`\n${stackTrim}\n\`\`\`\n\n` : ""
 }Re-emit BOTH code blocks (component + config) with the bug fixed. Add defensive guards (typeof / Array.isArray / optional chaining) so the same input doesn't crash again. If a \`catch\` block was silently swallowing the error, render it via \`<ErrorMessage message={err.message} />\` instead. Do not just retry the same code path.`;
-            msgs.push({ role: "user", content });
-            localStorage.setItem(
-                "dash-widget-builder",
-                JSON.stringify({ ...data, messages: msgs })
+        try {
+            window.dispatchEvent(
+                new CustomEvent("dash:chat-core-send", {
+                    detail: {
+                        persistKey: "dash-widget-builder",
+                        content,
+                    },
+                })
             );
         } catch {
-            /* localStorage unavailable — fall through; user can retry */
+            /* ignore */
         }
     }, []);
 
@@ -4084,47 +4082,37 @@ ${
                                                 )}
                                                 <button
                                                     onClick={() => {
+                                                        // Slice 19H: dispatch the
+                                                        // dash:chat-core-send window
+                                                        // CustomEvent so the ChatCore
+                                                        // bound to this modal actually
+                                                        // sends the message. The
+                                                        // previous localStorage-write
+                                                        // approach silently dropped
+                                                        // the message because ChatCore
+                                                        // only reads localStorage at
+                                                        // mount. Use the validator's
+                                                        // specific correction message
+                                                        // when present (slice 17b.12);
+                                                        // otherwise fall back to the
+                                                        // generic compile-error prompt.
+                                                        const content =
+                                                            previewErrorMeta?.correction
+                                                                ? previewErrorMeta.correction
+                                                                : `Fix this compilation error:\n\n${previewError}\n\nPlease output both the corrected jsx component code block and the javascript config code block.`;
                                                         try {
-                                                            const raw =
-                                                                localStorage.getItem(
-                                                                    "dash-widget-builder"
-                                                                );
-                                                            if (raw) {
-                                                                const data =
-                                                                    JSON.parse(
-                                                                        raw
-                                                                    );
-                                                                const msgs =
-                                                                    data?.messages ||
-                                                                    [];
-                                                                // Slice 17b.12: when the
-                                                                // validator detected a
-                                                                // hallucinated provider
-                                                                // method, send its specific
-                                                                // correction message
-                                                                // (with method names +
-                                                                // available alternatives)
-                                                                // instead of the generic
-                                                                // "fix this error" prompt.
-                                                                const content =
-                                                                    previewErrorMeta?.correction
-                                                                        ? previewErrorMeta.correction
-                                                                        : `Fix this compilation error:\n\n${previewError}\n\nPlease output both the corrected jsx component code block and the javascript config code block.`;
-                                                                msgs.push({
-                                                                    role: "user",
-                                                                    content,
-                                                                });
-                                                                localStorage.setItem(
-                                                                    "dash-widget-builder",
-                                                                    JSON.stringify(
-                                                                        {
-                                                                            ...data,
-                                                                            messages:
-                                                                                msgs,
-                                                                        }
-                                                                    )
-                                                                );
-                                                            }
+                                                            window.dispatchEvent(
+                                                                new CustomEvent(
+                                                                    "dash:chat-core-send",
+                                                                    {
+                                                                        detail: {
+                                                                            persistKey:
+                                                                                "dash-widget-builder",
+                                                                            content,
+                                                                        },
+                                                                    }
+                                                                )
+                                                            );
                                                         } catch (_) {
                                                             /* ignore */
                                                         }

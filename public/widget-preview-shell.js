@@ -63,6 +63,26 @@
         }
     }
 
+    // Slice 19H: every bridge:error site also needs to feed the
+    // modal's Console tab so users see runtime/eval errors there with
+    // a "Send error to AI" affordance. Use this helper so the two
+    // posts stay in sync — adding a new bridge:error site automatically
+    // surfaces it in the console too.
+    function postErrorToHost(kind, message, stack) {
+        postToHost("bridge:error", {
+            kind: kind,
+            message: message,
+            stack: stack || null,
+        });
+        postToHost("bridge:console", {
+            severity: "error",
+            source: "bridge:" + kind,
+            args: [message],
+            timestamp: Date.now(),
+            stack: stack || "",
+        });
+    }
+
     function clearRoot() {
         var root = document.getElementById("root");
         if (!root) return;
@@ -264,20 +284,19 @@
         var hostModules = window.__hostModules || {};
 
         if (!bundleSource || typeof bundleSource !== "string") {
-            postToHost("bridge:error", {
-                kind: "load-bundle",
-                message: "bridge:load-bundle missing bundleSource string",
-            });
+            postErrorToHost(
+                "load-bundle",
+                "bridge:load-bundle missing bundleSource string"
+            );
             return;
         }
         var React = hostModules.react;
         var ReactDOMClient = hostModules["react-dom/client"];
         if (!React || !ReactDOMClient) {
-            postToHost("bridge:error", {
-                kind: "load-bundle",
-                message:
-                    "host did not provide React + ReactDOMClient on window.__hostModules",
-            });
+            postErrorToHost(
+                "load-bundle",
+                "host did not provide React + ReactDOMClient on window.__hostModules"
+            );
             return;
         }
 
@@ -285,11 +304,11 @@
         try {
             bundleExports = evaluateBundle(bundleSource, hostModules);
         } catch (err) {
-            postToHost("bridge:error", {
-                kind: "bundle-eval",
-                message: (err && err.message) || "bundle eval failed",
-                stack: err && err.stack ? err.stack : null,
-            });
+            postErrorToHost(
+                "bundle-eval",
+                (err && err.message) || "bundle eval failed",
+                err && err.stack
+            );
             return;
         }
 
@@ -329,25 +348,21 @@
             }
         }
         if (!match) {
-            postToHost("bridge:error", {
-                kind: "no-component",
-                message:
-                    'No widget config matched name "' +
+            postErrorToHost(
+                "no-component",
+                'No widget config matched name "' +
                     componentName +
                     '" in bundle (' +
                     configs.length +
-                    " configs found)",
-            });
+                    " configs found)"
+            );
             return;
         }
 
         unmountCurrent();
         var rootEl = document.getElementById("root");
         if (!rootEl) {
-            postToHost("bridge:error", {
-                kind: "no-root",
-                message: "iframe #root element missing",
-            });
+            postErrorToHost("no-root", "iframe #root element missing");
             return;
         }
 
@@ -360,11 +375,11 @@
                 configKey: match.key,
             });
         } catch (err) {
-            postToHost("bridge:error", {
-                kind: "mount",
-                message: (err && err.message) || "mount failed",
-                stack: err && err.stack ? err.stack : null,
-            });
+            postErrorToHost(
+                "mount",
+                (err && err.message) || "mount failed",
+                err && err.stack
+            );
         }
     }
 
