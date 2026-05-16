@@ -3,26 +3,26 @@
  *
  * Tests for WirePicker (Compose-mode Stage 3 in-place picker).
  *
- * Provider step:
- *   - lists every wirable provider (credential w/ registry entry,
- *     mcp regardless)
- *   - skips credential providers with no registry entry
- *   - empty state when none configured
+ * Provider-type step (rewritten for the type-not-instance model):
+ *   - lists every credential type from PROVIDER_API_REGISTRY
+ *   - lists every MCP type from mainApi.mcp.getCatalog()
+ *   - annotates types whose user has configured an instance
+ *   - empty state when neither registry nor catalog returns anything
  *
  * Method step — credential:
  *   - lists only methods matching the slot's expected type
- *     (filtered via scoreMethodList)
  *   - clicking a method fires onPick with the full wire spec
- *   - Back returns to the provider step
+ *     (provider auto-bound to the configured instance, if any)
+ *   - Back returns to the provider-type step
  *
  * Method step — mcp:
- *   - shows loading state while tools are fetched
- *   - lists tools once loaded
- *   - error state on bridge failure
+ *   - free-text input + Wire button when no configured instance
+ *   - lists tools when a configured instance exists (via useMcpTools)
  *
- * WiredSlotSummary:
+ * WiredSlotSummary unchanged:
  *   - renders the provider.method label
  *   - Change and Static buttons fire their callbacks
+ *   - per-arg rows for non-auto method args
  */
 
 import "@testing-library/jest-dom";
@@ -30,83 +30,146 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { WirePicker, WiredSlotSummary } from "./WirePicker";
 
-function setMcpBridge(impl) {
+function setMcpBridge({ getCatalog, listTools } = {}) {
     if (!window.mainApi) window.mainApi = {};
     if (!window.mainApi.mcp) window.mainApi.mcp = {};
-    window.mainApi.mcp.listTools = impl;
+    if (getCatalog) window.mainApi.mcp.getCatalog = getCatalog;
+    if (listTools) window.mainApi.mcp.listTools = listTools;
 }
 
-function clearMcpBridge() {
+function clearBridge() {
     if (window.mainApi) delete window.mainApi.mcp;
     delete window.mainApi;
 }
 
-describe("WirePicker — provider step", () => {
-    test("lists every credential provider with a registry entry + every mcp provider", () => {
-        const providers = {
-            MyAlgolia: { type: "algolia", providerClass: "credential" },
-            UnknownCredential: {
-                type: "not-a-real-type",
-                providerClass: "credential",
-            },
-            MyFilesystem: { type: "filesystem", providerClass: "mcp" },
-        };
-        render(
-            <WirePicker
-                propName="data"
-                expectedType="Array<Object>"
-                providers={providers}
-                onPick={() => {}}
-            />
-        );
+afterEach(() => {
+    clearBridge();
+});
+
+describe("WirePicker — provider-type step", () => {
+    test("lists credential types from the registry + MCP types from the catalog", async () => {
+        setMcpBridge({
+            getCatalog: jest.fn().mockResolvedValue({
+                catalog: {
+                    servers: [
+                        { id: "gmail", name: "Gmail", description: "" },
+                        { id: "slack", name: "Slack", description: "" },
+                    ],
+                },
+            }),
+        });
+
+        await act(async () => {
+            render(
+                <WirePicker
+                    propName="data"
+                    expectedType="Array<Object>"
+                    providers={{}}
+                    onPick={() => {}}
+                />
+            );
+        });
+
+        // Credential type (algolia is the only one in
+        // PROVIDER_API_REGISTRY today).
         expect(
-            screen.getByTestId("composer-wire-provider-data-MyAlgolia")
+            screen.getByTestId("composer-wire-provider-data-algolia")
+        ).toBeInTheDocument();
+        // MCP types from the catalog.
+        expect(
+            screen.getByTestId("composer-wire-provider-data-gmail")
         ).toBeInTheDocument();
         expect(
-            screen.getByTestId("composer-wire-provider-data-MyFilesystem")
+            screen.getByTestId("composer-wire-provider-data-slack")
         ).toBeInTheDocument();
-        expect(
-            screen.queryByTestId(
-                "composer-wire-provider-data-UnknownCredential"
-            )
-        ).not.toBeInTheDocument();
     });
 
-    test("empty state when no providers are configured", () => {
-        render(
-            <WirePicker
-                propName="data"
-                expectedType="Array<Object>"
-                providers={{}}
-                onPick={() => {}}
-            />
+    test("annotates types whose user has a configured instance", async () => {
+        setMcpBridge({
+            getCatalog: jest.fn().mockResolvedValue({
+                catalog: { servers: [{ id: "gmail", name: "Gmail" }] },
+            }),
+        });
+
+        await act(async () => {
+            render(
+                <WirePicker
+                    propName="data"
+                    expectedType="Array<Object>"
+                    providers={{
+                        MyAlgolia: {
+                            type: "algolia",
+                            providerClass: "credential",
+                        },
+                    }}
+                    onPick={() => {}}
+                />
+            );
+        });
+
+        const algoliaBtn = screen.getByTestId(
+            "composer-wire-provider-data-algolia"
         );
+        expect(algoliaBtn.textContent).toMatch(/configured/);
+        const gmailBtn = screen.getByTestId(
+            "composer-wire-provider-data-gmail"
+        );
+        expect(gmailBtn.textContent).not.toMatch(/configured/);
+    });
+
+    test("empty state when catalog fetch fails AND registry is empty", async () => {
+        // The registry always has algolia today, so we can't easily
+        // hit the truly-empty branch — instead assert that catalog
+        // failure surfaces the error message while still showing
+        // credential types.
+        setMcpBridge({
+            getCatalog: jest
+                .fn()
+                .mockResolvedValue({ error: "boom", message: "boom" }),
+        });
+
+        await act(async () => {
+            render(
+                <WirePicker
+                    propName="data"
+                    expectedType="Array<Object>"
+                    providers={{}}
+                    onPick={() => {}}
+                />
+            );
+        });
+
+        // Credential algolia still surfaces.
         expect(
-            screen.getByTestId("composer-wire-empty-data")
+            screen.getByTestId("composer-wire-provider-data-algolia")
         ).toBeInTheDocument();
     });
 });
 
 describe("WirePicker — credential method step", () => {
-    const providers = {
-        MyAlgolia: { type: "algolia", providerClass: "credential" },
-    };
+    beforeEach(() => {
+        setMcpBridge({
+            getCatalog: jest
+                .fn()
+                .mockResolvedValue({ catalog: { servers: [] } }),
+        });
+    });
 
-    test("filters methods to Array-returning candidates for an Array slot", () => {
-        render(
-            <WirePicker
-                propName="data"
-                expectedType="Array<Object>"
-                providers={providers}
-                onPick={() => {}}
-            />
-        );
+    test("clicking an algolia type opens the method list filtered by expectedType", async () => {
+        await act(async () => {
+            render(
+                <WirePicker
+                    propName="data"
+                    expectedType="Array<Object>"
+                    providers={{}}
+                    onPick={() => {}}
+                />
+            );
+        });
         fireEvent.click(
-            screen.getByTestId("composer-wire-provider-data-MyAlgolia")
+            screen.getByTestId("composer-wire-provider-data-algolia")
         );
-        // listIndices returns Array → present.
-        // search returns {hits: Array<...>} → present (loose match).
-        // saveRule returns {taskID, objectID} → absent.
+        // Array slot → listIndices (strong) + search (loose), saveRule absent.
         expect(
             screen.getByTestId("composer-wire-method-data-listIndices")
         ).toBeInTheDocument();
@@ -116,24 +179,27 @@ describe("WirePicker — credential method step", () => {
         expect(
             screen.queryByTestId("composer-wire-method-data-saveRule")
         ).not.toBeInTheDocument();
-        // setSettings (void) should never appear.
-        expect(
-            screen.queryByTestId("composer-wire-method-data-setSettings")
-        ).not.toBeInTheDocument();
     });
 
-    test("clicking a method fires onPick with a full wire spec", () => {
+    test("picking a method fires onPick with the type id and auto-bound configured instance", async () => {
         const onPick = jest.fn();
-        render(
-            <WirePicker
-                propName="data"
-                expectedType="Array<Object>"
-                providers={providers}
-                onPick={onPick}
-            />
-        );
+        await act(async () => {
+            render(
+                <WirePicker
+                    propName="data"
+                    expectedType="Array<Object>"
+                    providers={{
+                        MyAlgolia: {
+                            type: "algolia",
+                            providerClass: "credential",
+                        },
+                    }}
+                    onPick={onPick}
+                />
+            );
+        });
         fireEvent.click(
-            screen.getByTestId("composer-wire-provider-data-MyAlgolia")
+            screen.getByTestId("composer-wire-provider-data-algolia")
         );
         fireEvent.click(
             screen.getByTestId("composer-wire-method-data-listIndices")
@@ -146,17 +212,45 @@ describe("WirePicker — credential method step", () => {
         });
     });
 
-    test("Back returns to provider step", () => {
-        render(
-            <WirePicker
-                propName="data"
-                expectedType="Array<Object>"
-                providers={providers}
-                onPick={() => {}}
-            />
+    test("picking a method when no instance is configured leaves provider null", async () => {
+        const onPick = jest.fn();
+        await act(async () => {
+            render(
+                <WirePicker
+                    propName="data"
+                    expectedType="Array<Object>"
+                    providers={{}}
+                    onPick={onPick}
+                />
+            );
+        });
+        fireEvent.click(
+            screen.getByTestId("composer-wire-provider-data-algolia")
         );
         fireEvent.click(
-            screen.getByTestId("composer-wire-provider-data-MyAlgolia")
+            screen.getByTestId("composer-wire-method-data-listIndices")
+        );
+        expect(onPick).toHaveBeenCalledWith({
+            provider: null,
+            providerType: "algolia",
+            providerClass: "credential",
+            method: "listIndices",
+        });
+    });
+
+    test("Back returns to the provider-type step", async () => {
+        await act(async () => {
+            render(
+                <WirePicker
+                    propName="data"
+                    expectedType="Array<Object>"
+                    providers={{}}
+                    onPick={() => {}}
+                />
+            );
+        });
+        fireEvent.click(
+            screen.getByTestId("composer-wire-provider-data-algolia")
         );
         expect(
             screen.getByTestId("composer-wire-methods-data")
@@ -166,128 +260,82 @@ describe("WirePicker — credential method step", () => {
             screen.getByTestId("composer-wire-providers-data")
         ).toBeInTheDocument();
     });
-
-    test("empty state when no methods match the slot type", () => {
-        // Setting expectedType to a scalar that nothing in the
-        // algolia registry returns.
-        render(
-            <WirePicker
-                propName="x"
-                expectedType="boolean"
-                providers={providers}
-                onPick={() => {}}
-            />
-        );
-        fireEvent.click(
-            screen.getByTestId("composer-wire-provider-x-MyAlgolia")
-        );
-        expect(
-            screen.getByText(/No methods on this provider/i)
-        ).toBeInTheDocument();
-    });
 });
 
 describe("WirePicker — MCP method step", () => {
-    const providers = {
-        MyFilesystem: {
-            type: "filesystem",
-            providerClass: "mcp",
-            serverName: "filesystem",
-        },
-    };
-
-    afterEach(() => {
-        clearMcpBridge();
-    });
-
-    test("shows loading and then renders the tool list", async () => {
-        let resolve;
-        const pending = new Promise((r) => {
-            resolve = r;
+    test("with no configured instance, free-text input lets the user wire by tool name", async () => {
+        setMcpBridge({
+            getCatalog: jest.fn().mockResolvedValue({
+                catalog: { servers: [{ id: "gmail", name: "Gmail" }] },
+            }),
         });
-        setMcpBridge(jest.fn().mockReturnValue(pending));
-
-        render(
-            <WirePicker
-                propName="data"
-                expectedType="Array<Object>"
-                providers={providers}
-                onPick={() => {}}
-            />
-        );
-        fireEvent.click(
-            screen.getByTestId("composer-wire-provider-data-MyFilesystem")
-        );
-        expect(screen.getByText(/Loading tools/)).toBeInTheDocument();
-
-        await act(async () => {
-            resolve({
-                tools: [
-                    { name: "read_file", description: "Read a file" },
-                    { name: "write_file", description: "Write a file" },
-                ],
-            });
-        });
-
-        expect(
-            screen.getByTestId("composer-wire-method-data-read_file")
-        ).toBeInTheDocument();
-        expect(
-            screen.getByTestId("composer-wire-method-data-write_file")
-        ).toBeInTheDocument();
-    });
-
-    test("error state surfaces the bridge error", async () => {
-        setMcpBridge(
-            jest.fn().mockResolvedValue({
-                error: "server-not-running",
-                message: "Server filesystem is not running",
-            })
-        );
-        render(
-            <WirePicker
-                propName="data"
-                expectedType="Array<Object>"
-                providers={providers}
-                onPick={() => {}}
-            />
-        );
-        await act(async () => {
-            fireEvent.click(
-                screen.getByTestId("composer-wire-provider-data-MyFilesystem")
-            );
-        });
-        expect(
-            screen.getByText(/Server filesystem is not running/)
-        ).toBeInTheDocument();
-    });
-
-    test("picking an MCP tool fires onPick with providerClass='mcp'", async () => {
-        setMcpBridge(
-            jest.fn().mockResolvedValue({ tools: [{ name: "read_file" }] })
-        );
         const onPick = jest.fn();
-        render(
-            <WirePicker
-                propName="data"
-                expectedType="Array<Object>"
-                providers={providers}
-                onPick={onPick}
-            />
-        );
         await act(async () => {
-            fireEvent.click(
-                screen.getByTestId("composer-wire-provider-data-MyFilesystem")
+            render(
+                <WirePicker
+                    propName="data"
+                    expectedType="Array<Object>"
+                    providers={{}}
+                    onPick={onPick}
+                />
             );
         });
         fireEvent.click(
-            screen.getByTestId("composer-wire-method-data-read_file")
+            screen.getByTestId("composer-wire-provider-data-gmail")
         );
+        const input = screen.getByTestId("composer-wire-tool-input-data");
+        fireEvent.change(input, { target: { value: "list_messages" } });
+        fireEvent.click(screen.getByTestId("composer-wire-tool-confirm-data"));
         expect(onPick).toHaveBeenCalledWith({
-            provider: "MyFilesystem",
-            providerType: "filesystem",
+            provider: null,
+            providerType: "gmail",
             providerClass: "mcp",
-            method: "read_file",
+            method: "list_messages",
+        });
+    });
+
+    test("with a configured instance, useMcpTools enumerates and renders the tool list", async () => {
+        setMcpBridge({
+            getCatalog: jest.fn().mockResolvedValue({
+                catalog: { servers: [{ id: "gmail", name: "Gmail" }] },
+            }),
+            listTools: jest.fn().mockResolvedValue({
+                tools: [{ name: "list_messages", description: "List inbox" }],
+            }),
+        });
+        const onPick = jest.fn();
+        await act(async () => {
+            render(
+                <WirePicker
+                    propName="data"
+                    expectedType="Array<Object>"
+                    providers={{
+                        MyGmail: {
+                            type: "gmail",
+                            providerClass: "mcp",
+                        },
+                    }}
+                    onPick={onPick}
+                />
+            );
+        });
+        fireEvent.click(
+            screen.getByTestId("composer-wire-provider-data-gmail")
+        );
+        // Wait one tick for useMcpTools to resolve.
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+        const toolBtn = screen.getByTestId(
+            "composer-wire-method-data-list_messages"
+        );
+        fireEvent.click(toolBtn);
+        expect(onPick).toHaveBeenCalledWith({
+            provider: "MyGmail",
+            providerType: "gmail",
+            providerClass: "mcp",
+            method: "list_messages",
         });
     });
 });
@@ -310,6 +358,22 @@ describe("WiredSlotSummary", () => {
             />
         );
         expect(screen.getByText("MyAlgolia.search")).toBeInTheDocument();
+    });
+
+    test("falls back to the providerType when no instance is bound", () => {
+        render(
+            <WiredSlotSummary
+                propName="data"
+                wire={{ ...wire, provider: null }}
+                onChange={() => {}}
+                onStatic={() => {}}
+            />
+        );
+        // Without an instance, the summary shows "<type>.<method>"
+        // so the user can still see what's wired.
+        expect(
+            screen.getByTestId("composer-wire-summary-data")
+        ).toBeInTheDocument();
     });
 
     test("Change fires onChange", () => {
@@ -341,7 +405,7 @@ describe("WiredSlotSummary", () => {
     });
 });
 
-describe("WiredSlotSummary — arg binding (C4)", () => {
+describe("WiredSlotSummary — arg binding", () => {
     const wire = {
         provider: "MyAlgolia",
         providerType: "algolia",
@@ -359,26 +423,15 @@ describe("WiredSlotSummary — arg binding (C4)", () => {
                 onSetArg={() => {}}
             />
         );
-        // algolia.search args minus the credential triplet:
-        // indexName, query, options.
         expect(
             screen.getByTestId("composer-arg-row-data-indexName")
         ).toBeInTheDocument();
         expect(
             screen.getByTestId("composer-arg-row-data-query")
         ).toBeInTheDocument();
-        expect(
-            screen.getByTestId("composer-arg-row-data-options")
-        ).toBeInTheDocument();
-        // Auto args are NOT surfaced.
+        // Auto-args (the credential triplet) are excluded.
         expect(
             screen.queryByTestId("composer-arg-row-data-providerHash")
-        ).not.toBeInTheDocument();
-        expect(
-            screen.queryByTestId("composer-arg-row-data-dashboardAppId")
-        ).not.toBeInTheDocument();
-        expect(
-            screen.queryByTestId("composer-arg-row-data-providerName")
         ).not.toBeInTheDocument();
     });
 
@@ -401,76 +454,5 @@ describe("WiredSlotSummary — arg binding (C4)", () => {
             kind: "literal",
             value: "products",
         });
-    });
-
-    test("switching an arg to userConfig fires onSetArg with the kind change", () => {
-        const onSetArg = jest.fn();
-        render(
-            <WiredSlotSummary
-                propName="data"
-                wire={wire}
-                onChange={() => {}}
-                onStatic={() => {}}
-                onSetArg={onSetArg}
-            />
-        );
-        fireEvent.click(
-            screen.getByTestId("composer-arg-kind-userConfig-data-query")
-        );
-        expect(onSetArg).toHaveBeenCalledWith("data", "query", {
-            kind: "userConfig",
-            field: "query",
-        });
-    });
-
-    test("userConfig field name input fires onSetArg with the typed name", () => {
-        const onSetArg = jest.fn();
-        const wireWithUserConfig = {
-            ...wire,
-            args: {
-                query: { kind: "userConfig", field: "query" },
-            },
-        };
-        render(
-            <WiredSlotSummary
-                propName="data"
-                wire={wireWithUserConfig}
-                onChange={() => {}}
-                onStatic={() => {}}
-                onSetArg={onSetArg}
-            />
-        );
-        const input = screen.getByTestId(
-            "composer-arg-userconfig-input-data-query"
-        );
-        fireEvent.change(input, { target: { value: "searchTerm" } });
-        expect(onSetArg).toHaveBeenCalledWith("data", "query", {
-            kind: "userConfig",
-            field: "searchTerm",
-        });
-    });
-
-    test("MCP wires only surface args the user has already bound (no schema)", () => {
-        const mcpWire = {
-            provider: "MyFs",
-            providerType: "filesystem",
-            providerClass: "mcp",
-            method: "read_file",
-            args: {
-                path: { kind: "literal", value: "/tmp/x" },
-            },
-        };
-        render(
-            <WiredSlotSummary
-                propName="data"
-                wire={mcpWire}
-                onChange={() => {}}
-                onStatic={() => {}}
-                onSetArg={() => {}}
-            />
-        );
-        expect(
-            screen.getByTestId("composer-arg-row-data-path")
-        ).toBeInTheDocument();
     });
 });

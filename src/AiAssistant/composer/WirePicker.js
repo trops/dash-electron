@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { PROVIDER_API_REGISTRY } from "../providerApiRegistry";
 import { useMcpTools } from "../mcpToolsQuery";
 import { scoreMethodList } from "./wireMatching";
+import { useWirableTypes } from "./wirableTypes";
 
 /**
  * WirePicker — Compose-mode Stage 3 in-place picker.
@@ -32,62 +33,43 @@ import { scoreMethodList } from "./wireMatching";
  * on the picker (cleared) based on the wire spec it sees afterwards.
  */
 export function WirePicker({ propName, expectedType, providers, onPick }) {
-    const [pickedProvider, setPickedProvider] = useState(null);
+    const [pickedType, setPickedType] = useState(null);
+    const wirable = useWirableTypes(providers);
 
-    // Filter providers to ones we can actually wire methods for.
-    // credential providers must have a corresponding entry in
-    // PROVIDER_API_REGISTRY; mcp providers always qualify (tools
-    // are runtime-enumerated).
-    const candidates = useMemo(() => {
-        const out = [];
-        for (const [name, p] of Object.entries(providers || {})) {
-            if (!p) continue;
-            const providerClass = p.providerClass || "credential";
-            if (
-                providerClass === "credential" &&
-                PROVIDER_API_REGISTRY[p.type]
-            ) {
-                out.push({
-                    name,
-                    type: p.type,
-                    providerClass,
-                });
-            } else if (providerClass === "mcp") {
-                out.push({
-                    name,
-                    type: p.type,
-                    providerClass,
-                    // The MCP listTools bridge takes a serverName;
-                    // dash-core uses the provider name itself by
-                    // convention when no explicit serverName is set.
-                    serverName: p.serverName || name,
-                });
-            }
-        }
-        return out.sort((a, b) => a.name.localeCompare(b.name));
-    }, [providers]);
-
-    if (!pickedProvider) {
+    if (!pickedType) {
         return (
-            <ProviderStep
+            <ProviderTypeStep
                 propName={propName}
-                candidates={candidates}
-                onPick={setPickedProvider}
+                wirable={wirable}
+                onPick={setPickedType}
             />
         );
     }
+
+    // For the method step we also need to know which (if any)
+    // configured provider instance to bind the resulting wire to.
+    // If exactly one instance is configured, auto-bind it. If
+    // multiple exist, pick the first (the install flow can let the
+    // user rebind). If none, leave `provider` null — the install
+    // flow surfaces a "configure a {type} provider" prompt.
+    const autoInstance =
+        Array.isArray(pickedType.configuredInstances) &&
+        pickedType.configuredInstances.length > 0
+            ? pickedType.configuredInstances[0]
+            : null;
 
     return (
         <MethodStep
             propName={propName}
             expectedType={expectedType}
-            provider={pickedProvider}
-            onBack={() => setPickedProvider(null)}
+            type={pickedType}
+            providers={providers}
+            onBack={() => setPickedType(null)}
             onPick={(method) =>
                 onPick({
-                    provider: pickedProvider.name,
-                    providerType: pickedProvider.type,
-                    providerClass: pickedProvider.providerClass,
+                    provider: autoInstance,
+                    providerType: pickedType.id,
+                    providerClass: pickedType.kind,
                     method,
                 })
             }
@@ -95,39 +77,69 @@ export function WirePicker({ propName, expectedType, providers, onPick }) {
     );
 }
 
-function ProviderStep({ propName, candidates, onPick }) {
-    if (candidates.length === 0) {
+function ProviderTypeStep({ propName, wirable, onPick }) {
+    // Only show the loading-only state when we have nothing to show
+    // yet. Credential types arrive synchronously from the registry,
+    // so usually the list is non-empty even during the catalog
+    // fetch.
+    if (wirable.status === "loading" && wirable.types.length === 0) {
+        return (
+            <div
+                className="text-[11px] px-2 py-1.5 rounded border border-dashed border-gray-700 bg-gray-900/50 text-gray-500"
+                data-testid={`composer-wire-loading-${propName}`}
+            >
+                Loading provider catalog…
+            </div>
+        );
+    }
+    if (wirable.types.length === 0) {
         return (
             <div
                 className="text-[11px] px-2 py-1.5 rounded border border-dashed border-gray-700 bg-gray-900/50 text-gray-500"
                 data-testid={`composer-wire-empty-${propName}`}
             >
-                No wirable providers configured. Add a credential or MCP
-                provider in Settings → Providers.
+                No wirable provider types available.
+                {wirable.error && (
+                    <span className="block text-red-400 mt-1">
+                        {wirable.error}
+                    </span>
+                )}
             </div>
         );
     }
     return (
         <div
-            className="rounded border border-gray-700 bg-gray-900/50 p-1"
+            className="rounded border border-gray-700 bg-gray-900/50 p-1 max-h-72 overflow-y-auto"
             data-testid={`composer-wire-providers-${propName}`}
         >
             <div className="text-[10px] uppercase tracking-wide text-gray-500 px-1 mb-1">
-                Pick a provider
+                Pick a provider type
             </div>
             <div className="flex flex-col">
-                {candidates.map((p) => (
+                {wirable.types.map((t) => (
                     <button
-                        key={p.name}
+                        key={`${t.kind}:${t.id}`}
                         type="button"
-                        onClick={() => onPick(p)}
-                        className="text-left text-xs px-2 py-1 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200 flex items-center justify-between"
-                        data-testid={`composer-wire-provider-${propName}-${p.name}`}
+                        onClick={() => onPick(t)}
+                        className="text-left text-xs px-2 py-1 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200"
+                        data-testid={`composer-wire-provider-${propName}-${t.id}`}
                     >
-                        <span className="truncate">{p.name}</span>
-                        <span className="text-[10px] text-gray-500 ml-2">
-                            {p.type} ({p.providerClass})
-                        </span>
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="truncate">{t.name}</span>
+                            <span className="text-[10px] text-gray-500 shrink-0">
+                                {t.kind}
+                                {t.hasConfiguredInstance && (
+                                    <span className="ml-1 text-emerald-400">
+                                        ✓ configured
+                                    </span>
+                                )}
+                            </span>
+                        </div>
+                        {t.description && (
+                            <div className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">
+                                {t.description}
+                            </div>
+                        )}
                     </button>
                 ))}
             </div>
@@ -135,12 +147,20 @@ function ProviderStep({ propName, candidates, onPick }) {
     );
 }
 
-function MethodStep({ propName, expectedType, provider, onBack, onPick }) {
-    if (provider.providerClass === "mcp") {
+function MethodStep({
+    propName,
+    expectedType,
+    type,
+    providers,
+    onBack,
+    onPick,
+}) {
+    if (type.kind === "mcp") {
         return (
             <McpMethodStep
                 propName={propName}
-                provider={provider}
+                type={type}
+                providers={providers}
                 onBack={onBack}
                 onPick={onPick}
             />
@@ -150,7 +170,7 @@ function MethodStep({ propName, expectedType, provider, onBack, onPick }) {
         <CredentialMethodStep
             propName={propName}
             expectedType={expectedType}
-            provider={provider}
+            type={type}
             onBack={onBack}
             onPick={onPick}
         />
@@ -160,14 +180,14 @@ function MethodStep({ propName, expectedType, provider, onBack, onPick }) {
 function CredentialMethodStep({
     propName,
     expectedType,
-    provider,
+    type,
     onBack,
     onPick,
 }) {
     const ranked = useMemo(() => {
-        const registry = PROVIDER_API_REGISTRY[provider.type] || {};
+        const registry = PROVIDER_API_REGISTRY[type.id] || {};
         return scoreMethodList(Object.entries(registry), expectedType);
-    }, [provider.type, expectedType]);
+    }, [type.id, expectedType]);
 
     return (
         <div
@@ -175,7 +195,7 @@ function CredentialMethodStep({
             data-testid={`composer-wire-methods-${propName}`}
         >
             <PickerHeader
-                title={`Methods on ${provider.name}`}
+                title={`Methods on ${type.name}`}
                 expectedType={expectedType}
                 onBack={onBack}
             />
@@ -221,34 +241,80 @@ function CredentialMethodStep({
     );
 }
 
-function McpMethodStep({ propName, provider, onBack, onPick }) {
-    const { status, tools, error } = useMcpTools(provider.serverName, null);
+function McpMethodStep({ propName, type, providers, onBack, onPick }) {
+    // The MCP listTools bridge only works against a RUNNING server,
+    // which requires a configured + started instance. If the user
+    // has one, use it; otherwise show a configure-first hint plus
+    // a free-text tool-name input so the user can still wire to a
+    // tool they know exists by name (the install flow will refuse
+    // the install if the tool turns out not to be real).
+    const configuredInstance = useMemo(() => {
+        for (const [name, p] of Object.entries(providers || {})) {
+            if (p?.type === type.id && p?.providerClass === "mcp") {
+                return p.serverName || name;
+            }
+        }
+        return null;
+    }, [providers, type.id]);
+    const { status, tools, error } = useMcpTools(configuredInstance, null);
+    const [freeText, setFreeText] = useState("");
+
     return (
         <div
             className="rounded border border-gray-700 bg-gray-900/50 p-1"
             data-testid={`composer-wire-methods-${propName}`}
         >
             <PickerHeader
-                title={`Tools on ${provider.name}`}
+                title={`Tools on ${type.name}`}
                 expectedType="(MCP)"
                 onBack={onBack}
             />
-            {status === "loading" && (
-                <div className="text-[11px] text-gray-500 px-2 py-1">
-                    Loading tools from {provider.serverName}…
+            {!configuredInstance && (
+                <div className="text-[11px] text-gray-500 px-2 py-1 space-y-1">
+                    <div>
+                        No configured {type.name} provider — tool list
+                        unavailable. Configure one in Settings → Providers to
+                        enumerate, or wire to a known tool name below.
+                    </div>
+                    <div className="flex gap-1">
+                        <input
+                            type="text"
+                            value={freeText}
+                            onChange={(e) => setFreeText(e.target.value)}
+                            placeholder="tool name"
+                            className="flex-1 px-1.5 py-0.5 text-[11px] font-mono bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                            data-testid={`composer-wire-tool-input-${propName}`}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (freeText.trim()) onPick(freeText.trim());
+                            }}
+                            disabled={!freeText.trim()}
+                            className="px-2 py-0.5 text-[11px] rounded bg-indigo-700 hover:bg-indigo-600 disabled:bg-gray-700 disabled:text-gray-500 text-white"
+                            data-testid={`composer-wire-tool-confirm-${propName}`}
+                        >
+                            Wire
+                        </button>
+                    </div>
                 </div>
             )}
-            {status === "error" && (
+            {configuredInstance && status === "loading" && (
+                <div className="text-[11px] text-gray-500 px-2 py-1">
+                    Loading tools from {configuredInstance}…
+                </div>
+            )}
+            {configuredInstance && status === "error" && (
                 <div className="text-[11px] text-red-400 px-2 py-1">
                     {error || "Failed to load tools"}
                 </div>
             )}
-            {status === "ok" && tools.length === 0 && (
+            {configuredInstance && status === "ok" && tools.length === 0 && (
                 <div className="text-[11px] text-gray-500 px-2 py-1">
                     No tools exposed by this server.
                 </div>
             )}
-            {status === "ok" && tools.length > 0 && (
+            {configuredInstance && status === "ok" && tools.length > 0 && (
                 <div className="flex flex-col">
                     {tools.map((tool) => (
                         <button
@@ -357,8 +423,14 @@ export function WiredSlotSummary({
                 <div className="min-w-0">
                     <span className="text-gray-400">Wired to: </span>
                     <span className="font-mono">
-                        {wire.provider}.{wire.method}
+                        {wire.provider || wire.providerType || "?"}.
+                        {wire.method}
                     </span>
+                    {!wire.provider && wire.providerType && (
+                        <span className="ml-2 text-[10px] text-amber-400">
+                            (configure a {wire.providerType} provider to run)
+                        </span>
+                    )}
                 </div>
                 <div className="flex items-center gap-2 ml-2 shrink-0">
                     <button

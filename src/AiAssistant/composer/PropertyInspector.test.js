@@ -127,11 +127,19 @@ describe("PropertyInspector — slot mode toggle", () => {
         expect(onSetSlotMode).toHaveBeenCalledWith("node-1", "data", "wire");
     });
 
-    test("when wired but unconfigured, the static editor is replaced with the WirePicker (empty state w/ no providers)", () => {
+    test("when wired but unconfigured, the static editor is replaced with the WirePicker", () => {
         const wiredNode = makeNode({
             type: "Table",
             wires: { data: { provider: null, method: null } },
         });
+        // Stub the MCP catalog bridge so the picker's async type
+        // load completes (the credential algolia type still surfaces
+        // synchronously from the registry regardless).
+        if (!window.mainApi) window.mainApi = {};
+        if (!window.mainApi.mcp) window.mainApi.mcp = {};
+        window.mainApi.mcp.getCatalog = jest
+            .fn()
+            .mockResolvedValue({ catalog: { servers: [] } });
         render(
             <PropertyInspector
                 node={wiredNode}
@@ -143,10 +151,12 @@ describe("PropertyInspector — slot mode toggle", () => {
                 onClose={() => {}}
             />
         );
-        // With zero providers configured, the picker renders its
-        // empty state instead of the old "configure in Stage 3" stub.
+        // The picker renders algolia (synchronously available from
+        // the registry, no async wait required); the prior empty
+        // state is gone now that we surface types instead of
+        // configured instances.
         expect(
-            screen.getByTestId("composer-wire-empty-data")
+            screen.getByTestId("composer-wire-provider-data-algolia")
         ).toBeInTheDocument();
         // The static editor (a JSON textarea for Table.data) is gone.
         expect(

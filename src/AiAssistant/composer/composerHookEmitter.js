@@ -189,10 +189,16 @@ export function buildHookScaffold(tree, providerApiRegistry) {
                 );
             }
         } else {
-            // credential class is the default
-            if (!credentialProvidersSeen.has(wire.provider)) {
-                const suffix = toIdent(wire.provider);
-                credentialProvidersSeen.set(wire.provider, suffix);
+            // credential class is the default. The hook key is the
+            // resolved provider type (everything resolves through
+            // useWidgetProviders().getProvider(<type>)); the
+            // provider instance name is only used as a stable suffix
+            // when present, so two different wires to the same type
+            // share one useProviderClient call.
+            const providerKey = wire.provider || wire.providerType;
+            if (!credentialProvidersSeen.has(providerKey)) {
+                const suffix = toIdent(providerKey);
+                credentialProvidersSeen.set(providerKey, suffix);
                 coreImports.add("useWidgetProviders");
                 coreImports.add("useProviderClient");
                 hookLines.push(
@@ -268,7 +274,8 @@ export function buildHookScaffold(tree, providerApiRegistry) {
                 `    }, [${handle}?.isConnected]);`
             );
         } else {
-            const suffix = credentialProvidersSeen.get(wire.provider);
+            const providerKey = wire.provider || wire.providerType;
+            const suffix = credentialProvidersSeen.get(providerKey);
             const handle = `pc_${suffix}`;
             const argLines = [
                 `            providerHash: ${handle}.providerHash,`,
