@@ -633,6 +633,38 @@ describe("WiredSlotSummary — arg binding", () => {
         ).not.toBeInTheDocument();
     });
 
+    test("MCP wire surfaces known-tool args even when nothing's bound yet (no chicken-and-egg)", () => {
+        // google-drive.search has `query` declared in the known-
+        // tools catalog. Even with `wire.args` empty, the arg row
+        // should appear so the user can bind it via the eventArg
+        // / literal / userConfig toggle — fixes the runtime
+        // "Missing required argument: query" error that came from
+        // the user having no UI to add args.
+        render(
+            <WiredSlotSummary
+                propName="onChange"
+                wire={{
+                    provider: null,
+                    providerType: "google-drive",
+                    providerClass: "mcp",
+                    method: "search",
+                }}
+                isCallbackWire={true}
+                onChange={() => {}}
+                onStatic={() => {}}
+                onSetArg={() => {}}
+            />
+        );
+        expect(
+            screen.getByTestId("composer-arg-row-onChange-query")
+        ).toBeInTheDocument();
+        // eventArg button is available so the user can bind to the
+        // typed value.
+        expect(
+            screen.getByTestId("composer-arg-kind-eventArg-onChange-query")
+        ).toBeInTheDocument();
+    });
+
     test("eventArg button appears only for callback wires and binds the arg to the event param", () => {
         const onSetArg = jest.fn();
         render(

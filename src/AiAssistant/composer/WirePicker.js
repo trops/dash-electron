@@ -3,7 +3,7 @@ import { PROVIDER_API_REGISTRY } from "../providerApiRegistry";
 import { useMcpTools } from "../mcpToolsQuery";
 import { scoreMethodList } from "./wireMatching";
 import { useWirableTypes } from "./wirableTypes";
-import { getKnownToolsForType } from "./mcpKnownTools";
+import { getKnownToolsForType, getKnownToolArgs } from "./mcpKnownTools";
 
 /**
  * WirePicker — Compose-mode Stage 3 in-place picker.
@@ -508,9 +508,18 @@ export function WiredSlotSummary({
 }) {
     const argNames = useMemo(() => {
         if (wire.providerClass === "mcp") {
-            // MCP tools — surface only args the user has already
-            // bound; C4 doesn't enumerate tool inputSchema yet.
-            return Object.keys(wire.args || {});
+            // MCP tools: prefer the known-tools catalog so required
+            // args (like google-drive.search.query) are surfaced
+            // for binding BEFORE the user runs the widget and hits
+            // a "Missing required argument" error at runtime.
+            // Merge with whatever the user has already bound so
+            // unknown-catalog args don't vanish.
+            const known =
+                getKnownToolArgs(wire.providerType, wire.method) || [];
+            const bound = Object.keys(wire.args || {});
+            const merged = [...known];
+            for (const b of bound) if (!merged.includes(b)) merged.push(b);
+            return merged;
         }
         const reg =
             PROVIDER_API_REGISTRY[wire.providerType] &&
