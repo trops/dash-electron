@@ -29,6 +29,7 @@ import {
     updateNodeProp,
     setSlotMode,
     setSlotWire,
+    setSlotArg,
     clearSlotWire,
     getNodeById,
 } from "./composerEmitter";
@@ -424,6 +425,85 @@ describe("setSlotMode / wires", () => {
     });
 });
 
+describe("emitWidgetCode — hook scaffolding for configured wires (C4)", () => {
+    function makeWiredTableTree() {
+        const tree = makeEmptyTree("WiredWidget");
+        const t2 = insertChild(tree, "root", { type: "Table" }, 1);
+        return setSlotWire(t2, "node-1", "data", {
+            provider: "MyAlgolia",
+            providerType: "algolia",
+            providerClass: "credential",
+            method: "listIndices",
+            args: {},
+        });
+    }
+
+    test("emits the full hook+effect+JSX bind for a wired Table", () => {
+        const { componentCode } = emitWidgetCode(makeWiredTableTree());
+        // React import grows to include useState + useEffect.
+        expect(componentCode).toContain(
+            'import React, { useEffect, useState } from "react";'
+        );
+        // dash-core hooks pulled in.
+        expect(componentCode).toContain(
+            'import { useProviderClient, useWidgetProviders } from "@trops/dash-core";'
+        );
+        // dash-react components still imported.
+        expect(componentCode).toContain(
+            'import { Panel, Table } from "@trops/dash-react";'
+        );
+        // Hook calls + state + effect body.
+        expect(componentCode).toContain(
+            "useProviderClient(provider_MyAlgolia)"
+        );
+        expect(componentCode).toContain(
+            "const [data, set_data] = useState(null);"
+        );
+        expect(componentCode).toContain("window.mainApi.algolia.listIndices");
+        // Wired prop binds to the slot var instead of [] placeholder.
+        expect(componentCode).toContain("<Table data={data} columns={[]} />");
+        // Component now takes a userConfig prop because at least one
+        // wire is configured (even though no userConfig args set).
+        expect(componentCode).toContain(
+            "export default function WiredWidget({ userConfig = {} })"
+        );
+    });
+
+    test("data-less tree (no wires) emits the C1 shape unchanged", () => {
+        const tree = makeEmptyTree();
+        const { componentCode } = emitWidgetCode(tree);
+        expect(componentCode).toContain('import React from "react";');
+        expect(componentCode).not.toContain("@trops/dash-core");
+        expect(componentCode).not.toContain("useState");
+        expect(componentCode).not.toContain("useEffect");
+        expect(componentCode).toContain(
+            "export default function ComposedWidget()"
+        );
+    });
+
+    test("mcp-class wire emits useMcpProvider + callTool", () => {
+        const tree = makeEmptyTree("McpWidget");
+        const t2 = insertChild(tree, "root", { type: "DataList" }, 1);
+        const t3 = setSlotWire(t2, "node-1", "items", {
+            provider: "MyFs",
+            providerType: "filesystem",
+            providerClass: "mcp",
+            method: "read_file",
+            args: {
+                path: { kind: "literal", value: "/tmp/x.json" },
+            },
+        });
+        const { componentCode } = emitWidgetCode(t3);
+        expect(componentCode).toContain(
+            'import { useMcpProvider } from "@trops/dash-core";'
+        );
+        expect(componentCode).toContain('useMcpProvider("filesystem")');
+        expect(componentCode).toContain('mcp_filesystem.callTool("read_file"');
+        expect(componentCode).toContain('path: "/tmp/x.json"');
+        expect(componentCode).toContain("<DataList items={items} />");
+    });
+});
+
 describe("setSlotWire / clearSlotWire", () => {
     test("setSlotWire installs a wire spec and flips slot into wire mode", () => {
         const tree = makeEmptyTree();
@@ -482,6 +562,82 @@ describe("setSlotWire / clearSlotWire", () => {
         const t2 = insertChild(tree, "root", { type: "Table" }, 1);
         const next = clearSlotWire(t2, "node-1", "data");
         expect(next).toBe(t2);
+    });
+});
+
+describe("setSlotArg (C4 arg binding)", () => {
+    function wiredTree() {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(tree, "root", { type: "Table" }, 1);
+        return setSlotWire(t2, "node-1", "data", {
+            provider: "A",
+            providerType: "algolia",
+            providerClass: "credential",
+            method: "search",
+        });
+    }
+
+    test("sets a literal binding", () => {
+        const t = setSlotArg(wiredTree(), "node-1", "data", "indexName", {
+            kind: "literal",
+            value: "products",
+        });
+        const node = getNodeById(t, "node-1");
+        expect(node.wires.data.args.indexName).toEqual({
+            kind: "literal",
+            value: "products",
+        });
+    });
+
+    test("sets a userConfig binding", () => {
+        const t = setSlotArg(wiredTree(), "node-1", "data", "query", {
+            kind: "userConfig",
+            field: "searchTerm",
+        });
+        const node = getNodeById(t, "node-1");
+        expect(node.wires.data.args.query).toEqual({
+            kind: "userConfig",
+            field: "searchTerm",
+        });
+    });
+
+    test("undefined binding clears the arg", () => {
+        const t1 = setSlotArg(wiredTree(), "node-1", "data", "indexName", {
+            kind: "literal",
+            value: "x",
+        });
+        const t2 = setSlotArg(t1, "node-1", "data", "indexName", undefined);
+        const node = getNodeById(t2, "node-1");
+        expect(node.wires.data.args.indexName).toBeUndefined();
+    });
+
+    test("is a no-op when no wire spec exists on the slot", () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(tree, "root", { type: "Table" }, 1);
+        const next = setSlotArg(t2, "node-1", "data", "indexName", {
+            kind: "literal",
+            value: "x",
+        });
+        expect(next).toBe(t2);
+    });
+
+    test("is non-mutating", () => {
+        const t = wiredTree();
+        const before = JSON.stringify(t);
+        setSlotArg(t, "node-1", "data", "indexName", {
+            kind: "literal",
+            value: "x",
+        });
+        expect(JSON.stringify(t)).toBe(before);
+    });
+
+    test("propagates into emitted code through the hook scaffold", () => {
+        const t = setSlotArg(wiredTree(), "node-1", "data", "indexName", {
+            kind: "literal",
+            value: "products",
+        });
+        const { componentCode } = emitWidgetCode(t);
+        expect(componentCode).toContain('indexName: "products"');
     });
 });
 

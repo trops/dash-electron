@@ -301,43 +301,210 @@ function truncate(s, max) {
     return s.length > max ? s.slice(0, max - 1) + "…" : s;
 }
 
+// Credential-provider methods always carry these three handle fields
+// as the first three args — the emitter auto-supplies them from the
+// resolved provider client, so the user never needs to bind them.
+// Filtered out of the arg editor.
+const CREDENTIAL_AUTO_ARGS = new Set([
+    "providerHash",
+    "dashboardAppId",
+    "providerName",
+]);
+
 /**
- * Read-only display of a configured wire spec. Rendered by the
- * property inspector once the picker has set a method. Shows the
- * provider + method and offers Change (clear method but stay in
- * wire mode → picker reappears) and Static (flip the slot back to
- * a literal value).
+ * Read-only display of a configured wire spec + per-arg binding
+ * editor.
+ *
+ * Rendered by the property inspector once the picker has set a
+ * method. Shows the provider + method header with Change / Static
+ * buttons, then a row per bindable method arg (for credential
+ * methods, sourced from PROVIDER_API_REGISTRY[type][method].args).
+ * For mcp tools there is no static arg schema, so this falls back
+ * to showing whatever args the user has already bound — the user
+ * can add new args via a free-text name input.
+ *
+ * Each arg row binds either to a literal value (JSON-encoded for
+ * non-scalars) or to a userConfig field name. The kind toggle
+ * persists per arg; switching between literal and userConfig
+ * preserves the literal value so the user can experiment.
  */
-export function WiredSlotSummary({ propName, wire, onChange, onStatic }) {
+export function WiredSlotSummary({
+    propName,
+    wire,
+    onChange,
+    onStatic,
+    onSetArg,
+}) {
+    const argNames = useMemo(() => {
+        if (wire.providerClass === "mcp") {
+            // MCP tools — surface only args the user has already
+            // bound; C4 doesn't enumerate tool inputSchema yet.
+            return Object.keys(wire.args || {});
+        }
+        const reg =
+            PROVIDER_API_REGISTRY[wire.providerType] &&
+            PROVIDER_API_REGISTRY[wire.providerType][wire.method];
+        if (!reg || !Array.isArray(reg.args)) return [];
+        return reg.args.filter((a) => !CREDENTIAL_AUTO_ARGS.has(a));
+    }, [wire.providerType, wire.providerClass, wire.method, wire.args]);
+
     return (
         <div
-            className="flex items-center justify-between text-[11px] px-2 py-1.5 rounded border border-indigo-700/40 bg-indigo-900/20 text-indigo-200"
+            className="rounded border border-indigo-700/40 bg-indigo-900/20 text-indigo-200"
             data-testid={`composer-wire-summary-${propName}`}
         >
-            <div className="min-w-0">
-                <span className="text-gray-400">Wired to: </span>
-                <span className="font-mono">
-                    {wire.provider}.{wire.method}
+            <div className="flex items-center justify-between text-[11px] px-2 py-1.5">
+                <div className="min-w-0">
+                    <span className="text-gray-400">Wired to: </span>
+                    <span className="font-mono">
+                        {wire.provider}.{wire.method}
+                    </span>
+                </div>
+                <div className="flex items-center gap-2 ml-2 shrink-0">
+                    <button
+                        type="button"
+                        onClick={onChange}
+                        className="text-[10px] text-indigo-300 hover:text-indigo-100 underline"
+                        data-testid={`composer-wire-change-${propName}`}
+                    >
+                        Change
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onStatic}
+                        className="text-[10px] text-gray-400 hover:text-gray-200 underline"
+                        data-testid={`composer-wire-revert-${propName}`}
+                    >
+                        Static
+                    </button>
+                </div>
+            </div>
+            {argNames.length > 0 && onSetArg && (
+                <div
+                    className="px-2 py-1.5 border-t border-indigo-700/40 space-y-1.5"
+                    data-testid={`composer-wire-args-${propName}`}
+                >
+                    {argNames.map((argName) => (
+                        <ArgRow
+                            key={argName}
+                            propName={propName}
+                            argName={argName}
+                            binding={(wire.args || {})[argName]}
+                            onSetArg={onSetArg}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function ArgRow({ propName, argName, binding, onSetArg }) {
+    const kind = (binding && binding.kind) || "literal";
+
+    return (
+        <div data-testid={`composer-arg-row-${propName}-${argName}`}>
+            <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[10px] font-mono text-indigo-200">
+                    {argName}
                 </span>
+                <div className="flex items-center gap-0.5 text-[10px] bg-gray-800 border border-gray-700 rounded p-0.5">
+                    <button
+                        type="button"
+                        onClick={() =>
+                            onSetArg(propName, argName, {
+                                kind: "literal",
+                                value:
+                                    (binding &&
+                                        binding.kind === "literal" &&
+                                        binding.value) ||
+                                    "",
+                            })
+                        }
+                        className={`px-1.5 py-0.5 rounded ${
+                            kind === "literal"
+                                ? "bg-indigo-600/40 text-indigo-100"
+                                : "text-gray-500 hover:text-gray-300"
+                        }`}
+                        data-testid={`composer-arg-kind-literal-${propName}-${argName}`}
+                    >
+                        literal
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() =>
+                            onSetArg(propName, argName, {
+                                kind: "userConfig",
+                                field:
+                                    (binding &&
+                                        binding.kind === "userConfig" &&
+                                        binding.field) ||
+                                    argName,
+                            })
+                        }
+                        className={`px-1.5 py-0.5 rounded ${
+                            kind === "userConfig"
+                                ? "bg-indigo-600/40 text-indigo-100"
+                                : "text-gray-500 hover:text-gray-300"
+                        }`}
+                        data-testid={`composer-arg-kind-userConfig-${propName}-${argName}`}
+                    >
+                        userConfig
+                    </button>
+                </div>
             </div>
-            <div className="flex items-center gap-2 ml-2 shrink-0">
-                <button
-                    type="button"
-                    onClick={onChange}
-                    className="text-[10px] text-indigo-300 hover:text-indigo-100 underline"
-                    data-testid={`composer-wire-change-${propName}`}
-                >
-                    Change
-                </button>
-                <button
-                    type="button"
-                    onClick={onStatic}
-                    className="text-[10px] text-gray-400 hover:text-gray-200 underline"
-                    data-testid={`composer-wire-revert-${propName}`}
-                >
-                    Static
-                </button>
-            </div>
+            {kind === "literal" ? (
+                <input
+                    type="text"
+                    value={
+                        binding && binding.kind === "literal"
+                            ? typeof binding.value === "string"
+                                ? binding.value
+                                : JSON.stringify(binding.value)
+                            : ""
+                    }
+                    onChange={(e) => {
+                        const raw = e.target.value;
+                        // Try parsing as JSON first (numbers, objects,
+                        // booleans). Fall back to plain string when
+                        // the parse fails — that's the common case for
+                        // free-text args like indexName, query, etc.
+                        let value = raw;
+                        if (raw.length > 0 && /^[\d{[\-"tfn]/.test(raw)) {
+                            try {
+                                value = JSON.parse(raw);
+                            } catch {
+                                value = raw;
+                            }
+                        }
+                        onSetArg(propName, argName, {
+                            kind: "literal",
+                            value,
+                        });
+                    }}
+                    className="w-full px-1.5 py-0.5 text-[10px] font-mono bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                    data-testid={`composer-arg-literal-input-${propName}-${argName}`}
+                    placeholder='"" / 0 / [...] / true'
+                />
+            ) : (
+                <input
+                    type="text"
+                    value={
+                        binding && binding.kind === "userConfig"
+                            ? binding.field || ""
+                            : ""
+                    }
+                    onChange={(e) =>
+                        onSetArg(propName, argName, {
+                            kind: "userConfig",
+                            field: e.target.value,
+                        })
+                    }
+                    className="w-full px-1.5 py-0.5 text-[10px] font-mono bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                    data-testid={`composer-arg-userconfig-input-${propName}-${argName}`}
+                    placeholder="userConfig field name"
+                />
+            )}
         </div>
     );
 }

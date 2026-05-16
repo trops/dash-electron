@@ -45,6 +45,8 @@ import {
     getComponentSchema,
     DASH_REACT_COMPONENT_SCHEMAS,
 } from "../dashReactComponentSchemas";
+import { PROVIDER_API_REGISTRY } from "../providerApiRegistry";
+import { buildHookScaffold } from "./composerHookEmitter";
 
 /**
  * Make a fresh tree containing only a root Panel. Use this as the
@@ -111,7 +113,7 @@ function placeholderForType(typeStr) {
  * level (matches the rest of the AI-emitted code style we don't
  * format-strictly afterwards — prettier runs at install time anyway).
  */
-function renderNodeJsx(node, indent = 0) {
+function renderNodeJsx(node, indent = 0, slotVarBySlotKey = null) {
     if (!node || typeof node.type !== "string") return "";
     const pad = "    ".repeat(indent);
     const schema = getComponentSchema(node.type);
@@ -126,11 +128,17 @@ function renderNodeJsx(node, indent = 0) {
     const propEntries = [];
     for (const [propName, propSchema] of Object.entries(schema.props)) {
         if (propName === "children") continue;
-        // C2: wired slots fall through to placeholder rendering
-        // until C3 emits hook-based bindings. The composer UI shows
-        // the wire state in the property inspector so the user
-        // knows the static value is intentionally unset.
         const isWired = Boolean(node.wires && node.wires[propName]);
+        // C4: if the wire is configured (the hook emitter assigned
+        // a state-var name for this slot), bind the prop to that
+        // var instead of any placeholder or static literal.
+        if (isWired && slotVarBySlotKey) {
+            const slotVar = slotVarBySlotKey.get(`${node.id}:${propName}`);
+            if (slotVar) {
+                propEntries.push(`${propName}={${slotVar}}`);
+                continue;
+            }
+        }
         const userValue =
             !isWired && node.props ? node.props[propName] : undefined;
         if (userValue !== undefined) {
@@ -165,7 +173,7 @@ function renderNodeJsx(node, indent = 0) {
     }
 
     const renderedChildren = childNodes
-        .map((c) => renderNodeJsx(c, indent + 1))
+        .map((c) => renderNodeJsx(c, indent + 1, slotVarBySlotKey))
         .filter(Boolean)
         .join("\n");
     return `${pad}<${node.type}${propsStr}>\n${renderedChildren}\n${pad}</${node.type}>`;
@@ -220,25 +228,60 @@ export function emitWidgetCode(tree) {
         .filter((n) => Boolean(DASH_REACT_COMPONENT_SCHEMAS[n]))
         .sort();
 
-    const importLine =
+    // C4: hook scaffolding for any configured wires in the tree.
+    // Returns the slot-var map renderNodeJsx uses to bind wired
+    // props to state vars, plus the imports and useEffect bodies
+    // the assembled component needs at the top.
+    const scaffold = buildHookScaffold(tree, PROVIDER_API_REGISTRY);
+    const { extraReactImports, coreImports, hookLines, slotVarBySlotKey } =
+        scaffold;
+
+    const reactImport =
+        extraReactImports.size > 0
+            ? `import React, { ${[...extraReactImports]
+                  .sort()
+                  .join(", ")} } from "react";`
+            : 'import React from "react";';
+
+    const reactComponentImport =
         importNames.length > 0
             ? `import { ${importNames.join(", ")} } from "@trops/dash-react";`
             : "";
 
-    const rootJsx = tree && tree.root ? renderNodeJsx(tree.root, 2) : "";
-    const componentCode = [
-        'import React from "react";',
-        importLine,
-        "",
-        `export default function ${widgetName}() {`,
+    const coreImport =
+        coreImports.size > 0
+            ? `import { ${[...coreImports]
+                  .sort()
+                  .join(", ")} } from "@trops/dash-core";`
+            : "";
+
+    const hasWires = slotVarBySlotKey.size > 0;
+    const componentParams = hasWires ? "{ userConfig = {} }" : "";
+    const rootJsx =
+        tree && tree.root ? renderNodeJsx(tree.root, 2, slotVarBySlotKey) : "";
+
+    const componentBody = [
+        ...hookLines,
+        hookLines.length > 0 ? "" : null,
         "    return (",
         rootJsx || "        <div />",
         "    );",
-        "}",
-        "",
-    ]
-        .filter((line) => line !== null)
-        .join("\n");
+    ].filter((line) => line !== null);
+
+    // `null` entries are conditional-skip; "" entries are intentional
+    // blank lines for visual separation.
+    const componentCode =
+        [
+            reactImport,
+            reactComponentImport || null,
+            coreImport || null,
+            "",
+            `export default function ${widgetName}(${componentParams}) {`,
+            ...componentBody,
+            "}",
+        ]
+            .filter((line) => line !== null)
+            .join("\n") + "\n";
 
     const displayName = widgetName.replace(/([A-Z])/g, " $1").trim();
     const configCode = `export default { component: "${widgetName}", name: "${displayName}", package: "${displayName}", author: "Composer", category: "general", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
@@ -357,6 +400,32 @@ export function setSlotWire(tree, nodeId, propName, wire) {
     if (!node) return tree;
     if (!node.wires || typeof node.wires !== "object") node.wires = {};
     node.wires[propName] = { ...wire };
+    return { ...tree, root: cloned };
+}
+
+/**
+ * Set one arg binding on a configured wire. `binding` shapes:
+ *   - { kind: "literal",    value: <any> }
+ *   - { kind: "userConfig", field: <string> }
+ *   - undefined → clears the arg (the emitter omits it)
+ *
+ * Has no effect when the slot has no wire spec yet (the picker has
+ * to set provider+method first before args make sense).
+ */
+export function setSlotArg(tree, nodeId, propName, argName, binding) {
+    if (!tree || !tree.root) return tree;
+    const cloned = cloneNode(tree.root);
+    const node = findNode(cloned, nodeId);
+    if (!node || !node.wires || !node.wires[propName]) return tree;
+    const wire = { ...node.wires[propName] };
+    const args = { ...(wire.args || {}) };
+    if (binding === undefined) {
+        delete args[argName];
+    } else {
+        args[argName] = binding;
+    }
+    wire.args = args;
+    node.wires[propName] = wire;
     return { ...tree, root: cloned };
 }
 
