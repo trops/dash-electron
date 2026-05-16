@@ -58,9 +58,27 @@ export function sendOneShot({
         const llm = window.mainApi.llm;
         const requestId = `composer-suggest-${Date.now()}-${nextRequestSeq++}`;
 
+        // Diagnostic breadcrumbs — kept on window so devtools can
+        // surface them without console-strip in dash-core eating
+        // them. Helped chase the v0.0.713 "timeout, no events" bug
+        // where the CLI bridge was being called but no stream
+        // events came back to the renderer.
+        if (typeof window !== "undefined") {
+            window.__DASH_DEBUG = window.__DASH_DEBUG || [];
+            window.__DASH_DEBUG.push({
+                t: Date.now(),
+                kind: "llmOneShot.start",
+                requestId,
+                backend,
+                hasApiKey: !!apiKey,
+                model,
+            });
+        }
+
         let accumulated = "";
         let settled = false;
         const listenerIds = [];
+        const events = [];
 
         const cleanup = () => {
             for (const id of listenerIds) {
@@ -80,18 +98,35 @@ export function sendOneShot({
             fn(val);
         };
 
-        const timer = setTimeout(
-            () =>
-                settle(
-                    reject,
-                    new Error(`LLM request timed out after ${timeoutMs}ms`)
-                ),
-            timeoutMs
-        );
+        const timer = setTimeout(() => {
+            if (typeof window !== "undefined") {
+                window.__DASH_DEBUG = window.__DASH_DEBUG || [];
+                window.__DASH_DEBUG.push({
+                    t: Date.now(),
+                    kind: "llmOneShot.timeout",
+                    requestId,
+                    backend,
+                    eventsObserved: events.length,
+                    events,
+                });
+            }
+            const hint =
+                events.length === 0
+                    ? " (no stream events received — the LLM bridge fired sendMessage but no delta/complete/error came back. Check Settings → Claude CLI auth, then DevTools window.__DASH_DEBUG.)"
+                    : "";
+            settle(
+                reject,
+                new Error(`LLM request timed out after ${timeoutMs}ms${hint}`)
+            );
+        }, timeoutMs);
 
         try {
             listenerIds.push(
                 llm.onStreamDelta((evt) => {
+                    events.push({
+                        k: "delta",
+                        reqMatch: evt?.requestId === requestId,
+                    });
                     if (!evt || evt.requestId !== requestId) return;
                     if (typeof evt.text === "string") accumulated += evt.text;
                     else if (typeof evt.delta === "string")
@@ -100,17 +135,34 @@ export function sendOneShot({
             );
             listenerIds.push(
                 llm.onStreamComplete((evt) => {
+                    events.push({
+                        k: "complete",
+                        reqMatch: evt?.requestId === requestId,
+                    });
                     if (!evt || evt.requestId !== requestId) return;
-                    // Some backends include the final text on the complete
-                    // event rather than via deltas — prefer it when present.
+                    // CLI bridge emits { requestId, content: [{type,text}],
+                    // stopReason, usage }; Anthropic bridge may emit a
+                    // top-level `text`. Try every reasonable surface
+                    // before falling back to the accumulated deltas.
                     const finalText =
                         (typeof evt.text === "string" && evt.text) ||
+                        (Array.isArray(evt.content)
+                            ? evt.content
+                                  .filter((b) => b && b.type === "text")
+                                  .map((b) => b.text || "")
+                                  .join("")
+                            : "") ||
                         accumulated;
                     settle(resolve, finalText);
                 })
             );
             listenerIds.push(
                 llm.onStreamError((evt) => {
+                    events.push({
+                        k: "error",
+                        reqMatch: evt?.requestId === requestId,
+                        msg: evt?.error || evt?.message,
+                    });
                     if (!evt || evt.requestId !== requestId) return;
                     settle(
                         reject,
@@ -130,10 +182,21 @@ export function sendOneShot({
         Promise.resolve(
             llm.sendMessage(requestId, {
                 model,
-                apiKey,
+                // For the CLI backend, passing apiKey: null is a
+                // no-op; passing it as undefined matches what
+                // ChatCore does and avoids any defensive branch in
+                // the bridge that might treat null as "use anthropic
+                // path" by accident.
+                apiKey: backend === "claude-code" ? undefined : apiKey,
                 backend,
                 systemPrompt,
                 messages,
+                // The CLI handler uses widgetUuid to resume CLI
+                // sessions across requests. Passing a stable id
+                // scoped to the suggester keeps successive Suggest
+                // calls in the same CLI session so the model has
+                // continuity (and saves CLI cold-start cost).
+                widgetUuid: "composer-suggest-layout",
                 // Lock down tool usage — these are pure structured
                 // completions, no MCP / Bash / Read needed.
                 replaceSystemPrompt: true,

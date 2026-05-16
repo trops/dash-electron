@@ -165,6 +165,32 @@ describe("sendOneShot", () => {
         fire("complete", { requestId, text: "all at once" });
         await expect(p).resolves.toBe("all at once");
     });
+
+    test("unwraps content[] shape on the complete event (CLI bridge shape)", async () => {
+        // The CLI bridge emits LLM_STREAM_COMPLETE with shape
+        //   { requestId, content: [{ type: "text", text: "..." }], stopReason, usage }
+        // and NOT with a top-level `text` field. The Anthropic
+        // streaming branch uses `text`. The wrapper has to handle
+        // both.
+        const { fire, llm } = setupFakeBridge();
+        const p = sendOneShot({
+            model: "x",
+            systemPrompt: "p",
+            userMessage: "m",
+        });
+        await Promise.resolve();
+        const [requestId] = llm.sendMessage.mock.calls[0];
+        fire("complete", {
+            requestId,
+            content: [
+                { type: "text", text: "hello " },
+                { type: "tool_use", id: "x" },
+                { type: "text", text: "world" },
+            ],
+            stopReason: "end_turn",
+        });
+        await expect(p).resolves.toBe("hello world");
+    });
 });
 
 describe("sendOneShotJson", () => {
