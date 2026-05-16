@@ -126,10 +126,26 @@ export function sendOneShot({
                     events.push({
                         k: "delta",
                         reqMatch: evt?.requestId === requestId,
+                        gotReqId: evt?.requestId,
+                        textLen:
+                            typeof evt?.text === "string"
+                                ? evt.text.length
+                                : null,
                     });
-                    if (!evt || evt.requestId !== requestId) return;
-                    if (typeof evt.text === "string") accumulated += evt.text;
-                    else if (typeof evt.delta === "string")
+                    // Defensive: if events arrive with no requestId
+                    // field at all (a future bridge shape change),
+                    // accept them too — better to overflow with text
+                    // than time out silently.
+                    if (
+                        evt &&
+                        evt.requestId !== undefined &&
+                        evt.requestId !== null &&
+                        evt.requestId !== requestId
+                    ) {
+                        return;
+                    }
+                    if (typeof evt?.text === "string") accumulated += evt.text;
+                    else if (typeof evt?.delta === "string")
                         accumulated += evt.delta;
                 })
             );
@@ -138,15 +154,25 @@ export function sendOneShot({
                     events.push({
                         k: "complete",
                         reqMatch: evt?.requestId === requestId,
+                        gotReqId: evt?.requestId,
+                        hasContent: Array.isArray(evt?.content),
+                        hasText: typeof evt?.text === "string",
                     });
-                    if (!evt || evt.requestId !== requestId) return;
+                    if (
+                        evt &&
+                        evt.requestId !== undefined &&
+                        evt.requestId !== null &&
+                        evt.requestId !== requestId
+                    ) {
+                        return;
+                    }
                     // CLI bridge emits { requestId, content: [{type,text}],
                     // stopReason, usage }; Anthropic bridge may emit a
                     // top-level `text`. Try every reasonable surface
                     // before falling back to the accumulated deltas.
                     const finalText =
-                        (typeof evt.text === "string" && evt.text) ||
-                        (Array.isArray(evt.content)
+                        (typeof evt?.text === "string" && evt.text) ||
+                        (Array.isArray(evt?.content)
                             ? evt.content
                                   .filter((b) => b && b.type === "text")
                                   .map((b) => b.text || "")
@@ -161,9 +187,17 @@ export function sendOneShot({
                     events.push({
                         k: "error",
                         reqMatch: evt?.requestId === requestId,
+                        gotReqId: evt?.requestId,
                         msg: evt?.error || evt?.message,
                     });
-                    if (!evt || evt.requestId !== requestId) return;
+                    if (
+                        evt &&
+                        evt.requestId !== undefined &&
+                        evt.requestId !== null &&
+                        evt.requestId !== requestId
+                    ) {
+                        return;
+                    }
                     settle(
                         reject,
                         new Error(
