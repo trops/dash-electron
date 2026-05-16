@@ -33,6 +33,7 @@ export function PropertyInspector({
     onSetSlotMode,
     onSetSlotWire,
     onClearSlotWire,
+    onSetSlotArg,
     onClose,
 }) {
     // Hooks must run unconditionally — schema-null and node-null
@@ -105,6 +106,7 @@ export function PropertyInspector({
                         onSetSlotMode={onSetSlotMode}
                         onSetSlotWire={onSetSlotWire}
                         onClearSlotWire={onClearSlotWire}
+                        onSetSlotArg={onSetSlotArg}
                     />
                 ))}
             </div>
@@ -124,6 +126,7 @@ function PropRow({
     onSetSlotMode,
     onSetSlotWire,
     onClearSlotWire,
+    onSetSlotArg,
 }) {
     const isWired = Boolean(wireSpec);
     const mode = isWired ? "wire" : "static";
@@ -184,6 +187,17 @@ function PropRow({
                         }
                         onStatic={() =>
                             onSetSlotMode(nodeId, propName, "static")
+                        }
+                        onSetArg={
+                            onSetSlotArg
+                                ? (slotName, argName, binding) =>
+                                      onSetSlotArg(
+                                          nodeId,
+                                          slotName,
+                                          argName,
+                                          binding
+                                      )
+                                : undefined
                         }
                     />
                 ) : (

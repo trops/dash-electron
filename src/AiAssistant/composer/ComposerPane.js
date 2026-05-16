@@ -12,6 +12,7 @@ import {
     setSlotMode,
     setSlotWire,
     clearSlotWire,
+    setSlotArg,
     getNodeById,
 } from "./composerEmitter";
 import { PropertyInspector } from "./PropertyInspector";
@@ -136,6 +137,15 @@ export function ComposerPane({ onEmit, providers = {}, initialTree = null }) {
         [tree, emit]
     );
 
+    const handleSetSlotArg = useCallback(
+        (nodeId, propName, argName, binding) => {
+            const next = setSlotArg(tree, nodeId, propName, argName, binding);
+            setTree(next);
+            emit(next);
+        },
+        [tree, emit]
+    );
+
     const handleRename = useCallback(
         (e) => {
             const raw = e.target.value;
@@ -205,6 +215,7 @@ export function ComposerPane({ onEmit, providers = {}, initialTree = null }) {
                         onSetSlotMode={handleSetSlotMode}
                         onSetSlotWire={handleSetSlotWire}
                         onClearSlotWire={handleClearSlotWire}
+                        onSetSlotArg={handleSetSlotArg}
                         onClose={() => setSelectedNodeId(null)}
                     />
                 </div>
