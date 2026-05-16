@@ -94,6 +94,56 @@ describe("ComposerPane", () => {
         expect(input.value).toBe("ComposedWidget");
     });
 
+    test("clicking a tree node opens the property inspector and hides the palette", () => {
+        render(<ComposerPane />);
+        // Add a Heading and click its tree row.
+        fireEvent.click(screen.getByTestId("composer-add-Heading"));
+        const treeNode = screen.getAllByTestId(/^composer-node-node-/)[0];
+        fireEvent.click(treeNode);
+
+        // Inspector visible, palette hidden.
+        expect(
+            screen.getByTestId(/^composer-inspector-node-/)
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByTestId("composer-add-Table")
+        ).not.toBeInTheDocument();
+    });
+
+    test("inspector close button restores the palette", () => {
+        render(<ComposerPane />);
+        fireEvent.click(screen.getByTestId("composer-add-Heading"));
+        fireEvent.click(screen.getAllByTestId(/^composer-node-node-/)[0]);
+        fireEvent.click(screen.getByTestId("composer-inspector-close"));
+        expect(screen.getByTestId("composer-add-Table")).toBeInTheDocument();
+    });
+
+    test("editing a prop in the inspector re-emits with the new value", () => {
+        const onEmit = jest.fn();
+        render(<ComposerPane onEmit={onEmit} />);
+        fireEvent.click(screen.getByTestId("composer-add-Heading"));
+        fireEvent.click(screen.getAllByTestId(/^composer-node-node-/)[0]);
+        const input = screen.getByTestId("composer-input-title");
+        fireEvent.change(input, { target: { value: "Updated" } });
+        const last = onEmit.mock.calls[onEmit.mock.calls.length - 1][0];
+        expect(last.componentCode).toContain('title="Updated"');
+    });
+
+    test("removing the selected node also closes the inspector", () => {
+        render(<ComposerPane />);
+        fireEvent.click(screen.getByTestId("composer-add-Heading"));
+        const treeNode = screen.getAllByTestId(/^composer-node-node-/)[0];
+        fireEvent.click(treeNode);
+        // Inspector is open. Remove the same node.
+        const removeBtn = screen.getByLabelText(/Remove Heading/);
+        fireEvent.click(removeBtn);
+        // Inspector should be gone, palette back.
+        expect(
+            screen.queryByTestId(/^composer-inspector-node-/)
+        ).not.toBeInTheDocument();
+        expect(screen.getByTestId("composer-add-Table")).toBeInTheDocument();
+    });
+
     test("category headers can collapse the section", () => {
         render(<ComposerPane />);
         // Display is expanded by default — clicking the header

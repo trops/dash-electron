@@ -8,7 +8,11 @@ import {
     emitWidgetCode,
     insertChild,
     removeNode,
+    updateNodeProp,
+    setSlotMode,
+    getNodeById,
 } from "./composerEmitter";
+import { PropertyInspector } from "./PropertyInspector";
 
 /**
  * ComposerPane — Compose-mode replacement for the chat panel in
@@ -47,6 +51,14 @@ export function ComposerPane({ onEmit, initialTree = null }) {
     const [collapsedCategories, setCollapsedCategories] = useState(
         () => new Set()
     );
+    // C2: when a tree node is selected, the bottom pane flips from
+    // palette → property inspector for that node. null = no
+    // selection → palette is shown.
+    const [selectedNodeId, setSelectedNodeId] = useState(null);
+    const selectedNode = useMemo(
+        () => getNodeById(tree, selectedNodeId),
+        [tree, selectedNodeId]
+    );
 
     const groupedSchemas = useMemo(() => getSchemasByCategory(), []);
     const categoryOrder = ["layout", "display", "input", "action", "feedback"];
@@ -78,6 +90,26 @@ export function ComposerPane({ onEmit, initialTree = null }) {
     const handleRemove = useCallback(
         (nodeId) => {
             const next = removeNode(tree, nodeId);
+            setTree(next);
+            emit(next);
+            // Deselect if the user nuked the node they were editing.
+            if (selectedNodeId === nodeId) setSelectedNodeId(null);
+        },
+        [tree, emit, selectedNodeId]
+    );
+
+    const handleChangeProp = useCallback(
+        (nodeId, propName, value) => {
+            const next = updateNodeProp(tree, nodeId, propName, value);
+            setTree(next);
+            emit(next);
+        },
+        [tree, emit]
+    );
+
+    const handleSetSlotMode = useCallback(
+        (nodeId, propName, mode) => {
+            const next = setSlotMode(tree, nodeId, propName, mode);
             setTree(next);
             emit(next);
         },
@@ -139,69 +171,88 @@ export function ComposerPane({ onEmit, initialTree = null }) {
                     node={tree.root}
                     depth={0}
                     onRemove={handleRemove}
+                    selectedNodeId={selectedNodeId}
+                    onSelect={setSelectedNodeId}
                 />
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
-                <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">
-                    Palette
+            {selectedNode ? (
+                <div className="flex-1 min-h-0">
+                    <PropertyInspector
+                        node={selectedNode}
+                        onChangeProp={handleChangeProp}
+                        onSetSlotMode={handleSetSlotMode}
+                        onClose={() => setSelectedNodeId(null)}
+                    />
                 </div>
-                {categoryOrder.map((cat) => {
-                    const names = groupedSchemas[cat];
-                    if (!names || names.length === 0) return null;
-                    const collapsed = collapsedCategories.has(cat);
-                    return (
-                        <div key={cat} className="mb-3">
-                            <button
-                                type="button"
-                                onClick={() => toggleCategory(cat)}
-                                className="flex items-center w-full text-left text-xs text-gray-400 hover:text-gray-200 mb-1"
-                                data-testid={`composer-category-${cat}`}
-                            >
-                                <span className="mr-1">
-                                    {collapsed ? "▸" : "▾"}
-                                </span>
-                                <span className="capitalize">{cat}</span>
-                                <span className="ml-2 text-gray-600">
-                                    ({names.length})
-                                </span>
-                            </button>
-                            {!collapsed && (
-                                <div className="flex flex-wrap gap-1.5">
-                                    {names.map((name) => (
-                                        <button
-                                            key={name}
-                                            type="button"
-                                            onClick={() => handleAdd(name)}
-                                            className="px-2 py-1 text-xs bg-gray-800 hover:bg-indigo-700 border border-gray-700 hover:border-indigo-500 rounded text-gray-300 hover:text-white transition-colors"
-                                            data-testid={`composer-add-${name}`}
-                                            title={`Add a <${name}> to the widget`}
-                                        >
-                                            + {name}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
+            ) : (
+                <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">
+                        Palette
+                    </div>
+                    {categoryOrder.map((cat) => {
+                        const names = groupedSchemas[cat];
+                        if (!names || names.length === 0) return null;
+                        const collapsed = collapsedCategories.has(cat);
+                        return (
+                            <div key={cat} className="mb-3">
+                                <button
+                                    type="button"
+                                    onClick={() => toggleCategory(cat)}
+                                    className="flex items-center w-full text-left text-xs text-gray-400 hover:text-gray-200 mb-1"
+                                    data-testid={`composer-category-${cat}`}
+                                >
+                                    <span className="mr-1">
+                                        {collapsed ? "▸" : "▾"}
+                                    </span>
+                                    <span className="capitalize">{cat}</span>
+                                    <span className="ml-2 text-gray-600">
+                                        ({names.length})
+                                    </span>
+                                </button>
+                                {!collapsed && (
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {names.map((name) => (
+                                            <button
+                                                key={name}
+                                                type="button"
+                                                onClick={() => handleAdd(name)}
+                                                className="px-2 py-1 text-xs bg-gray-800 hover:bg-indigo-700 border border-gray-700 hover:border-indigo-500 rounded text-gray-300 hover:text-white transition-colors"
+                                                data-testid={`composer-add-${name}`}
+                                                title={`Add a <${name}> to the widget`}
+                                            >
+                                                + {name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 }
 
-function ComposerTreeView({ node, depth, onRemove }) {
+function ComposerTreeView({ node, depth, onRemove, selectedNodeId, onSelect }) {
     if (!node) return null;
     const pad = depth * 12;
     const schema = DASH_REACT_COMPONENT_SCHEMAS[node.type];
     const childList = Array.isArray(node.children) ? node.children : [];
     const isRoot = depth === 0;
+    const isSelected = selectedNodeId === node.id;
 
     return (
         <div>
             <div
-                className="flex items-center justify-between py-0.5 text-sm"
+                className={`flex items-center justify-between py-0.5 text-sm rounded cursor-pointer ${
+                    isSelected
+                        ? "bg-indigo-600/20 text-indigo-200"
+                        : "hover:bg-gray-800"
+                }`}
                 style={{ paddingLeft: pad }}
+                onClick={() => onSelect && onSelect(node.id)}
                 data-testid={`composer-node-${node.id}`}
             >
                 <div className="flex items-center gap-1.5 min-w-0">
@@ -215,7 +266,10 @@ function ComposerTreeView({ node, depth, onRemove }) {
                 {!isRoot && (
                     <button
                         type="button"
-                        onClick={() => onRemove(node.id)}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onRemove(node.id);
+                        }}
                         className="text-gray-500 hover:text-red-400 px-1"
                         aria-label={`Remove ${node.type}`}
                         data-testid={`composer-remove-${node.id}`}
@@ -230,6 +284,8 @@ function ComposerTreeView({ node, depth, onRemove }) {
                     node={child}
                     depth={depth + 1}
                     onRemove={onRemove}
+                    selectedNodeId={selectedNodeId}
+                    onSelect={onSelect}
                 />
             ))}
         </div>

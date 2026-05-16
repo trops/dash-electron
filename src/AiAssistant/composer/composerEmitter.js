@@ -31,6 +31,14 @@
  * C1 emits a single-component, data-less widget skeleton (no hooks,
  * no provider calls). C3+ will introduce useWidgetProviders /
  * useProviderClient / useMcpProvider scaffolding for wired slots.
+ *
+ * C2 adds: per-prop edits via updateNodeProp, plus a parallel
+ * `wires` map per node that tracks which dataSlots are in
+ * "wire-to-provider" mode. The emitter treats wired slots as if
+ * they were unset (falls back to the type-appropriate placeholder)
+ * until C3 fills in real provider/method bindings — that way the
+ * preview keeps compiling while the user is still picking what to
+ * wire.
  */
 
 import {
@@ -118,12 +126,18 @@ function renderNodeJsx(node, indent = 0) {
     const propEntries = [];
     for (const [propName, propSchema] of Object.entries(schema.props)) {
         if (propName === "children") continue;
-        const userValue = node.props ? node.props[propName] : undefined;
+        // C2: wired slots fall through to placeholder rendering
+        // until C3 emits hook-based bindings. The composer UI shows
+        // the wire state in the property inspector so the user
+        // knows the static value is intentionally unset.
+        const isWired = Boolean(node.wires && node.wires[propName]);
+        const userValue =
+            !isWired && node.props ? node.props[propName] : undefined;
         if (userValue !== undefined) {
             propEntries.push(renderPropLiteral(propName, userValue));
             continue;
         }
-        if (propSchema.required) {
+        if (propSchema.required || isWired) {
             const placeholder = placeholderForType(propSchema.type);
             if (placeholder !== null) {
                 propEntries.push(`${propName}={${placeholder}}`);
@@ -267,11 +281,73 @@ export function removeNode(tree, nodeId) {
     return { ...tree, root: cloned };
 }
 
+/**
+ * Set a static prop value on a node by id. Pure. If the value is
+ * `undefined`, the prop is cleared (falls back to placeholder
+ * rendering at emit time). Has no effect when the node is not found.
+ *
+ * Setting a static value on a wired slot does NOT auto-flip the
+ * slot back to static mode — the user must explicitly toggle. This
+ * preserves wire-state across exploratory edits.
+ */
+export function updateNodeProp(tree, nodeId, propName, value) {
+    if (!tree || !tree.root) return tree;
+    const cloned = cloneNode(tree.root);
+    const node = findNode(cloned, nodeId);
+    if (!node) return tree;
+    if (!node.props || typeof node.props !== "object") node.props = {};
+    if (value === undefined) {
+        delete node.props[propName];
+    } else {
+        node.props[propName] = value;
+    }
+    return { ...tree, root: cloned };
+}
+
+/**
+ * Toggle a prop slot between "static" and "wire" modes on a node.
+ *
+ *   mode === "wire"   → node.wires[propName] = { provider: null, method: null }
+ *                       (skeleton — Stage 3 fills in the picker
+ *                       result via setSlotWire)
+ *   mode === "static" → delete node.wires[propName]
+ *
+ * The static prop value is preserved across mode flips so the user
+ * can experiment without losing their literal. Has no effect when
+ * the node is not found.
+ */
+export function setSlotMode(tree, nodeId, propName, mode) {
+    if (!tree || !tree.root) return tree;
+    const cloned = cloneNode(tree.root);
+    const node = findNode(cloned, nodeId);
+    if (!node) return tree;
+    if (!node.wires || typeof node.wires !== "object") node.wires = {};
+    if (mode === "wire") {
+        if (!node.wires[propName]) {
+            node.wires[propName] = { provider: null, method: null };
+        }
+    } else if (mode === "static") {
+        delete node.wires[propName];
+    }
+    return { ...tree, root: cloned };
+}
+
+/**
+ * Read-only lookup by id. Returns null if the node is not present.
+ * Used by the property inspector to render the currently-selected
+ * node's prop state.
+ */
+export function getNodeById(tree, nodeId) {
+    if (!tree || !tree.root || !nodeId) return null;
+    return findNode(tree.root, nodeId);
+}
+
 function cloneNode(node) {
     if (!node) return node;
     return {
         ...node,
         props: node.props ? { ...node.props } : {},
+        wires: node.wires ? { ...node.wires } : undefined,
         children: Array.isArray(node.children)
             ? node.children.map(cloneNode)
             : [],

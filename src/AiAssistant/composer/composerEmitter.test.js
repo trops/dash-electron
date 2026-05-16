@@ -26,6 +26,9 @@ import {
     emitWidgetCode,
     insertChild,
     removeNode,
+    updateNodeProp,
+    setSlotMode,
+    getNodeById,
 } from "./composerEmitter";
 
 describe("makeEmptyTree", () => {
@@ -308,5 +311,128 @@ describe("insertChild / removeNode — immutability and stable ids", () => {
         const tree = makeEmptyTree();
         const next = removeNode(tree, "root");
         expect(next.root.id).toBe("root");
+    });
+});
+
+describe("updateNodeProp", () => {
+    test("sets a static prop on the named node", () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(tree, "root", { type: "Heading" }, 1);
+        const t3 = updateNodeProp(t2, "node-1", "title", "Hello");
+        const node = getNodeById(t3, "node-1");
+        expect(node.props.title).toBe("Hello");
+    });
+
+    test("clears a prop when value is undefined", () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(
+            tree,
+            "root",
+            { type: "Heading", props: { title: "x" } },
+            1
+        );
+        const t3 = updateNodeProp(t2, "node-1", "title", undefined);
+        const node = getNodeById(t3, "node-1");
+        expect(node.props.title).toBeUndefined();
+    });
+
+    test("does not mutate the input tree", () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(tree, "root", { type: "Heading" }, 1);
+        const before = JSON.stringify(t2);
+        updateNodeProp(t2, "node-1", "title", "Hello");
+        expect(JSON.stringify(t2)).toBe(before);
+    });
+
+    test("is a no-op when the nodeId is not found", () => {
+        const tree = makeEmptyTree();
+        const next = updateNodeProp(tree, "no-such-id", "title", "x");
+        expect(next).toBe(tree);
+    });
+
+    test("propagates static value into emitted JSX", () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(tree, "root", { type: "Heading" }, 1);
+        const t3 = updateNodeProp(t2, "node-1", "title", "Hello");
+        const { componentCode } = emitWidgetCode(t3);
+        expect(componentCode).toContain('<Heading title="Hello" />');
+    });
+});
+
+describe("setSlotMode / wires", () => {
+    test('"wire" mode installs a skeleton wires entry', () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(tree, "root", { type: "Table" }, 1);
+        const t3 = setSlotMode(t2, "node-1", "data", "wire");
+        const node = getNodeById(t3, "node-1");
+        expect(node.wires).toBeDefined();
+        expect(node.wires.data).toEqual({ provider: null, method: null });
+    });
+
+    test('"static" mode removes the wires entry', () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(tree, "root", { type: "Table" }, 1);
+        const t3 = setSlotMode(t2, "node-1", "data", "wire");
+        const t4 = setSlotMode(t3, "node-1", "data", "static");
+        const node = getNodeById(t4, "node-1");
+        expect(node.wires && node.wires.data).toBeUndefined();
+    });
+
+    test("wired slots fall back to type-appropriate placeholders at emit time", () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(
+            tree,
+            "root",
+            { type: "Table", props: { data: [{ x: 1 }], columns: [] } },
+            1
+        );
+        // Static values present — emitter uses them.
+        const before = emitWidgetCode(t2).componentCode;
+        expect(before).toContain('data={[{"x":1}]}');
+
+        const t3 = setSlotMode(t2, "node-1", "data", "wire");
+        const after = emitWidgetCode(t3).componentCode;
+        // Wired now — placeholder [] wins despite the static value
+        // still being in node.props (preserved across mode flips).
+        expect(after).toMatch(/data=\{\[\]\}/);
+        expect(after).not.toContain('data={[{"x":1}]}');
+    });
+
+    test("static value is preserved across a wire → static round-trip", () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(
+            tree,
+            "root",
+            { type: "Table", props: { data: [{ x: 1 }] } },
+            1
+        );
+        const wired = setSlotMode(t2, "node-1", "data", "wire");
+        const back = setSlotMode(wired, "node-1", "data", "static");
+        const node = getNodeById(back, "node-1");
+        expect(node.props.data).toEqual([{ x: 1 }]);
+    });
+
+    test("cloneNode (via insertChild) preserves wires on existing nodes", () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(tree, "root", { type: "Table" }, 1);
+        const t3 = setSlotMode(t2, "node-1", "data", "wire");
+        const t4 = insertChild(t3, "root", { type: "Heading" }, 2);
+        const table = getNodeById(t4, "node-1");
+        expect(table.wires.data).toEqual({ provider: null, method: null });
+    });
+});
+
+describe("getNodeById", () => {
+    test("returns the matching node", () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(tree, "root", { type: "Heading" }, 1);
+        expect(getNodeById(t2, "node-1").type).toBe("Heading");
+    });
+
+    test("returns null for missing id, null tree, or null id", () => {
+        const tree = makeEmptyTree();
+        expect(getNodeById(tree, "no-such-id")).toBeNull();
+        expect(getNodeById(null, "root")).toBeNull();
+        expect(getNodeById(tree, null)).toBeNull();
     });
 });
