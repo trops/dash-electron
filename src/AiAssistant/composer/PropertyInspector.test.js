@@ -127,7 +127,7 @@ describe("PropertyInspector — slot mode toggle", () => {
         expect(onSetSlotMode).toHaveBeenCalledWith("node-1", "data", "wire");
     });
 
-    test("when wired, the static editor is replaced with the Stage 3 placeholder", () => {
+    test("when wired but unconfigured, the static editor is replaced with the WirePicker (empty state w/ no providers)", () => {
         const wiredNode = makeNode({
             type: "Table",
             wires: { data: { provider: null, method: null } },
@@ -135,18 +135,57 @@ describe("PropertyInspector — slot mode toggle", () => {
         render(
             <PropertyInspector
                 node={wiredNode}
+                providers={{}}
                 onChangeProp={() => {}}
                 onSetSlotMode={() => {}}
+                onSetSlotWire={() => {}}
+                onClearSlotWire={() => {}}
                 onClose={() => {}}
             />
         );
+        // With zero providers configured, the picker renders its
+        // empty state instead of the old "configure in Stage 3" stub.
         expect(
-            screen.getByTestId("composer-wire-placeholder-data")
+            screen.getByTestId("composer-wire-empty-data")
         ).toBeInTheDocument();
         // The static editor (a JSON textarea for Table.data) is gone.
         expect(
             screen.queryByTestId("composer-input-data")
         ).not.toBeInTheDocument();
+    });
+
+    test("when wired and configured, the WiredSlotSummary renders", () => {
+        const wiredNode = makeNode({
+            type: "Table",
+            wires: {
+                data: {
+                    provider: "MyAlgolia",
+                    providerType: "algolia",
+                    providerClass: "credential",
+                    method: "listIndices",
+                },
+            },
+        });
+        render(
+            <PropertyInspector
+                node={wiredNode}
+                providers={{
+                    MyAlgolia: {
+                        type: "algolia",
+                        providerClass: "credential",
+                    },
+                }}
+                onChangeProp={() => {}}
+                onSetSlotMode={() => {}}
+                onSetSlotWire={() => {}}
+                onClearSlotWire={() => {}}
+                onClose={() => {}}
+            />
+        );
+        expect(
+            screen.getByTestId("composer-wire-summary-data")
+        ).toBeInTheDocument();
+        expect(screen.getByText("MyAlgolia.listIndices")).toBeInTheDocument();
     });
 });
 

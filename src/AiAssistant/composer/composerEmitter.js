@@ -333,6 +333,51 @@ export function setSlotMode(tree, nodeId, propName, mode) {
 }
 
 /**
+ * Persist the user's provider+method pick on a wired slot. Implies
+ * wire mode — if the slot wasn't yet in wire mode, this also flips
+ * it (so the picker UI can be a one-shot "I picked this" rather
+ * than a two-step "set wire mode, then pick").
+ *
+ * `wire` shape (from the C3 picker):
+ *   {
+ *     provider: "MyAlgoliaInstance",   // providerName from app.providers
+ *     providerType: "algolia",         // provider.type
+ *     providerClass: "credential",     // "credential" | "mcp"
+ *     method: "search",                // method/tool name
+ *   }
+ *
+ * Stage 4 will extend the wire spec with `args: { … }` to carry the
+ * user's per-arg bindings; the emitter ignores fields it doesn't
+ * recognize so adding them is non-breaking.
+ */
+export function setSlotWire(tree, nodeId, propName, wire) {
+    if (!tree || !tree.root) return tree;
+    const cloned = cloneNode(tree.root);
+    const node = findNode(cloned, nodeId);
+    if (!node) return tree;
+    if (!node.wires || typeof node.wires !== "object") node.wires = {};
+    node.wires[propName] = { ...wire };
+    return { ...tree, root: cloned };
+}
+
+/**
+ * Clear any wire spec on a slot. The slot stays in wire mode (the
+ * picker reappears) — use setSlotMode("static") to flip back to a
+ * literal editor. Separating these two operations lets the user
+ * re-pick a different provider without losing the wire state.
+ */
+export function clearSlotWire(tree, nodeId, propName) {
+    if (!tree || !tree.root) return tree;
+    const cloned = cloneNode(tree.root);
+    const node = findNode(cloned, nodeId);
+    if (!node || !node.wires) return tree;
+    if (node.wires[propName]) {
+        node.wires[propName] = { provider: null, method: null };
+    }
+    return { ...tree, root: cloned };
+}
+
+/**
  * Read-only lookup by id. Returns null if the node is not present.
  * Used by the property inspector to render the currently-selected
  * node's prop state.

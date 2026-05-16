@@ -5024,6 +5024,7 @@ ${
                                 left-side Preview tab updates live. */}
                             {chatMode === "compose" && (
                                 <ComposerPane
+                                    providers={providers}
                                     onEmit={(code) => {
                                         compilePreview(code).catch(() => {});
                                         setActiveTab("preview");

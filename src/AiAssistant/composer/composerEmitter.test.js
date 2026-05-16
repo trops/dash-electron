@@ -28,6 +28,8 @@ import {
     removeNode,
     updateNodeProp,
     setSlotMode,
+    setSlotWire,
+    clearSlotWire,
     getNodeById,
 } from "./composerEmitter";
 
@@ -419,6 +421,67 @@ describe("setSlotMode / wires", () => {
         const t4 = insertChild(t3, "root", { type: "Heading" }, 2);
         const table = getNodeById(t4, "node-1");
         expect(table.wires.data).toEqual({ provider: null, method: null });
+    });
+});
+
+describe("setSlotWire / clearSlotWire", () => {
+    test("setSlotWire installs a wire spec and flips slot into wire mode", () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(tree, "root", { type: "Table" }, 1);
+        const t3 = setSlotWire(t2, "node-1", "data", {
+            provider: "MyAlgolia",
+            providerType: "algolia",
+            providerClass: "credential",
+            method: "search",
+        });
+        const node = getNodeById(t3, "node-1");
+        expect(node.wires.data).toMatchObject({
+            provider: "MyAlgolia",
+            providerType: "algolia",
+            providerClass: "credential",
+            method: "search",
+        });
+    });
+
+    test("setSlotWire is non-mutating", () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(tree, "root", { type: "Table" }, 1);
+        const before = JSON.stringify(t2);
+        setSlotWire(t2, "node-1", "data", {
+            provider: "X",
+            method: "y",
+        });
+        expect(JSON.stringify(t2)).toBe(before);
+    });
+
+    test("setSlotWire is a no-op when the nodeId is not found", () => {
+        const tree = makeEmptyTree();
+        const next = setSlotWire(tree, "no-such-id", "data", {
+            provider: "X",
+            method: "y",
+        });
+        expect(next).toBe(tree);
+    });
+
+    test("clearSlotWire resets the spec but keeps the slot in wire mode", () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(tree, "root", { type: "Table" }, 1);
+        const t3 = setSlotWire(t2, "node-1", "data", {
+            provider: "X",
+            method: "y",
+        });
+        const t4 = clearSlotWire(t3, "node-1", "data");
+        const node = getNodeById(t4, "node-1");
+        // Wire entry preserved (so static editor stays hidden) but
+        // provider/method are nulled so the picker re-appears.
+        expect(node.wires.data).toEqual({ provider: null, method: null });
+    });
+
+    test("clearSlotWire is a no-op when no wire exists", () => {
+        const tree = makeEmptyTree();
+        const t2 = insertChild(tree, "root", { type: "Table" }, 1);
+        const next = clearSlotWire(t2, "node-1", "data");
+        expect(next).toBe(t2);
     });
 });
 

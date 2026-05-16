@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { getComponentSchema } from "../dashReactComponentSchemas";
+import { WirePicker, WiredSlotSummary } from "./WirePicker";
 
 /**
  * PropertyInspector — Compose-mode Stage 2 surface.
@@ -27,8 +28,11 @@ import { getComponentSchema } from "../dashReactComponentSchemas";
  */
 export function PropertyInspector({
     node,
+    providers = {},
     onChangeProp,
     onSetSlotMode,
+    onSetSlotWire,
+    onClearSlotWire,
     onClose,
 }) {
     // Hooks must run unconditionally — schema-null and node-null
@@ -96,8 +100,11 @@ export function PropertyInspector({
                             node.props ? node.props[propName] : undefined
                         }
                         wireSpec={node.wires ? node.wires[propName] : undefined}
+                        providers={providers}
                         onChangeProp={onChangeProp}
                         onSetSlotMode={onSetSlotMode}
+                        onSetSlotWire={onSetSlotWire}
+                        onClearSlotWire={onClearSlotWire}
                     />
                 ))}
             </div>
@@ -112,11 +119,15 @@ function PropRow({
     isDataSlot,
     staticValue,
     wireSpec,
+    providers,
     onChangeProp,
     onSetSlotMode,
+    onSetSlotWire,
+    onClearSlotWire,
 }) {
     const isWired = Boolean(wireSpec);
     const mode = isWired ? "wire" : "static";
+    const isConfiguredWire = isWired && wireSpec.provider && wireSpec.method;
 
     return (
         <div data-testid={`composer-prop-row-${propName}`}>
@@ -164,12 +175,28 @@ function PropRow({
                 )}
             </div>
             {mode === "wire" ? (
-                <div
-                    className="text-[11px] px-2 py-1.5 rounded border border-dashed border-gray-700 bg-gray-900/50 text-gray-500 italic"
-                    data-testid={`composer-wire-placeholder-${propName}`}
-                >
-                    Wired to: (configure in Stage 3)
-                </div>
+                isConfiguredWire ? (
+                    <WiredSlotSummary
+                        propName={propName}
+                        wire={wireSpec}
+                        onChange={() =>
+                            onClearSlotWire && onClearSlotWire(nodeId, propName)
+                        }
+                        onStatic={() =>
+                            onSetSlotMode(nodeId, propName, "static")
+                        }
+                    />
+                ) : (
+                    <WirePicker
+                        propName={propName}
+                        expectedType={propSchema.type}
+                        providers={providers}
+                        onPick={(spec) =>
+                            onSetSlotWire &&
+                            onSetSlotWire(nodeId, propName, spec)
+                        }
+                    />
+                )
             ) : (
                 <StaticValueEditor
                     nodeId={nodeId}

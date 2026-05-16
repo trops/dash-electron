@@ -10,6 +10,8 @@ import {
     removeNode,
     updateNodeProp,
     setSlotMode,
+    setSlotWire,
+    clearSlotWire,
     getNodeById,
 } from "./composerEmitter";
 import { PropertyInspector } from "./PropertyInspector";
@@ -45,7 +47,7 @@ import { PropertyInspector } from "./PropertyInspector";
  * data-slot wiring to providers, and AI suggest buttons. The pane's
  * external contract (`onEmit`) does not change as those land.
  */
-export function ComposerPane({ onEmit, initialTree = null }) {
+export function ComposerPane({ onEmit, providers = {}, initialTree = null }) {
     const [tree, setTree] = useState(() => initialTree || makeEmptyTree());
     const idCounter = useRef(1);
     const [collapsedCategories, setCollapsedCategories] = useState(
@@ -116,6 +118,24 @@ export function ComposerPane({ onEmit, initialTree = null }) {
         [tree, emit]
     );
 
+    const handleSetSlotWire = useCallback(
+        (nodeId, propName, wire) => {
+            const next = setSlotWire(tree, nodeId, propName, wire);
+            setTree(next);
+            emit(next);
+        },
+        [tree, emit]
+    );
+
+    const handleClearSlotWire = useCallback(
+        (nodeId, propName) => {
+            const next = clearSlotWire(tree, nodeId, propName);
+            setTree(next);
+            emit(next);
+        },
+        [tree, emit]
+    );
+
     const handleRename = useCallback(
         (e) => {
             const raw = e.target.value;
@@ -180,8 +200,11 @@ export function ComposerPane({ onEmit, initialTree = null }) {
                 <div className="flex-1 min-h-0">
                     <PropertyInspector
                         node={selectedNode}
+                        providers={providers}
                         onChangeProp={handleChangeProp}
                         onSetSlotMode={handleSetSlotMode}
+                        onSetSlotWire={handleSetSlotWire}
+                        onClearSlotWire={handleClearSlotWire}
                         onClose={() => setSelectedNodeId(null)}
                     />
                 </div>
