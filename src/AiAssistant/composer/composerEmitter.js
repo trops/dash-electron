@@ -232,7 +232,20 @@ export function emitWidgetCode(tree) {
     // Returns the slot-var map renderNodeJsx uses to bind wired
     // props to state vars, plus the imports and useEffect bodies
     // the assembled component needs at the top.
-    const scaffold = buildHookScaffold(tree, PROVIDER_API_REGISTRY);
+    //
+    // The getPropType callback lets the hook emitter distinguish
+    // data-fetch wires (Array/Object slots → useState + useEffect)
+    // from callback wires (function slots → useCallback handler).
+    const getPropType = (componentType, propName) => {
+        const schema = getComponentSchema(componentType);
+        if (!schema || !schema.props || !schema.props[propName]) return null;
+        return schema.props[propName].type || null;
+    };
+    const scaffold = buildHookScaffold(
+        tree,
+        PROVIDER_API_REGISTRY,
+        getPropType
+    );
     const { extraReactImports, coreImports, hookLines, slotVarBySlotKey } =
         scaffold;
 

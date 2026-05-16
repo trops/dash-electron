@@ -44,21 +44,39 @@
  * their node + prop context. Unconfigured wires (skeleton
  * `{ provider: null, method: null }`) are skipped — the picker
  * UI's job to surface those.
+ *
+ * Each returned entry also carries the wired prop's schema type
+ * (e.g., "Array<Object>", "function", "string") which the hook
+ * emitter uses to decide between data-fetch wires (useState +
+ * useEffect populating a slot value) and callback wires (useCallback
+ * firing the tool when the user interacts).
+ *
+ * `getPropType` is injected for testability — callers in production
+ * pass a function backed by dashReactComponentSchemas; tests can
+ * pass a stub.
  */
-export function collectWires(tree) {
+export function collectWires(tree, getPropType = () => "any") {
     const out = [];
     if (!tree || !tree.root) return out;
     walk(tree.root, (node) => {
         if (!node.wires) return;
         for (const [propName, wire] of Object.entries(node.wires)) {
+            // A configured wire requires a method (the chosen tool/
+            // IPC method). The provider instance name is optional;
+            // a null provider means "any instance of providerType"
+            // and gets resolved at runtime.
             if (
                 wire &&
-                wire.provider &&
                 wire.method &&
-                typeof wire.provider === "string" &&
-                typeof wire.method === "string"
+                typeof wire.method === "string" &&
+                wire.providerType
             ) {
-                out.push({ nodeId: node.id, propName, wire });
+                out.push({
+                    nodeId: node.id,
+                    propName,
+                    wire,
+                    propType: getPropType(node.type, propName),
+                });
             }
         }
     });
@@ -148,8 +166,12 @@ function unwrapResultExpr(returnsType) {
  * `providerApiRegistry` is injected so this module stays
  * provider-agnostic and easy to test with fakes.
  */
-export function buildHookScaffold(tree, providerApiRegistry) {
-    const wires = collectWires(tree);
+export function buildHookScaffold(
+    tree,
+    providerApiRegistry,
+    getPropType = () => "any"
+) {
+    const wires = collectWires(tree, getPropType);
     const extraReactImports = new Set();
     const coreImports = new Set();
     const hookLines = [];
@@ -172,10 +194,26 @@ export function buildHookScaffold(tree, providerApiRegistry) {
     const credentialProvidersSeen = new Map(); // providerName → varSuffix
     const mcpProvidersSeen = new Map(); // providerType → varSuffix
 
-    extraReactImports.add("useState");
-    extraReactImports.add("useEffect");
+    // Pass 1: emit provider hook resolution lines + state OR
+    // useCallback handler per wire.
+    //
+    // Data-fetch wires (propType !== "function") allocate a useState
+    // slot and a useEffect that fires when the provider client is
+    // ready.
+    //
+    // Callback wires (propType === "function") allocate a useCallback
+    // that fires the tool when the React event handler fires, with
+    // no state allocation — the handler is the binding itself.
+    const hasDataWire = wires.some((w) => w.propType !== "function");
+    const hasCallbackWire = wires.some((w) => w.propType === "function");
+    if (hasDataWire) {
+        extraReactImports.add("useState");
+        extraReactImports.add("useEffect");
+    }
+    if (hasCallbackWire) {
+        extraReactImports.add("useCallback");
+    }
 
-    // Pass 1: emit provider hook resolution lines + state declarations.
     for (const { nodeId, propName, wire } of wires) {
         if (wire.providerClass === "mcp") {
             if (!mcpProvidersSeen.has(wire.providerType)) {
@@ -215,7 +253,10 @@ export function buildHookScaffold(tree, providerApiRegistry) {
             }
         }
 
-        // State variable for this slot.
+        // State variable (data wire) OR handler name (callback wire)
+        // for this slot. Stored in slotVarBySlotKey so the JSX
+        // renderer can bind `prop={varName}` regardless of which
+        // shape the wire takes.
         const slotKey = `${nodeId}:${propName}`;
         const baseVar = toIdent(propName);
         // If the same baseVar is already taken (two components with
@@ -230,16 +271,91 @@ export function buildHookScaffold(tree, providerApiRegistry) {
         }
         slotVarBySlotKey.set(slotKey, varName);
 
-        hookLines.push(
-            `    const [${varName}, set_${varName}] = useState(null);`
+        // Data wire: allocate state. Callback wire: skip — the
+        // useCallback declaration in pass 2 IS the binding, no
+        // intermediate state needed.
+        const w = wires.find(
+            (x) => x.nodeId === nodeId && x.propName === propName
         );
+        const isCallback = w && w.propType === "function";
+        if (!isCallback) {
+            hookLines.push(
+                `    const [${varName}, set_${varName}] = useState(null);`
+            );
+        }
     }
 
-    // Pass 2: emit one useEffect per slot.
-    for (const { nodeId, propName, wire } of wires) {
+    // Pass 2: emit one useEffect (data) or useCallback (handler)
+    // per wire.
+    for (const { nodeId, propName, wire, propType } of wires) {
         const slotKey = `${nodeId}:${propName}`;
         const varName = slotVarBySlotKey.get(slotKey);
         const setFn = `set_${varName}`;
+        const isCallback = propType === "function";
+
+        if (isCallback) {
+            // Build the args literal — same logic as the data-wire
+            // path. Auto args (credential triplet for credential
+            // class) are still supplied.
+            const argLines = [];
+            if (wire.providerClass !== "mcp") {
+                const providerKey = wire.provider || wire.providerType;
+                const suffix = credentialProvidersSeen.get(providerKey);
+                const handle = `pc_${suffix}`;
+                argLines.push(
+                    `                providerHash: ${handle}.providerHash,`,
+                    `                dashboardAppId: ${handle}.dashboardAppId,`,
+                    `                providerName: ${handle}.providerName,`
+                );
+            }
+            const args = wire.args || {};
+            for (const [argName, binding] of Object.entries(args)) {
+                const rhs = renderArgBinding(binding, userConfigFields);
+                if (rhs !== null)
+                    argLines.push(`                ${argName}: ${rhs},`);
+            }
+            const argsLiteral =
+                argLines.length === 0
+                    ? "{}"
+                    : `{\n${argLines.join("\n")}\n            }`;
+
+            if (wire.providerClass === "mcp") {
+                const suffix = mcpProvidersSeen.get(wire.providerType);
+                const handle = `mcp_${suffix}`;
+                hookLines.push(
+                    "",
+                    `    const ${varName} = useCallback(async () => {`,
+                    `        if (!${handle}?.isConnected) return;`,
+                    `        try {`,
+                    `            await ${handle}.callTool(${JSON.stringify(
+                        wire.method
+                    )}, ${argsLiteral});`,
+                    `        } catch (err) {`,
+                    `            // Tool errors are swallowed here so a CTA`,
+                    `            // failure doesn't crash the widget. Production`,
+                    `            // widgets should add user-visible error UI.`,
+                    `        }`,
+                    `    }, [${handle}?.isConnected]);`
+                );
+            } else {
+                const providerKey = wire.provider || wire.providerType;
+                const suffix = credentialProvidersSeen.get(providerKey);
+                const handle = `pc_${suffix}`;
+                hookLines.push(
+                    "",
+                    `    const ${varName} = useCallback(async () => {`,
+                    `        if (!${handle}?.providerHash) return;`,
+                    `        try {`,
+                    `            await window.mainApi.${wire.providerType}.${wire.method}(${argsLiteral});`,
+                    `        } catch (err) {`,
+                    `            // See note in the MCP branch above — silent`,
+                    `            // failure intentionally.`,
+                    `        }`,
+                    `    }, [${handle}?.providerHash]);`
+                );
+            }
+            continue;
+        }
 
         if (wire.providerClass === "mcp") {
             const suffix = mcpProvidersSeen.get(wire.providerType);

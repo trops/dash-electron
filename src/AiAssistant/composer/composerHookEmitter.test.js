@@ -276,6 +276,124 @@ describe("buildHookScaffold", () => {
         expect(matches.length).toBe(1);
     });
 
+    test("callback wire (propType=function) emits useCallback + no useState/useEffect", () => {
+        // Pretend the wired prop is a function callback. Emitter
+        // should produce a useCallback handler that fires the tool
+        // when invoked, not a useState/useEffect data-fetch.
+        const tree = makeTree();
+        tree.root.children.push({
+            id: "node-1",
+            type: "Button",
+            props: {},
+            wires: {
+                onClick: {
+                    provider: "MyAlgolia",
+                    providerType: "algolia",
+                    providerClass: "credential",
+                    method: "search",
+                    args: {
+                        indexName: { kind: "literal", value: "products" },
+                        query: { kind: "literal", value: "" },
+                    },
+                },
+            },
+            children: [],
+        });
+        const getPropType = (componentType, propName) => {
+            if (componentType === "Button" && propName === "onClick")
+                return "function";
+            return "any";
+        };
+        const s = buildHookScaffold(tree, fakeRegistry, getPropType);
+        expect(s.extraReactImports.has("useCallback")).toBe(true);
+        // No useState / useEffect imported when ALL wires are
+        // callbacks — pass 1 also branches on isCallback.
+        expect(s.extraReactImports.has("useState")).toBe(false);
+        expect(s.extraReactImports.has("useEffect")).toBe(false);
+        const text = s.hookLines.join("\n");
+        expect(text).toContain("const onClick = useCallback(async () => {");
+        expect(text).toContain("window.mainApi.algolia.search");
+        // Auto args still supplied.
+        expect(text).toContain("providerHash: pc_MyAlgolia.providerHash");
+        // No `setData(...)` line because there's no state.
+        expect(text).not.toMatch(/useState/);
+        expect(text).not.toMatch(/useEffect/);
+    });
+
+    test("MCP callback wire emits useCallback + callTool", () => {
+        const tree = makeTree();
+        tree.root.children.push({
+            id: "node-1",
+            type: "Button",
+            props: {},
+            wires: {
+                onClick: {
+                    provider: null,
+                    providerType: "filesystem",
+                    providerClass: "mcp",
+                    method: "write_file",
+                    args: { path: { kind: "literal", value: "/tmp/x" } },
+                },
+            },
+            children: [],
+        });
+        const getPropType = () => "function";
+        const s = buildHookScaffold(tree, fakeRegistry, getPropType);
+        expect(s.extraReactImports.has("useCallback")).toBe(true);
+        expect(s.coreImports.has("useMcpProvider")).toBe(true);
+        const text = s.hookLines.join("\n");
+        expect(text).toContain("const onClick = useCallback(async () => {");
+        expect(text).toContain('mcp_filesystem.callTool("write_file"');
+    });
+
+    test("mixed: one data wire + one callback wire share the provider hook", () => {
+        const tree = makeTree();
+        // Data wire (Table.data → listIndices).
+        tree.root.children.push({
+            id: "node-1",
+            type: "Table",
+            props: {},
+            wires: {
+                data: {
+                    provider: "A",
+                    providerType: "algolia",
+                    providerClass: "credential",
+                    method: "listIndices",
+                    args: {},
+                },
+            },
+            children: [],
+        });
+        // Callback wire (Button.onClick → search) on the same instance.
+        tree.root.children.push({
+            id: "node-2",
+            type: "Button",
+            props: {},
+            wires: {
+                onClick: {
+                    provider: "A",
+                    providerType: "algolia",
+                    providerClass: "credential",
+                    method: "search",
+                    args: { indexName: { kind: "literal", value: "x" } },
+                },
+            },
+            children: [],
+        });
+        const getPropType = (_t, p) =>
+            p === "onClick" ? "function" : "Array<Object>";
+        const s = buildHookScaffold(tree, fakeRegistry, getPropType);
+        expect(s.extraReactImports.has("useState")).toBe(true);
+        expect(s.extraReactImports.has("useEffect")).toBe(true);
+        expect(s.extraReactImports.has("useCallback")).toBe(true);
+        const text = s.hookLines.join("\n");
+        // One useProviderClient line — the two wires share it.
+        const pcMatches = text.match(/useProviderClient\(provider_A\)/g) || [];
+        expect(pcMatches.length).toBe(1);
+        expect(text).toContain("const [data, set_data] = useState(null);");
+        expect(text).toContain("const onClick = useCallback(async () => {");
+    });
+
     test("disambiguates slot var names when same propName wired on multiple nodes", () => {
         const tree = makeTree();
         tree.root.children.push({

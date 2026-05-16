@@ -128,9 +128,20 @@ function PropRow({
     onClearSlotWire,
     onSetSlotArg,
 }) {
+    // Callback wires (function-typed props like onClick / onChange)
+    // can be wired to a tool that fires on the event. They're
+    // always in wire mode — there's no useful "static" value for a
+    // function in the composer, so we don't render the toggle.
+    const isCallbackProp = propSchema && propSchema.type === "function";
     const isWired = Boolean(wireSpec);
-    const mode = isWired ? "wire" : "static";
-    const isConfiguredWire = isWired && wireSpec.provider && wireSpec.method;
+    // Callback props auto-enter wire mode the first time the user
+    // sees them; the inspector then renders the picker. The mode
+    // toggle is suppressed.
+    const mode = isCallbackProp || isWired ? "wire" : "static";
+    // Method wires need a method; callback wires don't need a
+    // provider instance to be considered "configured" (the install
+    // flow surfaces a missing-provider banner downstream).
+    const isConfiguredWire = isWired && wireSpec.method;
 
     return (
         <div data-testid={`composer-prop-row-${propName}`}>
@@ -144,7 +155,7 @@ function PropRow({
                         ({propSchema.type})
                     </span>
                 </label>
-                {isDataSlot && (
+                {isDataSlot && !isCallbackProp && (
                     <div className="flex items-center gap-0.5 text-[10px] bg-gray-800 border border-gray-700 rounded p-0.5">
                         <button
                             type="button"
@@ -175,6 +186,11 @@ function PropRow({
                             wire
                         </button>
                     </div>
+                )}
+                {isCallbackProp && (
+                    <span className="text-[10px] text-indigo-400">
+                        callback
+                    </span>
                 )}
             </div>
             {mode === "wire" ? (

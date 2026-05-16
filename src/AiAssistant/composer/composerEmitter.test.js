@@ -481,6 +481,36 @@ describe("emitWidgetCode — hook scaffolding for configured wires (C4)", () => 
         );
     });
 
+    test("callback wire (Button.onClick → algolia.search) emits useCallback binding", () => {
+        const tree = makeEmptyTree("CtaWidget");
+        const t2 = insertChild(
+            tree,
+            "root",
+            { type: "Button", props: { title: "Search" } },
+            1
+        );
+        const t3 = setSlotWire(t2, "node-1", "onClick", {
+            provider: "MyAlgolia",
+            providerType: "algolia",
+            providerClass: "credential",
+            method: "search",
+            args: {
+                indexName: { kind: "literal", value: "products" },
+                query: { kind: "literal", value: "" },
+            },
+        });
+        const { componentCode } = emitWidgetCode(t3);
+        expect(componentCode).toContain(
+            'import React, { useCallback } from "react";'
+        );
+        expect(componentCode).toContain(
+            "const onClick = useCallback(async () => {"
+        );
+        expect(componentCode).toContain("window.mainApi.algolia.search");
+        // JSX binds the callback to the prop.
+        expect(componentCode).toMatch(/<Button[^>]*onClick=\{onClick\}/);
+    });
+
     test("mcp-class wire emits useMcpProvider + callTool", () => {
         const tree = makeEmptyTree("McpWidget");
         const t2 = insertChild(tree, "root", { type: "DataList" }, 1);

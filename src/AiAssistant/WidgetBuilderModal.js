@@ -5047,6 +5047,20 @@ ${
                                     model={model}
                                     backend={preferredBackend}
                                     onEmit={(code) => {
+                                        // Mirror the composer's
+                                        // emitted code into
+                                        // detectedCode so the Code
+                                        // and Configure tabs (gated
+                                        // on detectedCode.componentCode)
+                                        // become active. Without
+                                        // this, the user can't see
+                                        // or edit the source the
+                                        // composer is generating.
+                                        setDetectedCode({
+                                            componentCode: code.componentCode,
+                                            configCode: code.configCode,
+                                            files: code.files || null,
+                                        });
                                         compilePreview(code).catch(() => {});
                                         setActiveTab("preview");
                                     }}
