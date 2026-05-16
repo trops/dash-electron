@@ -56,6 +56,30 @@ export function sendOneShot({
     deltaQuiescenceMs = 4_000,
 } = {}) {
     return new Promise((resolve, reject) => {
+        // Test-only override hook. E2E specs can install
+        // `window.__DASH_LLM_ONE_SHOT_OVERRIDE` as an async
+        // function taking the same params object and resolving to
+        // a string — used to exercise the SuggestLayoutButton
+        // pipeline without depending on the real CLI or mock-LLM
+        // server (contextBridge freezes window.mainApi so direct
+        // bridge stubbing isn't possible from the page side).
+        // The override completely short-circuits the listener
+        // plumbing below.
+        if (
+            typeof window !== "undefined" &&
+            typeof window.__DASH_LLM_ONE_SHOT_OVERRIDE === "function"
+        ) {
+            Promise.resolve(
+                window.__DASH_LLM_ONE_SHOT_OVERRIDE({
+                    model,
+                    apiKey,
+                    backend,
+                    systemPrompt,
+                    userMessage,
+                })
+            ).then(resolve, reject);
+            return;
+        }
         if (
             typeof window === "undefined" ||
             !window.mainApi ||

@@ -149,29 +149,107 @@ test("compose mode lets the user pick components and keeps the preview live", as
         ).toBeVisible({ timeout: 3000 });
     });
 
-    await test.step("Suggest-a-layout button is present and does NOT demand an API key under CLI backend (regression test)", async () => {
+    await test.step("Suggest-a-layout end-to-end with a stubbed LLM bridge", async () => {
         // Close the inspector first so the palette + suggest
         // button come back into view.
         await window
             .locator('[data-testid="composer-inspector-close"]')
             .click();
-        const suggestOpen = window.locator(
-            '[data-testid="composer-suggest-layout-open"]'
-        );
-        await expect(suggestOpen).toBeVisible();
-        await suggestOpen.click();
-        // Form mounts. There should be NO error message at this
-        // stage — the API-key error only appears post-submit
-        // when the bridge rejects (anthropic path with no key).
-        // Pre-submit, the form is inert; if "API key is
-        // required" appears before any click, that means the
-        // suggest path is hardcoded to a key-requiring backend.
+
+        // Install the test-only override hook. llmOneShot checks
+        // window.__DASH_LLM_ONE_SHOT_OVERRIDE before falling
+        // through to the real bridge — this lets us exercise the
+        // full SuggestLayoutButton pipeline without depending on
+        // the real CLI or a mock-LLM server (contextBridge freezes
+        // window.mainApi so direct stubbing isn't possible).
+        //
+        // The canned response covers:
+        //   - a top-level prose preamble (the model often greets
+        //     before emitting JSON — extractJsonBlock should peel
+        //     past it via the fenced-block fallback walk)
+        //   - a fenced ```json block with a valid 2-suggestion
+        //     payload that exercises both the sanitizer
+        //     (every component name is in the curated schema) and
+        //     the rule that the root must be Panel.
+        await window.evaluate(() => {
+            const cannedResponse =
+                "I'll help you build that. Here are some layout ideas:\n\n" +
+                "```json\n" +
+                JSON.stringify({
+                    suggestions: [
+                        {
+                            label: "Inbox with detail",
+                            root: {
+                                type: "Panel",
+                                children: [
+                                    {
+                                        type: "Heading",
+                                        props: { title: "Inbox" },
+                                    },
+                                    { type: "Table" },
+                                ],
+                            },
+                        },
+                        {
+                            label: "Search-and-read",
+                            root: {
+                                type: "Panel",
+                                children: [
+                                    { type: "SearchInput" },
+                                    { type: "DataList" },
+                                ],
+                            },
+                        },
+                    ],
+                }) +
+                "\n```";
+            window.__DASH_LLM_ONE_SHOT_OVERRIDE = async () => cannedResponse;
+        });
+
+        // Open the form and submit a description.
+        await window
+            .locator('[data-testid="composer-suggest-layout-open"]')
+            .click();
+        await window
+            .locator('[data-testid="composer-suggest-layout-input"]')
+            .fill("a gmail inbox reader");
+        await window
+            .locator('[data-testid="composer-suggest-layout-submit"]')
+            .click();
+
+        // With the override the call resolves immediately. If
+        // extractJsonBlock or the sanitizer change in a breaking
+        // way, one of these locators disappears and the test fails.
         await expect(
-            window.locator('[data-testid="composer-suggest-layout-form"]')
+            window.locator('[data-testid="composer-suggest-layout-results"]')
+        ).toBeVisible({ timeout: 5000 });
+        await expect(
+            window.locator('[data-testid="composer-suggest-layout-pick-0"]')
         ).toBeVisible();
         await expect(
-            window.locator('[data-testid="composer-suggest-layout-error"]')
+            window.locator('[data-testid="composer-suggest-layout-pick-1"]')
+        ).toBeVisible();
+
+        // Pick the first suggestion — the tree should rebuild to
+        // include the Inbox heading and a Table.
+        await window
+            .locator('[data-testid="composer-suggest-layout-pick-0"]')
+            .click();
+
+        // Form auto-closes on apply.
+        await expect(
+            window.locator('[data-testid="composer-suggest-layout-form"]')
         ).toHaveCount(0);
+        // Tree contains Heading + Table.
+        await expect(
+            window.locator('button[aria-label="Remove Heading"]')
+        ).toBeVisible({ timeout: 3000 });
+        // The existing Table (from the earlier add step) and the new
+        // Table from the suggestion both have aria-label "Remove
+        // Table" — assert at least one is present rather than count.
+        await expect(
+            window.locator('button[aria-label="Remove Table"]').first()
+        ).toBeVisible();
     });
 
     await test.step("no console errors and no suppressed errors fired", async () => {

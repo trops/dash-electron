@@ -240,6 +240,72 @@ describe("SuggestLayoutButton", () => {
         ).toBeInTheDocument();
     });
 
+    test("retries once with a stricter prompt when the first response has no JSON", async () => {
+        // First call: model returns prose ("I'll help you build...").
+        // Second call (retry with stricter prompt): real JSON.
+        sendOneShotJson
+            .mockRejectedValueOnce(
+                new Error(
+                    "LLM response did not contain a JSON block. Raw text: hi"
+                )
+            )
+            .mockResolvedValueOnce({
+                suggestions: [
+                    {
+                        label: "retry suggestion",
+                        root: {
+                            type: "Panel",
+                            children: [
+                                { type: "Heading", props: { title: "OK" } },
+                            ],
+                        },
+                    },
+                ],
+            });
+
+        render(<SuggestLayoutButton onApplyTree={() => {}} model="m" />);
+        fireEvent.click(screen.getByTestId("composer-suggest-layout-open"));
+        fireEvent.change(screen.getByTestId("composer-suggest-layout-input"), {
+            target: { value: "a thing" },
+        });
+        await act(async () => {
+            fireEvent.click(
+                screen.getByTestId("composer-suggest-layout-submit")
+            );
+        });
+
+        // Two calls total: first failed, second succeeded with the
+        // retry prompt that includes the "PRIOR ATTEMPT FAILED"
+        // instruction.
+        expect(sendOneShotJson).toHaveBeenCalledTimes(2);
+        const secondPrompt = sendOneShotJson.mock.calls[1][0].systemPrompt;
+        expect(secondPrompt).toMatch(/PRIOR ATTEMPT FAILED/);
+        // Picker renders with the retry suggestion.
+        expect(screen.getByText("retry suggestion")).toBeInTheDocument();
+    });
+
+    test("does NOT retry on non-no-JSON errors (timeout / bridge error)", async () => {
+        sendOneShotJson.mockRejectedValueOnce(
+            new Error("LLM request timed out after 60000ms")
+        );
+        render(<SuggestLayoutButton onApplyTree={() => {}} model="m" />);
+        fireEvent.click(screen.getByTestId("composer-suggest-layout-open"));
+        fireEvent.change(screen.getByTestId("composer-suggest-layout-input"), {
+            target: { value: "x" },
+        });
+        await act(async () => {
+            fireEvent.click(
+                screen.getByTestId("composer-suggest-layout-submit")
+            );
+        });
+        // No retry — error surfaces immediately so we don't double-bill
+        // on transport failures.
+        expect(sendOneShotJson).toHaveBeenCalledTimes(1);
+        expect(
+            screen.getByTestId("composer-suggest-layout-error").textContent
+        ).toMatch(/timed out/i);
+    });
+
     test("surfaces LLM errors in the form", async () => {
         sendOneShotJson.mockRejectedValue(new Error("model offline"));
         render(<SuggestLayoutButton onApplyTree={() => {}} />);

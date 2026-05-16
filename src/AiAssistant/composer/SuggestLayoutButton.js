@@ -57,14 +57,35 @@ export function SuggestLayoutButton({
         setError(null);
         setSuggestions([]);
         try {
-            const sys = buildSystemPrompt();
-            const result = await sendOneShotJson({
-                model,
-                apiKey,
-                backend,
-                systemPrompt: sys,
-                userMessage: description,
-            });
+            // First attempt: standard system prompt. If the model
+            // responds with prose instead of JSON (the common
+            // failure mode of conversational models), retry once
+            // with a stronger "your prior attempt failed" prompt.
+            // After the retry, surface the error to the user.
+            let result;
+            try {
+                result = await sendOneShotJson({
+                    model,
+                    apiKey,
+                    backend,
+                    systemPrompt: buildSystemPrompt(),
+                    userMessage: description,
+                });
+            } catch (firstErr) {
+                // Only retry on the no-JSON failure mode — bridge
+                // errors / timeouts shouldn't double-bill the user.
+                const isNoJson = /JSON block|parse error/i.test(
+                    firstErr?.message || ""
+                );
+                if (!isNoJson) throw firstErr;
+                result = await sendOneShotJson({
+                    model,
+                    apiKey,
+                    backend,
+                    systemPrompt: buildSystemPrompt({ retry: true }),
+                    userMessage: description,
+                });
+            }
             const items =
                 result &&
                 Array.isArray(result.suggestions) &&
@@ -204,23 +225,40 @@ export function SuggestLayoutButton({
     );
 }
 
-function buildSystemPrompt() {
+function buildSystemPrompt({ retry = false } = {}) {
     const allowed = SCHEMA_COMPONENT_NAMES.join(", ");
-    return [
-        "You are the layout suggester for the Dash widget composer.",
-        "Given a one-line widget description from the user, return 2-3 candidate composition trees as JSON.",
+    const base = [
+        "You are a structured-output API for the Dash widget composer. You do NOT chat.",
+        "",
+        "The user describes a widget in one line. You respond with NOTHING but a JSON object of layout candidates.",
+        "",
+        "OUTPUT FORMAT — emit exactly this and nothing else:",
+        "```json",
+        "{",
+        '  "suggestions": [',
+        '    { "label": "<short summary>", "root": { "type": "Panel", "children": [ ... ] } },',
+        "    ...",
+        "  ]",
+        "}",
+        "```",
         "",
         "STRICT RULES:",
-        '- Respond with a single JSON object: { "suggestions": [ ... ] }.',
-        "- Each suggestion: { label: string, root: TreeNode }.",
+        '- The first character of your response must be `{` or `` ``` ``. NO preamble, NO confirmation, NO "I\'ll help".',
+        "- Provide 2-3 suggestions. Each suggestion has { label: string, root: TreeNode }.",
         "- Each TreeNode: { type: string, props?: object, children?: TreeNode[] }.",
-        '- The root TreeNode must always have type "Panel".',
+        '- The root TreeNode of every suggestion MUST have type "Panel".',
         `- ONLY use these component types: ${allowed}.`,
-        "- props can include literal string/number/boolean values only — no functions, no JSX expressions.",
-        "- Do not include any data-fetching logic; the composer wires data slots in a separate stage.",
-        "- Do NOT wrap the JSON in markdown fences unless you must.",
+        "- props can include literal string/number/boolean values only — no functions, no JSX expressions, no data-fetching logic.",
         "- Keep each suggestion compact — 3-6 nodes is ideal.",
-    ].join("\n");
+        "- The composer wires data slots in a later stage. Do NOT include props for `data`, `items`, `options`, or other dataSlot fields.",
+    ];
+    if (retry) {
+        base.push(
+            "",
+            "PRIOR ATTEMPT FAILED. Your previous response contained prose instead of JSON. Respond with the JSON object only — no explanatory text before, between, or after. Start with `{`."
+        );
+    }
+    return base.join("\n");
 }
 
 /**
