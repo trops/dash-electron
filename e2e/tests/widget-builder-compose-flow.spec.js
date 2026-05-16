@@ -114,76 +114,65 @@ test("compose mode lets the user pick components and keeps the preview live", as
         ).toBeVisible({ timeout: 3000 });
     });
 
-    await test.step(
-        "preview survives the 2000ms chat-poller cycle (regression: 'goes back to blank')",
-        async () => {
-            // The bug: every poll tick, the chat-messages localStorage
-            // poller saw msgs.length===0 + hadActivity and reset
-            // previewComponent → null. Compose never writes chat
-            // messages, so this fired forever. Fix is in
-            // WidgetBuilderModal.js — poller now skips its reset
-            // branch when chatModeRef.current === "compose".
-            //
-            // Wait > one poll cycle so the bug would have fired if
-            // present, then assert the tree didn't get nuked AND
-            // the composer-pane is still mounted (not flipped back
-            // to the chat empty-state).
-            await window.waitForTimeout(2500);
-            await expect(
-                window.locator('[data-testid="composer-pane"]')
-            ).toBeVisible();
-            await expect(
-                window.locator('button[aria-label="Remove Heading"]')
-            ).toBeVisible();
-            await expect(
-                window.locator('button[aria-label="Remove Table"]')
-            ).toBeVisible();
-        }
-    );
+    await test.step("preview survives the 2000ms chat-poller cycle (regression: 'goes back to blank')", async () => {
+        // The bug: every poll tick, the chat-messages localStorage
+        // poller saw msgs.length===0 + hadActivity and reset
+        // previewComponent → null. Compose never writes chat
+        // messages, so this fired forever. Fix is in
+        // WidgetBuilderModal.js — poller now skips its reset
+        // branch when chatModeRef.current === "compose".
+        //
+        // Wait > one poll cycle so the bug would have fired if
+        // present, then assert the tree didn't get nuked AND
+        // the composer-pane is still mounted (not flipped back
+        // to the chat empty-state).
+        await window.waitForTimeout(2500);
+        await expect(
+            window.locator('[data-testid="composer-pane"]')
+        ).toBeVisible();
+        await expect(
+            window.locator('button[aria-label="Remove Heading"]')
+        ).toBeVisible();
+        await expect(
+            window.locator('button[aria-label="Remove Table"]')
+        ).toBeVisible();
+    });
 
-    await test.step(
-        "clicking a tree node opens the property inspector",
-        async () => {
-            // Click the second-most-recently-added child (Heading).
-            await window
-                .locator('[data-testid^="composer-node-node-"]')
-                .first()
-                .click();
-            await expect(
-                window.locator('[data-testid^="composer-inspector-node-"]')
-            ).toBeVisible({ timeout: 3000 });
-        }
-    );
+    await test.step("clicking a tree node opens the property inspector", async () => {
+        // Click the second-most-recently-added child (Heading).
+        await window
+            .locator('[data-testid^="composer-node-node-"]')
+            .first()
+            .click();
+        await expect(
+            window.locator('[data-testid^="composer-inspector-node-"]')
+        ).toBeVisible({ timeout: 3000 });
+    });
 
-    await test.step(
-        "Suggest-a-layout button is present and does NOT demand an API key under CLI backend (regression test)",
-        async () => {
-            // Close the inspector first so the palette + suggest
-            // button come back into view.
-            await window
-                .locator('[data-testid="composer-inspector-close"]')
-                .click();
-            const suggestOpen = window.locator(
-                '[data-testid="composer-suggest-layout-open"]'
-            );
-            await expect(suggestOpen).toBeVisible();
-            await suggestOpen.click();
-            // Form mounts. There should be NO error message at this
-            // stage — the API-key error only appears post-submit
-            // when the bridge rejects (anthropic path with no key).
-            // Pre-submit, the form is inert; if "API key is
-            // required" appears before any click, that means the
-            // suggest path is hardcoded to a key-requiring backend.
-            await expect(
-                window.locator('[data-testid="composer-suggest-layout-form"]')
-            ).toBeVisible();
-            await expect(
-                window.locator(
-                    '[data-testid="composer-suggest-layout-error"]'
-                )
-            ).toHaveCount(0);
-        }
-    );
+    await test.step("Suggest-a-layout button is present and does NOT demand an API key under CLI backend (regression test)", async () => {
+        // Close the inspector first so the palette + suggest
+        // button come back into view.
+        await window
+            .locator('[data-testid="composer-inspector-close"]')
+            .click();
+        const suggestOpen = window.locator(
+            '[data-testid="composer-suggest-layout-open"]'
+        );
+        await expect(suggestOpen).toBeVisible();
+        await suggestOpen.click();
+        // Form mounts. There should be NO error message at this
+        // stage — the API-key error only appears post-submit
+        // when the bridge rejects (anthropic path with no key).
+        // Pre-submit, the form is inert; if "API key is
+        // required" appears before any click, that means the
+        // suggest path is hardcoded to a key-requiring backend.
+        await expect(
+            window.locator('[data-testid="composer-suggest-layout-form"]')
+        ).toBeVisible();
+        await expect(
+            window.locator('[data-testid="composer-suggest-layout-error"]')
+        ).toHaveCount(0);
+    });
 
     await test.step("no console errors and no suppressed errors fired", async () => {
         const noise = [
