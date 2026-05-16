@@ -124,9 +124,18 @@ function enumerateCredentialTypes(providers) {
 }
 
 function enumerateMcpTypes(catalog, providers) {
-    const servers = Array.isArray(catalog && catalog.servers)
-        ? catalog.servers
-        : [];
+    // The bridge has historically returned two shapes:
+    //   - { catalog: [server, server, ...] }       (current; the
+    //     bridge unwraps `catalog.servers` itself)
+    //   - { catalog: { version, servers: [...] } } (raw catalog file)
+    // Accept either so a future bridge restructure doesn't silently
+    // collapse the type list to zero.
+    let servers = [];
+    if (Array.isArray(catalog)) {
+        servers = catalog;
+    } else if (catalog && Array.isArray(catalog.servers)) {
+        servers = catalog.servers;
+    }
     const configuredByType = groupConfiguredInstancesByType(providers);
     return servers.map((s) => {
         const instances = configuredByType.mcp[s.id] || [];

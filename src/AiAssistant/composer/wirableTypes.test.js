@@ -95,6 +95,31 @@ describe("useWirableTypes", () => {
         expect(algolia.configuredInstances).toContain("MyAlgolia");
     });
 
+    test("handles the bridge's flat-array shape (catalog: [server, …])", async () => {
+        // The live dash-core bridge returns `{ success: true,
+        // catalog: [server, …] }` — already-unwrapped. The wrapper
+        // must accept this shape as well as `{ catalog: { servers:
+        // [...] } }`. Regression: pre-fix the array shape collapsed
+        // to zero MCP types so the picker only showed credentials.
+        if (!window.mainApi) window.mainApi = {};
+        if (!window.mainApi.mcp) window.mainApi.mcp = {};
+        window.mainApi.mcp.getCatalog = jest.fn().mockResolvedValue({
+            success: true,
+            catalog: [
+                { id: "gmail", name: "Gmail" },
+                { id: "slack", name: "Slack" },
+            ],
+        });
+        const states = [];
+        await act(async () => {
+            render(<Probe providers={{}} onState={(s) => states.push(s)} />);
+        });
+        const final = states[states.length - 1];
+        const ids = final.types.map((t) => t.id);
+        expect(ids).toContain("gmail");
+        expect(ids).toContain("slack");
+    });
+
     test("missing MCP bridge: credentials still surface, error populated", async () => {
         // No setMcpBridge call → bridge truly missing.
         const states = [];
