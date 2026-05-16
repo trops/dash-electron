@@ -632,8 +632,20 @@ export function buildHookScaffold(
                     `            const result = await window.mainApi.${wire.providerType}.${wire.method}(${argsLiteral});`,
                     `            set_${varName}Result(${unwrap});`,
                     `        } catch (err) {`,
-                    `            // See note in the MCP branch above — silent`,
-                    `            // failure intentionally.`,
+                    `            try {`,
+                    `                (window.__DASH_DEBUG = window.__DASH_DEBUG || []).push({`,
+                    `                    t: Date.now(),`,
+                    `                    kind: "composer.ipc-error",`,
+                    `                    service: ${JSON.stringify(
+                        wire.providerType
+                    )},`,
+                    `                    method: ${JSON.stringify(
+                        wire.method
+                    )},`,
+                    `                    pc: { providerHash: ${handle}?.providerHash, dashboardAppId: ${handle}?.dashboardAppId, providerName: ${handle}?.providerName },`,
+                    `                    err: String(err && (err.message || err)),`,
+                    `                });`,
+                    `            } catch (_) {}`,
                     `        }`,
                     `    }, [${handle}?.providerHash]);`
                 );
