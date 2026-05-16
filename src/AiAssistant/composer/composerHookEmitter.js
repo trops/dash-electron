@@ -628,24 +628,15 @@ export function buildHookScaffold(
                     `    const ${varName} = useCallback(async (eventArg) => {`,
                     setterLine +
                         `        if (!${handle}?.providerHash) return;`,
+                    `        // Diagnostic: surfaces in the modal Console tab`,
+                    `        // so the user can see the exact pc triplet sent`,
+                    `        // when 'Provider not found' or similar errors fire.`,
+                    `        console.log("[composer] ${wire.providerType}.${wire.method} call:", { providerHash: ${handle}.providerHash, dashboardAppId: ${handle}.dashboardAppId, providerName: ${handle}.providerName });`,
                     `        try {`,
                     `            const result = await window.mainApi.${wire.providerType}.${wire.method}(${argsLiteral});`,
                     `            set_${varName}Result(${unwrap});`,
                     `        } catch (err) {`,
-                    `            try {`,
-                    `                (window.__DASH_DEBUG = window.__DASH_DEBUG || []).push({`,
-                    `                    t: Date.now(),`,
-                    `                    kind: "composer.ipc-error",`,
-                    `                    service: ${JSON.stringify(
-                        wire.providerType
-                    )},`,
-                    `                    method: ${JSON.stringify(
-                        wire.method
-                    )},`,
-                    `                    pc: { providerHash: ${handle}?.providerHash, dashboardAppId: ${handle}?.dashboardAppId, providerName: ${handle}?.providerName },`,
-                    `                    err: String(err && (err.message || err)),`,
-                    `                });`,
-                    `            } catch (_) {}`,
+                    `            console.error("[composer] ${wire.providerType}.${wire.method} failed:", err && (err.message || err), { providerHash: ${handle}.providerHash, dashboardAppId: ${handle}.dashboardAppId, providerName: ${handle}.providerName });`,
                     `        }`,
                     `    }, [${handle}?.providerHash]);`
                 );
