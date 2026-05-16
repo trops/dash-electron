@@ -27,6 +27,10 @@
  *     [methodName]: {
  *       args: ["field1", "field2", ...],   // top-level keys of the payload object
  *       desc:  "Short one-line description.",
+ *       returns: {
+ *         type: "Array<Object>" | "Object" | "void" | …,
+ *         sampleShape: { … },              // representative example, NOT a runtime schema
+ *       },
  *     },
  *     ...
  *   }
@@ -36,12 +40,43 @@
  * `{ providerHash, dashboardAppId, providerName, ...callSpecific }`
  * — the credentials-resolution prefix is invariant; only the call-
  * specific fields vary.
+ *
+ * `returns.type` is a loose type hint string (intentionally informal —
+ * "Array<Object>", "Array<{name,entries}>", "{ taskID, objectID }") used
+ * by the Compose-mode wire stage to filter the methods dropdown to
+ * return-shape-compatible candidates for a given component slot
+ * (e.g. Table.data needs Array → only show methods returning Array).
+ *
+ * `returns.sampleShape` is a representative JS-literal example the
+ * composer can use to populate UI defaults — column suggestions for
+ * a Table, field pickers for a DataList, etc. It is NOT validated at
+ * runtime against actual responses; SDK responses may carry many
+ * additional fields not enumerated here. Keep it minimal: just the
+ * fields the composer needs to suggest sensible bindings.
+ *
+ * `returns: { type: "void" }` is allowed for methods called purely
+ * for side effects (writes, deletes) — the composer will not surface
+ * these in "wire to provider" pickers for display slots.
  */
 export const PROVIDER_API_REGISTRY = {
     algolia: {
         listIndices: {
             args: ["providerHash", "dashboardAppId", "providerName"],
             desc: "List every index in the configured Algolia application. Returns an array of `{ name, entries, ... }` rows.",
+            returns: {
+                type: "Array<{name,entries,dataSize,fileSize,lastBuildTimeS,numberOfPendingTasks,pendingTask,primary,replicas,updatedAt,createdAt}>",
+                sampleShape: [
+                    {
+                        name: "string",
+                        entries: "number",
+                        dataSize: "number",
+                        fileSize: "number",
+                        lastBuildTimeS: "number",
+                        updatedAt: "string",
+                        createdAt: "string",
+                    },
+                ],
+            },
         },
         search: {
             args: [
@@ -53,6 +88,25 @@ export const PROVIDER_API_REGISTRY = {
                 "options",
             ],
             desc: "Run a search against an index. `options` is the standard Algolia search options object.",
+            returns: {
+                type: "{hits:Array<Object>,nbHits,page,nbPages,hitsPerPage,processingTimeMS,query,params}",
+                sampleShape: {
+                    hits: [
+                        {
+                            objectID: "string",
+                            _highlightResult: "object",
+                            _snippetResult: "object",
+                        },
+                    ],
+                    nbHits: "number",
+                    page: "number",
+                    nbPages: "number",
+                    hitsPerPage: "number",
+                    processingTimeMS: "number",
+                    query: "string",
+                    params: "string",
+                },
+            },
         },
         browseObjectsToFile: {
             args: [
@@ -64,6 +118,10 @@ export const PROVIDER_API_REGISTRY = {
                 "query",
             ],
             desc: "Stream every record matching `query` (default empty = all) into a JSON file at `toFilename`. Use for export workflows.",
+            returns: {
+                type: "void",
+                sampleShape: null,
+            },
         },
         partialUpdateObjectsFromDirectory: {
             args: [
@@ -75,6 +133,10 @@ export const PROVIDER_API_REGISTRY = {
                 "createIfNotExists",
             ],
             desc: "Bulk-update records by reading every JSON file in `dir`. `createIfNotExists` toggles upsert behavior.",
+            returns: {
+                type: "void",
+                sampleShape: null,
+            },
         },
         getSettings: {
             args: [
@@ -84,6 +146,16 @@ export const PROVIDER_API_REGISTRY = {
                 "indexName",
             ],
             desc: "Get the index's settings object (searchableAttributes, ranking, etc.).",
+            returns: {
+                type: "Object",
+                sampleShape: {
+                    searchableAttributes: "Array<string>",
+                    attributesForFaceting: "Array<string>",
+                    ranking: "Array<string>",
+                    customRanking: "Array<string>",
+                    replicas: "Array<string>",
+                },
+            },
         },
         setSettings: {
             args: [
@@ -94,6 +166,10 @@ export const PROVIDER_API_REGISTRY = {
                 "settings",
             ],
             desc: "Replace the index's settings object.",
+            returns: {
+                type: "void",
+                sampleShape: null,
+            },
         },
         getAnalyticsForQuery: {
             args: [
@@ -104,6 +180,16 @@ export const PROVIDER_API_REGISTRY = {
                 "query",
             ],
             desc: "Fetch analytics for a single query (count, click-through, conversion).",
+            returns: {
+                type: "Object",
+                sampleShape: {
+                    query: "string",
+                    count: "number",
+                    clickThroughRate: "number",
+                    conversionRate: "number",
+                    averageClickPosition: "number",
+                },
+            },
         },
         searchRules: {
             args: [
@@ -116,6 +202,23 @@ export const PROVIDER_API_REGISTRY = {
                 "page",
             ],
             desc: "List/search query rules on an index. `query` defaults to '' (returns all rules). `hitsPerPage` and `page` are optional pagination. Returns the standard Algolia rules-search response (`{ hits, nbHits, page, nbPages }`).",
+            returns: {
+                type: "{hits:Array<Object>,nbHits,page,nbPages}",
+                sampleShape: {
+                    hits: [
+                        {
+                            objectID: "string",
+                            description: "string",
+                            conditions: "Array<Object>",
+                            consequence: "Object",
+                            enabled: "boolean",
+                        },
+                    ],
+                    nbHits: "number",
+                    page: "number",
+                    nbPages: "number",
+                },
+            },
         },
         saveRule: {
             args: [
@@ -126,6 +229,13 @@ export const PROVIDER_API_REGISTRY = {
                 "rule",
             ],
             desc: "Create or update (upsert) a single query rule. `rule` is the full rule object including `objectID`. There is no separate createRule/updateRule — saveRule does both.",
+            returns: {
+                type: "{taskID,objectID}",
+                sampleShape: {
+                    taskID: "number",
+                    objectID: "string",
+                },
+            },
         },
         deleteRule: {
             args: [
@@ -136,6 +246,12 @@ export const PROVIDER_API_REGISTRY = {
                 "objectID",
             ],
             desc: "Delete a query rule by `objectID`. Destructive — every install of an `@ai-built/*` widget that calls this triggers the install-time permission gate.",
+            returns: {
+                type: "{taskID}",
+                sampleShape: {
+                    taskID: "number",
+                },
+            },
         },
     },
 };
