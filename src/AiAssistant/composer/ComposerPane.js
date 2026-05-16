@@ -55,6 +55,7 @@ export function ComposerPane({
     initialTree = null,
     apiKey = null,
     model = "claude-sonnet-4-20250514",
+    backend = "claude-code",
 }) {
     const [tree, setTree] = useState(() => initialTree || makeEmptyTree());
     const idCounter = useRef(1);
@@ -259,6 +260,7 @@ export function ComposerPane({
                     <SuggestLayoutButton
                         apiKey={apiKey}
                         model={model}
+                        backend={backend}
                         onApplyTree={handleApplySuggestedTree}
                     />
                     <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">

@@ -42,7 +42,7 @@ export function sendOneShot({
     apiKey = null,
     systemPrompt,
     userMessage,
-    backend = "anthropic",
+    backend = "claude-code",
     timeoutMs = 60_000,
 } = {}) {
     return new Promise((resolve, reject) => {

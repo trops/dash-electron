@@ -81,6 +81,55 @@ describe("SuggestLayoutButton", () => {
         expect(screen.getByText("A simple list")).toBeInTheDocument();
     });
 
+    test("forwards the backend prop to the LLM helper (so claude-code CLI is used when configured)", async () => {
+        sendOneShotJson.mockResolvedValue({
+            suggestions: [
+                {
+                    label: "x",
+                    root: { type: "Panel", children: [] },
+                },
+            ],
+        });
+        render(
+            <SuggestLayoutButton
+                onApplyTree={() => {}}
+                model="m"
+                backend="claude-code"
+            />
+        );
+        fireEvent.click(screen.getByTestId("composer-suggest-layout-open"));
+        fireEvent.change(screen.getByTestId("composer-suggest-layout-input"), {
+            target: { value: "x" },
+        });
+        await act(async () => {
+            fireEvent.click(
+                screen.getByTestId("composer-suggest-layout-submit")
+            );
+        });
+        const call = sendOneShotJson.mock.calls[0][0];
+        expect(call.backend).toBe("claude-code");
+    });
+
+    test("defaults to claude-code backend when none is passed (no apiKey required)", async () => {
+        sendOneShotJson.mockResolvedValue({
+            suggestions: [
+                { label: "x", root: { type: "Panel", children: [] } },
+            ],
+        });
+        render(<SuggestLayoutButton onApplyTree={() => {}} model="m" />);
+        fireEvent.click(screen.getByTestId("composer-suggest-layout-open"));
+        fireEvent.change(screen.getByTestId("composer-suggest-layout-input"), {
+            target: { value: "x" },
+        });
+        await act(async () => {
+            fireEvent.click(
+                screen.getByTestId("composer-suggest-layout-submit")
+            );
+        });
+        const call = sendOneShotJson.mock.calls[0][0];
+        expect(call.backend).toBe("claude-code");
+    });
+
     test("picking a suggestion fires onApplyTree with ids assigned and resets the form", async () => {
         sendOneShotJson.mockResolvedValue({
             suggestions: [

@@ -1319,8 +1319,18 @@ ${
     const isRemixMode = !!effectiveEditContext?.originalWidgetId;
 
     // Chat-pane mode ("build" = AI generates widgets, "discover" = AI
-    // searches the registry). Resets to "build" each time the modal opens.
+    // searches the registry, "compose" = stepwise composer with no chat).
+    // Resets to "build" each time the modal opens.
     const [chatMode, setChatMode] = useState("build");
+    // Mirror of chatMode in a ref so the chat-messages poller (which
+    // stays mounted across mode changes) can read the current mode
+    // without resubscribing on every flip. Required so the
+    // "messages.length===0 + hadActivity" New-Chat reset branch can
+    // skip compose mode, which intentionally never writes messages.
+    const chatModeRef = useRef("build");
+    useEffect(() => {
+        chatModeRef.current = chatMode;
+    }, [chatMode]);
     // Widgets returned by registry.search for the most recent user message
     // in Discover mode. Rendered as cards above the chat.
     const [discoverResults, setDiscoverResults] = useState([]);
@@ -2006,11 +2016,19 @@ ${
                     // (either compiled code OR sent at least one message),
                     // so clicking New Chat after Skip-for-now (no compile
                     // yet) still re-opens the provider gate.
+                    //
+                    // Slice 20.C1+ — also skip the reset branch while
+                    // the user is in compose mode. Compose never writes
+                    // chat messages, so `msgs.length === 0` is true for
+                    // every poll tick; combined with `hadActivity` from
+                    // the composer's own compiles, the reset would fire
+                    // continuously and nuke the live composer preview.
                     const hadActivity =
                         !!lastCompiledCode.current || lastMsgCount.current > 0;
                     if (
                         msgs.length === 0 &&
                         hadActivity &&
+                        chatModeRef.current !== "compose" &&
                         !effectiveEditContext?.componentCode
                     ) {
                         setPreviewComponent(null);
@@ -5027,6 +5045,7 @@ ${
                                     providers={providers}
                                     apiKey={apiKey}
                                     model={model}
+                                    backend={preferredBackend}
                                     onEmit={(code) => {
                                         compilePreview(code).catch(() => {});
                                         setActiveTab("preview");

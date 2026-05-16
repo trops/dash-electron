@@ -31,7 +31,12 @@ import { sendOneShotJson } from "./llmOneShot";
  * fall-through to free-form code (the chat-mode flow exists for
  * that case).
  */
-export function SuggestLayoutButton({ apiKey, model, onApplyTree }) {
+export function SuggestLayoutButton({
+    apiKey,
+    model,
+    backend = "claude-code",
+    onApplyTree,
+}) {
     const [open, setOpen] = useState(false);
     const [description, setDescription] = useState("");
     const [status, setStatus] = useState("idle");
@@ -56,6 +61,7 @@ export function SuggestLayoutButton({ apiKey, model, onApplyTree }) {
             const result = await sendOneShotJson({
                 model,
                 apiKey,
+                backend,
                 systemPrompt: sys,
                 userMessage: description,
             });
@@ -74,7 +80,7 @@ export function SuggestLayoutButton({ apiKey, model, onApplyTree }) {
             setError(err.message || String(err));
             setStatus("error");
         }
-    }, [description, model, apiKey]);
+    }, [description, model, apiKey, backend]);
 
     const pickSuggestion = useCallback(
         (suggestion) => {
