@@ -44,6 +44,7 @@
 import {
     getComponentSchema,
     DASH_REACT_COMPONENT_SCHEMAS,
+    getInputBinding,
 } from "../dashReactComponentSchemas";
 import { PROVIDER_API_REGISTRY } from "../providerApiRegistry";
 import { buildHookScaffold } from "./composerHookEmitter";
@@ -129,10 +130,13 @@ function renderNodeJsx(node, indent = 0, slotVarBySlotKey = null) {
     for (const [propName, propSchema] of Object.entries(schema.props)) {
         if (propName === "children") continue;
         const isWired = Boolean(node.wires && node.wires[propName]);
-        // C4: if the wire is configured (the hook emitter assigned
-        // a state-var name for this slot), bind the prop to that
-        // var instead of any placeholder or static literal.
-        if (isWired && slotVarBySlotKey) {
+        // slotVarBySlotKey is the unified binding map: includes
+        // wire-derived vars (C4), pipe-derived vars (C5a), and
+        // auto-state vars for input components (C5b). Any entry
+        // here wins over the static literal / placeholder paths so
+        // an input's value/onChange render against composer-
+        // managed state without the user explicitly wiring them.
+        if (slotVarBySlotKey) {
             const slotVar = slotVarBySlotKey.get(`${node.id}:${propName}`);
             if (slotVar) {
                 propEntries.push(`${propName}={${slotVar}}`);
@@ -244,10 +248,23 @@ export function emitWidgetCode(tree) {
     const scaffold = buildHookScaffold(
         tree,
         PROVIDER_API_REGISTRY,
-        getPropType
+        getPropType,
+        getInputBinding
     );
-    const { extraReactImports, coreImports, hookLines, slotVarBySlotKey } =
-        scaffold;
+    const {
+        extraReactImports,
+        coreImports,
+        hookLines,
+        slotVarBySlotKey,
+        userConfigFields,
+    } = scaffold;
+
+    // Collect the unique provider types + classes the wires reach.
+    // Drives the providers[] declaration in .dash.js so the install
+    // flow can request provider configuration up front instead of
+    // letting the widget render with `pc` null until the user
+    // figures out a provider is needed.
+    const providerDeclarations = collectProviderDeclarations(tree);
 
     const reactImport =
         extraReactImports.size > 0
@@ -297,9 +314,130 @@ export function emitWidgetCode(tree) {
             .join("\n") + "\n";
 
     const displayName = widgetName.replace(/([A-Z])/g, " $1").trim();
-    const configCode = `export default { component: "${widgetName}", name: "${displayName}", package: "${displayName}", author: "Composer", category: "general", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
+    const configCode = renderConfigCode({
+        widgetName,
+        displayName,
+        providerDeclarations,
+        userConfigFields,
+    });
 
     return { componentCode, configCode, files: null };
+}
+
+/**
+ * Walk the tree and emit one declaration per unique provider
+ * (type + class). Pipe wires are skipped — they reuse the source
+ * wire's provider and don't add their own.
+ *
+ * Shape per entry:
+ *   { type, providerClass, required: true }
+ *
+ * Used by the install flow to surface the right configure-provider
+ * UI before the user clicks Install — otherwise the widget renders
+ * with a null provider client and either errors out or silently
+ * shows nothing.
+ */
+function collectProviderDeclarations(tree) {
+    if (!tree || !tree.root) return [];
+    const seen = new Map(); // key = "<class>:<type>" → entry
+    const visit = (node) => {
+        if (!node) return;
+        if (node.wires) {
+            for (const w of Object.values(node.wires)) {
+                if (!w || w.kind === "pipe") continue;
+                if (!w.providerType || !w.method) continue;
+                const cls = w.providerClass || "credential";
+                const key = `${cls}:${w.providerType}`;
+                if (!seen.has(key)) {
+                    seen.set(key, {
+                        type: w.providerType,
+                        providerClass: cls,
+                        required: true,
+                    });
+                }
+            }
+        }
+        if (Array.isArray(node.children)) {
+            for (const c of node.children) visit(c);
+        }
+    };
+    visit(tree.root);
+    return Array.from(seen.values()).sort((a, b) =>
+        a.type.localeCompare(b.type)
+    );
+}
+
+function renderConfigCode({
+    widgetName,
+    displayName,
+    providerDeclarations,
+    userConfigFields,
+}) {
+    // Build the userConfig field map — one entry per userConfig-
+    // kind arg binding the user set. Each gets a sensible default
+    // shape so the widget config panel renders a text input out of
+    // the box; the user can refine instructions / type later.
+    const userConfigEntries = Array.from(userConfigFields || []).sort();
+    const userConfigJs =
+        userConfigEntries.length === 0
+            ? ""
+            : "    userConfig: {\n" +
+              userConfigEntries
+                  .map(
+                      (field) =>
+                          `        ${JSON.stringify(field)}: { ` +
+                          `type: "text", ` +
+                          `displayName: ${JSON.stringify(
+                              prettyFieldName(field)
+                          )}, ` +
+                          `defaultValue: "", ` +
+                          `instructions: "" }`
+                  )
+                  .join(",\n") +
+              ",\n    },\n";
+
+    const providersJs =
+        providerDeclarations.length === 0
+            ? ""
+            : "    providers: [\n" +
+              providerDeclarations
+                  .map(
+                      (p) =>
+                          `        { ` +
+                          `type: ${JSON.stringify(p.type)}, ` +
+                          `providerClass: ${JSON.stringify(
+                              p.providerClass
+                          )}, ` +
+                          `required: ${p.required ? "true" : "false"} }`
+                  )
+                  .join(",\n") +
+              ",\n    ],\n";
+
+    return [
+        "export default {",
+        `    component: ${JSON.stringify(widgetName)},`,
+        `    name: ${JSON.stringify(displayName)},`,
+        `    package: ${JSON.stringify(displayName)},`,
+        `    author: "Composer",`,
+        `    category: "general",`,
+        `    type: "widget",`,
+        `    canHaveChildren: false,`,
+        `    workspace: "ai-built",`,
+        providersJs,
+        userConfigJs,
+        "};",
+        "",
+    ]
+        .filter((line) => line !== "")
+        .join("\n");
+}
+
+function prettyFieldName(field) {
+    // camelCase → Title Case for displayName.
+    return field
+        .replace(/([A-Z])/g, " $1")
+        .replace(/^./, (c) => c.toUpperCase())
+        .trim();
 }
 
 /**

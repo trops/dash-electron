@@ -633,6 +633,59 @@ describe("WiredSlotSummary — arg binding", () => {
         ).not.toBeInTheDocument();
     });
 
+    test("eventArg button appears only for callback wires and binds the arg to the event param", () => {
+        const onSetArg = jest.fn();
+        render(
+            <WiredSlotSummary
+                propName="onChange"
+                wire={{
+                    provider: null,
+                    providerType: "google-drive",
+                    providerClass: "mcp",
+                    method: "search",
+                    args: { query: { kind: "literal", value: "x" } },
+                }}
+                isCallbackWire={true}
+                onChange={() => {}}
+                onStatic={() => {}}
+                onSetArg={onSetArg}
+            />
+        );
+        // Without an MCP registry entry, args fall back to whatever
+        // the user has bound — the test wire has `query` bound, so
+        // the eventArg button is on the same row.
+        const eventBtn = screen.getByTestId(
+            "composer-arg-kind-eventArg-onChange-query"
+        );
+        fireEvent.click(eventBtn);
+        expect(onSetArg).toHaveBeenCalledWith("onChange", "query", {
+            kind: "eventArg",
+        });
+    });
+
+    test("eventArg button hidden for non-callback (data) wires", () => {
+        render(
+            <WiredSlotSummary
+                propName="data"
+                wire={{
+                    provider: "MyAlgolia",
+                    providerType: "algolia",
+                    providerClass: "credential",
+                    method: "search",
+                }}
+                isCallbackWire={false}
+                onChange={() => {}}
+                onStatic={() => {}}
+                onSetArg={() => {}}
+            />
+        );
+        // For algolia.search, query is one of the args. Verify the
+        // event button does NOT render.
+        expect(
+            screen.queryByTestId("composer-arg-kind-eventArg-data-query")
+        ).not.toBeInTheDocument();
+    });
+
     test("typing in a literal arg input fires onSetArg with the parsed value", () => {
         const onSetArg = jest.fn();
         render(

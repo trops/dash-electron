@@ -329,6 +329,42 @@ export function getComponentSchema(name) {
 }
 
 /**
+ * For input-category components, returns the auto-managed
+ * value/onChange binding the composer should emit. Input components
+ * always have their value backed by useState — the composer hides
+ * those props from the wire UI and emits the state allocation +
+ * onChange-to-setter wiring automatically. Other components return
+ * null.
+ *
+ * Shape:
+ *   { valueProp: "value" | "checked", changeProp: "onChange",
+ *     defaultValue: '""' | "false" | "0" | "null" }
+ *
+ * `defaultValue` is a JS expression source the emitter drops into
+ * `useState(...)` as-is.
+ */
+export function getInputBinding(name) {
+    const schema = getComponentSchema(name);
+    if (!schema || schema.category !== "input") return null;
+    const props = schema.props || {};
+    let valueProp = null;
+    if ("value" in props) valueProp = "value";
+    else if ("checked" in props) valueProp = "checked";
+    if (!valueProp) return null;
+    if (!("onChange" in props)) return null;
+    const type = props[valueProp].type;
+    let defaultValue = "null";
+    if (type === "string") defaultValue = '""';
+    else if (type === "number") defaultValue = "0";
+    else if (type === "boolean") defaultValue = "false";
+    return {
+        valueProp,
+        changeProp: "onChange",
+        defaultValue,
+    };
+}
+
+/**
  * Whether a component has any data slots — quick test for the
  * composer's "this component needs wiring" badge in the tree view.
  */

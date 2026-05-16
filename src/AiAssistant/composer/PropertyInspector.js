@@ -1,5 +1,8 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { getComponentSchema } from "../dashReactComponentSchemas";
+import {
+    getComponentSchema,
+    getInputBinding,
+} from "../dashReactComponentSchemas";
 import { WirePicker, WiredSlotSummary, PipedSlotSummary } from "./WirePicker";
 
 /**
@@ -63,6 +66,14 @@ export function PropertyInspector({
         );
     }
 
+    // For input components, the value prop is auto-managed by the
+    // emitter (useState backing). The onChange prop is also auto-
+    // managed when unwired (binds to the setter). We surface them
+    // both in the inspector with a small auto-managed label so the
+    // user knows what's happening — they can still wire onChange to
+    // a tool, but the value prop has no editable state form because
+    // it's controlled by the input itself.
+    const inputBinding = node ? getInputBinding(node.type) : null;
     const propRows = Object.entries(schema.props).filter(
         ([name]) => name !== "children"
     );
@@ -99,6 +110,9 @@ export function PropertyInspector({
                         propName={propName}
                         propSchema={propSchema}
                         isDataSlot={dataSlotSet.has(propName)}
+                        isAutoValueProp={
+                            inputBinding && inputBinding.valueProp === propName
+                        }
                         staticValue={
                             node.props ? node.props[propName] : undefined
                         }
@@ -123,6 +137,7 @@ function PropRow({
     propName,
     propSchema,
     isDataSlot,
+    isAutoValueProp,
     staticValue,
     wireSpec,
     providers,
@@ -193,9 +208,14 @@ function PropRow({
                         </button>
                     </div>
                 )}
-                {isCallbackProp && (
+                {isCallbackProp && !isAutoValueProp && (
                     <span className="text-[10px] text-indigo-400">
                         callback
+                    </span>
+                )}
+                {isAutoValueProp && (
+                    <span className="text-[10px] text-emerald-400">
+                        auto-state
                     </span>
                 )}
             </div>
@@ -218,6 +238,7 @@ function PropRow({
                         <WiredSlotSummary
                             propName={propName}
                             wire={wireSpec}
+                            isCallbackWire={isCallbackProp}
                             onChange={() =>
                                 onClearSlotWire &&
                                 onClearSlotWire(nodeId, propName)

@@ -109,6 +109,49 @@ function walk(node, visit) {
 }
 
 /**
+ * Walk the tree and populate inputStateByNodeId for every input-
+ * category node. Var names derive from the component type + a
+ * counter so two SearchInputs in the same tree get distinct vars.
+ */
+function collectInputStates(tree, getInputBinding, out) {
+    if (!tree || !tree.root) return;
+    const seenNames = new Set();
+    walk(tree.root, (node) => {
+        if (!node || !node.type) return;
+        const binding = getInputBinding(node.type);
+        if (!binding) return;
+        let base =
+            node.type.charAt(0).toLowerCase() + node.type.slice(1) + "Value";
+        let varName = base;
+        let suffix = 0;
+        while (seenNames.has(varName)) {
+            suffix += 1;
+            varName = `${base}_${suffix}`;
+        }
+        seenNames.add(varName);
+        // A user-set static value becomes the initial state — so
+        // `Slider props: { value: 50 }` initializes the slider at
+        // 50 but still tracks subsequent edits via useState.
+        const userValue =
+            node.props && node.props[binding.valueProp] !== undefined
+                ? node.props[binding.valueProp]
+                : undefined;
+        const initial =
+            userValue !== undefined
+                ? JSON.stringify(userValue)
+                : binding.defaultValue;
+        out.set(node.id, {
+            varName,
+            setter: `set${varName.charAt(0).toUpperCase()}${varName.slice(1)}`,
+            valueProp: binding.valueProp,
+            changeProp: binding.changeProp,
+            defaultValue: initial,
+            componentType: node.type,
+        });
+    });
+}
+
+/**
  * Sanitize an arbitrary string into a JS identifier. Used for
  * deriving handle names from provider instance names that may
  * contain spaces, hyphens, etc.
@@ -128,8 +171,17 @@ function toIdent(s) {
  *
  * Also collects userConfig field names into `userConfigFields` so
  * the emitter can declare them in the .dash.js config (post-C4).
+ *
+ * Binding kinds:
+ *   - literal     → JSON-encoded value
+ *   - userConfig  → userConfig.<field>
+ *   - eventArg    → the literal `eventArg` (the callback handler's
+ *                   first parameter — only valid inside a callback
+ *                   wire's emitted handler).
+ *   - componentValue → another node's auto-state var name; resolved
+ *                   via inputStateByNodeId map passed by the caller.
  */
-function renderArgBinding(binding, userConfigFields) {
+function renderArgBinding(binding, userConfigFields, inputStateByNodeId) {
     if (!binding || typeof binding !== "object") return null;
     if (binding.kind === "literal") {
         if (binding.value === undefined) return null;
@@ -146,7 +198,32 @@ function renderArgBinding(binding, userConfigFields) {
         userConfigFields.add(binding.field);
         return `userConfig.${binding.field}`;
     }
+    if (binding.kind === "eventArg") {
+        return "eventArg";
+    }
+    if (binding.kind === "componentValue") {
+        if (!inputStateByNodeId || !binding.sourceNodeId) return null;
+        const entry = inputStateByNodeId.get(binding.sourceNodeId);
+        return entry ? entry.varName : null;
+    }
     return null;
+}
+
+/**
+ * Initial state value for a wired slot. Mirrors the unwrap shape so
+ * the consumer (Table, DataList, etc.) gets a usable empty value
+ * before the first fetch / event fires, instead of `null` causing a
+ * `Cannot read 'map' of null` crash on the first render.
+ *
+ * Returns a JS expression source — caller drops it into the
+ * useState() call as-is.
+ */
+function initialResultValue(returnsType) {
+    if (typeof returnsType !== "string") return "null";
+    if (/^Array(<|$)/.test(returnsType)) return "[]";
+    if (/[{:,]\s*hits\s*:\s*Array/.test(returnsType)) return "[]";
+    if (/[{:,]\s*items\s*:\s*Array/.test(returnsType)) return "[]";
+    return "null";
 }
 
 /**
@@ -186,7 +263,8 @@ function unwrapResultExpr(returnsType) {
 export function buildHookScaffold(
     tree,
     providerApiRegistry,
-    getPropType = () => "any"
+    getPropType = () => "any",
+    getInputBinding = () => null
 ) {
     const wires = collectWires(tree, getPropType);
     const extraReactImports = new Set();
@@ -194,8 +272,42 @@ export function buildHookScaffold(
     const hookLines = [];
     const slotVarBySlotKey = new Map();
     const userConfigFields = new Set();
+    // inputStateByNodeId: nodeId → { varName, setter, valueProp,
+    // changeProp, defaultValue }. Pre-pass populates this for every
+    // input-category node. Drives:
+    //   - useState allocation at the top of the component
+    //   - value/checked + onChange JSX binds (via slotVarBySlotKey)
+    //   - the prepended setState(eventArg) line in wired-onChange
+    //     handlers
+    //   - the `componentValue` arg-binding resolver
+    const inputStateByNodeId = new Map();
+    collectInputStates(tree, getInputBinding, inputStateByNodeId);
+
+    // Pre-pass: input-component auto-state. Allocates useState for
+    // every input's value/checked, registers the var in the slot
+    // map so the JSX renderer binds it, and pre-binds onChange to
+    // setState — so even an unwired SearchInput holds its typed
+    // value in component state available to downstream wires.
+    if (inputStateByNodeId.size > 0) {
+        extraReactImports.add("useState");
+        for (const [nodeId, entry] of inputStateByNodeId) {
+            hookLines.push(
+                `    const [${entry.varName}, ${entry.setter}] = useState(${entry.defaultValue});`
+            );
+            // value/checked binds to the state var.
+            slotVarBySlotKey.set(`${nodeId}:${entry.valueProp}`, entry.varName);
+        }
+    }
 
     if (wires.length === 0) {
+        // Even with no wires, input nodes may still have generated
+        // state — wire each input's onChange to its setter inline.
+        // (Done after the wire loop below when wires exist; here we
+        // handle the no-wire case so unwired inputs are still
+        // interactive.)
+        for (const [nodeId, entry] of inputStateByNodeId) {
+            slotVarBySlotKey.set(`${nodeId}:${entry.changeProp}`, entry.setter);
+        }
         return {
             extraReactImports,
             coreImports,
@@ -299,21 +411,37 @@ export function buildHookScaffold(
         // downstream `pipe` wires bind to a callback's tool result
         // (Search.onChange fires google-drive.search → DataList
         // reads `onChangeResult`).
+        //
+        // Initial value comes from the wire's return-type metadata:
+        // Array-shaped returns get `[]`, scalars/objects get `null`.
+        // This prevents the `Cannot read 'map' of null` crash that
+        // would otherwise hit on the first render before the fetch /
+        // event fires.
         const w = wires.find(
             (x) => x.nodeId === nodeId && x.propName === propName
         );
         const isCallback = w && w.propType === "function";
+        const registryEntry =
+            providerApiRegistry &&
+            providerApiRegistry[wire.providerType] &&
+            providerApiRegistry[wire.providerType][wire.method];
+        const returnsType =
+            (registryEntry &&
+                registryEntry.returns &&
+                registryEntry.returns.type) ||
+            null;
+        const initial = initialResultValue(returnsType);
         if (isCallback) {
             // Need useState for the result-capture state, regardless
             // of whether anything pipes from it (cheap, and lets
             // the user wire it up later).
             extraReactImports.add("useState");
             hookLines.push(
-                `    const [${varName}Result, set_${varName}Result] = useState(null);`
+                `    const [${varName}Result, set_${varName}Result] = useState(${initial});`
             );
         } else {
             hookLines.push(
-                `    const [${varName}, set_${varName}] = useState(null);`
+                `    const [${varName}, set_${varName}] = useState(${initial});`
             );
         }
     }
@@ -376,7 +504,11 @@ export function buildHookScaffold(
             }
             const args = wire.args || {};
             for (const [argName, binding] of Object.entries(args)) {
-                const rhs = renderArgBinding(binding, userConfigFields);
+                const rhs = renderArgBinding(
+                    binding,
+                    userConfigFields,
+                    inputStateByNodeId
+                );
                 if (rhs !== null)
                     argLines.push(`                ${argName}: ${rhs},`);
             }
@@ -403,13 +535,26 @@ export function buildHookScaffold(
                 null;
             const unwrap = unwrapResultExpr(returnsType);
 
+            // If this callback wire is on an input component's
+            // changeProp, prepend a setter call so the typed value
+            // is captured to state alongside firing the tool. The
+            // handler signature uses `eventArg` so the arg-binding
+            // path can also reference the new value directly via
+            // kind: "eventArg".
+            const inputState = inputStateByNodeId.get(nodeId);
+            const isInputChange =
+                inputState && inputState.changeProp === propName;
+            const setterLine = isInputChange
+                ? `        ${inputState.setter}(eventArg);\n`
+                : "";
+
             if (wire.providerClass === "mcp") {
                 const suffix = mcpProvidersSeen.get(wire.providerType);
                 const handle = `mcp_${suffix}`;
                 hookLines.push(
                     "",
-                    `    const ${varName} = useCallback(async () => {`,
-                    `        if (!${handle}?.isConnected) return;`,
+                    `    const ${varName} = useCallback(async (eventArg) => {`,
+                    setterLine + `        if (!${handle}?.isConnected) return;`,
                     `        try {`,
                     `            const result = await ${handle}.callTool(${JSON.stringify(
                         wire.method
@@ -428,8 +573,9 @@ export function buildHookScaffold(
                 const handle = `pc_${suffix}`;
                 hookLines.push(
                     "",
-                    `    const ${varName} = useCallback(async () => {`,
-                    `        if (!${handle}?.providerHash) return;`,
+                    `    const ${varName} = useCallback(async (eventArg) => {`,
+                    setterLine +
+                        `        if (!${handle}?.providerHash) return;`,
                     `        try {`,
                     `            const result = await window.mainApi.${wire.providerType}.${wire.method}(${argsLiteral});`,
                     `            set_${varName}Result(${unwrap});`,
@@ -440,6 +586,13 @@ export function buildHookScaffold(
                     `    }, [${handle}?.providerHash]);`
                 );
             }
+            // Also register the changeProp slot var so the JSX
+            // renderer binds onChange={varName} (the useCallback)
+            // — overrides the default `setter` binding we set in
+            // the no-wire pre-pass.
+            if (isInputChange) {
+                slotVarBySlotKey.set(`${nodeId}:${propName}`, varName);
+            }
             continue;
         }
 
@@ -449,7 +602,11 @@ export function buildHookScaffold(
             const argLines = [];
             const args = wire.args || {};
             for (const [argName, binding] of Object.entries(args)) {
-                const rhs = renderArgBinding(binding, userConfigFields);
+                const rhs = renderArgBinding(
+                    binding,
+                    userConfigFields,
+                    inputStateByNodeId
+                );
                 if (rhs !== null)
                     argLines.push(`            ${argName}: ${rhs},`);
             }
@@ -486,7 +643,11 @@ export function buildHookScaffold(
             ];
             const args = wire.args || {};
             for (const [argName, binding] of Object.entries(args)) {
-                const rhs = renderArgBinding(binding, userConfigFields);
+                const rhs = renderArgBinding(
+                    binding,
+                    userConfigFields,
+                    inputStateByNodeId
+                );
                 if (rhs !== null)
                     argLines.push(`            ${argName}: ${rhs},`);
             }
@@ -517,6 +678,18 @@ export function buildHookScaffold(
                 `        };`,
                 `    }, [${handle}?.providerHash]);`
             );
+        }
+    }
+
+    // Post-pass: for every input whose changeProp didn't end up
+    // wired (no useCallback generated above), default-bind onChange
+    // to the bare setter — so unwired inputs still capture typed
+    // values into state. Wired onChange handlers already overrode
+    // this entry inside the wire loop above.
+    for (const [nodeId, entry] of inputStateByNodeId) {
+        const changeKey = `${nodeId}:${entry.changeProp}`;
+        if (!slotVarBySlotKey.has(changeKey)) {
+            slotVarBySlotKey.set(changeKey, entry.setter);
         }
     }
 

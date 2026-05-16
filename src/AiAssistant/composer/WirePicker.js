@@ -501,6 +501,7 @@ const CREDENTIAL_AUTO_ARGS = new Set([
 export function WiredSlotSummary({
     propName,
     wire,
+    isCallbackWire = false,
     onChange,
     onStatic,
     onSetArg,
@@ -566,6 +567,7 @@ export function WiredSlotSummary({
                             propName={propName}
                             argName={argName}
                             binding={(wire.args || {})[argName]}
+                            isCallbackWire={isCallbackWire}
                             onSetArg={onSetArg}
                         />
                     ))}
@@ -575,7 +577,7 @@ export function WiredSlotSummary({
     );
 }
 
-function ArgRow({ propName, argName, binding, onSetArg }) {
+function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
     const kind = (binding && binding.kind) || "literal";
 
     return (
@@ -627,6 +629,25 @@ function ArgRow({ propName, argName, binding, onSetArg }) {
                     >
                         userConfig
                     </button>
+                    {isCallbackWire && (
+                        <button
+                            type="button"
+                            onClick={() =>
+                                onSetArg(propName, argName, {
+                                    kind: "eventArg",
+                                })
+                            }
+                            className={`px-1.5 py-0.5 rounded ${
+                                kind === "eventArg"
+                                    ? "bg-indigo-600/40 text-indigo-100"
+                                    : "text-gray-500 hover:text-gray-300"
+                            }`}
+                            data-testid={`composer-arg-kind-eventArg-${propName}-${argName}`}
+                            title="Pass the event handler's first argument (the input's new value, the clicked item, etc.)"
+                        >
+                            event
+                        </button>
+                    )}
                 </div>
             </div>
             {kind === "literal" ? (
@@ -662,6 +683,16 @@ function ArgRow({ propName, argName, binding, onSetArg }) {
                     data-testid={`composer-arg-literal-input-${propName}-${argName}`}
                     placeholder='"" / 0 / [...] / true'
                 />
+            ) : kind === "eventArg" ? (
+                <div
+                    className="text-[10px] px-1.5 py-1 font-mono text-indigo-200 bg-gray-900/50 border border-gray-700 rounded"
+                    data-testid={`composer-arg-eventarg-display-${propName}-${argName}`}
+                >
+                    eventArg{" "}
+                    <span className="text-gray-500">
+                        (= the event handler's first arg)
+                    </span>
+                </div>
             ) : (
                 <input
                     type="text"

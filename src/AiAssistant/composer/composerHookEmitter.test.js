@@ -132,7 +132,9 @@ describe("buildHookScaffold", () => {
 
         const text = s.hookLines.join("\n");
         expect(text).toContain("useProviderClient(provider_MyAlgolia)");
-        expect(text).toContain("useState(null)");
+        // listIndices returns Array<…> so the initial value is []
+        // (not null) — prevents the consumer crashing on .map(null).
+        expect(text).toContain("useState([])");
         expect(text).toContain("window.mainApi.algolia.listIndices");
         // Auto-supplied credential triplet.
         expect(text).toContain("providerHash: pc_MyAlgolia.providerHash");
@@ -313,14 +315,16 @@ describe("buildHookScaffold", () => {
         expect(s.extraReactImports.has("useState")).toBe(true);
         expect(s.extraReactImports.has("useEffect")).toBe(false);
         const text = s.hookLines.join("\n");
-        expect(text).toContain("const onClick = useCallback(async () => {");
+        expect(text).toContain(
+            "const onClick = useCallback(async (eventArg) => {"
+        );
         expect(text).toContain("window.mainApi.algolia.search");
         // Auto args still supplied.
         expect(text).toContain("providerHash: pc_MyAlgolia.providerHash");
         // Result-capture state allocated; the handler writes the
         // unwrapped result so a downstream pipe sees the data.
         expect(text).toContain(
-            "const [onClickResult, set_onClickResult] = useState(null);"
+            "const [onClickResult, set_onClickResult] = useState([]);"
         );
         expect(text).toContain("set_onClickResult(result?.hits || [])");
     });
@@ -347,7 +351,9 @@ describe("buildHookScaffold", () => {
         expect(s.extraReactImports.has("useCallback")).toBe(true);
         expect(s.coreImports.has("useMcpProvider")).toBe(true);
         const text = s.hookLines.join("\n");
-        expect(text).toContain("const onClick = useCallback(async () => {");
+        expect(text).toContain(
+            "const onClick = useCallback(async (eventArg) => {"
+        );
         expect(text).toContain('mcp_filesystem.callTool("write_file"');
     });
 
@@ -395,8 +401,11 @@ describe("buildHookScaffold", () => {
         // One useProviderClient line — the two wires share it.
         const pcMatches = text.match(/useProviderClient\(provider_A\)/g) || [];
         expect(pcMatches.length).toBe(1);
-        expect(text).toContain("const [data, set_data] = useState(null);");
-        expect(text).toContain("const onClick = useCallback(async () => {");
+        // listIndices returns Array — initial state is [].
+        expect(text).toContain("const [data, set_data] = useState([]);");
+        expect(text).toContain(
+            "const onClick = useCallback(async (eventArg) => {"
+        );
     });
 
     test("disambiguates slot var names when same propName wired on multiple nodes", () => {
