@@ -16,6 +16,7 @@ import {
     getNodeById,
 } from "./composerEmitter";
 import { PropertyInspector } from "./PropertyInspector";
+import { SuggestLayoutButton } from "./SuggestLayoutButton";
 
 /**
  * ComposerPane — Compose-mode replacement for the chat panel in
@@ -48,7 +49,13 @@ import { PropertyInspector } from "./PropertyInspector";
  * data-slot wiring to providers, and AI suggest buttons. The pane's
  * external contract (`onEmit`) does not change as those land.
  */
-export function ComposerPane({ onEmit, providers = {}, initialTree = null }) {
+export function ComposerPane({
+    onEmit,
+    providers = {},
+    initialTree = null,
+    apiKey = null,
+    model = "claude-sonnet-4-20250514",
+}) {
     const [tree, setTree] = useState(() => initialTree || makeEmptyTree());
     const idCounter = useRef(1);
     const [collapsedCategories, setCollapsedCategories] = useState(
@@ -162,6 +169,34 @@ export function ComposerPane({ onEmit, providers = {}, initialTree = null }) {
         [tree, emit]
     );
 
+    const handleApplySuggestedTree = useCallback(
+        (suggestion) => {
+            // Reset the id counter to reflect the suggested tree's
+            // node count so future inserts keep monotonic ids.
+            let maxId = 0;
+            const visit = (n) => {
+                if (!n) return;
+                const m = (n.id || "").match(/^node-(\d+)$/);
+                if (m) {
+                    const v = parseInt(m[1], 10);
+                    if (v > maxId) maxId = v;
+                }
+                if (Array.isArray(n.children)) n.children.forEach(visit);
+            };
+            visit(suggestion.root);
+            idCounter.current = maxId;
+
+            const nextTree = {
+                widgetName: suggestion.widgetName || tree.widgetName,
+                root: suggestion.root,
+            };
+            setTree(nextTree);
+            setSelectedNodeId(null);
+            emit(nextTree);
+        },
+        [tree.widgetName, emit]
+    );
+
     const toggleCategory = useCallback((cat) => {
         setCollapsedCategories((prev) => {
             const next = new Set(prev);
@@ -221,6 +256,11 @@ export function ComposerPane({ onEmit, providers = {}, initialTree = null }) {
                 </div>
             ) : (
                 <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
+                    <SuggestLayoutButton
+                        apiKey={apiKey}
+                        model={model}
+                        onApplyTree={handleApplySuggestedTree}
+                    />
                     <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">
                         Palette
                     </div>

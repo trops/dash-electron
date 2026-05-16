@@ -5025,6 +5025,8 @@ ${
                             {chatMode === "compose" && (
                                 <ComposerPane
                                     providers={providers}
+                                    apiKey={apiKey}
+                                    model={model}
                                     onEmit={(code) => {
                                         compilePreview(code).catch(() => {});
                                         setActiveTab("preview");
