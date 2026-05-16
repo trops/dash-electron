@@ -95,6 +95,33 @@ describe("providerApiRegistry — drift against public/preload.js", () => {
     });
 });
 
+describe("providerApiRegistry — `returns` annotation shape (composer wire stage)", () => {
+    /**
+     * Every method must declare what it returns so the Compose-mode
+     * wire stage can match return shapes to component slots. Missing
+     * a `returns` field means the composer can't surface the method
+     * in any picker — silently inert.
+     */
+    test.each(Object.entries(PROVIDER_API_REGISTRY.algolia))(
+        "algolia.%s declares a `returns: { type, sampleShape }`",
+        (name, spec) => {
+            expect(spec.returns).toBeDefined();
+            expect(spec.returns).not.toBeNull();
+            expect(typeof spec.returns).toBe("object");
+            expect(typeof spec.returns.type).toBe("string");
+            expect(spec.returns.type.length).toBeGreaterThan(0);
+            // sampleShape is `null` for void returns, otherwise an
+            // object or array literal.
+            if (spec.returns.type === "void") {
+                expect(spec.returns.sampleShape).toBeNull();
+            } else {
+                expect(spec.returns.sampleShape).not.toBeUndefined();
+                expect(spec.returns.sampleShape).not.toBeNull();
+            }
+        }
+    );
+});
+
 describe("formatProviderApiSection", () => {
     const { formatProviderApiSection } = require("./providerApiRegistry");
 
