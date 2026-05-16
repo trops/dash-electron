@@ -44,6 +44,16 @@ export function sendOneShot({
     userMessage,
     backend = "claude-code",
     timeoutMs = 60_000,
+    // CLI quiescence window: after this many ms with no new delta
+    // event, assume the stream is done and resolve with whatever
+    // has accumulated. The Claude CLI bridge's close handler only
+    // emits LLM_STREAM_COMPLETE if the final stdout line parses as
+    // a stream-json `result` event. When the model finishes via
+    // `assistant`+text deltas and exits without a result line (the
+    // common case for prompt-mode runs with no tool use), no
+    // complete event ever fires — we'd otherwise wait until the
+    // 60s hard timeout despite having the full answer in hand.
+    deltaQuiescenceMs = 4_000,
 } = {}) {
     return new Promise((resolve, reject) => {
         if (
@@ -77,6 +87,7 @@ export function sendOneShot({
 
         let accumulated = "";
         let settled = false;
+        let quiescenceTimer = null;
         const listenerIds = [];
         const events = [];
 
@@ -89,6 +100,25 @@ export function sendOneShot({
                 }
             }
             clearTimeout(timer);
+            if (quiescenceTimer) clearTimeout(quiescenceTimer);
+        };
+
+        // Bumped after every accepted delta. When this fires without
+        // a prior settle, we resolve with whatever has accumulated.
+        const bumpQuiescence = () => {
+            if (quiescenceTimer) clearTimeout(quiescenceTimer);
+            quiescenceTimer = setTimeout(() => {
+                if (typeof window !== "undefined") {
+                    window.__DASH_DEBUG = window.__DASH_DEBUG || [];
+                    window.__DASH_DEBUG.push({
+                        t: Date.now(),
+                        kind: "llmOneShot.quiescence-resolve",
+                        requestId,
+                        accumulatedLen: accumulated.length,
+                    });
+                }
+                settle(resolve, accumulated);
+            }, deltaQuiescenceMs);
         };
 
         const settle = (fn, val) => {
@@ -147,6 +177,7 @@ export function sendOneShot({
                     if (typeof evt?.text === "string") accumulated += evt.text;
                     else if (typeof evt?.delta === "string")
                         accumulated += evt.delta;
+                    bumpQuiescence();
                 })
             );
             listenerIds.push(

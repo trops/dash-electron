@@ -166,6 +166,61 @@ describe("sendOneShot", () => {
         await expect(p).resolves.toBe("all at once");
     });
 
+    test("resolves with accumulated deltas after the quiescence window when complete never fires", async () => {
+        // The Claude CLI bridge sometimes finishes a stream-json
+        // run without ever emitting a `result` line, so no
+        // LLM_STREAM_COMPLETE event reaches the renderer. The
+        // wrapper must still resolve — once deltas stop arriving
+        // for `deltaQuiescenceMs`, we treat the stream as done and
+        // return the accumulated text.
+        jest.useFakeTimers();
+        try {
+            const { fire, llm } = setupFakeBridge();
+            const p = sendOneShot({
+                model: "x",
+                systemPrompt: "p",
+                userMessage: "m",
+                deltaQuiescenceMs: 100,
+            });
+            await Promise.resolve();
+            const [requestId] = llm.sendMessage.mock.calls[0];
+            fire("delta", { requestId, text: "part 1 " });
+            fire("delta", { requestId, text: "part 2" });
+            // No complete event. Advance past the quiescence window.
+            jest.advanceTimersByTime(150);
+            await expect(p).resolves.toBe("part 1 part 2");
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    test("complete event arriving inside the quiescence window wins over the timer", async () => {
+        jest.useFakeTimers();
+        try {
+            const { fire, llm } = setupFakeBridge();
+            const p = sendOneShot({
+                model: "x",
+                systemPrompt: "p",
+                userMessage: "m",
+                deltaQuiescenceMs: 100,
+            });
+            await Promise.resolve();
+            const [requestId] = llm.sendMessage.mock.calls[0];
+            fire("delta", { requestId, text: "streaming" });
+            jest.advanceTimersByTime(50);
+            fire("complete", {
+                requestId,
+                content: [{ type: "text", text: "final" }],
+            });
+            await expect(p).resolves.toBe("final");
+            // Ensure no late quiescence resolve fires (would surface
+            // as an unhandled promise warning).
+            jest.advanceTimersByTime(200);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
     test("unwraps content[] shape on the complete event (CLI bridge shape)", async () => {
         // The CLI bridge emits LLM_STREAM_COMPLETE with shape
         //   { requestId, content: [{ type: "text", text: "..." }], stopReason, usage }
