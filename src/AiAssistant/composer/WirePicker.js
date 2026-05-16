@@ -3,6 +3,7 @@ import { PROVIDER_API_REGISTRY } from "../providerApiRegistry";
 import { useMcpTools } from "../mcpToolsQuery";
 import { scoreMethodList } from "./wireMatching";
 import { useWirableTypes } from "./wirableTypes";
+import { getKnownToolsForType } from "./mcpKnownTools";
 
 /**
  * WirePicker — Compose-mode Stage 3 in-place picker.
@@ -256,6 +257,7 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
         }
         return null;
     }, [providers, type.id]);
+    const knownTools = useMemo(() => getKnownToolsForType(type.id), [type.id]);
     const { status, tools, error } = useMcpTools(configuredInstance, null);
     const [freeText, setFreeText] = useState("");
 
@@ -269,11 +271,41 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
                 expectedType="(MCP)"
                 onBack={onBack}
             />
-            {!configuredInstance && (
+            {!configuredInstance && knownTools && (
+                <>
+                    <div className="text-[10px] text-amber-400 px-2 py-1">
+                        Approximate — configure a {type.name} provider in
+                        Settings → Providers for the live tool list.
+                    </div>
+                    <div
+                        className="flex flex-col"
+                        data-testid={`composer-wire-known-tools-${propName}`}
+                    >
+                        {knownTools.map((tool) => (
+                            <button
+                                key={tool.name}
+                                type="button"
+                                onClick={() => onPick(tool.name)}
+                                className="text-left text-xs px-2 py-1 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200"
+                                data-testid={`composer-wire-method-${propName}-${tool.name}`}
+                                title={tool.description || ""}
+                            >
+                                <span className="font-mono">{tool.name}</span>
+                                {tool.description && (
+                                    <div className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">
+                                        {tool.description}
+                                    </div>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                </>
+            )}
+            {!configuredInstance && !knownTools && (
                 <div className="text-[11px] text-gray-500 px-2 py-1 space-y-1">
                     <div>
-                        No configured {type.name} provider — tool list
-                        unavailable. Configure one in Settings → Providers to
+                        No configured {type.name} provider and no static tool
+                        list available. Configure one in Settings → Providers to
                         enumerate, or wire to a known tool name below.
                     </div>
                     <div className="flex gap-1">

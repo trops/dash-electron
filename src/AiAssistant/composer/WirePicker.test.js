@@ -263,7 +263,9 @@ describe("WirePicker — credential method step", () => {
 });
 
 describe("WirePicker — MCP method step", () => {
-    test("with no configured instance, free-text input lets the user wire by tool name", async () => {
+    test("with no configured instance + known-tools catalog hit, surfaces static list with approximate hint", async () => {
+        // gmail has a known-tools entry in mcpKnownTools.js — the
+        // picker surfaces those instead of the free-text fallback.
         setMcpBridge({
             getCatalog: jest.fn().mockResolvedValue({
                 catalog: { servers: [{ id: "gmail", name: "Gmail" }] },
@@ -283,14 +285,57 @@ describe("WirePicker — MCP method step", () => {
         fireEvent.click(
             screen.getByTestId("composer-wire-provider-data-gmail")
         );
-        const input = screen.getByTestId("composer-wire-tool-input-data");
-        fireEvent.change(input, { target: { value: "list_messages" } });
-        fireEvent.click(screen.getByTestId("composer-wire-tool-confirm-data"));
+        expect(
+            screen.getByTestId("composer-wire-known-tools-data")
+        ).toBeInTheDocument();
+        // The free-text input is NOT rendered because the static
+        // list took its place.
+        expect(
+            screen.queryByTestId("composer-wire-tool-input-data")
+        ).not.toBeInTheDocument();
+        fireEvent.click(
+            screen.getByTestId("composer-wire-method-data-list_messages")
+        );
         expect(onPick).toHaveBeenCalledWith({
             provider: null,
             providerType: "gmail",
             providerClass: "mcp",
             method: "list_messages",
+        });
+    });
+
+    test("with no configured instance AND no known-tools entry, falls back to free-text wire input", async () => {
+        // Made-up MCP type with no entry in mcpKnownTools — the
+        // user sees the free-text input as a last resort.
+        setMcpBridge({
+            getCatalog: jest.fn().mockResolvedValue({
+                catalog: {
+                    servers: [{ id: "unknown-service", name: "Unknown" }],
+                },
+            }),
+        });
+        const onPick = jest.fn();
+        await act(async () => {
+            render(
+                <WirePicker
+                    propName="data"
+                    expectedType="Array<Object>"
+                    providers={{}}
+                    onPick={onPick}
+                />
+            );
+        });
+        fireEvent.click(
+            screen.getByTestId("composer-wire-provider-data-unknown-service")
+        );
+        const input = screen.getByTestId("composer-wire-tool-input-data");
+        fireEvent.change(input, { target: { value: "do_thing" } });
+        fireEvent.click(screen.getByTestId("composer-wire-tool-confirm-data"));
+        expect(onPick).toHaveBeenCalledWith({
+            provider: null,
+            providerType: "unknown-service",
+            providerClass: "mcp",
+            method: "do_thing",
         });
     });
 
