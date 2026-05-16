@@ -663,8 +663,12 @@ describe("emitWidgetCode — hook scaffolding for configured wires (C4)", () => 
         const useCallbackCount = (componentCode.match(/useCallback\(/g) || [])
             .length;
         expect(useCallbackCount).toBe(1);
-        // The DataList items prop binds to the source's result var.
-        expect(componentCode).toMatch(/<DataList[^>]*items=\{onClickResult\}/);
+        // DataList is rendered as an iteration of DataList.Item
+        // children; the bound slot var is the source array.
+        expect(componentCode).toMatch(
+            /Array\.isArray\(onClickResult\)\s*\?\s*onClickResult\s*:\s*\[\]/
+        );
+        expect(componentCode).toContain("<DataList.Item");
     });
 
     test("mcp-class wire emits useMcpProvider + callTool", () => {
@@ -686,7 +690,10 @@ describe("emitWidgetCode — hook scaffolding for configured wires (C4)", () => 
         expect(componentCode).toContain('useMcpProvider("filesystem")');
         expect(componentCode).toContain('mcp_filesystem.callTool("read_file"');
         expect(componentCode).toContain('path: "/tmp/x.json"');
-        expect(componentCode).toContain("<DataList items={items} />");
+        expect(componentCode).toMatch(
+            /Array\.isArray\(items\)\s*\?\s*items\s*:\s*\[\]/
+        );
+        expect(componentCode).toContain("<DataList.Item");
     });
 });
 

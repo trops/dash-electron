@@ -192,10 +192,17 @@ describe("PropertyInspector — slot mode toggle", () => {
                 onClose={() => {}}
             />
         );
+        // Rows are accordion-collapsed by default when not needing
+        // attention (configured wires count as "good"). Expand it.
+        fireEvent.click(screen.getByTestId("composer-prop-toggle-data"));
         expect(
             screen.getByTestId("composer-wire-summary-data")
         ).toBeInTheDocument();
-        expect(screen.getByText("MyAlgolia.listIndices")).toBeInTheDocument();
+        // The summary appears both in the collapsed header (always)
+        // and inside the expanded body — getAllByText handles both.
+        expect(
+            screen.getAllByText(/MyAlgolia\.listIndices/).length
+        ).toBeGreaterThan(0);
     });
 });
 
@@ -230,6 +237,7 @@ describe("PropertyInspector — static editors by type", () => {
                 onClose={() => {}}
             />
         );
+        fireEvent.click(screen.getByTestId("composer-prop-toggle-title"));
         const input = screen.getByTestId("composer-input-title");
         fireEvent.change(input, { target: { value: "" } });
         expect(onChangeProp).toHaveBeenCalledWith("node-1", "title", undefined);
@@ -245,6 +253,7 @@ describe("PropertyInspector — static editors by type", () => {
                 onClose={() => {}}
             />
         );
+        fireEvent.click(screen.getByTestId("composer-prop-toggle-value"));
         const input = screen.getByTestId("composer-input-value");
         expect(input.type).toBe("number");
         fireEvent.change(input, { target: { value: "42" } });
@@ -261,6 +270,7 @@ describe("PropertyInspector — static editors by type", () => {
                 onClose={() => {}}
             />
         );
+        fireEvent.click(screen.getByTestId("composer-prop-toggle-checked"));
         const input = screen.getByTestId("composer-input-checked");
         expect(input.type).toBe("checkbox");
         fireEvent.click(input);

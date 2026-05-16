@@ -1331,6 +1331,24 @@ ${
     useEffect(() => {
         chatModeRef.current = chatMode;
     }, [chatMode]);
+
+    // Composer tree state. Lifted out of ComposerPane so we can
+    // persist the user's composition in the draft alongside the
+    // generated code. `composerInitialTree` is set from a resumed
+    // draft (paired with a remount via composerSessionKey so the
+    // pane picks up the new tree); composerTree is the live mirror
+    // updated on every in-pane edit via onTreeChange.
+    const [composerTree, setComposerTree] = useState(null);
+    const [composerInitialTree, setComposerInitialTree] = useState(null);
+    const [composerSessionKey, setComposerSessionKey] = useState(0);
+    // Mirror in a ref so the auto-save useEffect can read the latest
+    // tree without re-binding on every keystroke. The save effect's
+    // deps already cover code+files; using a ref for tree avoids
+    // re-scheduling the entire effect when the tree mutates.
+    const composerTreeRef = useRef(null);
+    useEffect(() => {
+        composerTreeRef.current = composerTree;
+    }, [composerTree]);
     // Widgets returned by registry.search for the most recent user message
     // in Discover mode. Rendered as cards above the chat.
     const [discoverResults, setDiscoverResults] = useState([]);
@@ -1592,6 +1610,12 @@ ${
             chatHistory,
             pickedProvider: selectedProviderForBuildRef.current,
             mode: "ai",
+            // Compose-mode persistence: stash the live tree + the
+            // active chat mode so resuming restores the composer
+            // back to the user's last composition (not just the
+            // emitted code).
+            chatMode: chatModeRef.current || "build",
+            composerTree: composerTreeRef.current || null,
         };
         // Pass files alongside so the main process materializes them
         // under @ai-built/<name>-draft-<id>/ and stamps packageDir
@@ -3292,6 +3316,12 @@ ${
                             setPreviewError(null);
                             setInstallStatus(null);
                             setSelectedProviderForBuild(null);
+                            // Reset compose-mode state so a fresh
+                            // session doesn't inherit the tree from
+                            // whatever was last loaded.
+                            setComposerInitialTree(null);
+                            setComposerTree(null);
+                            setComposerSessionKey((k) => k + 1);
                             setViewMode("builder");
                         }}
                         onResume={async (draft) => {
@@ -3334,13 +3364,27 @@ ${
                             }
                             // Restore the latest code so the preview +
                             // editor pick up where the user left off.
-                            setDetectedCode({
+                            const restoredCode = {
                                 componentCode: full.componentCode || null,
                                 configCode: full.configCode || null,
                                 files: Array.isArray(full.files)
                                     ? full.files
                                     : [],
-                            });
+                            };
+                            setDetectedCode(restoredCode);
+                            // Compile the restored code so the Preview
+                            // tab actually renders instead of showing
+                            // the empty placeholder from modal open.
+                            // Mirrors the remix/editContext useEffect
+                            // a few hundred lines up — drafts went
+                            // through setDetectedCode but never
+                            // through the compile pipeline, so the
+                            // preview stayed blank until the user
+                            // typed a new message (chat) or edited
+                            // the code tab manually.
+                            if (restoredCode.componentCode) {
+                                compilePreview(restoredCode).catch(() => {});
+                            }
                             // Restore the picked provider so the chat
                             // gate doesn't reappear and the post-process
                             // auto-correct stays consistent.
@@ -3348,6 +3392,22 @@ ${
                                 setSelectedProviderForBuild(
                                     full.pickedProvider
                                 );
+                            }
+                            // Restore compose mode + the saved
+                            // composer tree so the user picks up
+                            // exactly where they left off (palette,
+                            // selected node, wires, field maps).
+                            // composerSessionKey bump forces the
+                            // pane to remount with the new initial
+                            // tree — useState wouldn't otherwise pick
+                            // up the change after the first mount.
+                            if (full.composerTree) {
+                                setComposerInitialTree(full.composerTree);
+                                setComposerTree(full.composerTree);
+                                setComposerSessionKey((k) => k + 1);
+                            }
+                            if (full.chatMode) {
+                                setChatMode(full.chatMode);
                             }
                             setInstallStatus(null);
                             setViewMode("builder");
@@ -4344,6 +4404,13 @@ ${
                                                                     appContext
                                                                 )?.providers ||
                                                                 {},
+                                                            credentials:
+                                                                (
+                                                                    previewAppCtx ||
+                                                                    appContext
+                                                                )
+                                                                    ?.credentials ||
+                                                                null,
                                                         }}
                                                         widgetData={buildPreviewWidgetData(
                                                             {
@@ -5042,6 +5109,9 @@ ${
                                 left-side Preview tab updates live. */}
                             {chatMode === "compose" && (
                                 <ComposerPane
+                                    key={composerSessionKey}
+                                    initialTree={composerInitialTree}
+                                    onTreeChange={setComposerTree}
                                     providers={providers}
                                     apiKey={apiKey}
                                     model={model}

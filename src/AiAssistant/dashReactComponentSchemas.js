@@ -59,20 +59,13 @@ export const DASH_REACT_COMPONENT_SCHEMAS = {
         },
         dataSlots: [],
     },
-    Tabs: {
-        category: "layout",
-        props: {
-            children: { type: "ReactNode" },
-        },
-        dataSlots: [],
-    },
-    Accordion: {
-        category: "layout",
-        props: {
-            children: { type: "ReactNode" },
-        },
-        dataSlots: [],
-    },
+    // Tabs and Accordion are intentionally omitted: dash-react
+    // requires sub-component nesting (<Tabs.List>, <Tabs.Trigger
+    // value=…>, <Tabs.Content value=…> / <Accordion.Item>,
+    // <Accordion.Trigger>, <Accordion.Content>) which the composer
+    // can't yet model in its tree. A bare <Tabs>{children}</Tabs>
+    // emits valid JSX but renders nothing visible. Re-add when the
+    // composer learns to insert sub-component children.
 
     // ─── Display ────────────────────────────────────────────────────
     Heading: {
@@ -99,7 +92,7 @@ export const DASH_REACT_COMPONENT_SCHEMAS = {
     Tag: {
         category: "display",
         props: {
-            title: { type: "string", required: true },
+            text: { type: "string", required: true },
         },
         dataSlots: [],
     },
@@ -145,6 +138,7 @@ export const DASH_REACT_COMPONENT_SCHEMAS = {
     InputText: {
         category: "input",
         props: {
+            label: { type: "string" },
             value: { type: "string" },
             onChange: { type: "function" },
             placeholder: { type: "string" },
@@ -154,6 +148,7 @@ export const DASH_REACT_COMPONENT_SCHEMAS = {
     TextArea: {
         category: "input",
         props: {
+            label: { type: "string" },
             value: { type: "string" },
             onChange: { type: "function" },
             placeholder: { type: "string" },
@@ -164,6 +159,7 @@ export const DASH_REACT_COMPONENT_SCHEMAS = {
     SearchInput: {
         category: "input",
         props: {
+            label: { type: "string" },
             value: { type: "string" },
             onChange: { type: "function" },
             placeholder: { type: "string" },
@@ -182,6 +178,7 @@ export const DASH_REACT_COMPONENT_SCHEMAS = {
     Switch: {
         category: "input",
         props: {
+            label: { type: "string" },
             checked: { type: "boolean" },
             onChange: { type: "function" },
         },
@@ -190,6 +187,7 @@ export const DASH_REACT_COMPONENT_SCHEMAS = {
     Toggle: {
         category: "input",
         props: {
+            label: { type: "string" },
             checked: { type: "boolean" },
             onChange: { type: "function" },
         },
@@ -198,6 +196,7 @@ export const DASH_REACT_COMPONENT_SCHEMAS = {
     Checkbox: {
         category: "input",
         props: {
+            label: { type: "string" },
             checked: { type: "boolean" },
             onChange: { type: "function" },
         },
@@ -215,10 +214,12 @@ export const DASH_REACT_COMPONENT_SCHEMAS = {
     Slider: {
         category: "input",
         props: {
+            label: { type: "string" },
             value: { type: "number" },
             onChange: { type: "function" },
             min: { type: "number" },
             max: { type: "number" },
+            step: { type: "number" },
         },
         dataSlots: [],
     },
@@ -237,20 +238,16 @@ export const DASH_REACT_COMPONENT_SCHEMAS = {
         category: "action",
         props: {
             icon: { type: "string", required: true },
-            title: { type: "string" },
+            text: { type: "string" },
             onClick: { type: "function" },
             disabled: { type: "boolean" },
         },
         dataSlots: [],
     },
-    DropdownPanel: {
-        category: "action",
-        props: {
-            trigger: { type: "ReactNode", required: true },
-            children: { type: "ReactNode" },
-        },
-        dataSlots: [],
-    },
+    // DropdownPanel intentionally omitted: needs caller-managed
+    // isOpen/onClose state + DropdownPanel.Header / .Divider
+    // sub-components the composer can't model yet. Re-add when
+    // we support component-local state for non-input primitives.
 
     // ─── Feedback ───────────────────────────────────────────────────
     Alert: {

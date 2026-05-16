@@ -126,6 +126,42 @@ function renderNodeJsx(node, indent = 0, slotVarBySlotKey = null) {
         return `${pad}{/* unknown component: ${node.type} */}`;
     }
 
+    // dash-react's DataList is a container (`<dl>`) that renders
+    // its children — it has no `items` prop. The composer schema
+    // exposes a virtual `items` slot so users can wire a data
+    // source; when that slot is bound, expand it into a child loop
+    // of DataList.Item with a forgiving label/value heuristic so
+    // arbitrary result shapes (algolia hits, MCP rows, raw strings)
+    // render without the user having to hand-map fields. The user
+    // can edit the generated code via the Code tab to customize
+    // the mapping.
+    if (node.type === "DataList" && slotVarBySlotKey) {
+        const itemsVar = slotVarBySlotKey.get(`${node.id}:items`);
+        if (itemsVar) {
+            const wire = node.wires && node.wires.items;
+            const fieldMap = wire && wire.fieldMap;
+            const fieldExpr = (target) => {
+                if (fieldMap && fieldMap[target]) {
+                    const src = fieldMap[target];
+                    return (
+                        `(typeof __it === 'string' ? __it : ` +
+                        `(__it && __it[${JSON.stringify(src)}]) ?? '')`
+                    );
+                }
+                return defaultFieldExpr(target);
+            };
+            return (
+                `${pad}<DataList>\n` +
+                `${pad}    {(Array.isArray(${itemsVar}) ? ${itemsVar} : []).map((__it, __i) => (\n` +
+                `${pad}        <DataList.Item key={__i} label={${fieldExpr(
+                    "label"
+                )}} value={${fieldExpr("value")}} />\n` +
+                `${pad}    ))}\n` +
+                `${pad}</DataList>`
+            );
+        }
+    }
+
     const propEntries = [];
     for (const [propName, propSchema] of Object.entries(schema.props)) {
         if (propName === "children") continue;
@@ -139,7 +175,14 @@ function renderNodeJsx(node, indent = 0, slotVarBySlotKey = null) {
         if (slotVarBySlotKey) {
             const slotVar = slotVarBySlotKey.get(`${node.id}:${propName}`);
             if (slotVar) {
-                propEntries.push(`${propName}={${slotVar}}`);
+                const wire = node.wires && node.wires[propName];
+                propEntries.push(
+                    `${propName}={${adaptSlotForProp(
+                        propSchema?.type,
+                        slotVar,
+                        wire
+                    )}}`
+                );
                 continue;
             }
         }
@@ -181,6 +224,76 @@ function renderNodeJsx(node, indent = 0, slotVarBySlotKey = null) {
         .filter(Boolean)
         .join("\n");
     return `${pad}<${node.type}${propsStr}>\n${renderedChildren}\n${pad}</${node.type}>`;
+}
+
+/**
+ * When a wired/piped slot var lands on a prop whose schema type
+ * advertises a specific item shape (e.g. SelectInput.options
+ * needs Array<{label,value}>, Table.columns needs
+ * Array<{key,label}>), wrap the raw var in a .map() that picks
+ * sensible fallback fields so common provider return shapes
+ * (algolia indices with `name`, MCP rows, plain strings, …)
+ * render without the user having to hand-write a mapping. The
+ * Code tab is editable for explicit customization.
+ */
+function adaptSlotForProp(propType, slotVar, wire) {
+    if (typeof propType !== "string") return slotVar;
+    const targetFields = parseShapeFields(propType);
+    if (!targetFields) return slotVar;
+    const fieldMap = wire && wire.fieldMap;
+    const buildExpr = (targetField) => {
+        if (fieldMap && fieldMap[targetField]) {
+            const src = fieldMap[targetField];
+            return (
+                `(typeof __it === 'string' ? __it : ` +
+                `(__it && __it[${JSON.stringify(src)}]) ?? '')`
+            );
+        }
+        return defaultFieldExpr(targetField);
+    };
+    const props = targetFields.map((f) => `${f}: ${buildExpr(f)}`).join(", ");
+    return `(Array.isArray(${slotVar}) ? ${slotVar} : []).map((__it) => ({ ${props} }))`;
+}
+
+/**
+ * Parse the set of target field names from a schema type string
+ * like `Array<{label,value}>` → `["label","value"]`. Returns null
+ * for type strings that don't describe a shape-typed array, in
+ * which case the emitter passes the slot var through unchanged.
+ */
+export function parseShapeFields(propType) {
+    if (typeof propType !== "string") return null;
+    const m = propType.match(/Array<\{([^}]+)\}>/);
+    if (!m) return null;
+    return m[1]
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
+
+/**
+ * Fallback heuristic for a target field name when the user hasn't
+ * picked an explicit source field via the field-map UI. Kept narrow
+ * — adds candidates only for the shape names we actually emit, so
+ * an unknown target field just renders as an empty string instead
+ * of fishing through every property on the source object.
+ */
+function defaultFieldExpr(targetField) {
+    const chains = {
+        label:
+            "__it?.label ?? __it?.name ?? __it?.title ?? __it?.key ?? " +
+            "__it?.objectID ?? __it?.id",
+        value: "__it?.value ?? __it?.id ?? __it?.objectID ?? __it?.key ?? __it?.name",
+        key: "__it?.key ?? __it?.id ?? __it?.objectID ?? __it?.name",
+    };
+    const chain = chains[targetField];
+    if (chain) {
+        return (
+            `(typeof __it === 'string' ? __it : ` +
+            `(__it && (${chain})) ?? String(__it ?? ''))`
+        );
+    }
+    return `(__it && __it[${JSON.stringify(targetField)}]) ?? ''`;
 }
 
 /**
@@ -607,6 +720,35 @@ export function setSlotPipe(
         sourceNodeId,
         sourcePropName,
     };
+    return { ...tree, root: cloned };
+}
+
+/**
+ * Persist a field-mapping choice on a wire or pipe. `fieldMap` is
+ * an object keyed by target-shape field names whose values are the
+ * source-shape field names the emitter should pull from each item.
+ *
+ * Example: SelectInput.options wired to algolia.listIndices —
+ *   targetType is Array<{label,value}>, source items have
+ *   { name, entries, dataSize, … }. Setting
+ *   `{ label: "name", value: "name" }` makes the emitted code
+ *   `.map(it => ({ label: it.name, value: it.name }))` instead of
+ *   relying on the generic fallback heuristic.
+ *
+ * Passing `null` clears the override.
+ */
+export function setSlotFieldMap(tree, nodeId, propName, fieldMap) {
+    if (!tree || !tree.root) return tree;
+    const cloned = cloneNode(tree.root);
+    const node = findNode(cloned, nodeId);
+    if (!node || !node.wires || !node.wires[propName]) return tree;
+    const wire = { ...node.wires[propName] };
+    if (fieldMap === null || fieldMap === undefined) {
+        delete wire.fieldMap;
+    } else {
+        wire.fieldMap = { ...fieldMap };
+    }
+    node.wires[propName] = wire;
     return { ...tree, root: cloned };
 }
 

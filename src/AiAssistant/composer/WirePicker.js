@@ -4,6 +4,7 @@ import { useMcpTools } from "../mcpToolsQuery";
 import { scoreMethodList } from "./wireMatching";
 import { useWirableTypes } from "./wirableTypes";
 import { getKnownToolsForType, getKnownToolArgs } from "./mcpKnownTools";
+import { parseShapeFields } from "./composerEmitter";
 
 /**
  * WirePicker — Compose-mode Stage 3 in-place picker.
@@ -508,10 +509,12 @@ const CREDENTIAL_AUTO_ARGS = new Set([
 export function WiredSlotSummary({
     propName,
     wire,
+    targetType = null,
     isCallbackWire = false,
     onChange,
     onStatic,
     onSetArg,
+    onSetFieldMap,
 }) {
     const argNames = useMemo(() => {
         if (wire.providerClass === "mcp") {
@@ -589,8 +592,107 @@ export function WiredSlotSummary({
                     ))}
                 </div>
             )}
+            {!isCallbackWire && onSetFieldMap && (
+                <FieldMapEditor
+                    propName={propName}
+                    wire={wire}
+                    targetType={targetType}
+                    onSetFieldMap={onSetFieldMap}
+                />
+            )}
         </div>
     );
+}
+
+/**
+ * Rendered under WiredSlotSummary for data slots whose target type
+ * is shape-typed (e.g. SelectInput.options → Array<{label,value}>).
+ * Shows one dropdown per target field, listing the source method's
+ * known return fields. The "(auto)" sentinel keeps the emitter's
+ * fallback heuristic for that field. Hides itself entirely when
+ * either the target isn't shape-typed or the source's return shape
+ * isn't documented in the registry (no fields to pick from).
+ */
+function FieldMapEditor({ propName, wire, targetType, onSetFieldMap }) {
+    const targetFields = useMemo(
+        () => parseShapeFields(targetType),
+        [targetType]
+    );
+    const sourceFields = useMemo(() => extractSourceItemFields(wire), [wire]);
+    if (!targetFields || targetFields.length === 0) return null;
+    if (!sourceFields || sourceFields.length === 0) return null;
+
+    const fieldMap = wire.fieldMap || {};
+    const handleChange = (target, src) => {
+        const next = { ...fieldMap };
+        if (!src) delete next[target];
+        else next[target] = src;
+        onSetFieldMap(propName, Object.keys(next).length ? next : null);
+    };
+
+    return (
+        <div
+            className="px-2 py-1.5 border-t border-indigo-700/40 space-y-1"
+            data-testid={`composer-fieldmap-${propName}`}
+        >
+            <div className="text-[10px] text-gray-400">
+                Map fields from <span className="font-mono">{wire.method}</span>
+            </div>
+            {targetFields.map((target) => (
+                <div
+                    key={target}
+                    className="flex items-center justify-between gap-2"
+                    data-testid={`composer-fieldmap-row-${propName}-${target}`}
+                >
+                    <span className="text-[10px] font-mono text-indigo-200">
+                        {target}
+                    </span>
+                    <select
+                        value={fieldMap[target] || ""}
+                        onChange={(e) =>
+                            handleChange(target, e.target.value || null)
+                        }
+                        className="text-[10px] bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-200"
+                        data-testid={`composer-fieldmap-select-${propName}-${target}`}
+                    >
+                        <option value="">(auto)</option>
+                        {sourceFields.map((f) => (
+                            <option key={f} value={f}>
+                                {f}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+/**
+ * Pull the per-item field names out of a wire's known return shape.
+ * Handles the two patterns we currently see in the registry:
+ *   - returns.sampleShape is an Array → item lives at [0]
+ *   - returns.sampleShape is `{hits: [...]}` (algolia.search style)
+ *     → item lives at .hits[0]
+ * Returns null when the wire's provider/method has no documented
+ * return shape (MCP tools, custom methods, etc.). Caller hides the
+ * field-map UI in that case.
+ */
+function extractSourceItemFields(wire) {
+    if (!wire || wire.providerClass !== "credential") return null;
+    const reg =
+        PROVIDER_API_REGISTRY[wire.providerType] &&
+        PROVIDER_API_REGISTRY[wire.providerType][wire.method];
+    const shape = reg?.returns?.sampleShape;
+    if (!shape) return null;
+    let item = null;
+    if (Array.isArray(shape)) {
+        item = shape[0];
+    } else if (shape && Array.isArray(shape.hits)) {
+        item = shape.hits[0];
+    }
+    if (!item || typeof item !== "object") return null;
+    return Object.keys(item);
 }
 
 function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {

@@ -39,6 +39,7 @@ export function PropertyInspector({
     onClearSlotWire,
     onSetSlotPipe,
     onSetSlotArg,
+    onSetSlotFieldMap,
     onClose,
 }) {
     // Hooks must run unconditionally — schema-null and node-null
@@ -125,6 +126,7 @@ export function PropertyInspector({
                         onClearSlotWire={onClearSlotWire}
                         onSetSlotPipe={onSetSlotPipe}
                         onSetSlotArg={onSetSlotArg}
+                        onSetSlotFieldMap={onSetSlotFieldMap}
                     />
                 ))}
             </div>
@@ -148,6 +150,7 @@ function PropRow({
     onClearSlotWire,
     onSetSlotPipe,
     onSetSlotArg,
+    onSetSlotFieldMap,
 }) {
     // Callback wires (function-typed props like onClick / onChange)
     // can be wired to a tool that fires on the event. They're
@@ -163,140 +166,244 @@ function PropRow({
     // provider instance to be considered "configured" (the install
     // flow surfaces a missing-provider banner downstream).
     const isConfiguredWire = isWired && wireSpec.method;
+    // Pipes are a different "configured" predicate — they don't
+    // have a method but they DO have sourceNodeId; show summary in
+    // both shapes.
+    const isPipe = isWired && wireSpec.kind === "pipe";
+
+    // Each row is an accordion. Default collapsed so the inspector
+    // is scannable. Auto-expand only when the row needs attention:
+    //   - required static prop with no value typed yet
+    //   - wire mode but not configured (user hasn't picked a method)
+    // Configured wires, auto-state props, and optional empties stay
+    // collapsed; a single-line summary in the header tells the user
+    // what's there and one click opens the editor. Without this the
+    // SearchInput inspector spills the entire provider list inline
+    // before the user has expressed any intent.
+    const needsAttention =
+        (mode === "static" &&
+            propSchema.required &&
+            (staticValue === undefined || staticValue === "")) ||
+        (mode === "wire" && !isConfiguredWire && !isPipe);
+    const [expanded, setExpanded] = useState(needsAttention);
+
+    const summary = useMemo(() => {
+        if (isAutoValueProp) return "auto-state";
+        if (mode === "wire") {
+            if (isPipe) {
+                return `piped from ${wireSpec.sourcePropName}`;
+            }
+            if (isConfiguredWire) {
+                const ref = wireSpec.provider || wireSpec.providerType || "?";
+                return `${ref}.${wireSpec.method}`;
+            }
+            return isCallbackProp
+                ? "callback — click to pick a tool"
+                : "not wired — click to pick a source";
+        }
+        if (staticValue === undefined || staticValue === null) return "—";
+        if (typeof staticValue === "string") {
+            return staticValue === ""
+                ? "(empty)"
+                : `"${
+                      staticValue.length > 30
+                          ? staticValue.slice(0, 30) + "…"
+                          : staticValue
+                  }"`;
+        }
+        if (typeof staticValue === "object") return "(object)";
+        return String(staticValue);
+    }, [
+        mode,
+        isAutoValueProp,
+        isConfiguredWire,
+        isPipe,
+        isCallbackProp,
+        wireSpec,
+        staticValue,
+    ]);
 
     return (
-        <div data-testid={`composer-prop-row-${propName}`}>
-            <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] text-gray-300 font-mono">
-                    {propName}
-                    {propSchema.required && (
-                        <span className="text-red-400 ml-0.5">*</span>
-                    )}
-                    <span className="ml-1 text-gray-500">
+        <div
+            data-testid={`composer-prop-row-${propName}`}
+            className="border border-gray-800 rounded"
+        >
+            <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-white/5"
+                data-testid={`composer-prop-toggle-${propName}`}
+            >
+                <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-gray-500 text-[10px]">
+                        {expanded ? "▾" : "▸"}
+                    </span>
+                    <span className="text-[11px] text-gray-300 font-mono">
+                        {propName}
+                        {propSchema.required && (
+                            <span className="text-red-400 ml-0.5">*</span>
+                        )}
+                    </span>
+                    <span className="text-[10px] text-gray-500">
                         ({propSchema.type})
                     </span>
-                </label>
-                {isDataSlot && !isCallbackProp && (
-                    <div className="flex items-center gap-0.5 text-[10px] bg-gray-800 border border-gray-700 rounded p-0.5">
-                        <button
-                            type="button"
-                            onClick={() =>
-                                onSetSlotMode(nodeId, propName, "static")
-                            }
-                            className={`px-1.5 py-0.5 rounded ${
-                                mode === "static"
-                                    ? "bg-indigo-600/30 text-indigo-200"
-                                    : "text-gray-500 hover:text-gray-300"
-                            }`}
-                            data-testid={`composer-slot-static-${propName}`}
-                        >
-                            static
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() =>
-                                onSetSlotMode(nodeId, propName, "wire")
-                            }
-                            className={`px-1.5 py-0.5 rounded ${
-                                mode === "wire"
-                                    ? "bg-indigo-600/30 text-indigo-200"
-                                    : "text-gray-500 hover:text-gray-300"
-                            }`}
-                            data-testid={`composer-slot-wire-${propName}`}
-                        >
-                            wire
-                        </button>
-                    </div>
-                )}
-                {isCallbackProp && !isAutoValueProp && (
-                    <span className="text-[10px] text-indigo-400">
-                        callback
-                    </span>
-                )}
-                {isAutoValueProp && (
-                    <span className="text-[10px] text-emerald-400">
-                        auto-state
-                    </span>
-                )}
-            </div>
-            {mode === "wire" ? (
-                isConfiguredWire ? (
-                    wireSpec.kind === "pipe" ? (
-                        <PipedSlotSummary
-                            propName={propName}
-                            wire={wireSpec}
-                            tree={tree}
-                            onChange={() =>
-                                onClearSlotWire &&
-                                onClearSlotWire(nodeId, propName)
-                            }
-                            onStatic={() =>
-                                onSetSlotMode(nodeId, propName, "static")
-                            }
-                        />
-                    ) : (
-                        <WiredSlotSummary
-                            propName={propName}
-                            wire={wireSpec}
-                            isCallbackWire={isCallbackProp}
-                            onChange={() =>
-                                onClearSlotWire &&
-                                onClearSlotWire(nodeId, propName)
-                            }
-                            onStatic={() =>
-                                onSetSlotMode(nodeId, propName, "static")
-                            }
-                            onSetArg={
-                                onSetSlotArg
-                                    ? (slotName, argName, binding) =>
-                                          onSetSlotArg(
-                                              nodeId,
-                                              slotName,
-                                              argName,
-                                              binding
-                                          )
-                                    : undefined
-                            }
-                        />
-                    )
-                ) : (
-                    <WirePicker
-                        propName={propName}
-                        // Callback wires fire on event and don't
-                        // care about the method's return shape, so
-                        // we drop the type filter. Otherwise the
-                        // picker filters by `function` and finds
-                        // nothing — no method returns a function.
-                        expectedType={isCallbackProp ? "any" : propSchema.type}
-                        providers={providers}
-                        tree={tree}
-                        // Pipe is only meaningful for data slots
-                        // (non-function props). Callbacks always
-                        // fire; they're never receivers.
-                        allowPipe={!isCallbackProp}
-                        onPick={(spec) =>
-                            onSetSlotWire &&
-                            onSetSlotWire(nodeId, propName, spec)
-                        }
-                        onPipe={(sourceNodeId, sourcePropName) =>
-                            onSetSlotPipe &&
-                            onSetSlotPipe(
-                                nodeId,
-                                propName,
-                                sourceNodeId,
-                                sourcePropName
+                </span>
+                <span
+                    className={`text-[10px] truncate ml-2 ${
+                        needsAttention
+                            ? "text-amber-400"
+                            : isConfiguredWire || isPipe
+                            ? "text-indigo-300"
+                            : isAutoValueProp
+                            ? "text-emerald-400"
+                            : "text-gray-400"
+                    }`}
+                    data-testid={`composer-prop-summary-${propName}`}
+                >
+                    {summary}
+                </span>
+            </button>
+            {expanded && (
+                <div className="px-2 pb-2 space-y-1.5">
+                    {isDataSlot && !isCallbackProp && (
+                        <div className="flex items-center justify-end mb-1">
+                            <div className="flex items-center gap-0.5 text-[10px] bg-gray-800 border border-gray-700 rounded p-0.5">
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        onSetSlotMode(
+                                            nodeId,
+                                            propName,
+                                            "static"
+                                        )
+                                    }
+                                    className={`px-1.5 py-0.5 rounded ${
+                                        mode === "static"
+                                            ? "bg-indigo-600/30 text-indigo-200"
+                                            : "text-gray-500 hover:text-gray-300"
+                                    }`}
+                                    data-testid={`composer-slot-static-${propName}`}
+                                >
+                                    static
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        onSetSlotMode(nodeId, propName, "wire")
+                                    }
+                                    className={`px-1.5 py-0.5 rounded ${
+                                        mode === "wire"
+                                            ? "bg-indigo-600/30 text-indigo-200"
+                                            : "text-gray-500 hover:text-gray-300"
+                                    }`}
+                                    data-testid={`composer-slot-wire-${propName}`}
+                                >
+                                    wire
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                    {mode === "wire" ? (
+                        isConfiguredWire ? (
+                            wireSpec.kind === "pipe" ? (
+                                <PipedSlotSummary
+                                    propName={propName}
+                                    wire={wireSpec}
+                                    tree={tree}
+                                    onChange={() =>
+                                        onClearSlotWire &&
+                                        onClearSlotWire(nodeId, propName)
+                                    }
+                                    onStatic={() =>
+                                        onSetSlotMode(
+                                            nodeId,
+                                            propName,
+                                            "static"
+                                        )
+                                    }
+                                />
+                            ) : (
+                                <WiredSlotSummary
+                                    propName={propName}
+                                    wire={wireSpec}
+                                    targetType={propSchema.type}
+                                    isCallbackWire={isCallbackProp}
+                                    onChange={() =>
+                                        onClearSlotWire &&
+                                        onClearSlotWire(nodeId, propName)
+                                    }
+                                    onStatic={() =>
+                                        onSetSlotMode(
+                                            nodeId,
+                                            propName,
+                                            "static"
+                                        )
+                                    }
+                                    onSetArg={
+                                        onSetSlotArg
+                                            ? (slotName, argName, binding) =>
+                                                  onSetSlotArg(
+                                                      nodeId,
+                                                      slotName,
+                                                      argName,
+                                                      binding
+                                                  )
+                                            : undefined
+                                    }
+                                    onSetFieldMap={
+                                        onSetSlotFieldMap
+                                            ? (slotName, fieldMap) =>
+                                                  onSetSlotFieldMap(
+                                                      nodeId,
+                                                      slotName,
+                                                      fieldMap
+                                                  )
+                                            : undefined
+                                    }
+                                />
                             )
-                        }
-                    />
-                )
-            ) : (
-                <StaticValueEditor
-                    nodeId={nodeId}
-                    propName={propName}
-                    propSchema={propSchema}
-                    value={staticValue}
-                    onChangeProp={onChangeProp}
-                />
+                        ) : (
+                            <WirePicker
+                                propName={propName}
+                                // Callback wires fire on event and don't
+                                // care about the method's return shape, so
+                                // we drop the type filter. Otherwise the
+                                // picker filters by `function` and finds
+                                // nothing — no method returns a function.
+                                expectedType={
+                                    isCallbackProp ? "any" : propSchema.type
+                                }
+                                providers={providers}
+                                tree={tree}
+                                // Pipe is only meaningful for data slots
+                                // (non-function props). Callbacks always
+                                // fire; they're never receivers.
+                                allowPipe={!isCallbackProp}
+                                onPick={(spec) =>
+                                    onSetSlotWire &&
+                                    onSetSlotWire(nodeId, propName, spec)
+                                }
+                                onPipe={(sourceNodeId, sourcePropName) =>
+                                    onSetSlotPipe &&
+                                    onSetSlotPipe(
+                                        nodeId,
+                                        propName,
+                                        sourceNodeId,
+                                        sourcePropName
+                                    )
+                                }
+                            />
+                        )
+                    ) : (
+                        <StaticValueEditor
+                            nodeId={nodeId}
+                            propName={propName}
+                            propSchema={propSchema}
+                            value={staticValue}
+                            onChangeProp={onChangeProp}
+                        />
+                    )}
+                </div>
             )}
         </div>
     );
