@@ -11,6 +11,7 @@ import {
     updateNodeProp,
     setSlotMode,
     setSlotWire,
+    setSlotPipe,
     clearSlotWire,
     setSlotArg,
     getNodeById,
@@ -145,6 +146,21 @@ export function ComposerPane({
         [tree, emit]
     );
 
+    const handleSetSlotPipe = useCallback(
+        (nodeId, propName, sourceNodeId, sourcePropName) => {
+            const next = setSlotPipe(
+                tree,
+                nodeId,
+                propName,
+                sourceNodeId,
+                sourcePropName
+            );
+            setTree(next);
+            emit(next);
+        },
+        [tree, emit]
+    );
+
     const handleSetSlotArg = useCallback(
         (nodeId, propName, argName, binding) => {
             const next = setSlotArg(tree, nodeId, propName, argName, binding);
@@ -246,11 +262,13 @@ export function ComposerPane({
                 <div className="flex-1 min-h-0">
                     <PropertyInspector
                         node={selectedNode}
+                        tree={tree}
                         providers={providers}
                         onChangeProp={handleChangeProp}
                         onSetSlotMode={handleSetSlotMode}
                         onSetSlotWire={handleSetSlotWire}
                         onClearSlotWire={handleClearSlotWire}
+                        onSetSlotPipe={handleSetSlotPipe}
                         onSetSlotArg={handleSetSlotArg}
                         onClose={() => setSelectedNodeId(null)}
                     />

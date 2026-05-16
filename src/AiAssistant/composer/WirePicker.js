@@ -33,15 +33,58 @@ import { getKnownToolsForType } from "./mcpKnownTools";
  * decides whether to swap to the WiredSlotSummary (filled) or stay
  * on the picker (cleared) based on the wire spec it sees afterwards.
  */
-export function WirePicker({ propName, expectedType, providers, onPick }) {
+export function WirePicker({
+    propName,
+    expectedType,
+    providers,
+    tree = null,
+    allowPipe = false,
+    onPick,
+    onPipe,
+}) {
     const [pickedType, setPickedType] = useState(null);
     const wirable = useWirableTypes(providers);
+
+    // Find other wires in the tree that could feed this slot. Pipe
+    // is only useful when there's at least one configured wire to
+    // pipe FROM (typically a callback handler whose tool fires on
+    // event). Data wires can also be piped from (e.g., two slots
+    // showing the same fetched list).
+    const pipeSources = useMemo(() => {
+        if (!allowPipe || !tree || !tree.root) return [];
+        const sources = [];
+        const visit = (node) => {
+            if (!node) return;
+            if (node.wires) {
+                for (const [pName, w] of Object.entries(node.wires)) {
+                    if (!w) continue;
+                    // Configured method wires (any kind other than
+                    // pipe) are pipe-able.
+                    if (w.kind !== "pipe" && w.method && w.providerType) {
+                        sources.push({
+                            nodeId: node.id,
+                            propName: pName,
+                            nodeType: node.type,
+                            label: `${node.type}.${pName} → ${w.providerType}.${w.method}`,
+                        });
+                    }
+                }
+            }
+            if (Array.isArray(node.children)) {
+                for (const c of node.children) visit(c);
+            }
+        };
+        visit(tree.root);
+        return sources;
+    }, [tree, allowPipe]);
 
     if (!pickedType) {
         return (
             <ProviderTypeStep
                 propName={propName}
                 wirable={wirable}
+                pipeSources={pipeSources}
+                onPipe={onPipe}
                 onPick={setPickedType}
             />
         );
@@ -78,7 +121,13 @@ export function WirePicker({ propName, expectedType, providers, onPick }) {
     );
 }
 
-function ProviderTypeStep({ propName, wirable, onPick }) {
+function ProviderTypeStep({
+    propName,
+    wirable,
+    pipeSources = [],
+    onPipe,
+    onPick,
+}) {
     // Only show the loading-only state when we have nothing to show
     // yet. Credential types arrive synchronously from the registry,
     // so usually the list is non-empty even during the catalog
@@ -113,6 +162,29 @@ function ProviderTypeStep({ propName, wirable, onPick }) {
             className="rounded border border-gray-700 bg-gray-900/50 p-1 max-h-72 overflow-y-auto"
             data-testid={`composer-wire-providers-${propName}`}
         >
+            {pipeSources.length > 0 && onPipe && (
+                <div
+                    className="mb-2 pb-2 border-b border-gray-700"
+                    data-testid={`composer-pipe-sources-${propName}`}
+                >
+                    <div className="text-[10px] uppercase tracking-wide text-gray-500 px-1 mb-1">
+                        Or pipe from an existing wire
+                    </div>
+                    <div className="flex flex-col">
+                        {pipeSources.map((src) => (
+                            <button
+                                key={`${src.nodeId}:${src.propName}`}
+                                type="button"
+                                onClick={() => onPipe(src.nodeId, src.propName)}
+                                className="text-left text-xs px-2 py-1 rounded hover:bg-amber-700/30 text-gray-300 hover:text-amber-200"
+                                data-testid={`composer-pipe-source-${propName}-${src.nodeId}-${src.propName}`}
+                            >
+                                <span className="font-mono">{src.label}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
             <div className="text-[10px] uppercase tracking-wide text-gray-500 px-1 mb-1">
                 Pick a provider type
             </div>
@@ -609,6 +681,65 @@ function ArgRow({ propName, argName, binding, onSetArg }) {
                     placeholder="userConfig field name"
                 />
             )}
+        </div>
+    );
+}
+
+/**
+ * Summary card for a slot that's piped from another wire (typically
+ * a callback handler whose tool result populates this slot's data).
+ * Shows the source as `<NodeType>.<propName>` plus Change (clears
+ * the pipe → picker reappears) and Static (flip back to literal)
+ * buttons.
+ */
+export function PipedSlotSummary({ propName, wire, tree, onChange, onStatic }) {
+    const sourceLabel = (() => {
+        if (!wire || !wire.sourceNodeId) return "(unknown)";
+        // Walk the tree to find the source node's type for display.
+        if (!tree || !tree.root)
+            return `${wire.sourceNodeId}.${wire.sourcePropName}`;
+        let label = `${wire.sourceNodeId}.${wire.sourcePropName}`;
+        const visit = (node) => {
+            if (!node) return;
+            if (node.id === wire.sourceNodeId) {
+                label = `${node.type}.${wire.sourcePropName}`;
+                return;
+            }
+            if (Array.isArray(node.children)) {
+                for (const c of node.children) visit(c);
+            }
+        };
+        visit(tree.root);
+        return label;
+    })();
+
+    return (
+        <div
+            className="flex items-center justify-between text-[11px] px-2 py-1.5 rounded border border-amber-700/40 bg-amber-900/20 text-amber-200"
+            data-testid={`composer-pipe-summary-${propName}`}
+        >
+            <div className="min-w-0">
+                <span className="text-gray-400">Piped from: </span>
+                <span className="font-mono">{sourceLabel}</span>
+            </div>
+            <div className="flex items-center gap-2 ml-2 shrink-0">
+                <button
+                    type="button"
+                    onClick={onChange}
+                    className="text-[10px] text-amber-300 hover:text-amber-100 underline"
+                    data-testid={`composer-pipe-change-${propName}`}
+                >
+                    Change
+                </button>
+                <button
+                    type="button"
+                    onClick={onStatic}
+                    className="text-[10px] text-gray-400 hover:text-gray-200 underline"
+                    data-testid={`composer-pipe-revert-${propName}`}
+                >
+                    Static
+                </button>
+            </div>
         </div>
     );
 }

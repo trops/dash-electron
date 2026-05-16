@@ -28,7 +28,7 @@
 import "@testing-library/jest-dom";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
-import { WirePicker, WiredSlotSummary } from "./WirePicker";
+import { WirePicker, WiredSlotSummary, PipedSlotSummary } from "./WirePicker";
 
 function setMcpBridge({ getCatalog, listTools } = {}) {
     if (!window.mainApi) window.mainApi = {};
@@ -382,6 +382,159 @@ describe("WirePicker — MCP method step", () => {
             providerClass: "mcp",
             method: "list_messages",
         });
+    });
+});
+
+describe("WirePicker — pipe from existing wires", () => {
+    test("surfaces an 'Or pipe from' section when allowPipe is true and the tree has wired sources", async () => {
+        setMcpBridge({
+            getCatalog: jest
+                .fn()
+                .mockResolvedValue({ catalog: { servers: [] } }),
+        });
+        const tree = {
+            widgetName: "W",
+            root: {
+                id: "root",
+                type: "Panel",
+                props: {},
+                children: [
+                    {
+                        id: "node-1",
+                        type: "SearchInput",
+                        props: {},
+                        wires: {
+                            onChange: {
+                                provider: null,
+                                providerType: "google-drive",
+                                providerClass: "mcp",
+                                method: "search",
+                            },
+                        },
+                        children: [],
+                    },
+                ],
+            },
+        };
+        const onPipe = jest.fn();
+        await act(async () => {
+            render(
+                <WirePicker
+                    propName="items"
+                    expectedType="Array<{label,value}>"
+                    providers={{}}
+                    tree={tree}
+                    allowPipe={true}
+                    onPick={() => {}}
+                    onPipe={onPipe}
+                />
+            );
+        });
+        // The "Or pipe from" section renders the SearchInput.onChange
+        // source.
+        expect(
+            screen.getByTestId("composer-pipe-sources-items")
+        ).toBeInTheDocument();
+        const src = screen.getByTestId(
+            "composer-pipe-source-items-node-1-onChange"
+        );
+        expect(src.textContent).toMatch(
+            /SearchInput\.onChange → google-drive\.search/
+        );
+        fireEvent.click(src);
+        expect(onPipe).toHaveBeenCalledWith("node-1", "onChange");
+    });
+
+    test("no pipe section when allowPipe is false (e.g., callback prop)", async () => {
+        setMcpBridge({
+            getCatalog: jest
+                .fn()
+                .mockResolvedValue({ catalog: { servers: [] } }),
+        });
+        const tree = {
+            widgetName: "W",
+            root: {
+                id: "root",
+                type: "Panel",
+                props: {},
+                children: [
+                    {
+                        id: "node-1",
+                        type: "SearchInput",
+                        props: {},
+                        wires: {
+                            onChange: {
+                                providerType: "google-drive",
+                                providerClass: "mcp",
+                                method: "search",
+                            },
+                        },
+                        children: [],
+                    },
+                ],
+            },
+        };
+        await act(async () => {
+            render(
+                <WirePicker
+                    propName="onClick"
+                    expectedType="function"
+                    providers={{}}
+                    tree={tree}
+                    allowPipe={false}
+                    onPick={() => {}}
+                    onPipe={() => {}}
+                />
+            );
+        });
+        expect(
+            screen.queryByTestId("composer-pipe-sources-onClick")
+        ).not.toBeInTheDocument();
+    });
+});
+
+describe("PipedSlotSummary", () => {
+    test("renders source label and Change / Static buttons", () => {
+        const tree = {
+            widgetName: "W",
+            root: {
+                id: "root",
+                type: "Panel",
+                props: {},
+                children: [
+                    {
+                        id: "node-1",
+                        type: "SearchInput",
+                        props: {},
+                        children: [],
+                    },
+                ],
+            },
+        };
+        const wire = {
+            kind: "pipe",
+            sourceNodeId: "node-1",
+            sourcePropName: "onChange",
+        };
+        const onChange = jest.fn();
+        const onStatic = jest.fn();
+        render(
+            <PipedSlotSummary
+                propName="items"
+                wire={wire}
+                tree={tree}
+                onChange={onChange}
+                onStatic={onStatic}
+            />
+        );
+        expect(
+            screen.getByTestId("composer-pipe-summary-items")
+        ).toBeInTheDocument();
+        expect(screen.getByText("SearchInput.onChange")).toBeInTheDocument();
+        fireEvent.click(screen.getByTestId("composer-pipe-change-items"));
+        expect(onChange).toHaveBeenCalled();
+        fireEvent.click(screen.getByTestId("composer-pipe-revert-items"));
+        expect(onStatic).toHaveBeenCalled();
     });
 });
 

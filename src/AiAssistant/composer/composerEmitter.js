@@ -443,6 +443,36 @@ export function setSlotArg(tree, nodeId, propName, argName, binding) {
 }
 
 /**
+ * Persist a "pipe from another wire" choice on a data slot. Stores
+ * `{ kind: "pipe", sourceNodeId, sourcePropName }` on the wire
+ * spec; the emitter binds the slot's JSX prop to the source wire's
+ * result state at compile time.
+ *
+ * Typical use: SearchInput.onChange wired to `algolia.search`, then
+ * DataList.items piped from `SearchInput.onChange` — the data list
+ * displays whatever the search returns whenever the search fires.
+ */
+export function setSlotPipe(
+    tree,
+    nodeId,
+    propName,
+    sourceNodeId,
+    sourcePropName
+) {
+    if (!tree || !tree.root) return tree;
+    const cloned = cloneNode(tree.root);
+    const node = findNode(cloned, nodeId);
+    if (!node) return tree;
+    if (!node.wires || typeof node.wires !== "object") node.wires = {};
+    node.wires[propName] = {
+        kind: "pipe",
+        sourceNodeId,
+        sourcePropName,
+    };
+    return { ...tree, root: cloned };
+}
+
+/**
  * Clear any wire spec on a slot. The slot stays in wire mode (the
  * picker reappears) — use setSlotMode("static") to flip back to a
  * literal editor. Separating these two operations lets the user

@@ -29,6 +29,7 @@ import {
     updateNodeProp,
     setSlotMode,
     setSlotWire,
+    setSlotPipe,
     setSlotArg,
     clearSlotWire,
     getNodeById,
@@ -500,15 +501,44 @@ describe("emitWidgetCode — hook scaffolding for configured wires (C4)", () => 
             },
         });
         const { componentCode } = emitWidgetCode(t3);
+        // useState is also imported for the result-capture state
+        // that downstream pipe wires read from.
         expect(componentCode).toContain(
-            'import React, { useCallback } from "react";'
+            'import React, { useCallback, useState } from "react";'
         );
         expect(componentCode).toContain(
             "const onClick = useCallback(async () => {"
         );
         expect(componentCode).toContain("window.mainApi.algolia.search");
+        expect(componentCode).toContain(
+            "const [onClickResult, set_onClickResult] = useState(null);"
+        );
         // JSX binds the callback to the prop.
         expect(componentCode).toMatch(/<Button[^>]*onClick=\{onClick\}/);
+    });
+
+    test("pipe wire (DataList.items piped from Button.onClick) binds to the callback's result state", () => {
+        const tree = makeEmptyTree("PipeWidget");
+        // Add a Button + wire its onClick to algolia.search.
+        const t2 = insertChild(tree, "root", { type: "Button" }, 1);
+        const t3 = setSlotWire(t2, "node-1", "onClick", {
+            provider: "MyAlgolia",
+            providerType: "algolia",
+            providerClass: "credential",
+            method: "search",
+            args: { indexName: { kind: "literal", value: "p" } },
+        });
+        // Add a DataList + pipe its items from node-1's onClick.
+        const t4 = insertChild(t3, "root", { type: "DataList" }, 2);
+        const t5 = setSlotPipe(t4, "node-2", "items", "node-1", "onClick");
+        const { componentCode } = emitWidgetCode(t5);
+        // No second useEffect / useCallback for the pipe — it's
+        // a JSX-level rebind.
+        const useCallbackCount = (componentCode.match(/useCallback\(/g) || [])
+            .length;
+        expect(useCallbackCount).toBe(1);
+        // The DataList items prop binds to the source's result var.
+        expect(componentCode).toMatch(/<DataList[^>]*items=\{onClickResult\}/);
     });
 
     test("mcp-class wire emits useMcpProvider + callTool", () => {

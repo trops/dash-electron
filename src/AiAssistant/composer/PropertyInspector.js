@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { getComponentSchema } from "../dashReactComponentSchemas";
-import { WirePicker, WiredSlotSummary } from "./WirePicker";
+import { WirePicker, WiredSlotSummary, PipedSlotSummary } from "./WirePicker";
 
 /**
  * PropertyInspector — Compose-mode Stage 2 surface.
@@ -28,11 +28,13 @@ import { WirePicker, WiredSlotSummary } from "./WirePicker";
  */
 export function PropertyInspector({
     node,
+    tree = null,
     providers = {},
     onChangeProp,
     onSetSlotMode,
     onSetSlotWire,
     onClearSlotWire,
+    onSetSlotPipe,
     onSetSlotArg,
     onClose,
 }) {
@@ -102,10 +104,12 @@ export function PropertyInspector({
                         }
                         wireSpec={node.wires ? node.wires[propName] : undefined}
                         providers={providers}
+                        tree={tree}
                         onChangeProp={onChangeProp}
                         onSetSlotMode={onSetSlotMode}
                         onSetSlotWire={onSetSlotWire}
                         onClearSlotWire={onClearSlotWire}
+                        onSetSlotPipe={onSetSlotPipe}
                         onSetSlotArg={onSetSlotArg}
                     />
                 ))}
@@ -122,10 +126,12 @@ function PropRow({
     staticValue,
     wireSpec,
     providers,
+    tree,
     onChangeProp,
     onSetSlotMode,
     onSetSlotWire,
     onClearSlotWire,
+    onSetSlotPipe,
     onSetSlotArg,
 }) {
     // Callback wires (function-typed props like onClick / onChange)
@@ -195,35 +201,65 @@ function PropRow({
             </div>
             {mode === "wire" ? (
                 isConfiguredWire ? (
-                    <WiredSlotSummary
-                        propName={propName}
-                        wire={wireSpec}
-                        onChange={() =>
-                            onClearSlotWire && onClearSlotWire(nodeId, propName)
-                        }
-                        onStatic={() =>
-                            onSetSlotMode(nodeId, propName, "static")
-                        }
-                        onSetArg={
-                            onSetSlotArg
-                                ? (slotName, argName, binding) =>
-                                      onSetSlotArg(
-                                          nodeId,
-                                          slotName,
-                                          argName,
-                                          binding
-                                      )
-                                : undefined
-                        }
-                    />
+                    wireSpec.kind === "pipe" ? (
+                        <PipedSlotSummary
+                            propName={propName}
+                            wire={wireSpec}
+                            tree={tree}
+                            onChange={() =>
+                                onClearSlotWire &&
+                                onClearSlotWire(nodeId, propName)
+                            }
+                            onStatic={() =>
+                                onSetSlotMode(nodeId, propName, "static")
+                            }
+                        />
+                    ) : (
+                        <WiredSlotSummary
+                            propName={propName}
+                            wire={wireSpec}
+                            onChange={() =>
+                                onClearSlotWire &&
+                                onClearSlotWire(nodeId, propName)
+                            }
+                            onStatic={() =>
+                                onSetSlotMode(nodeId, propName, "static")
+                            }
+                            onSetArg={
+                                onSetSlotArg
+                                    ? (slotName, argName, binding) =>
+                                          onSetSlotArg(
+                                              nodeId,
+                                              slotName,
+                                              argName,
+                                              binding
+                                          )
+                                    : undefined
+                            }
+                        />
+                    )
                 ) : (
                     <WirePicker
                         propName={propName}
                         expectedType={propSchema.type}
                         providers={providers}
+                        tree={tree}
+                        // Pipe is only meaningful for data slots
+                        // (non-function props). Callbacks always
+                        // fire; they're never receivers.
+                        allowPipe={!isCallbackProp}
                         onPick={(spec) =>
                             onSetSlotWire &&
                             onSetSlotWire(nodeId, propName, spec)
+                        }
+                        onPipe={(sourceNodeId, sourcePropName) =>
+                            onSetSlotPipe &&
+                            onSetSlotPipe(
+                                nodeId,
+                                propName,
+                                sourceNodeId,
+                                sourcePropName
+                            )
                         }
                     />
                 )

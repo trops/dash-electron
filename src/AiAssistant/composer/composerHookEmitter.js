@@ -61,12 +61,29 @@ export function collectWires(tree, getPropType = () => "any") {
     walk(tree.root, (node) => {
         if (!node.wires) return;
         for (const [propName, wire] of Object.entries(node.wires)) {
-            // A configured wire requires a method (the chosen tool/
-            // IPC method). The provider instance name is optional;
-            // a null provider means "any instance of providerType"
-            // and gets resolved at runtime.
+            if (!wire) continue;
+            // Pipe wires reference another wire's result state. They
+            // have no provider/method of their own — bind their slot
+            // to the source wire's var name in buildHookScaffold's
+            // pass 1b.
             if (
-                wire &&
+                wire.kind === "pipe" &&
+                wire.sourceNodeId &&
+                wire.sourcePropName
+            ) {
+                out.push({
+                    nodeId: node.id,
+                    propName,
+                    wire,
+                    propType: getPropType(node.type, propName),
+                });
+                continue;
+            }
+            // A configured method wire requires a method (the chosen
+            // tool/IPC method). The provider instance name is
+            // optional; a null provider means "any instance of
+            // providerType" and gets resolved at runtime.
+            if (
                 wire.method &&
                 typeof wire.method === "string" &&
                 wire.providerType
@@ -215,6 +232,11 @@ export function buildHookScaffold(
     }
 
     for (const { nodeId, propName, wire } of wires) {
+        // Pipe wires don't allocate any of: provider hook, state,
+        // useEffect, or useCallback. Pass 1b binds them by looking
+        // up the source wire's var name.
+        if (wire.kind === "pipe") continue;
+
         if (wire.providerClass === "mcp") {
             if (!mcpProvidersSeen.has(wire.providerType)) {
                 const suffix = toIdent(wire.providerType);
@@ -271,23 +293,67 @@ export function buildHookScaffold(
         }
         slotVarBySlotKey.set(slotKey, varName);
 
-        // Data wire: allocate state. Callback wire: skip — the
-        // useCallback declaration in pass 2 IS the binding, no
-        // intermediate state needed.
+        // Data wire: allocate state for the slot var.
+        // Callback wire: ALSO allocate a result state — even if
+        // unused, the cost is one useState. This is what lets
+        // downstream `pipe` wires bind to a callback's tool result
+        // (Search.onChange fires google-drive.search → DataList
+        // reads `onChangeResult`).
         const w = wires.find(
             (x) => x.nodeId === nodeId && x.propName === propName
         );
         const isCallback = w && w.propType === "function";
-        if (!isCallback) {
+        if (isCallback) {
+            // Need useState for the result-capture state, regardless
+            // of whether anything pipes from it (cheap, and lets
+            // the user wire it up later).
+            extraReactImports.add("useState");
+            hookLines.push(
+                `    const [${varName}Result, set_${varName}Result] = useState(null);`
+            );
+        } else {
             hookLines.push(
                 `    const [${varName}, set_${varName}] = useState(null);`
             );
         }
     }
 
+    // Pass 1b: resolve pipe wires. A pipe wire points at another
+    // node's wire (typically a callback handler) and binds its JSX
+    // prop to that wire's result state. No provider hook, no
+    // useState, no useEffect — the JSX bind below is the entire
+    // implementation.
+    for (const { nodeId, propName, wire } of wires) {
+        if (wire.kind !== "pipe") continue;
+        const slotKey = `${nodeId}:${propName}`;
+        const srcKey = `${wire.sourceNodeId}:${wire.sourcePropName}`;
+        const srcVar = slotVarBySlotKey.get(srcKey);
+        if (!srcVar) {
+            // Source wire isn't present (or hasn't allocated a var
+            // yet) — leave this slot unresolved so the emitter
+            // falls back to the placeholder. The composer UI will
+            // already have surfaced this as a dangling pipe.
+            continue;
+        }
+        // The pipe's effective var IS the source's result var. For
+        // callback sources that's `<srcVar>Result`; for data
+        // sources we can pipe the slot var directly.
+        const srcWire = wires.find(
+            (x) =>
+                x.nodeId === wire.sourceNodeId &&
+                x.propName === wire.sourcePropName
+        );
+        const srcIsCallback = srcWire && srcWire.propType === "function";
+        slotVarBySlotKey.set(
+            slotKey,
+            srcIsCallback ? `${srcVar}Result` : srcVar
+        );
+    }
+
     // Pass 2: emit one useEffect (data) or useCallback (handler)
-    // per wire.
+    // per wire. Pipe wires are handled entirely in pass 1b.
     for (const { nodeId, propName, wire, propType } of wires) {
+        if (wire.kind === "pipe") continue;
         const slotKey = `${nodeId}:${propName}`;
         const varName = slotVarBySlotKey.get(slotKey);
         const setFn = `set_${varName}`;
@@ -319,6 +385,24 @@ export function buildHookScaffold(
                     ? "{}"
                     : `{\n${argLines.join("\n")}\n            }`;
 
+            // Result-capture: every callback writes its tool's
+            // unwrapped result into `<varName>Result` state.
+            // Downstream `pipe` wires read that state. The unwrap
+            // heuristic matches the data-wire path so
+            // {hits:Array<…>}-returning methods feed result.hits
+            // (etc.) into the pipe — saves the user from writing
+            // adapter code.
+            const registryEntry =
+                providerApiRegistry &&
+                providerApiRegistry[wire.providerType] &&
+                providerApiRegistry[wire.providerType][wire.method];
+            const returnsType =
+                (registryEntry &&
+                    registryEntry.returns &&
+                    registryEntry.returns.type) ||
+                null;
+            const unwrap = unwrapResultExpr(returnsType);
+
             if (wire.providerClass === "mcp") {
                 const suffix = mcpProvidersSeen.get(wire.providerType);
                 const handle = `mcp_${suffix}`;
@@ -327,9 +411,10 @@ export function buildHookScaffold(
                     `    const ${varName} = useCallback(async () => {`,
                     `        if (!${handle}?.isConnected) return;`,
                     `        try {`,
-                    `            await ${handle}.callTool(${JSON.stringify(
+                    `            const result = await ${handle}.callTool(${JSON.stringify(
                         wire.method
                     )}, ${argsLiteral});`,
+                    `            set_${varName}Result(${unwrap});`,
                     `        } catch (err) {`,
                     `            // Tool errors are swallowed here so a CTA`,
                     `            // failure doesn't crash the widget. Production`,
@@ -346,7 +431,8 @@ export function buildHookScaffold(
                     `    const ${varName} = useCallback(async () => {`,
                     `        if (!${handle}?.providerHash) return;`,
                     `        try {`,
-                    `            await window.mainApi.${wire.providerType}.${wire.method}(${argsLiteral});`,
+                    `            const result = await window.mainApi.${wire.providerType}.${wire.method}(${argsLiteral});`,
+                    `            set_${varName}Result(${unwrap});`,
                     `        } catch (err) {`,
                     `            // See note in the MCP branch above — silent`,
                     `            // failure intentionally.`,

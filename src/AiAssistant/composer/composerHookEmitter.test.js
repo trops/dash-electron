@@ -276,7 +276,7 @@ describe("buildHookScaffold", () => {
         expect(matches.length).toBe(1);
     });
 
-    test("callback wire (propType=function) emits useCallback + no useState/useEffect", () => {
+    test("callback wire (propType=function) emits useCallback + result-capture state, no useEffect", () => {
         // Pretend the wired prop is a function callback. Emitter
         // should produce a useCallback handler that fires the tool
         // when invoked, not a useState/useEffect data-fetch.
@@ -306,18 +306,23 @@ describe("buildHookScaffold", () => {
         };
         const s = buildHookScaffold(tree, fakeRegistry, getPropType);
         expect(s.extraReactImports.has("useCallback")).toBe(true);
-        // No useState / useEffect imported when ALL wires are
-        // callbacks — pass 1 also branches on isCallback.
-        expect(s.extraReactImports.has("useState")).toBe(false);
+        // useState IS imported — callback wires allocate a result-
+        // capture state so downstream `pipe` wires can read the
+        // tool's return value. useEffect is NOT imported (no data
+        // wires).
+        expect(s.extraReactImports.has("useState")).toBe(true);
         expect(s.extraReactImports.has("useEffect")).toBe(false);
         const text = s.hookLines.join("\n");
         expect(text).toContain("const onClick = useCallback(async () => {");
         expect(text).toContain("window.mainApi.algolia.search");
         // Auto args still supplied.
         expect(text).toContain("providerHash: pc_MyAlgolia.providerHash");
-        // No `setData(...)` line because there's no state.
-        expect(text).not.toMatch(/useState/);
-        expect(text).not.toMatch(/useEffect/);
+        // Result-capture state allocated; the handler writes the
+        // unwrapped result so a downstream pipe sees the data.
+        expect(text).toContain(
+            "const [onClickResult, set_onClickResult] = useState(null);"
+        );
+        expect(text).toContain("set_onClickResult(result?.hits || [])");
     });
 
     test("MCP callback wire emits useCallback + callTool", () => {

@@ -5062,7 +5062,14 @@ ${
                                             files: code.files || null,
                                         });
                                         compilePreview(code).catch(() => {});
-                                        setActiveTab("preview");
+                                        // Intentionally NOT yanking
+                                        // the user back to Preview
+                                        // on every composer edit —
+                                        // when they're reading the
+                                        // Code tab, the auto-switch
+                                        // is disruptive. Preview
+                                        // content updates regardless
+                                        // of which tab is active.
                                     }}
                                 />
                             )}
