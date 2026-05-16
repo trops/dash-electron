@@ -329,6 +329,33 @@ describe("buildHookScaffold", () => {
         expect(text).toContain("set_onClickResult(result?.hits || [])");
     });
 
+    test("MCP wire result-capture inlines an unwrap helper that handles content[].text and newline-split fallback", () => {
+        const tree = makeTree();
+        tree.root.children.push({
+            id: "node-1",
+            type: "DataList",
+            props: {},
+            wires: {
+                items: {
+                    providerType: "google-drive",
+                    providerClass: "mcp",
+                    method: "search",
+                    args: { query: { kind: "literal", value: "x" } },
+                },
+            },
+            children: [],
+        });
+        const getPropType = () => "Array<{label,value}>";
+        const s = buildHookScaffold(tree, fakeRegistry, getPropType);
+        const text = s.hookLines.join("\n");
+        // Unwrap reads result.content[0].type === "text", tries
+        // JSON.parse, falls back to text.split("\\n").
+        expect(text).toContain("Array.isArray(result.content)");
+        expect(text).toContain("JSON.parse(_t)");
+        expect(text).toContain('_t.split("\\n")');
+        expect(text).toContain("label: s, value: s");
+    });
+
     test("MCP callback wire emits useCallback + callTool", () => {
         const tree = makeTree();
         tree.root.children.push({

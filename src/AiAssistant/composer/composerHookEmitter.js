@@ -210,6 +210,54 @@ function renderArgBinding(binding, userConfigFields, inputStateByNodeId) {
 }
 
 /**
+ * Lines of generated code that unwrap an MCP `callTool` result
+ * into the shape a consumer component actually wants. MCP tools
+ * return { content: [{ type, text }, ...], isError? } per the MCP
+ * spec — handing that whole object to a DataList expecting an
+ * Array of { label, value } items silently renders nothing (the
+ * symptom the user hit with google-drive.search). The emitter
+ * inlines this 5-line unwrap into every MCP set_<varName>Result(...)
+ * site:
+ *
+ *   - Single text block whose text parses as JSON → return parsed
+ *   - Single text block with non-JSON text → return the text string
+ *   - Multi-block / non-text content → return the content array
+ *   - Missing content → return the raw result (rare; fallback)
+ *
+ * Variable name `_v` is local to the try-block so it can't collide
+ * with state vars in the surrounding component.
+ */
+function emitMcpUnwrapLines(setterCall, indent = "        ") {
+    // Best-effort layered unwrap of MCP tool results:
+    //   1. Standard envelope: { content: [{ type: "text", text }] }
+    //   2. text body: try JSON.parse → object/array if it's
+    //      structured (e.g., postgres.query returns rows)
+    //   3. text body with newlines: split into {label,value} rows
+    //      so an Array-shaped consumer (DataList, Table) gets
+    //      something renderable instead of a giant string (the
+    //      common case for google-drive.search etc., which return
+    //      'Found N items:\\nLine 1\\nLine 2\\n…')
+    //   4. Fallback: the raw text or the raw result
+    return [
+        `${indent}let _v = result;`,
+        `${indent}if (result && Array.isArray(result.content)) {`,
+        `${indent}    const _c0 = result.content[0];`,
+        `${indent}    if (result.content.length === 1 && _c0?.type === "text") {`,
+        `${indent}        const _t = typeof _c0.text === "string" ? _c0.text : "";`,
+        `${indent}        try {`,
+        `${indent}            _v = JSON.parse(_t);`,
+        `${indent}        } catch {`,
+        `${indent}            if (_t.includes("\\n")) {`,
+        `${indent}                _v = _t.split("\\n").map((s) => s.trim()).filter(Boolean).map((s) => ({ label: s, value: s }));`,
+        `${indent}            } else { _v = _t; }`,
+        `${indent}        }`,
+        `${indent}    } else { _v = result.content; }`,
+        `${indent}}`,
+        `${indent}${setterCall.replace("__VAL__", "_v")}`,
+    ];
+}
+
+/**
  * Initial state value for a wired slot. Mirrors the unwrap shape so
  * the consumer (Table, DataList, etc.) gets a usable empty value
  * before the first fetch / event fires, instead of `null` causing a
@@ -551,6 +599,10 @@ export function buildHookScaffold(
             if (wire.providerClass === "mcp") {
                 const suffix = mcpProvidersSeen.get(wire.providerType);
                 const handle = `mcp_${suffix}`;
+                const unwrapLines = emitMcpUnwrapLines(
+                    `set_${varName}Result(__VAL__);`,
+                    "            "
+                );
                 hookLines.push(
                     "",
                     `    const ${varName} = useCallback(async (eventArg) => {`,
@@ -559,7 +611,7 @@ export function buildHookScaffold(
                     `            const result = await ${handle}.callTool(${JSON.stringify(
                         wire.method
                     )}, ${argsLiteral});`,
-                    `            set_${varName}Result(${unwrap});`,
+                    ...unwrapLines,
                     `        } catch (err) {`,
                     `            // Tool errors are swallowed here so a CTA`,
                     `            // failure doesn't crash the widget. Production`,
@@ -614,6 +666,10 @@ export function buildHookScaffold(
                 argLines.length === 0
                     ? "{}"
                     : `{\n${argLines.join("\n")}\n        }`;
+            const unwrapLines = emitMcpUnwrapLines(
+                `${setFn}(__VAL__);`,
+                "                "
+            );
             hookLines.push(
                 "",
                 `    useEffect(() => {`,
@@ -624,7 +680,7 @@ export function buildHookScaffold(
                 )}, ${argsLiteral})`,
                 `            .then((result) => {`,
                 `                if (cancelled) return;`,
-                `                ${setFn}(result);`,
+                ...unwrapLines,
                 `            })`,
                 `            .catch(() => {});`,
                 `        return () => {`,
