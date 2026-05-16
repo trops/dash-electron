@@ -267,32 +267,56 @@ export function sendOneShot({
             return;
         }
 
+        // Resolve a scratch cwd for the CLI backend so the
+        // dash-electron project's CLAUDE.md and skills folder don't
+        // auto-load and make the model conversational. The renderer
+        // can't read os.tmpdir() directly — go through the bridge
+        // helper added in preload. Non-CLI backends ignore cwd, so
+        // we only bother to fetch it for claude-code.
+        const cwdPromise =
+            backend === "claude-code" &&
+            window.mainApi &&
+            window.mainApi.aiAssistant &&
+            typeof window.mainApi.aiAssistant.composerScratchDir === "function"
+                ? Promise.resolve(
+                      window.mainApi.aiAssistant
+                          .composerScratchDir()
+                          .catch(() => undefined)
+                  )
+                : Promise.resolve(undefined);
+
         const messages = [{ role: "user", content: userMessage }];
-        Promise.resolve(
-            llm.sendMessage(requestId, {
-                model,
-                // For the CLI backend, passing apiKey: null is a
-                // no-op; passing it as undefined matches what
-                // ChatCore does and avoids any defensive branch in
-                // the bridge that might treat null as "use anthropic
-                // path" by accident.
-                apiKey: backend === "claude-code" ? undefined : apiKey,
-                backend,
-                systemPrompt,
-                messages,
-                // The CLI handler uses widgetUuid to resume CLI
-                // sessions across requests. Passing a stable id
-                // scoped to the suggester keeps successive Suggest
-                // calls in the same CLI session so the model has
-                // continuity (and saves CLI cold-start cost).
-                widgetUuid: "composer-suggest-layout",
-                // Lock down tool usage — these are pure structured
-                // completions, no MCP / Bash / Read needed.
-                replaceSystemPrompt: true,
-                disableTools: true,
-                maxToolRounds: 0,
-            })
-        ).catch((err) => settle(reject, err));
+        cwdPromise.then((cwd) =>
+            Promise.resolve(
+                llm.sendMessage(requestId, {
+                    model,
+                    // For the CLI backend, passing apiKey: null is a
+                    // no-op; passing it as undefined matches what
+                    // ChatCore does and avoids any defensive branch
+                    // in the bridge that might treat null as "use
+                    // anthropic path" by accident.
+                    apiKey: backend === "claude-code" ? undefined : apiKey,
+                    backend,
+                    systemPrompt,
+                    messages,
+                    // Scratch cwd keeps the CLI from auto-loading
+                    // CLAUDE.md + skills folder. Undefined for
+                    // non-CLI backends — they ignore cwd anyway.
+                    cwd,
+                    // INTENTIONALLY no widgetUuid — each Suggest
+                    // call is a fresh CLI session with no context
+                    // continuity. A previous shared-session bug had
+                    // the model responding "I just built..." because
+                    // it remembered an earlier turn.
+                    // Lock down tool usage — these are pure
+                    // structured completions, no MCP / Bash / Read
+                    // needed.
+                    replaceSystemPrompt: true,
+                    disableTools: true,
+                    maxToolRounds: 0,
+                })
+            ).catch((err) => settle(reject, err))
+        );
     });
 }
 

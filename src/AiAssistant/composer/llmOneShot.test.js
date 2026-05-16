@@ -153,6 +153,60 @@ describe("sendOneShot", () => {
         await expect(p).rejects.toThrow("blew up");
     });
 
+    test("CLI backend: fetches a scratch cwd from mainApi.aiAssistant and passes it to sendMessage", async () => {
+        const { fire, llm } = setupFakeBridge();
+        window.mainApi.aiAssistant = {
+            composerScratchDir: jest
+                .fn()
+                .mockResolvedValue("/tmp/dash-composer-suggest"),
+        };
+        const p = sendOneShot({
+            model: "x",
+            backend: "claude-code",
+            systemPrompt: "p",
+            userMessage: "m",
+        });
+        // Wait for the cwd lookup + sendMessage call to flush.
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(
+            window.mainApi.aiAssistant.composerScratchDir
+        ).toHaveBeenCalledTimes(1);
+        expect(llm.sendMessage).toHaveBeenCalled();
+        const [requestId, params] = llm.sendMessage.mock.calls[0];
+        expect(params.cwd).toBe("/tmp/dash-composer-suggest");
+        // Each Suggest run uses a fresh CLI session (no widgetUuid).
+        expect(params.widgetUuid).toBeUndefined();
+        // Settle the promise so jest doesn't complain about a
+        // hanging request at end of test.
+        fire("complete", { requestId, text: "ok" });
+        await expect(p).resolves.toBe("ok");
+    });
+
+    test("anthropic backend: does NOT call composerScratchDir", async () => {
+        const { fire, llm } = setupFakeBridge();
+        window.mainApi.aiAssistant = {
+            composerScratchDir: jest.fn(),
+        };
+        const p = sendOneShot({
+            model: "x",
+            apiKey: "sk-test",
+            backend: "anthropic",
+            systemPrompt: "p",
+            userMessage: "m",
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(
+            window.mainApi.aiAssistant.composerScratchDir
+        ).not.toHaveBeenCalled();
+        const [requestId, params] = llm.sendMessage.mock.calls[0];
+        expect(params.cwd).toBeUndefined();
+        fire("complete", { requestId, text: "ok" });
+        await expect(p).resolves.toBe("ok");
+    });
+
     test("uses text on the complete event when present (no deltas)", async () => {
         const { fire, llm } = setupFakeBridge();
         const p = sendOneShot({
