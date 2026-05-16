@@ -238,6 +238,39 @@ describe("WirePicker — credential method step", () => {
         });
     });
 
+    test("callback-wire context (expectedType='any') shows every method, no return-type filter", async () => {
+        // Regression: wiring SearchInput.onChange to Algolia
+        // surfaced 'No methods on this provider return a shape
+        // compatible with function' — no Algolia method returns a
+        // function, so the filter killed the whole list. Callback
+        // wires need expectedType='any' (the picker's slot type
+        // doesn't constrain method selection for fire-on-event).
+        await act(async () => {
+            render(
+                <WirePicker
+                    propName="onChange"
+                    expectedType="any"
+                    providers={{}}
+                    onPick={() => {}}
+                />
+            );
+        });
+        fireEvent.click(
+            screen.getByTestId("composer-wire-provider-onChange-algolia")
+        );
+        // saveRule, listIndices, search — all surface (no filter).
+        expect(
+            screen.getByTestId("composer-wire-method-onChange-listIndices")
+        ).toBeInTheDocument();
+        expect(
+            screen.getByTestId("composer-wire-method-onChange-saveRule")
+        ).toBeInTheDocument();
+        // setSettings (void return) should still be excluded.
+        expect(
+            screen.queryByTestId("composer-wire-method-onChange-setSettings")
+        ).not.toBeInTheDocument();
+    });
+
     test("Back returns to the provider-type step", async () => {
         await act(async () => {
             render(

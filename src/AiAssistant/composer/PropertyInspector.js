@@ -262,7 +262,12 @@ function PropRow({
                 ) : (
                     <WirePicker
                         propName={propName}
-                        expectedType={propSchema.type}
+                        // Callback wires fire on event and don't
+                        // care about the method's return shape, so
+                        // we drop the type filter. Otherwise the
+                        // picker filters by `function` and finds
+                        // nothing — no method returns a function.
+                        expectedType={isCallbackProp ? "any" : propSchema.type}
                         providers={providers}
                         tree={tree}
                         // Pipe is only meaningful for data slots

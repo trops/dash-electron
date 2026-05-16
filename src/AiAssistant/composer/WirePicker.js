@@ -444,11 +444,18 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
 }
 
 function PickerHeader({ title, expectedType, onBack }) {
+    // Suppress the "→ <type>" hint when the type is the unrestricted
+    // sentinel ("any") or "function" — neither is a useful filter
+    // hint to surface; the former matches everything and the latter
+    // would imply "method returning a function," which is wrong for
+    // callback wires that just fire on event.
+    const showExpected =
+        expectedType && expectedType !== "any" && expectedType !== "function";
     return (
         <div className="flex items-center justify-between px-1 mb-1">
             <div className="text-[10px] uppercase tracking-wide text-gray-500">
                 {title}{" "}
-                {expectedType && (
+                {showExpected && (
                     <span className="text-gray-600">
                         → <code>{expectedType}</code>
                     </span>
