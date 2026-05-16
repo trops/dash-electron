@@ -1,0 +1,297 @@
+/**
+ * Composer emitter — pure functions that translate a composition
+ * tree into widget code (componentCode + configCode) the existing
+ * compilePreview pipeline can consume.
+ *
+ * Tree shape:
+ *
+ *   {
+ *     widgetName: "MyWidget",
+ *     root: {
+ *       id: "node-1",            // unique within tree
+ *       type: "Panel",           // schema key from dashReactComponentSchemas
+ *       props: { … },            // user-set props (literal values only in C1;
+ *                                //   C3 will add wired-to-provider entries)
+ *       children: [ … nodes … ], // present iff schema accepts children
+ *     },
+ *   }
+ *
+ * The emitter does NOT validate the tree's prop completeness — that
+ * is the composer UI's job (required props are surfaced in the
+ * property inspector). It DOES fall back to type-appropriate
+ * placeholders for required props that have no user-set value, so
+ * the emitted code always compiles and previews. Without this, the
+ * user couldn't see "what would this look like" mid-composition.
+ *
+ * Imports are computed by walking the tree and collecting every
+ * component name encountered. Components imported but not actually
+ * used in any branch are dropped — keeps the emitted code tidy and
+ * the bundle minimal.
+ *
+ * C1 emits a single-component, data-less widget skeleton (no hooks,
+ * no provider calls). C3+ will introduce useWidgetProviders /
+ * useProviderClient / useMcpProvider scaffolding for wired slots.
+ */
+
+import {
+    getComponentSchema,
+    DASH_REACT_COMPONENT_SCHEMAS,
+} from "../dashReactComponentSchemas";
+
+/**
+ * Make a fresh tree containing only a root Panel. Use this as the
+ * initial state when the user opens the composer for a new widget.
+ *
+ * The `widgetName` defaults to "ComposedWidget" — the user can
+ * rename via the composer toolbar before installing.
+ */
+export function makeEmptyTree(widgetName = "ComposedWidget") {
+    return {
+        widgetName,
+        root: {
+            id: "root",
+            type: "Panel",
+            props: {},
+            children: [],
+        },
+    };
+}
+
+/**
+ * Walk the tree and collect the set of every component type
+ * referenced. Includes the root.
+ */
+export function collectUsedComponents(tree) {
+    const used = new Set();
+    if (!tree || !tree.root) return used;
+    walk(tree.root, (node) => {
+        if (node && typeof node.type === "string") used.add(node.type);
+    });
+    return used;
+}
+
+function walk(node, visit) {
+    if (!node) return;
+    visit(node);
+    if (Array.isArray(node.children)) {
+        for (const child of node.children) walk(child, visit);
+    }
+}
+
+/**
+ * Generate a literal placeholder value for a prop given its declared
+ * schema type. Pure heuristic — keeps the data-less preview alive
+ * without forcing the user to fill every required field upfront.
+ *
+ * Returns a JS expression as a string (so the caller can drop it
+ * into JSX directly), or null for types we cannot guess at safely.
+ */
+function placeholderForType(typeStr) {
+    if (typeof typeStr !== "string") return null;
+    if (typeStr === "string") return '"Sample"';
+    if (typeStr === "number") return "0";
+    if (typeStr === "boolean") return "false";
+    if (typeStr === "function") return "() => {}";
+    if (typeStr === "any") return "null";
+    if (typeStr === "ReactNode") return null; // children only, never a prop literal
+    if (typeStr.startsWith("Array<")) return "[]";
+    return null;
+}
+
+/**
+ * Render a single node's JSX. Indentation is two spaces per nesting
+ * level (matches the rest of the AI-emitted code style we don't
+ * format-strictly afterwards — prettier runs at install time anyway).
+ */
+function renderNodeJsx(node, indent = 0) {
+    if (!node || typeof node.type !== "string") return "";
+    const pad = "    ".repeat(indent);
+    const schema = getComponentSchema(node.type);
+    if (!schema) {
+        // Unknown component — emit a comment rather than fail. The
+        // validator (post-emit) would reject this branch, surfacing
+        // the issue to the user with the same suggestion machinery
+        // the chat-flow uses.
+        return `${pad}{/* unknown component: ${node.type} */}`;
+    }
+
+    const propEntries = [];
+    for (const [propName, propSchema] of Object.entries(schema.props)) {
+        if (propName === "children") continue;
+        const userValue = node.props ? node.props[propName] : undefined;
+        if (userValue !== undefined) {
+            propEntries.push(renderPropLiteral(propName, userValue));
+            continue;
+        }
+        if (propSchema.required) {
+            const placeholder = placeholderForType(propSchema.type);
+            if (placeholder !== null) {
+                propEntries.push(`${propName}={${placeholder}}`);
+            }
+        }
+    }
+
+    const propsStr = propEntries.length > 0 ? " " + propEntries.join(" ") : "";
+    const childrenSchema = schema.props.children;
+    const hasChildrenSlot = Boolean(childrenSchema);
+    const childNodes = Array.isArray(node.children) ? node.children : [];
+
+    if (!hasChildrenSlot || childNodes.length === 0) {
+        // Components with a required ReactNode `children` prop and
+        // no children rendered would crash. Insert a placeholder
+        // text node so the preview stays alive.
+        if (
+            hasChildrenSlot &&
+            childrenSchema.required &&
+            childNodes.length === 0
+        ) {
+            return `${pad}<${node.type}${propsStr}>Sample</${node.type}>`;
+        }
+        return `${pad}<${node.type}${propsStr} />`;
+    }
+
+    const renderedChildren = childNodes
+        .map((c) => renderNodeJsx(c, indent + 1))
+        .filter(Boolean)
+        .join("\n");
+    return `${pad}<${node.type}${propsStr}>\n${renderedChildren}\n${pad}</${node.type}>`;
+}
+
+/**
+ * Render a single user-set prop. C1 only handles literal types
+ * (string/number/boolean/array/object) — the wire-to-provider path
+ * lands in C3 and will short-circuit here.
+ */
+function renderPropLiteral(propName, value) {
+    if (typeof value === "string") {
+        // Escape embedded double-quotes — bare ones would break the
+        // attribute. Backticks would be a more robust default but
+        // change the JSX shape; stick with double-quoted strings
+        // until we know we need template literals.
+        const escaped = value.replace(/"/g, '\\"');
+        return `${propName}="${escaped}"`;
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+        return `${propName}={${value}}`;
+    }
+    if (value === null) {
+        return `${propName}={null}`;
+    }
+    // Arrays / plain objects — JSON.stringify is correct because the
+    // emitted JSX runs in a JS context, not HTML. Escapes everything
+    // for free. Functions are not currently supported (the composer
+    // UI never sets a function-typed prop).
+    try {
+        return `${propName}={${JSON.stringify(value)}}`;
+    } catch {
+        return "";
+    }
+}
+
+/**
+ * Emit the componentCode + configCode pair for a composition tree.
+ *
+ * The returned shape matches what compilePreview expects today, so
+ * the composer can route through the same pipeline as Build mode.
+ */
+export function emitWidgetCode(tree) {
+    const widgetName =
+        (tree && typeof tree.widgetName === "string" && tree.widgetName) ||
+        "ComposedWidget";
+    const used = collectUsedComponents(tree);
+    // Drop names that aren't in the curated schema. (Validator
+    // catches unknown names downstream, but emitting an import for
+    // something we never knew about is wasted work.)
+    const importNames = [...used]
+        .filter((n) => Boolean(DASH_REACT_COMPONENT_SCHEMAS[n]))
+        .sort();
+
+    const importLine =
+        importNames.length > 0
+            ? `import { ${importNames.join(", ")} } from "@trops/dash-react";`
+            : "";
+
+    const rootJsx = tree && tree.root ? renderNodeJsx(tree.root, 2) : "";
+    const componentCode = [
+        'import React from "react";',
+        importLine,
+        "",
+        `export default function ${widgetName}() {`,
+        "    return (",
+        rootJsx || "        <div />",
+        "    );",
+        "}",
+        "",
+    ]
+        .filter((line) => line !== null)
+        .join("\n");
+
+    const displayName = widgetName.replace(/([A-Z])/g, " $1").trim();
+    const configCode = `export default { component: "${widgetName}", name: "${displayName}", package: "${displayName}", author: "Composer", category: "general", type: "widget", canHaveChildren: false, workspace: "ai-built" };`;
+
+    return { componentCode, configCode, files: null };
+}
+
+/**
+ * Insert a child node into the tree under a given parent id. Pure —
+ * returns a new tree, never mutates. Used by the composer's "Add to
+ * widget" button. If `parentId` is not found, the child is appended
+ * to the root (safer default than throwing — keeps the composer UI
+ * resilient to id drift during heavy edits).
+ *
+ * Caller supplies `idCounter` so ids stay unique across inserts.
+ */
+export function insertChild(tree, parentId, child, idCounter) {
+    const childWithId = {
+        ...child,
+        id: `node-${idCounter}`,
+        children: Array.isArray(child.children) ? child.children : [],
+    };
+    const cloned = cloneNode(tree.root);
+    const parent = findNode(cloned, parentId) || cloned;
+    parent.children = Array.isArray(parent.children) ? parent.children : [];
+    parent.children.push(childWithId);
+    return { ...tree, root: cloned };
+}
+
+/**
+ * Remove a node by id. Refuses to remove the root (returns the tree
+ * unchanged) — the composer always needs at least one node to emit
+ * valid JSX.
+ */
+export function removeNode(tree, nodeId) {
+    if (!tree || !tree.root) return tree;
+    if (tree.root.id === nodeId) return tree;
+    const cloned = cloneNode(tree.root);
+    removeChildById(cloned, nodeId);
+    return { ...tree, root: cloned };
+}
+
+function cloneNode(node) {
+    if (!node) return node;
+    return {
+        ...node,
+        props: node.props ? { ...node.props } : {},
+        children: Array.isArray(node.children)
+            ? node.children.map(cloneNode)
+            : [],
+    };
+}
+
+function findNode(node, id) {
+    if (!node) return null;
+    if (node.id === id) return node;
+    if (Array.isArray(node.children)) {
+        for (const child of node.children) {
+            const found = findNode(child, id);
+            if (found) return found;
+        }
+    }
+    return null;
+}
+
+function removeChildById(node, id) {
+    if (!node || !Array.isArray(node.children)) return;
+    node.children = node.children.filter((c) => c.id !== id);
+    for (const child of node.children) removeChildById(child, id);
+}
