@@ -184,7 +184,15 @@ git add -u
 if [ -n "$(git diff --name-only HEAD -- public/tailwind.css 2>/dev/null)" ]; then
     git add public/tailwind.css
 fi
-git commit -m "$COMMIT_MSG"
+# Skip the commit step when nothing is staged — happens when the
+# branch already has its work split into per-slice commits and the
+# user is just running the script to bump+push+PR. Without this guard
+# `git commit` exits non-zero and `set -e` kills the pipeline.
+if git diff --cached --quiet; then
+    echo "No staged changes; skipping commit step (branch already has committed work)."
+else
+    git commit -m "$COMMIT_MSG"
+fi
 
 # --- Rebase on latest remote ---
 step "Rebasing on latest origin"
