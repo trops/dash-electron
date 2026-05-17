@@ -287,6 +287,43 @@ export function setCellComponent(grid, cellId, componentName, props = {}) {
 }
 
 /**
+ * Swap a cell's component type while keeping its props/wires intact.
+ * Use this for variant-style edits (Heading → Heading2 → Heading3).
+ *
+ * Pre-conditions enforced by the caller (PropertyInspector's variant
+ * picker):
+ *   - newType shares the same prop signature as the existing type
+ *     (variants of dash-react components do). Otherwise existing
+ *     props/wires may reference fields the new schema doesn't know
+ *     about — they'd persist on the cell but render as ignored.
+ *   - newType has the same container/leaf nature; we don't migrate
+ *     container ↔ leaf shape here (leaves don't have a gridId).
+ *
+ * Returns the input grid unchanged for unknown cellId, missing
+ * newType, container/leaf mismatch, or no-op (same type).
+ */
+export function setCellType(grid, cellId, newType) {
+    if (!grid || !grid.cells[cellId]) return grid;
+    if (typeof newType !== "string" || newType.length === 0) return grid;
+    const cell = grid.cells[cellId];
+    if (cell.kind === "empty") return grid;
+    if (cell.type === newType) return grid;
+    // Refuse to flip a leaf into a container or vice versa — those
+    // have different cell shapes (container needs a gridId). The
+    // variant-swap path doesn't go through here for those cases.
+    const wasContainer = cell.kind === "container";
+    const willBeContainer = isContainer(newType);
+    if (wasContainer !== willBeContainer) return grid;
+    return {
+        ...grid,
+        cells: {
+            ...grid.cells,
+            [cellId]: { ...cell, type: newType },
+        },
+    };
+}
+
+/**
  * Empty a cell (drop its component, drop any inner grid it owned).
  * The cell itself remains so its row position is preserved.
  */
@@ -308,6 +345,168 @@ export function clearCellComponent(grid, cellId) {
         grids: nextGrids,
         cells: { ...nextCells, [cellId]: { id: cellId, kind: "empty" } },
     };
+}
+
+/**
+ * Move a cell to a new position. Supports same-grid reorder and
+ * cross-grid moves (drag from root into a Panel's body, etc.).
+ *
+ * `target` shape:
+ *   { gridId?, rowIdx, cellIdx?, newRow: boolean }
+ *
+ * - `gridId`         — destination grid id. Defaults to the source's
+ *                      grid (same-grid reorder).
+ * - `newRow: true`   → create a new row at `rowIdx` containing only
+ *                      the moved cell.
+ * - `newRow: false`  → splice the moved cell into the destination
+ *                      row's `cells` at `cellIdx`.
+ *
+ * Source-row cleanup: if the source row becomes empty after removal,
+ * it's dropped (cross-grid) or merged-out (same-grid). Source grid
+ * keeps a placeholder empty row if it would otherwise have zero rows.
+ *
+ * Cycle prevention: a container cell can't be moved into one of its
+ * own descendant grids — that would create an infinite render loop.
+ * Caught silently (returns grid unchanged).
+ *
+ * Pure: returns a new grid; no mutation. Returns the input grid
+ * unchanged on any invalid input (unknown cellId, missing target,
+ * out-of-range indices, descendant cycle).
+ */
+export function moveCellWithinGrid(grid, cellId, target) {
+    if (!grid || !grid.grids) return grid;
+    const loc = findCellLocation(grid, cellId);
+    if (!loc) return grid;
+    if (!target || typeof target.rowIdx !== "number") return grid;
+    const { gridId: srcGridId, rowIdx: srcRow, cellIdx: srcCell } = loc;
+    const tgtGridId = target.gridId || srcGridId;
+    if (!grid.grids[tgtGridId]) return grid;
+    // Cycle prevention: dragging Panel-X into its own (or a deeper
+    // descendant) inner grid would let the cell reference itself
+    // through the gridId chain and recurse forever in the editor /
+    // emitter.
+    if (
+        cellId &&
+        grid.cells[cellId] &&
+        grid.cells[cellId].kind === "container" &&
+        isDescendantGridOfCell(grid, cellId, tgtGridId)
+    ) {
+        return grid;
+    }
+    const newRow = target.newRow === true;
+    const sameGrid = srcGridId === tgtGridId;
+    const srcGrid = grid.grids[srcGridId];
+    // 1. Remove source cell from its source row.
+    let srcRows = srcGrid.rows.map((r, i) => ({
+        cells:
+            i === srcRow
+                ? r.cells.filter((_, idx) => idx !== srcCell)
+                : [...r.cells],
+    }));
+    // 2. Target rows: alias to srcRows for same-grid, otherwise clone
+    //    the destination grid's rows so they're independently mutable.
+    let tgtRows = sameGrid
+        ? srcRows
+        : grid.grids[tgtGridId].rows.map((r) => ({ cells: [...r.cells] }));
+    let targetRow = target.rowIdx;
+    let targetCell = typeof target.cellIdx === "number" ? target.cellIdx : 0;
+    // 3. Cleanup empty source row (same-grid only; cross-grid is
+    //    handled after the insert because srcRows and tgtRows are
+    //    distinct arrays in that branch).
+    if (sameGrid) {
+        const sourceRowNowEmpty = srcRows[srcRow].cells.length === 0;
+        if (sourceRowNowEmpty && !(srcRow === targetRow && !newRow)) {
+            srcRows = srcRows.filter((_, i) => i !== srcRow);
+            tgtRows = srcRows;
+            if (srcRow < targetRow) targetRow -= 1;
+        }
+    }
+    // 4. Same-row reorder shift: removing source ahead of target
+    //    shifts the target index left by one. Applies only for
+    //    same-grid + same-row + splice-into-existing-row.
+    if (sameGrid && !newRow && srcRow === targetRow && targetCell > srcCell) {
+        targetCell -= 1;
+    }
+    // 5. Apply the insert.
+    if (newRow) {
+        if (targetRow < 0 || targetRow > tgtRows.length) return grid;
+        tgtRows.splice(targetRow, 0, { cells: [cellId] });
+    } else {
+        if (targetRow < 0 || targetRow >= tgtRows.length) return grid;
+        if (targetCell < 0 || targetCell > tgtRows[targetRow].cells.length) {
+            return grid;
+        }
+        tgtRows[targetRow].cells.splice(targetCell, 0, cellId);
+    }
+    // 6. Cross-grid: drop empty source rows; if source grid would
+    //    end up with zero rows, seed a placeholder empty cell so the
+    //    "+ Add component" / "+ Row" affordances stay reachable.
+    if (!sameGrid) {
+        srcRows = srcRows.filter((r) => r.cells.length > 0);
+        if (srcRows.length === 0) {
+            const ph = nextCellId(grid);
+            return {
+                ...grid,
+                grids: {
+                    ...grid.grids,
+                    [srcGridId]: { ...srcGrid, rows: [{ cells: [ph.id] }] },
+                    [tgtGridId]: { ...grid.grids[tgtGridId], rows: tgtRows },
+                },
+                cells: {
+                    ...grid.cells,
+                    [ph.id]: { id: ph.id, kind: "empty" },
+                },
+                _nextCellId: ph.next,
+            };
+        }
+    }
+    if (tgtRows.length === 0) return grid;
+    if (sameGrid) {
+        return {
+            ...grid,
+            grids: {
+                ...grid.grids,
+                [srcGridId]: { ...srcGrid, rows: tgtRows },
+            },
+        };
+    }
+    return {
+        ...grid,
+        grids: {
+            ...grid.grids,
+            [srcGridId]: { ...srcGrid, rows: srcRows },
+            [tgtGridId]: { ...grid.grids[tgtGridId], rows: tgtRows },
+        },
+    };
+}
+
+/**
+ * Walk down from `cellId` (which must be a container) and return
+ * true if `targetGridId` is reachable. Used to reject moves that
+ * would create an inner-grid cycle (drag a Panel into its own body).
+ */
+function isDescendantGridOfCell(grid, cellId, targetGridId) {
+    const cell = grid.cells[cellId];
+    if (!cell || cell.kind !== "container" || !cell.gridId) return false;
+    const visited = new Set();
+    const stack = [cell.gridId];
+    while (stack.length > 0) {
+        const gid = stack.pop();
+        if (!gid || visited.has(gid)) continue;
+        visited.add(gid);
+        if (gid === targetGridId) return true;
+        const g = grid.grids[gid];
+        if (!g) continue;
+        for (const row of g.rows) {
+            for (const cId of row.cells) {
+                const c = grid.cells[cId];
+                if (c && c.kind === "container" && c.gridId) {
+                    stack.push(c.gridId);
+                }
+            }
+        }
+    }
+    return false;
 }
 
 /**

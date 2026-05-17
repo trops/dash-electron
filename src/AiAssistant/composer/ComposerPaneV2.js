@@ -31,7 +31,9 @@ import {
     splitCell,
     removeCell,
     setCellComponent,
+    setCellType,
     clearCellComponent,
+    moveCellWithinGrid,
 } from "./gridLayout";
 import { emitGridWidgetCode } from "./gridEmitter";
 import {
@@ -46,6 +48,26 @@ import {
 import { GridEditor } from "./GridEditor";
 import { PaletteView } from "./PaletteView";
 import { PropertyInspector } from "./PropertyInspector";
+import { getComponentSchema } from "../dashReactComponentSchemas";
+
+/**
+ * True when the component's schema exposes nothing the inspector
+ * can meaningfully edit — `children` is the only prop, no data slots,
+ * no auto-state. Used to skip auto-selection after add so containers
+ * like Panel/Card/Container don't pop the inspector for no reason.
+ */
+function hasEditableProps(componentName) {
+    const schema = getComponentSchema(componentName);
+    if (!schema) return false;
+    const propKeys = Object.keys(schema.props || {}).filter(
+        (k) => k !== "children"
+    );
+    if (propKeys.length > 0) return true;
+    if (Array.isArray(schema.dataSlots) && schema.dataSlots.length > 0) {
+        return true;
+    }
+    return false;
+}
 
 export function ComposerPaneV2({
     onEmit,
@@ -131,9 +153,31 @@ export function ComposerPaneV2({
     const handleSetCellComponent = useCallback(
         (cellId, componentName, props) => {
             setGrid((g) => setCellComponent(g, cellId, componentName, props));
-            setSelectedCellId(cellId);
+            // Auto-open the inspector ONLY for components that have
+            // something worth editing. Pure containers (Panel, Card,
+            // Container — children-only schemas) have no props or
+            // wires to surface, so popping the inspector is wasted
+            // navigation. The user can still click the cell later
+            // to inspect — this just skips the auto-jump.
+            if (hasEditableProps(componentName)) {
+                setSelectedCellId(cellId);
+            } else {
+                setSelectedCellId(null);
+            }
         },
         [setGrid, setSelectedCellId]
+    );
+    const handleMoveCell = useCallback(
+        (cellId, target) => {
+            setGrid((g) => moveCellWithinGrid(g, cellId, target));
+        },
+        [setGrid]
+    );
+    const handleChangeType = useCallback(
+        (cellId, newType) => {
+            setGrid((g) => setCellType(g, cellId, newType));
+        },
+        [setGrid]
     );
 
     // Fired by the GridEditor's empty-cell "+ Add" button. We swap
@@ -249,11 +293,16 @@ export function ComposerPaneV2({
     );
 
     // Selected cell → synthesize a node-shape for the inspector.
-    // Empty cells deselect (inspector hides).
+    // Empty cells deselect (inspector hides). Layouts / containers
+    // with no editable props (Panel/Card/Container/etc.) also hide
+    // the inspector — clicking them still shows selection feedback
+    // in the editor, but popping a "nothing to edit here" inspector
+    // would just be visual noise.
     const selectedNode = useMemo(() => {
         if (!selectedCellId) return null;
         const cell = grid.cells[selectedCellId];
         if (!cell || cell.kind === "empty") return null;
+        if (!hasEditableProps(cell.type)) return null;
         return {
             id: selectedCellId,
             type: cell.type,
@@ -333,6 +382,7 @@ export function ComposerPaneV2({
                             tree={treeShimForPipes}
                             providers={providers}
                             onChangeProp={handleChangeProp}
+                            onChangeType={handleChangeType}
                             onSetSlotMode={handleSetSlotMode}
                             onSetSlotWire={handleSetSlotWire}
                             onClearSlotWire={handleClearSlotWire}
@@ -367,6 +417,7 @@ export function ComposerPaneV2({
                         onSplitCell={handleSplitCell}
                         onRemoveCell={handleRemoveCell}
                         onRequestPalette={handleRequestPalette}
+                        onMoveCell={handleMoveCell}
                     />
                 </div>
             )}

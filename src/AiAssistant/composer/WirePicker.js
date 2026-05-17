@@ -159,25 +159,26 @@ function ProviderTypeStep({
         );
     }
     return (
-        <div
-            className="rounded border border-gray-700 bg-gray-900/50 p-1 max-h-72 overflow-y-auto"
-            data-testid={`composer-wire-providers-${propName}`}
-        >
+        <div className="space-y-2">
             {pipeSources.length > 0 && onPipe && (
                 <div
-                    className="mb-2 pb-2 border-b border-gray-700"
+                    className="rounded border border-amber-700/40 bg-amber-900/10 p-2"
                     data-testid={`composer-pipe-sources-${propName}`}
                 >
-                    <div className="text-[10px] uppercase tracking-wide text-gray-500 px-1 mb-1">
-                        Or pipe from an existing wire
+                    <div className="text-[10px] uppercase tracking-wide text-amber-300/80 mb-1.5">
+                        Reuse an existing wire
                     </div>
-                    <div className="flex flex-col">
+                    {/* Cap at ~3 visible rows with scroll for the
+                        rest. Without this a widget with lots of
+                        wired callbacks would push the provider list
+                        below the fold and dominate the inspector. */}
+                    <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
                         {pipeSources.map((src) => (
                             <button
                                 key={`${src.nodeId}:${src.propName}`}
                                 type="button"
                                 onClick={() => onPipe(src.nodeId, src.propName)}
-                                className="text-left text-xs px-2 py-1 rounded hover:bg-amber-700/30 text-gray-300 hover:text-amber-200"
+                                className="text-left text-xs px-2 py-1.5 rounded border border-amber-600/40 bg-amber-700/20 hover:bg-amber-600/40 text-amber-100 hover:text-white transition-colors"
                                 data-testid={`composer-pipe-source-${propName}-${src.nodeId}-${src.propName}`}
                             >
                                 <span className="font-mono">{src.label}</span>
@@ -186,36 +187,43 @@ function ProviderTypeStep({
                     </div>
                 </div>
             )}
-            <div className="text-[10px] uppercase tracking-wide text-gray-500 px-1 mb-1">
-                Pick a provider type
-            </div>
-            <div className="flex flex-col">
-                {wirable.types.map((t) => (
-                    <button
-                        key={`${t.kind}:${t.id}`}
-                        type="button"
-                        onClick={() => onPick(t)}
-                        className="text-left text-xs px-2 py-1 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200"
-                        data-testid={`composer-wire-provider-${propName}-${t.id}`}
-                    >
-                        <div className="flex items-center justify-between gap-2">
-                            <span className="truncate">{t.name}</span>
-                            <span className="text-[10px] text-gray-500 shrink-0">
-                                {t.kind}
-                                {t.hasConfiguredInstance && (
-                                    <span className="ml-1 text-emerald-400">
-                                        ✓ configured
-                                    </span>
-                                )}
-                            </span>
-                        </div>
-                        {t.description && (
-                            <div className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">
-                                {t.description}
+            <div
+                className="rounded border border-gray-700 bg-gray-900/50 p-1 max-h-96 overflow-y-auto"
+                data-testid={`composer-wire-providers-${propName}`}
+            >
+                <div className="text-[10px] uppercase tracking-wide text-gray-500 px-1 mb-1">
+                    {pipeSources.length > 0 && onPipe
+                        ? "Or pick a new provider"
+                        : "Pick a provider type"}
+                </div>
+                <div className="flex flex-col">
+                    {wirable.types.map((t) => (
+                        <button
+                            key={`${t.kind}:${t.id}`}
+                            type="button"
+                            onClick={() => onPick(t)}
+                            className="text-left text-xs px-2 py-1 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200"
+                            data-testid={`composer-wire-provider-${propName}-${t.id}`}
+                        >
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="truncate">{t.name}</span>
+                                <span className="text-[10px] text-gray-500 shrink-0">
+                                    {t.kind}
+                                    {t.hasConfiguredInstance && (
+                                        <span className="ml-1 text-emerald-400">
+                                            ✓ configured
+                                        </span>
+                                    )}
+                                </span>
                             </div>
-                        )}
-                    </button>
-                ))}
+                            {t.description && (
+                                <div className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">
+                                    {t.description}
+                                </div>
+                            )}
+                        </button>
+                    ))}
+                </div>
             </div>
         </div>
     );
