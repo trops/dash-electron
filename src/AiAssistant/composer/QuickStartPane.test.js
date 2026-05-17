@@ -14,11 +14,15 @@ import React from "react";
 import { render, fireEvent, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { QuickStartPane, treeToGrid } from "./QuickStartPane";
-import { SAMPLE_LAYOUTS } from "./composerSampleLayouts";
+import {
+    SAMPLE_LAYOUTS,
+    INTENTS,
+    getSampleLayoutsForIntent,
+} from "./composerSampleLayouts";
 import { isGridEmpty } from "./gridLayout";
 
-describe("QuickStartPane — rendering", () => {
-    test("renders the AI opener, sample gallery, and start-from-scratch escape hatch", () => {
+describe("QuickStartPane — step 1 (intent picker)", () => {
+    test("renders an intent tile per INTENTS entry + the escape hatch; no detail view yet", () => {
         render(
             <QuickStartPane
                 onApplyGrid={() => {}}
@@ -26,19 +30,28 @@ describe("QuickStartPane — rendering", () => {
                 seedCellId="cell-1"
             />
         );
-        expect(screen.getByTestId("composer-quick-start")).toBeInTheDocument();
         expect(
-            screen.getByTestId("composer-quick-start-ai-open")
+            screen.getByTestId("composer-quick-start-intents")
         ).toBeInTheDocument();
+        for (const it of INTENTS) {
+            expect(
+                screen.getByTestId(`composer-quick-start-intent-${it.id}`)
+            ).toBeInTheDocument();
+        }
+        // No detail view, no samples, no AI form when at step 1.
         expect(
-            screen.getByTestId("composer-quick-start-samples")
-        ).toBeInTheDocument();
+            screen.queryByTestId("composer-quick-start-samples")
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByTestId("composer-quick-start-ai")
+        ).not.toBeInTheDocument();
+        // Escape hatch is visible from both steps.
         expect(
             screen.getByTestId("composer-quick-start-scratch")
         ).toBeInTheDocument();
     });
 
-    test("renders one card per sample layout", () => {
+    test("clicking an intent advances to the matching detail view", () => {
         render(
             <QuickStartPane
                 onApplyGrid={() => {}}
@@ -46,15 +59,52 @@ describe("QuickStartPane — rendering", () => {
                 seedCellId="cell-1"
             />
         );
-        for (const layout of SAMPLE_LAYOUTS) {
+        fireEvent.click(
+            screen.getByTestId("composer-quick-start-intent-search")
+        );
+        expect(
+            screen.getByTestId("composer-quick-start-detail-search")
+        ).toBeInTheDocument();
+    });
+});
+
+describe("QuickStartPane — step 2 (intent detail)", () => {
+    function advanceToIntent(intentId) {
+        fireEvent.click(
+            screen.getByTestId(`composer-quick-start-intent-${intentId}`)
+        );
+    }
+
+    test("renders only the samples matching the picked intent + the AI form", () => {
+        render(
+            <QuickStartPane
+                onApplyGrid={() => {}}
+                onRequestPalette={() => {}}
+                seedCellId="cell-1"
+            />
+        );
+        advanceToIntent("search");
+        const expected = getSampleLayoutsForIntent("search");
+        for (const layout of expected) {
             expect(
                 screen.getByTestId(`composer-quick-start-sample-${layout.id}`)
             ).toBeInTheDocument();
         }
+        // A sample that doesn't match the search intent is hidden.
+        const dashboardSample = SAMPLE_LAYOUTS.find(
+            (l) => l.id === "dashboard-summary"
+        );
+        expect(
+            screen.queryByTestId(
+                `composer-quick-start-sample-${dashboardSample.id}`
+            )
+        ).not.toBeInTheDocument();
+        // AI form opener is present.
+        expect(
+            screen.getByTestId("composer-quick-start-ai-open")
+        ).toBeInTheDocument();
     });
-});
 
-describe("QuickStartPane — actions", () => {
     test("clicking a sample card fires onApplyGrid with that sample's grid", () => {
         const onApplyGrid = jest.fn();
         render(
@@ -64,16 +114,51 @@ describe("QuickStartPane — actions", () => {
                 seedCellId="cell-1"
             />
         );
-        const sample = SAMPLE_LAYOUTS[0];
+        advanceToIntent("search");
+        const sample = getSampleLayoutsForIntent("search")[0];
         fireEvent.click(
             screen.getByTestId(`composer-quick-start-sample-${sample.id}`)
         );
         expect(onApplyGrid).toHaveBeenCalledTimes(1);
-        const arg = onApplyGrid.mock.calls[0][0];
-        expect(isGridEmpty(arg)).toBe(false);
+        expect(isGridEmpty(onApplyGrid.mock.calls[0][0])).toBe(false);
     });
 
-    test("clicking 'start from scratch' opens the palette on the seed cell", () => {
+    test("Change link returns to the intent picker", () => {
+        render(
+            <QuickStartPane
+                onApplyGrid={() => {}}
+                onRequestPalette={() => {}}
+                seedCellId="cell-1"
+            />
+        );
+        advanceToIntent("view");
+        fireEvent.click(screen.getByTestId("composer-quick-start-back"));
+        expect(
+            screen.getByTestId("composer-quick-start-intents")
+        ).toBeInTheDocument();
+    });
+
+    test("opening the AI form reveals the textarea and submit button", () => {
+        render(
+            <QuickStartPane
+                onApplyGrid={() => {}}
+                onRequestPalette={() => {}}
+                seedCellId="cell-1"
+            />
+        );
+        advanceToIntent("search");
+        fireEvent.click(screen.getByTestId("composer-quick-start-ai-open"));
+        expect(
+            screen.getByTestId("composer-quick-start-ai-input")
+        ).toBeInTheDocument();
+        expect(
+            screen.getByTestId("composer-quick-start-ai-submit")
+        ).toBeDisabled();
+    });
+});
+
+describe("QuickStartPane — escape hatch", () => {
+    test("clicking 'start blank' opens the palette on the seed cell from step 1", () => {
         const onRequestPalette = jest.fn();
         render(
             <QuickStartPane
@@ -86,7 +171,7 @@ describe("QuickStartPane — actions", () => {
         expect(onRequestPalette).toHaveBeenCalledWith("cell-99");
     });
 
-    test("scratch button is disabled when no seed cell is available (safety)", () => {
+    test("scratch button is disabled when no seed cell is available", () => {
         render(
             <QuickStartPane
                 onApplyGrid={() => {}}
@@ -96,23 +181,6 @@ describe("QuickStartPane — actions", () => {
         );
         expect(
             screen.getByTestId("composer-quick-start-scratch")
-        ).toBeDisabled();
-    });
-
-    test("opening the AI form reveals the textarea and submit button", () => {
-        render(
-            <QuickStartPane
-                onApplyGrid={() => {}}
-                onRequestPalette={() => {}}
-                seedCellId="cell-1"
-            />
-        );
-        fireEvent.click(screen.getByTestId("composer-quick-start-ai-open"));
-        expect(
-            screen.getByTestId("composer-quick-start-ai-input")
-        ).toBeInTheDocument();
-        expect(
-            screen.getByTestId("composer-quick-start-ai-submit")
         ).toBeDisabled();
     });
 });
