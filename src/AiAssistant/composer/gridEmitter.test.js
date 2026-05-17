@@ -152,7 +152,9 @@ describe("emitGridWidgetCode", () => {
 
         const g2 = setCellComponent(g0, cellA, "Card3");
         const out2 = emitGridWidgetCode(g2).componentCode;
-        expect(out2).toMatch(/<Card3 className="h-full w-full min-h-0">/);
+        expect(out2).toMatch(
+            /<Card3 className="h-full w-full min-h-0 overflow-y-auto">/
+        );
     });
 
     test("Card container injects className=h-full so it actually fills the wrapper", () => {
@@ -164,7 +166,7 @@ describe("emitGridWidgetCode", () => {
         const g1 = setCellComponent(g0, cellId, "Card");
         const { componentCode } = emitGridWidgetCode(g1);
         expect(componentCode).toMatch(
-            /<Card className="h-full w-full min-h-0">/
+            /<Card className="h-full w-full min-h-0 overflow-y-auto">/
         );
     });
 
@@ -174,7 +176,7 @@ describe("emitGridWidgetCode", () => {
         const g1 = setCellComponent(g0, cellId, "Table");
         const { componentCode } = emitGridWidgetCode(g1);
         expect(componentCode).toMatch(
-            /<Table[^>]*className="h-full w-full min-h-0"/
+            /<Table[^>]*className="h-full w-full min-h-0 overflow-y-auto"/
         );
     });
 

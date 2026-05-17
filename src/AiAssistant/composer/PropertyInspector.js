@@ -2,10 +2,31 @@ import React, { useCallback, useMemo, useState } from "react";
 import {
     getComponentSchema,
     getInputBinding,
+    DASH_REACT_COMPONENT_SCHEMAS,
 } from "../dashReactComponentSchemas";
 import { WirePicker, WiredSlotSummary, PipedSlotSummary } from "./WirePicker";
 import { PROVIDER_API_REGISTRY } from "../providerApiRegistry";
 import { getKnownToolArgs } from "./mcpKnownTools";
+
+/**
+ * Return the ordered list of variant component names sharing a base
+ * with `componentName` — e.g. `Heading` → ["Heading", "Heading2",
+ * "Heading3"]. Base is the name with any trailing digit stripped.
+ * Returns an empty list when fewer than 2 variants exist (nothing
+ * meaningful to swap between).
+ */
+function listVariants(componentName) {
+    if (typeof componentName !== "string") return [];
+    const base = componentName.replace(/[0-9]+$/, "");
+    if (!base) return [];
+    const variants = [];
+    if (DASH_REACT_COMPONENT_SCHEMAS[base]) variants.push(base);
+    for (let n = 2; n <= 9; n += 1) {
+        const name = `${base}${n}`;
+        if (DASH_REACT_COMPONENT_SCHEMAS[name]) variants.push(name);
+    }
+    return variants.length >= 2 ? variants : [];
+}
 
 const CREDENTIAL_AUTO_ARGS = new Set([
     "providerHash",
@@ -87,6 +108,7 @@ export function PropertyInspector({
     tree = null,
     providers = {},
     onChangeProp,
+    onChangeType,
     onSetSlotMode,
     onSetSlotWire,
     onClearSlotWire,
@@ -152,6 +174,11 @@ export function PropertyInspector({
                 </button>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-3">
+                <VariantPicker
+                    nodeId={node.id}
+                    currentType={node.type}
+                    onChangeType={onChangeType}
+                />
                 {propRows.length === 0 && (
                     <div className="text-xs text-gray-500">
                         This component has no editable props.
@@ -637,6 +664,61 @@ function JsonTextarea({ nodeId, propName, value, onChangeProp }) {
             )}
             <div className="text-[10px] text-gray-500 mt-0.5">
                 JSON — applied when the field loses focus
+            </div>
+        </div>
+    );
+}
+
+/**
+ * Small segmented control above the prop rows that lets the user
+ * swap a component for one of its visual variants (Heading ↔
+ * Heading2 ↔ Heading3, Panel ↔ Panel2 ↔ Panel3, etc.).
+ *
+ * Renders nothing when the component has no siblings (single-form
+ * components like Container/DataList/SearchInput don't get a strip).
+ * Each pill shows the variant suffix ("Original", "Style 2",
+ * "Style 3") instead of the raw type name so the user reads the
+ * affordance as a style choice, not a different component.
+ *
+ * Swap preserves props/wires — variants share the prop signature
+ * by construction (they're literally the same React component with
+ * different styling in dash-react). See `setCellType` in
+ * gridLayout.js for the guarantees enforced on the mutator side.
+ */
+function VariantPicker({ nodeId, currentType, onChangeType }) {
+    const variants = useMemo(() => listVariants(currentType), [currentType]);
+    if (variants.length < 2 || typeof onChangeType !== "function") return null;
+    return (
+        <div
+            className="flex items-center gap-2"
+            data-testid={`composer-variant-picker-${nodeId}`}
+        >
+            <span className="text-[10px] uppercase tracking-wide text-gray-500">
+                Style
+            </span>
+            <div className="flex items-center gap-0.5 text-[10px] bg-gray-800 border border-gray-700 rounded p-0.5">
+                {variants.map((name, idx) => {
+                    const label = idx === 0 ? "Original" : `Style ${idx + 1}`;
+                    const isActive = name === currentType;
+                    return (
+                        <button
+                            key={name}
+                            type="button"
+                            onClick={() =>
+                                !isActive && onChangeType(nodeId, name)
+                            }
+                            className={`px-2 py-0.5 rounded ${
+                                isActive
+                                    ? "bg-indigo-600/40 text-indigo-100"
+                                    : "text-gray-400 hover:text-gray-200"
+                            }`}
+                            data-testid={`composer-variant-${nodeId}-${name}`}
+                            title={name}
+                        >
+                            {label}
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );

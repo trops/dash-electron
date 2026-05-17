@@ -336,3 +336,47 @@ describe("PropertyInspector — close button", () => {
         expect(onClose).toHaveBeenCalled();
     });
 });
+
+describe("PropertyInspector — variant picker", () => {
+    test("renders Original/Style 2/Style 3 for a component with variants and invokes onChangeType", () => {
+        const onChangeType = jest.fn();
+        render(
+            <PropertyInspector
+                node={makeNode({ type: "Heading" })}
+                onChangeProp={() => {}}
+                onSetSlotMode={() => {}}
+                onChangeType={onChangeType}
+                onClose={() => {}}
+            />
+        );
+        // Picker rendered with all three Heading variants.
+        const picker = screen.getByTestId("composer-variant-picker-node-1");
+        expect(picker).toBeInTheDocument();
+        expect(
+            screen.getByTestId("composer-variant-node-1-Heading")
+        ).toBeInTheDocument();
+        expect(
+            screen.getByTestId("composer-variant-node-1-Heading2")
+        ).toBeInTheDocument();
+        expect(
+            screen.getByTestId("composer-variant-node-1-Heading3")
+        ).toBeInTheDocument();
+        fireEvent.click(screen.getByTestId("composer-variant-node-1-Heading3"));
+        expect(onChangeType).toHaveBeenCalledWith("node-1", "Heading3");
+    });
+
+    test("does NOT render the variant picker for single-form components (Container, DataList)", () => {
+        render(
+            <PropertyInspector
+                node={makeNode({ type: "DataList" })}
+                onChangeProp={() => {}}
+                onSetSlotMode={() => {}}
+                onChangeType={() => {}}
+                onClose={() => {}}
+            />
+        );
+        expect(
+            screen.queryByTestId("composer-variant-picker-node-1")
+        ).not.toBeInTheDocument();
+    });
+});

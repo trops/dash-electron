@@ -43,6 +43,18 @@ const CREDENTIAL_TYPE_LABELS = {
     algolia: "Algolia",
 };
 
+// One-line description per credential type. Without this the
+// picker rows for credential providers are noticeably shorter
+// than MCP rows (which carry catalog descriptions), making the
+// list look uneven. Keep these brief — the picker truncates to
+// two lines anyway. Falls back to a generic credential
+// description for types not explicitly listed.
+const CREDENTIAL_TYPE_DESCRIPTIONS = {
+    algolia: "Search and manage Algolia indices via your API key.",
+};
+const CREDENTIAL_DEFAULT_DESCRIPTION =
+    "Direct API access via stored credentials.";
+
 /**
  * React hook surface — async-aware. Returns
  *   { status: "idle"|"loading"|"ok"|"error",
@@ -115,7 +127,9 @@ function enumerateCredentialTypes(providers) {
             id: typeId,
             name: CREDENTIAL_TYPE_LABELS[typeId] || typeId,
             kind: "credential",
-            description: "",
+            description:
+                CREDENTIAL_TYPE_DESCRIPTIONS[typeId] ||
+                CREDENTIAL_DEFAULT_DESCRIPTION,
             hasConfiguredInstance: instances.length > 0,
             configuredInstances: instances,
         });

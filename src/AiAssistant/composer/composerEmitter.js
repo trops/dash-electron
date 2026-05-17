@@ -182,9 +182,17 @@ export function renderNodeJsx(
                 }
                 return defaultFieldExpr(target);
             };
+            // Match the standard fill-cell className injection so a
+            // wired DataList inside a Card scrolls within its bounds
+            // instead of spilling past sibling cells. Skipped when
+            // the node isn't acting as a fill cell (V1 emit path,
+            // narrow embed).
+            const fillAttr = wrapperFill
+                ? ' className="h-full w-full min-h-0 overflow-y-auto"'
+                : "";
             return (
                 `${pad}<div data-composer-node-id="${node.id}"${rootStyle}>\n` +
-                `${pad}    <DataList>\n` +
+                `${pad}    <DataList${fillAttr}>\n` +
                 `${pad}        {(Array.isArray(${itemsVar}) ? ${itemsVar} : []).map((__it, __i) => (\n` +
                 `${pad}            <DataList.Item key={__i} label={${fieldExpr(
                     "label"
@@ -232,7 +240,7 @@ export function renderNodeJsx(
                   )})}`
                 : "";
             const fillAttr = wrapperFill
-                ? ' className="h-full w-full min-h-0"'
+                ? ' className="h-full w-full min-h-0 overflow-y-auto"'
                 : "";
             return (
                 `${pad}<div data-composer-node-id="${node.id}"${rootStyle}>\n` +
@@ -315,11 +323,14 @@ export function renderNodeJsx(
     // h-full/w-full defaults (notably Card, Table, DataList) actually
     // fill the sized cell wrapper. Panel/Container already self-size
     // but the duplicate classes are harmless. dash-react primitives
-    // all accept and merge a className prop. Skipped when the user
-    // already set a className via props (none of the schemas surface
-    // one today, but the guard future-proofs it).
+    // all accept and merge a className prop. `overflow-y-auto` is
+    // included so a tall DataList/Table scrolls inside its cell
+    // instead of spilling past sibling cells in the grid stack (the
+    // cell wrapper itself is `overflow-hidden` for the same reason).
+    // Skipped when the user already set a className via props (none
+    // of the schemas surface one today, but the guard future-proofs it).
     if (wrapperFill && !propEntries.some((e) => e.startsWith("className="))) {
-        propEntries.push(`className="h-full w-full min-h-0"`);
+        propEntries.push(`className="h-full w-full min-h-0 overflow-y-auto"`);
     }
 
     const propsStr = propEntries.length > 0 ? " " + propEntries.join(" ") : "";

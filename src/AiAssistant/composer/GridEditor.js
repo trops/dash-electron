@@ -21,9 +21,9 @@
  *     their current inspector context.
  */
 
-import React from "react";
+import React, { useState } from "react";
 import { getComponentSchema } from "../dashReactComponentSchemas";
-import { isContainer } from "./gridLayout";
+import { findCellLocation, isContainer } from "./gridLayout";
 
 /**
  * Per-category color tokens. Renders containers + leaves with a
@@ -91,8 +91,50 @@ export function GridEditor({
     onSplitCell,
     onRemoveCell,
     onRequestPalette,
+    onMoveCell,
 }) {
+    // Track which cell is being dragged + the active drop indicator.
+    // Lifted to GridEditor (not per-cell) so the indicator can move
+    // smoothly between cells without each leaving-cell having to
+    // race-condition its own clear. Also lets us hide the indicator
+    // immediately on drop or dragend.
+    //
+    // dragInfo: { cellId } | null  — set on dragstart, cleared on dragend/drop.
+    // dropInfo: { targetCellId, edge } | null
+    //   edge: "top" | "bottom" | "left" | "right" — closest cell edge
+    //   to the cursor. Drives the insertion-bar render in CellNode.
+    const [dragInfo, setDragInfo] = useState(null);
+    const [dropInfo, setDropInfo] = useState(null);
     if (!grid || !grid.rootGridId) return null;
+
+    const handleDragStart = (cellId) => setDragInfo({ cellId });
+    const handleDragEnd = () => {
+        setDragInfo(null);
+        setDropInfo(null);
+    };
+    const handleDrop = (sourceId, targetCellId, edge) => {
+        // dragInfo state is UI-only; the authoritative sourceId
+        // comes from dataTransfer (passed in here).
+        setDragInfo(null);
+        setDropInfo(null);
+        if (!onMoveCell || !sourceId) return;
+        if (sourceId === targetCellId) return;
+        const tgtLoc = findCellLocation(grid, targetCellId);
+        if (!tgtLoc) return;
+        // Translate (target cell, edge) → mutator target. Both same-
+        // and cross-grid drops route through the same path; the
+        // mutator (moveCellWithinGrid) discriminates via target.gridId.
+        const target =
+            edge === "top"
+                ? { gridId: tgtLoc.gridId, rowIdx: tgtLoc.rowIdx, newRow: true }
+                : {
+                      gridId: tgtLoc.gridId,
+                      rowIdx: tgtLoc.rowIdx + 1,
+                      newRow: true,
+                  };
+        onMoveCell(sourceId, target);
+    };
+
     return (
         <div data-testid="composer-grid-editor">
             <GridNode
@@ -105,6 +147,13 @@ export function GridEditor({
                 onSplitCell={onSplitCell}
                 onRemoveCell={onRemoveCell}
                 onRequestPalette={onRequestPalette}
+                dragInfo={dragInfo}
+                dropInfo={dropInfo}
+                onDragStartCell={handleDragStart}
+                onDragEndCell={handleDragEnd}
+                onDragOverCell={setDropInfo}
+                onDragLeaveCell={() => setDropInfo(null)}
+                onDropCell={handleDrop}
             />
         </div>
     );
@@ -120,6 +169,13 @@ function GridNode({
     onSplitCell,
     onRemoveCell,
     onRequestPalette,
+    dragInfo,
+    dropInfo,
+    onDragStartCell,
+    onDragEndCell,
+    onDragOverCell,
+    onDragLeaveCell,
+    onDropCell,
 }) {
     const targetGrid = grid.grids[gridId];
     if (!targetGrid) return null;
@@ -148,6 +204,13 @@ function GridNode({
                                 onAddRow={onAddRow}
                                 onRemoveRow={onRemoveRow}
                                 selectedCellId={selectedCellId}
+                                dragInfo={dragInfo}
+                                dropInfo={dropInfo}
+                                onDragStartCell={onDragStartCell}
+                                onDragEndCell={onDragEndCell}
+                                onDragOverCell={onDragOverCell}
+                                onDragLeaveCell={onDragLeaveCell}
+                                onDropCell={onDropCell}
                             />
                         ))}
                     </div>
@@ -175,6 +238,21 @@ function GridNode({
     );
 }
 
+/**
+ * V1 drag/drop only reorders ROWS — we split the cell by vertical
+ * midpoint and return "top" or "bottom". The four-edge split (with
+ * left/right for same-row sibling reorder) flickered constantly for
+ * wide cells because 1px of vertical movement flipped the
+ * shortest-distance edge between top and bottom. Sticking to a
+ * single axis with a clean midpoint comparison makes the indicator
+ * stable. Same-row horizontal reorder is a follow-up via dedicated
+ * arrow buttons.
+ */
+function closestEdge(rect, _clientX, clientY) {
+    const midY = rect.top + rect.height / 2;
+    return clientY < midY ? "top" : "bottom";
+}
+
 function cellsStyle(row) {
     return {
         gridTemplateColumns: `repeat(${Math.max(
@@ -195,8 +273,140 @@ function CellNode({
     onAddRow,
     onRemoveRow,
     selectedCellId,
+    dragInfo,
+    dropInfo,
+    onDragStartCell,
+    onDragEndCell,
+    onDragOverCell,
+    onDragLeaveCell,
+    onDropCell,
 }) {
     if (!cell) return null;
+    // Drag handlers — shared across leaf/container/empty render
+    // branches so the user can drag any cell (and drop onto any
+    // cell). Empty cells are valid drop targets but not drag sources
+    // — dragging an empty placeholder would have no visible effect.
+    const isDraggable = cell.kind === "leaf" || cell.kind === "container";
+    const isBeingDragged = dragInfo && dragInfo.cellId === cell.id;
+    const activeEdge =
+        dropInfo && dropInfo.targetCellId === cell.id ? dropInfo.edge : null;
+    // MIME-style key marking dataTransfer payload as "ours" — keeps
+    // drag/drop from accidentally accepting external drags (files,
+    // text selections). Native dataTransfer is the source of truth
+    // for the source cellId, NOT React state — the browser cancels
+    // the drop entirely if dragover's preventDefault is gated on a
+    // possibly-stale dragInfo prop, even when state is set correctly.
+    const COMPOSER_DRAG_MIME = "application/x-composer-cell-id";
+    const dragProps = {
+        draggable: isDraggable,
+        onDragStart: isDraggable
+            ? (e) => {
+                  // stopPropagation is critical here: when dragging a
+                  // cell inside a Panel/Card, dragstart bubbles up to
+                  // the container's own dragStart handler, which then
+                  // overwrites the dataTransfer payload with the
+                  // CONTAINER's cellId. The drop then tries to move
+                  // the Panel into its own inner grid, the cycle
+                  // check silently rejects it, and the user sees no
+                  // movement — the symptom that masked this bug.
+                  e.stopPropagation();
+                  e.dataTransfer.setData(COMPOSER_DRAG_MIME, cell.id);
+                  // text/plain is a fallback some browsers require
+                  // to consider the drag "valid"; some don't fire
+                  // dragover at all without it.
+                  e.dataTransfer.setData("text/plain", cell.id);
+                  e.dataTransfer.effectAllowed = "move";
+                  onDragStartCell && onDragStartCell(cell.id);
+              }
+            : undefined,
+        onDragEnd: isDraggable
+            ? () => {
+                  onDragEndCell && onDragEndCell();
+              }
+            : undefined,
+        onDragOver: (e) => {
+            // dataTransfer.types is readable during dragover (the
+            // payload itself isn't — that's a browser security
+            // restriction). Use it to discriminate composer drags
+            // from external ones.
+            const types = e.dataTransfer.types;
+            const isOurs =
+                types &&
+                (typeof types.includes === "function"
+                    ? types.includes(COMPOSER_DRAG_MIME)
+                    : Array.prototype.indexOf.call(
+                          types,
+                          COMPOSER_DRAG_MIME
+                      ) !== -1);
+            if (!isOurs) return;
+            // Must preventDefault to allow drop. Always do this for
+            // our own drags so the browser knows this cell is a
+            // valid drop target, even when the dragInfo state prop
+            // hasn't propagated to this render yet.
+            e.preventDefault();
+            // stopPropagation so ancestor cell wrappers (Panel,
+            // Card) don't also claim this dragover. Without it the
+            // outermost ancestor wins the indicator AND ultimately
+            // the drop, which would move the cell out of its
+            // intended container.
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = "move";
+            // UI-only: skip the indicator when hovering source-self.
+            if (dragInfo && dragInfo.cellId === cell.id) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const edge = closestEdge(rect, e.clientX, e.clientY);
+            if (
+                !dropInfo ||
+                dropInfo.targetCellId !== cell.id ||
+                dropInfo.edge !== edge
+            ) {
+                onDragOverCell &&
+                    onDragOverCell({ targetCellId: cell.id, edge });
+            }
+        },
+        onDragLeave: (e) => {
+            // Only clear if we're leaving the cell's outer box —
+            // bubbled dragleaves from children would otherwise drop
+            // the indicator unnecessarily.
+            const r = e.currentTarget.getBoundingClientRect();
+            if (
+                e.clientX < r.left ||
+                e.clientX > r.right ||
+                e.clientY < r.top ||
+                e.clientY > r.bottom
+            ) {
+                onDragLeaveCell && onDragLeaveCell();
+            }
+        },
+        onDrop: (e) => {
+            const sourceId =
+                e.dataTransfer.getData(COMPOSER_DRAG_MIME) ||
+                e.dataTransfer.getData("text/plain");
+            if (!sourceId) return;
+            e.preventDefault();
+            // stopPropagation prevents the same drop from also
+            // firing on the ancestor cell wrapper (Panel/Card),
+            // which would invoke onMoveCell a second time with the
+            // ancestor as target — bouncing the cell back out of
+            // its intended location.
+            e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            const edge = closestEdge(rect, e.clientX, e.clientY);
+            onDropCell && onDropCell(sourceId, cell.id, edge);
+        },
+    };
+    // Insertion-bar overlay: a thin colored bar pinned to the active
+    // edge. `pointer-events-none` keeps the bar from intercepting the
+    // dragover events that drive its own positioning.
+    const dropIndicator = activeEdge ? (
+        <div
+            data-testid={`composer-cell-${cell.id}-drop-${activeEdge}`}
+            className={`absolute pointer-events-none bg-indigo-500 left-0 right-0 h-1 ${
+                activeEdge === "top" ? "top-0" : "bottom-0"
+            }`}
+        />
+    ) : null;
+    const draggingOpacity = isBeingDragged ? "opacity-50" : "";
     // Resolve the effective kind against the CURRENT schema.
     // Handles the migration case where a component's container-ness
     // flipped after the cell was created (e.g. Paragraph used to
@@ -212,9 +422,11 @@ function CellNode({
     if (effectiveKind === "empty") {
         return (
             <div
-                className={`flex items-stretch gap-1 border border-dashed ${selectionClass} rounded`}
+                {...dragProps}
+                className={`relative flex items-stretch gap-1 border border-dashed ${selectionClass} rounded ${draggingOpacity}`}
                 data-testid={`composer-cell-${cell.id}`}
             >
+                {dropIndicator}
                 <button
                     type="button"
                     onClick={() => onRequestPalette(cell.id)}
@@ -248,9 +460,11 @@ function CellNode({
         const color = getCategoryColor(cell.type);
         return (
             <div
-                className={`border border-l-4 ${color.border} ${selectionClass} rounded p-1.5 bg-gray-900 hover:bg-gray-800`}
+                {...dragProps}
+                className={`relative border border-l-4 ${color.border} ${selectionClass} rounded p-1.5 bg-gray-900 hover:bg-gray-800 ${draggingOpacity}`}
                 data-testid={`composer-cell-${cell.id}`}
             >
+                {dropIndicator}
                 <div className="flex items-center justify-between gap-1">
                     <button
                         type="button"
@@ -286,9 +500,11 @@ function CellNode({
         const color = getCategoryColor(cell.type);
         return (
             <div
-                className={`border border-l-4 ${color.border} ${selectionClass} rounded bg-gray-900`}
+                {...dragProps}
+                className={`relative border border-l-4 ${color.border} ${selectionClass} rounded bg-gray-900 ${draggingOpacity}`}
                 data-testid={`composer-cell-${cell.id}`}
             >
+                {dropIndicator}
                 <div
                     className={`flex items-center justify-between gap-1 px-1.5 py-1 border-b border-gray-700 ${color.headerBg}`}
                 >
@@ -328,6 +544,13 @@ function CellNode({
                         onSplitCell={onSplitCell}
                         onRemoveCell={onRemoveCell}
                         onRequestPalette={onRequestPalette}
+                        dragInfo={dragInfo}
+                        dropInfo={dropInfo}
+                        onDragStartCell={onDragStartCell}
+                        onDragEndCell={onDragEndCell}
+                        onDragOverCell={onDragOverCell}
+                        onDragLeaveCell={onDragLeaveCell}
+                        onDropCell={onDropCell}
                     />
                 </div>
             </div>

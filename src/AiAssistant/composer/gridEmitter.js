@@ -239,8 +239,15 @@ function renderCellJsx(grid, cell, indent, slotVarBySlotKey) {
     // + flex-column so the component inside (Panel h-full, Table)
     // has a sized parent to resolve against. Natural cells leave
     // height alone so the component sits at its content size.
+    // overflow-hidden on the wrapper ensures the contained component
+    // can't paint outside the cell's box — so a long DataList/Table
+    // inside a Card stays clipped to the Card and the inner element
+    // takes responsibility for scroll. Without this, the component
+    // (which has h-full but no overflow rule of its own — Card,
+    // DataList, …) lets its children spill past sibling cells in the
+    // grid stack.
     const cellLayoutClass = fills
-        ? "flex-1 min-w-0 h-full min-h-0 flex flex-col"
+        ? "flex-1 min-w-0 h-full min-h-0 flex flex-col overflow-hidden"
         : "flex-1 min-w-0";
     if (effectiveKind === "leaf") {
         // Delegate to the tree emitter's per-node renderer for leaf
@@ -275,9 +282,12 @@ function renderCellJsx(grid, cell, indent, slotVarBySlotKey) {
         // Container components get the fill className so Card (which
         // has no h-full default) actually fills the wrapper. Panel
         // and Container already self-size to h-full/w-full; the
-        // duplicate classes are harmless.
+        // duplicate classes are harmless. `overflow-y-auto` makes
+        // Card behave like Panel does (Panel/Container already scroll
+        // their content in dash-react) so a long child list scrolls
+        // inside the container instead of spilling past it.
         const componentClass = fills
-            ? ' className="h-full w-full min-h-0"'
+            ? ' className="h-full w-full min-h-0 overflow-y-auto"'
             : "";
         return (
             `${pad}<div data-composer-node-id="${cell.id}" className="${cellLayoutClass}">\n` +
