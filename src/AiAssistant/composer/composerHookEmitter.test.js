@@ -13,7 +13,8 @@
  *   - auto-supplies the credential triplet (providerHash/dashboardAppId/
  *     providerName) without the user binding them
  *   - literal-kind args render as JSON-encoded values
- *   - userConfig-kind args render as `userConfig.<field>` and
+ *   - userConfig-kind args render as `props.<field>` (matches the
+ *     flat-prop convention dash-core's WidgetFactory delivers) and
  *     populate the userConfigFields set
  *   - return-shape heuristic: methods returning {hits:Array} unwrap
  *     to result?.hits; methods returning Array unwrap with Array.isArray;
@@ -231,8 +232,8 @@ describe("buildHookScaffold", () => {
             "searchTerm",
         ]);
         const text = s.hookLines.join("\n");
-        expect(text).toContain("indexName: userConfig.indexName");
-        expect(text).toContain("query: userConfig.searchTerm");
+        expect(text).toContain("indexName: props.indexName");
+        expect(text).toContain("query: props.searchTerm");
     });
 
     test("provider hook renders once when two slots use the same instance", () => {

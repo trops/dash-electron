@@ -78,6 +78,15 @@ export function collectUsedComponents(tree) {
     walk(tree.root, (node) => {
         if (node && typeof node.type === "string") used.add(node.type);
     });
+    // Shim companions — Menu's iteration body references the matching
+    // MenuItem variant (Menu2 → MenuItem2, ...) which the user never
+    // drops directly. Auto-include so imports resolve and the bundle
+    // compiles. Same rule applied by gridEmitter.collectUsedComponentNames.
+    for (const name of [...used]) {
+        if (name === "Menu" || name === "Menu2" || name === "Menu3") {
+            used.add(name.replace(/^Menu/, "MenuItem"));
+        }
+    }
     return used;
 }
 
@@ -114,9 +123,32 @@ function placeholderForType(typeStr) {
  * level (matches the rest of the AI-emitted code style we don't
  * format-strictly afterwards — prettier runs at install time anyway).
  */
-function renderNodeJsx(node, indent = 0, slotVarBySlotKey = null) {
+export function renderNodeJsx(
+    node,
+    indent = 0,
+    slotVarBySlotKey = null,
+    { wrapperFill = false } = {}
+) {
     if (!node || typeof node.type !== "string") return "";
     const pad = "    ".repeat(indent);
+    // The root wrapper carries explicit full-size flex styling so the
+    // root component (Panel default `h-full w-full`, Card, etc.) has
+    // a sized parent to resolve percentage heights against. Without
+    // this, a composition with a single Panel collapses to content
+    // height because the wrapper div is plain block flow. Non-root
+    // wrappers stay unstyled — children should size against their
+    // parent component, not against the composer's plumbing.
+    //
+    // The grid emitter calls renderNodeJsx for every leaf cell (not
+    // just the root), and each leaf is sized by its grid track — so
+    // it passes wrapperFill: true to opt every leaf wrapper into the
+    // same fill style. Tree-mode (V1) leaves wrapperFill off; only
+    // the literal "root" node gets the style.
+    const isRoot = node.id === "root";
+    const fillStyle =
+        ` style={{ height: "100%", width: "100%", display: "flex",` +
+        ` flexDirection: "column" }}`;
+    const rootStyle = isRoot || wrapperFill ? fillStyle : "";
     const schema = getComponentSchema(node.type);
     if (!schema) {
         // Unknown component — emit a comment rather than fail. The
@@ -151,15 +183,94 @@ function renderNodeJsx(node, indent = 0, slotVarBySlotKey = null) {
                 return defaultFieldExpr(target);
             };
             return (
-                `${pad}<DataList>\n` +
-                `${pad}    {(Array.isArray(${itemsVar}) ? ${itemsVar} : []).map((__it, __i) => (\n` +
-                `${pad}        <DataList.Item key={__i} label={${fieldExpr(
+                `${pad}<div data-composer-node-id="${node.id}"${rootStyle}>\n` +
+                `${pad}    <DataList>\n` +
+                `${pad}        {(Array.isArray(${itemsVar}) ? ${itemsVar} : []).map((__it, __i) => (\n` +
+                `${pad}            <DataList.Item key={__i} label={${fieldExpr(
                     "label"
                 )}} value={${fieldExpr("value")}} />\n` +
-                `${pad}    ))}\n` +
-                `${pad}</DataList>`
+                `${pad}        ))}\n` +
+                `${pad}    </DataList>\n` +
+                `${pad}</div>`
             );
         }
+    }
+
+    // Menu / Menu2 / Menu3 — dash-react's Menu is just a vertical
+    // stack of children. The composer surfaces it as a data-driven
+    // leaf: `items` is a virtual data slot, `onSelect` an optional
+    // callback. The shim renders the wired items as a `.map()` of
+    // the matching MenuItem variant. Same field-map machinery as
+    // DataList so arbitrary result shapes (algolia hits, MCP rows,
+    // raw strings) render without hand-mapping.
+    const isMenu =
+        node.type === "Menu" || node.type === "Menu2" || node.type === "Menu3";
+    if (isMenu && slotVarBySlotKey) {
+        const itemsVar = slotVarBySlotKey.get(`${node.id}:items`);
+        if (itemsVar) {
+            const wire = node.wires && node.wires.items;
+            const fieldMap = wire && wire.fieldMap;
+            const fieldExpr = (target) => {
+                if (fieldMap && fieldMap[target]) {
+                    const src = fieldMap[target];
+                    return (
+                        `(typeof __it === 'string' ? __it : ` +
+                        `(__it && __it[${JSON.stringify(src)}]) ?? '')`
+                    );
+                }
+                return defaultFieldExpr(target);
+            };
+            // Menu2 → MenuItem2, Menu3 → MenuItem3; Menu → MenuItem.
+            const menuItemType = node.type.replace(/^Menu/, "MenuItem");
+            // onSelect handler: bound via the input-binding / wire
+            // slot map under the `onSelect` key (same path as any
+            // callback slot). If unbound, omit onClick on the row.
+            const onSelectVar = slotVarBySlotKey.get(`${node.id}:onSelect`);
+            const onClickAttr = onSelectVar
+                ? ` onClick={() => ${onSelectVar} && ${onSelectVar}(${fieldExpr(
+                      "value"
+                  )})}`
+                : "";
+            const fillAttr = wrapperFill
+                ? ' className="h-full w-full min-h-0"'
+                : "";
+            return (
+                `${pad}<div data-composer-node-id="${node.id}"${rootStyle}>\n` +
+                `${pad}    <${node.type}${fillAttr}>\n` +
+                `${pad}        {(Array.isArray(${itemsVar}) ? ${itemsVar} : []).map((__it, __i) => (\n` +
+                `${pad}            <${menuItemType} key={__i}${onClickAttr}>{${fieldExpr(
+                    "label"
+                )}}</${menuItemType}>\n` +
+                `${pad}        ))}\n` +
+                `${pad}    </${node.type}>\n` +
+                `${pad}</div>`
+            );
+        }
+    }
+
+    // Paragraph's text content lives in children — surface a `text`
+    // virtual prop in the schema and render it as JSX content here.
+    // Same shim pattern as DataList above; keeps the inspector
+    // generic (text is just a string prop in the schema view).
+    if (node.type === "Paragraph") {
+        const text =
+            node.props && typeof node.props.text === "string"
+                ? node.props.text
+                : "";
+        const escaped = text.replace(/[<>{}]/g, (c) =>
+            c === "<"
+                ? "&lt;"
+                : c === ">"
+                ? "&gt;"
+                : c === "{"
+                ? "&#123;"
+                : "&#125;"
+        );
+        return (
+            `${pad}<div data-composer-node-id="${node.id}"${rootStyle}>\n` +
+            `${pad}    <Paragraph>${escaped || "Sample"}</Paragraph>\n` +
+            `${pad}</div>`
+        );
     }
 
     const propEntries = [];
@@ -200,10 +311,31 @@ function renderNodeJsx(node, indent = 0, slotVarBySlotKey = null) {
         }
     }
 
+    // Fill-cells inject a className so components without their own
+    // h-full/w-full defaults (notably Card, Table, DataList) actually
+    // fill the sized cell wrapper. Panel/Container already self-size
+    // but the duplicate classes are harmless. dash-react primitives
+    // all accept and merge a className prop. Skipped when the user
+    // already set a className via props (none of the schemas surface
+    // one today, but the guard future-proofs it).
+    if (wrapperFill && !propEntries.some((e) => e.startsWith("className="))) {
+        propEntries.push(`className="h-full w-full min-h-0"`);
+    }
+
     const propsStr = propEntries.length > 0 ? " " + propEntries.join(" ") : "";
     const childrenSchema = schema.props.children;
     const hasChildrenSlot = Boolean(childrenSchema);
     const childNodes = Array.isArray(node.children) ? node.children : [];
+
+    // Wrap every emitted component in a div carrying its node id so
+    // the preview iframe can map clicks back to a node and outline
+    // the hovered/selected component. dash-react primitives don't
+    // forward unknown props through, so an inline data attribute on
+    // <Heading data-…> gets silently dropped — the wrapper div is
+    // the only reliable place to stash the id. Small layout cost
+    // (one extra block element per component); harmless in installs.
+    const wrap = (inner) =>
+        `${pad}<div data-composer-node-id="${node.id}"${rootStyle}>\n${inner}\n${pad}</div>`;
 
     if (!hasChildrenSlot || childNodes.length === 0) {
         // Components with a required ReactNode `children` prop and
@@ -214,16 +346,20 @@ function renderNodeJsx(node, indent = 0, slotVarBySlotKey = null) {
             childrenSchema.required &&
             childNodes.length === 0
         ) {
-            return `${pad}<${node.type}${propsStr}>Sample</${node.type}>`;
+            return wrap(
+                `${pad}    <${node.type}${propsStr}>Sample</${node.type}>`
+            );
         }
-        return `${pad}<${node.type}${propsStr} />`;
+        return wrap(`${pad}    <${node.type}${propsStr} />`);
     }
 
     const renderedChildren = childNodes
-        .map((c) => renderNodeJsx(c, indent + 1, slotVarBySlotKey))
+        .map((c) => renderNodeJsx(c, indent + 2, slotVarBySlotKey))
         .filter(Boolean)
         .join("\n");
-    return `${pad}<${node.type}${propsStr}>\n${renderedChildren}\n${pad}</${node.type}>`;
+    return wrap(
+        `${pad}    <${node.type}${propsStr}>\n${renderedChildren}\n${pad}    </${node.type}>`
+    );
 }
 
 /**
@@ -399,7 +535,14 @@ export function emitWidgetCode(tree) {
             : "";
 
     const hasWires = slotVarBySlotKey.size > 0;
-    const componentParams = hasWires ? "{ userConfig = {} }" : "";
+    // dash-core's WidgetFactory delivers userConfig fields as FLAT
+    // top-level props (via `{...userPrefs}` in WidgetFactory.js), and
+    // the preview pipeline mirrors that. Reading from `props.foo`
+    // matches the live runtime contract; reading from `userConfig.foo`
+    // (the old shape) silently picks up undefined. The .dash.js
+    // config still declares the userConfig schema for the config form,
+    // but the widget consumes flat props.
+    const componentParams = hasWires ? "props" : "";
     const rootJsx =
         tree && tree.root ? renderNodeJsx(tree.root, 2, slotVarBySlotKey) : "";
 
@@ -450,7 +593,7 @@ export function emitWidgetCode(tree) {
  * with a null provider client and either errors out or silently
  * shows nothing.
  */
-function collectProviderDeclarations(tree) {
+export function collectProviderDeclarations(tree) {
     if (!tree || !tree.root) return [];
     const seen = new Map(); // key = "<class>:<type>" → entry
     const visit = (node) => {
@@ -480,7 +623,7 @@ function collectProviderDeclarations(tree) {
     );
 }
 
-function renderConfigCode({
+export function renderConfigCode({
     widgetName,
     displayName,
     providerDeclarations,

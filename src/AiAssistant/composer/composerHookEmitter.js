@@ -33,8 +33,9 @@
  *
  * Arg bindings (C4 scope):
  *   - kind "literal" → JSON-encoded value emitted inline.
- *   - kind "userConfig" → emitted as `userConfig.<field>` (and
- *     userConfig is destructured from the widget's props).
+ *   - kind "userConfig" → emitted as `props.<field>` (matches
+ *     dash-core's WidgetFactory which spreads userConfig values as
+ *     flat top-level props, not as a `userConfig` object).
  *   - missing/unrecognized → omitted (the IPC handler should
  *     tolerate undefined for non-required args).
  */
@@ -120,8 +121,14 @@ function collectInputStates(tree, getInputBinding, out) {
         if (!node || !node.type) return;
         const binding = getInputBinding(node.type);
         if (!binding) return;
+        // Var name = camelCase component + suffix. Inputs use "Value"
+        // (sliderValue), selection emitters use "Selected"
+        // (menuSelected) so the emitted variable reads sensibly.
+        const stateSuffix = binding.stateSuffix || "Value";
         let base =
-            node.type.charAt(0).toLowerCase() + node.type.slice(1) + "Value";
+            node.type.charAt(0).toLowerCase() +
+            node.type.slice(1) +
+            stateSuffix;
         let varName = base;
         let suffix = 0;
         while (seenNames.has(varName)) {
@@ -131,9 +138,13 @@ function collectInputStates(tree, getInputBinding, out) {
         seenNames.add(varName);
         // A user-set static value becomes the initial state — so
         // `Slider props: { value: 50 }` initializes the slider at
-        // 50 but still tracks subsequent edits via useState.
+        // 50 but still tracks subsequent edits via useState. Skipped
+        // for selection emitters (valueProp null) since they have
+        // no static-value prop to read from.
         const userValue =
-            node.props && node.props[binding.valueProp] !== undefined
+            binding.valueProp != null &&
+            node.props &&
+            node.props[binding.valueProp] !== undefined
                 ? node.props[binding.valueProp]
                 : undefined;
         const initial =
@@ -174,7 +185,8 @@ function toIdent(s) {
  *
  * Binding kinds:
  *   - literal     → JSON-encoded value
- *   - userConfig  → userConfig.<field>
+ *   - userConfig  → props.<field> (flat-prop convention used by
+ *                   dash-core's WidgetFactory and the preview pipeline).
  *   - eventArg    → the literal `eventArg` (the callback handler's
  *                   first parameter — only valid inside a callback
  *                   wire's emitted handler).
@@ -196,7 +208,7 @@ function renderArgBinding(binding, userConfigFields, inputStateByNodeId) {
             return null;
         }
         userConfigFields.add(binding.field);
-        return `userConfig.${binding.field}`;
+        return `props.${binding.field}`;
     }
     if (binding.kind === "eventArg") {
         return "eventArg";
@@ -342,8 +354,16 @@ export function buildHookScaffold(
             hookLines.push(
                 `    const [${entry.varName}, ${entry.setter}] = useState(${entry.defaultValue});`
             );
-            // value/checked binds to the state var.
-            slotVarBySlotKey.set(`${nodeId}:${entry.valueProp}`, entry.varName);
+            // value/checked binds to the state var. Selection emitters
+            // (Menu) have no valueProp — they don't bind the state
+            // back into JSX, the state just exists for downstream
+            // consumers to read.
+            if (entry.valueProp) {
+                slotVarBySlotKey.set(
+                    `${nodeId}:${entry.valueProp}`,
+                    entry.varName
+                );
+            }
         }
     }
 

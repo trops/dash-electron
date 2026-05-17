@@ -87,6 +87,11 @@ export function ComposerPane({
     apiKey = null,
     model = "claude-sonnet-4-20250514",
     backend = "claude-code",
+    // Lifted selection so the host (modal) can drive selection
+    // from the preview iframe's click-to-pick. Optional — when not
+    // provided, the pane manages its own selection internally.
+    selectedNodeId: controlledSelectedNodeId = null,
+    onSelectedNodeChange,
 }) {
     const [tree, setTreeRaw] = useState(() => initialTree || makeEmptyTree());
     // Monotonic id source for new nodes. Seeded from the initial
@@ -183,7 +188,26 @@ export function ComposerPane({
     // C2: when a tree node is selected, the bottom pane flips from
     // palette → property inspector for that node. null = no
     // selection → palette is shown.
-    const [selectedNodeId, setSelectedNodeId] = useState(null);
+    //
+    // Selection is "controlled" when the host supplies
+    // `selectedNodeId` + `onSelectedNodeChange` (so preview-iframe
+    // clicks can drive selection). Otherwise we keep an internal
+    // state for the standalone case (tests, embeds).
+    const [internalSelectedNodeId, setInternalSelectedNodeId] = useState(null);
+    const isControlled = typeof onSelectedNodeChange === "function";
+    const selectedNodeId = isControlled
+        ? controlledSelectedNodeId
+        : internalSelectedNodeId;
+    const setSelectedNodeId = useCallback(
+        (id) => {
+            if (isControlled) {
+                onSelectedNodeChange(id);
+            } else {
+                setInternalSelectedNodeId(id);
+            }
+        },
+        [isControlled, onSelectedNodeChange]
+    );
     const selectedNode = useMemo(
         () => getNodeById(tree, selectedNodeId),
         [tree, selectedNodeId]
@@ -224,7 +248,7 @@ export function ComposerPane({
             // Deselect if the user nuked the node they were editing.
             if (selectedNodeId === nodeId) setSelectedNodeId(null);
         },
-        [tree, emit, selectedNodeId, setTree]
+        [tree, emit, selectedNodeId, setTree, setSelectedNodeId]
     );
 
     const handleChangeProp = useCallback(
@@ -325,7 +349,7 @@ export function ComposerPane({
             setSelectedNodeId(null);
             emit(nextTree);
         },
-        [tree.widgetName, emit, setTree]
+        [tree.widgetName, emit, setTree, setSelectedNodeId]
     );
 
     const toggleCategory = useCallback((cat) => {

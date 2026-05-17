@@ -231,6 +231,15 @@
         if (!currentRoot) return;
         currentRoot.render(buildTree(React, Component, props));
         scheduleRenderStats();
+        // React re-render may have replaced the DOM nodes that
+        // carried the selection marker. Re-apply on the next tick
+        // so the selected component keeps its solid outline across
+        // prop updates.
+        if (composerSelectable && composerSelectedId) {
+            setTimeout(function () {
+                applySelectionMarker(composerSelectedId);
+            }, 0);
+        }
     }
 
     function reRenderCurrent() {
@@ -438,6 +447,18 @@
             mountWidget(payload);
             return;
         }
+        if (type === "bridge:set-selectable") {
+            composerSelectable = !!(payload && payload.selectable);
+            if (composerSelectable) {
+                installComposerSelectableStyles();
+            }
+            return;
+        }
+        if (type === "bridge:set-selected") {
+            composerSelectedId = (payload && payload.nodeId) || null;
+            applySelectionMarker(composerSelectedId);
+            return;
+        }
     });
 
     // === Error reporting (broad catch-all) ===
@@ -594,6 +615,65 @@
             // banner, and the user knows to recheck their setup.
         }
     }
+
+    // === Composer node selection ===
+    // The composer emits every rendered component with a
+    // `data-composer-node-id="node-N"` attribute. We add a hover
+    // outline + click handler so users can pick a component in the
+    // live preview and the host's inspector jumps to that node.
+    // Activates only when the host opts in via bridge:set-selectable
+    // (sent by the modal when in Compose mode), so the same iframe
+    // shell stays inert for the chat/build flow.
+    var composerSelectable = false;
+    var composerSelectedId = null;
+    function installComposerSelectableStyles() {
+        if (document.getElementById("composer-selectable-style")) return;
+        var style = document.createElement("style");
+        style.id = "composer-selectable-style";
+        style.textContent =
+            "[data-composer-node-id] { cursor: pointer; }\n" +
+            "[data-composer-node-id]:hover {\n" +
+            "    outline: 2px dashed rgba(99, 102, 241, 0.7);\n" +
+            "    outline-offset: 2px;\n" +
+            "}\n" +
+            "[data-composer-node-id][data-composer-selected='true'] {\n" +
+            "    outline: 2px solid rgb(99, 102, 241);\n" +
+            "    outline-offset: 2px;\n" +
+            "}\n";
+        document.head.appendChild(style);
+    }
+    function findComposerNodeId(target) {
+        if (!target || typeof target.closest !== "function") return null;
+        var el = target.closest("[data-composer-node-id]");
+        return el ? el.getAttribute("data-composer-node-id") : null;
+    }
+    function applySelectionMarker(id) {
+        var prev = document.querySelectorAll("[data-composer-selected='true']");
+        for (var i = 0; i < prev.length; i++) {
+            prev[i].removeAttribute("data-composer-selected");
+        }
+        if (!id) return;
+        var nodes = document.querySelectorAll(
+            '[data-composer-node-id="' + id + '"]'
+        );
+        for (var j = 0; j < nodes.length; j++) {
+            nodes[j].setAttribute("data-composer-selected", "true");
+        }
+    }
+    document.addEventListener(
+        "click",
+        function (event) {
+            if (!composerSelectable) return;
+            var id = findComposerNodeId(event.target);
+            if (!id) return;
+            event.preventDefault();
+            event.stopPropagation();
+            composerSelectedId = id;
+            applySelectionMarker(id);
+            postToHost("bridge:composer-clicked", { nodeId: id });
+        },
+        true
+    );
 
     // === Handshake ===
     function announceReady() {

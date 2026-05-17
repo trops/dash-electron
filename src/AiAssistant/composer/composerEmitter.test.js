@@ -33,6 +33,7 @@ import {
     setSlotArg,
     clearSlotWire,
     getNodeById,
+    renderNodeJsx,
 } from "./composerEmitter";
 
 describe("makeEmptyTree", () => {
@@ -97,7 +98,7 @@ describe("emitWidgetCode — minimal cases", () => {
         expect(componentCode).toContain(
             "export default function ComposedWidget()"
         );
-        expect(componentCode).toContain("<Panel />");
+        expect(componentCode).toMatch(/<Panel\s[^>]*\/>/);
         expect(configCode).toContain('component: "ComposedWidget"');
         expect(configCode).toContain('workspace: "ai-built"');
     });
@@ -118,6 +119,46 @@ describe("emitWidgetCode — minimal cases", () => {
         });
         expect(componentCode).toContain("<div />");
     });
+
+    test("renderNodeJsx({ wrapperFill: true }) emits the fill style on any node, not just root — used by the grid emitter for every leaf cell", () => {
+        const node = {
+            id: "cell-7",
+            type: "Heading",
+            props: { title: "Hi" },
+            children: [],
+        };
+        const out = renderNodeJsx(node, 0, null, { wrapperFill: true });
+        expect(out).toMatch(
+            /<div data-composer-node-id="cell-7" style=\{\{ height: "100%", width: "100%", display: "flex", flexDirection: "column" \}\}>/
+        );
+        const outNoFill = renderNodeJsx(node, 0, null);
+        expect(outNoFill).toContain('<div data-composer-node-id="cell-7">');
+        expect(outNoFill).not.toMatch(/cell-7" style=/);
+    });
+
+    test("root wrapper carries full-size flex style; non-root wrappers don't", () => {
+        // The root wrapper has to give percentage-height components
+        // (Panel defaults to h-full) a sized parent to resolve
+        // against — otherwise a single-Panel composition collapses
+        // to content height in the preview canvas. Non-root wrappers
+        // stay unstyled so children size against their parent
+        // component instead of the composer plumbing.
+        const tree = makeEmptyTree();
+        const withChild = insertChild(
+            tree,
+            "root",
+            { type: "Heading", props: { title: "Hi" } },
+            1
+        );
+        const { componentCode } = emitWidgetCode(withChild);
+        expect(componentCode).toMatch(
+            /<div data-composer-node-id="root" style=\{\{ height: "100%", width: "100%", display: "flex", flexDirection: "column" \}\}>/
+        );
+        expect(componentCode).toContain('<div data-composer-node-id="node-1">');
+        expect(componentCode).not.toMatch(
+            /<div data-composer-node-id="node-1" style=/
+        );
+    });
 });
 
 describe("emitWidgetCode — props", () => {
@@ -130,7 +171,7 @@ describe("emitWidgetCode — props", () => {
             1
         );
         const { componentCode } = emitWidgetCode(next);
-        expect(componentCode).toContain('<Heading title="Hello there" />');
+        expect(componentCode).toContain('<Heading title="Hello there"');
     });
 
     test("escapes embedded double quotes in string props", () => {
@@ -142,7 +183,7 @@ describe("emitWidgetCode — props", () => {
             1
         );
         const { componentCode } = emitWidgetCode(next);
-        expect(componentCode).toContain('<Heading title="He said \\"hi\\"" />');
+        expect(componentCode).toContain('<Heading title="He said \\"hi\\""');
     });
 
     test("renders number and boolean props as brace expressions", () => {
@@ -198,7 +239,7 @@ describe("emitWidgetCode — required-prop placeholders", () => {
         // expr for a `string` type is the quoted literal "Sample".
         // Bare-attribute form (title="…") is reserved for user-set
         // string props rendered via renderPropLiteral.
-        expect(componentCode).toContain('<Heading title={"Sample"} />');
+        expect(componentCode).toContain('<Heading title={"Sample"}');
     });
 
     test("fills required Array prop with []", () => {
@@ -228,7 +269,7 @@ describe("emitWidgetCode — required-prop placeholders", () => {
         // Paragraph has children: ReactNode, required.
         const next = insertChild(tree, "root", { type: "Paragraph" }, 1);
         const { componentCode } = emitWidgetCode(next);
-        expect(componentCode).toContain("<Paragraph>Sample</Paragraph>");
+        expect(componentCode).toMatch(/<Paragraph[^>]*>Sample<\/Paragraph>/);
     });
 });
 
@@ -266,9 +307,9 @@ describe("emitWidgetCode — nesting and imports", () => {
             2
         );
         const { componentCode } = emitWidgetCode(t3);
-        expect(componentCode).toContain("<Panel>");
-        expect(componentCode).toContain("<Card>");
-        expect(componentCode).toContain('<Heading title="Inside the card" />');
+        expect(componentCode).toMatch(/<Panel[^>]*>/);
+        expect(componentCode).toMatch(/<Card[^>]*>/);
+        expect(componentCode).toContain('<Heading title="Inside the card"');
         expect(componentCode).toContain("</Card>");
         expect(componentCode).toContain("</Panel>");
     });
@@ -366,7 +407,7 @@ describe("updateNodeProp", () => {
         const t2 = insertChild(tree, "root", { type: "Heading" }, 1);
         const t3 = updateNodeProp(t2, "node-1", "title", "Hello");
         const { componentCode } = emitWidgetCode(t3);
-        expect(componentCode).toContain('<Heading title="Hello" />');
+        expect(componentCode).toContain('<Heading title="Hello"');
     });
 });
 
@@ -472,11 +513,15 @@ describe("emitWidgetCode — hook scaffolding for configured wires (C4)", () => 
         );
         expect(componentCode).toContain("window.mainApi.algolia.listIndices");
         // Wired prop binds to the slot var instead of [] placeholder.
-        expect(componentCode).toContain("<Table data={data} columns={[]} />");
-        // Component now takes a userConfig prop because at least one
-        // wire is configured (even though no userConfig args set).
+        expect(componentCode).toMatch(
+            /<Table data=\{data\} columns=\{\[\]\}[^>]*\/>/
+        );
+        // Component now takes a `props` parameter because at least
+        // one wire is configured. The flat-prop shape matches what
+        // dash-core's WidgetFactory delivers (userConfig values
+        // spread as top-level props).
         expect(componentCode).toContain(
-            "export default function WiredWidget({ userConfig = {} })"
+            "export default function WiredWidget(props)"
         );
     });
 
@@ -543,7 +588,7 @@ describe("emitWidgetCode — hook scaffolding for configured wires (C4)", () => 
                 query: { kind: "userConfig", field: "searchQuery" },
             },
         });
-        const { configCode } = emitWidgetCode(t3);
+        const { componentCode, configCode } = emitWidgetCode(t3);
         // Provider declaration emitted.
         expect(configCode).toMatch(/providers:\s*\[/);
         expect(configCode).toContain('type: "algolia"');
@@ -555,6 +600,12 @@ describe("emitWidgetCode — hook scaffolding for configured wires (C4)", () => 
         expect(configCode).toContain('"searchQuery"');
         expect(configCode).toContain('displayName: "Index Name"');
         expect(configCode).toContain('displayName: "Search Query"');
+        // Component code references the bindings via flat props
+        // (matches dash-core WidgetFactory's `{...userPrefs}` spread).
+        // Without this, the wired call resolves `undefined` and the
+        // preview / installed widget silently fetches with nothing.
+        expect(componentCode).toContain("indexName: props.indexName");
+        expect(componentCode).toContain("query: props.searchQuery");
     });
 
     test("enriched .dash.js: pipe wires don't duplicate the source's provider declaration", () => {

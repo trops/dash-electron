@@ -4,6 +4,59 @@ import {
     getInputBinding,
 } from "../dashReactComponentSchemas";
 import { WirePicker, WiredSlotSummary, PipedSlotSummary } from "./WirePicker";
+import { PROVIDER_API_REGISTRY } from "../providerApiRegistry";
+import { getKnownToolArgs } from "./mcpKnownTools";
+
+const CREDENTIAL_AUTO_ARGS = new Set([
+    "providerHash",
+    "dashboardAppId",
+    "providerName",
+]);
+
+// Heuristic for "this arg is fed by the event payload" when wiring
+// a callback (onChange/onClick/onInput). SearchInput.onChange →
+// algolia.search has `query` as the typical event-payload arg, so
+// pre-binding it to {kind:"eventArg"} matches user expectation:
+// the value the user typed becomes the search query without them
+// having to flip the binding mode by hand.
+const EVENT_ARG_NAMES = new Set([
+    "query",
+    "value",
+    "text",
+    "search",
+    "input",
+    "term",
+]);
+
+function getMethodArgs(wire) {
+    if (!wire || !wire.providerType || !wire.method) return [];
+    if (wire.providerClass === "mcp") {
+        return getKnownToolArgs(wire.providerType, wire.method) || [];
+    }
+    const reg =
+        PROVIDER_API_REGISTRY[wire.providerType] &&
+        PROVIDER_API_REGISTRY[wire.providerType][wire.method];
+    if (!reg || !Array.isArray(reg.args)) return [];
+    return reg.args.filter((a) => !CREDENTIAL_AUTO_ARGS.has(a));
+}
+
+/**
+ * Pre-populate args on a freshly-picked callback wire so common
+ * "event payload" args (query/value/text/…) default to eventArg
+ * instead of an unset literal. The user is already in callback
+ * context — the only reason they wired the callback at all is to
+ * react to the event, so eventArg is the typical binding.
+ */
+function applyCallbackArgDefaults(spec, isCallbackProp) {
+    if (!isCallbackProp || !spec) return spec;
+    const args = { ...(spec.args || {}) };
+    for (const argName of getMethodArgs(spec)) {
+        if (EVENT_ARG_NAMES.has(argName) && !args[argName]) {
+            args[argName] = { kind: "eventArg" };
+        }
+    }
+    return { ...spec, args };
+}
 
 /**
  * PropertyInspector — Compose-mode Stage 2 surface.
@@ -104,31 +157,48 @@ export function PropertyInspector({
                         This component has no editable props.
                     </div>
                 )}
-                {propRows.map(([propName, propSchema]) => (
-                    <PropRow
-                        key={propName}
-                        nodeId={node.id}
-                        propName={propName}
-                        propSchema={propSchema}
-                        isDataSlot={dataSlotSet.has(propName)}
-                        isAutoValueProp={
-                            inputBinding && inputBinding.valueProp === propName
-                        }
-                        staticValue={
-                            node.props ? node.props[propName] : undefined
-                        }
-                        wireSpec={node.wires ? node.wires[propName] : undefined}
-                        providers={providers}
-                        tree={tree}
-                        onChangeProp={onChangeProp}
-                        onSetSlotMode={onSetSlotMode}
-                        onSetSlotWire={onSetSlotWire}
-                        onClearSlotWire={onClearSlotWire}
-                        onSetSlotPipe={onSetSlotPipe}
-                        onSetSlotArg={onSetSlotArg}
-                        onSetSlotFieldMap={onSetSlotFieldMap}
-                    />
-                ))}
+                {propRows.map(([propName, propSchema]) => {
+                    const wireSpec = node.wires
+                        ? node.wires[propName]
+                        : undefined;
+                    // Auto-state covers two cases:
+                    //   - inputs: valueProp reads from state, the row
+                    //     has no user-editable static value.
+                    //   - selection emitters (Menu): changeProp writes
+                    //     to state via the auto-allocated setter.
+                    //     User can still wire onSelect explicitly to
+                    //     override; in that case auto-state is hidden
+                    //     and the wire picker shows instead.
+                    const isAutoStateProp =
+                        inputBinding &&
+                        ((inputBinding.valueProp &&
+                            inputBinding.valueProp === propName) ||
+                            (inputBinding.changeProp === propName &&
+                                !wireSpec));
+                    return (
+                        <PropRow
+                            key={propName}
+                            nodeId={node.id}
+                            propName={propName}
+                            propSchema={propSchema}
+                            isDataSlot={dataSlotSet.has(propName)}
+                            isAutoValueProp={isAutoStateProp}
+                            staticValue={
+                                node.props ? node.props[propName] : undefined
+                            }
+                            wireSpec={wireSpec}
+                            providers={providers}
+                            tree={tree}
+                            onChangeProp={onChangeProp}
+                            onSetSlotMode={onSetSlotMode}
+                            onSetSlotWire={onSetSlotWire}
+                            onClearSlotWire={onClearSlotWire}
+                            onSetSlotPipe={onSetSlotPipe}
+                            onSetSlotArg={onSetSlotArg}
+                            onSetSlotFieldMap={onSetSlotFieldMap}
+                        />
+                    );
+                })}
             </div>
         </div>
     );
@@ -161,7 +231,12 @@ function PropRow({
     // Callback props auto-enter wire mode the first time the user
     // sees them; the inspector then renders the picker. The mode
     // toggle is suppressed.
-    const mode = isCallbackProp || isWired ? "wire" : "static";
+    // Data slots default to wire mode — the whole point of a data
+    // slot is "this gets its value from a provider/pipe." Static
+    // values are the exception (typically a placeholder, like
+    // hand-written options array). User can still toggle to static
+    // via the segmented control if they want a literal value.
+    const mode = isCallbackProp || isWired || isDataSlot ? "wire" : "static";
     // Method wires need a method; callback wires don't need a
     // provider instance to be considered "configured" (the install
     // flow surfaces a missing-provider banner downstream).
@@ -180,11 +255,16 @@ function PropRow({
     // what's there and one click opens the editor. Without this the
     // SearchInput inspector spills the entire provider list inline
     // before the user has expressed any intent.
+    // Auto-state props (input value, Menu.onSelect, …) don't need
+    // user attention by default — the composer already handled them
+    // with a useState / setter pair. Keep them collapsed; expanding
+    // still shows the picker so the user can opt into an explicit
+    // wire if they want to override.
     const needsAttention =
         (mode === "static" &&
             propSchema.required &&
             (staticValue === undefined || staticValue === "")) ||
-        (mode === "wire" && !isConfiguredWire && !isPipe);
+        (mode === "wire" && !isAutoValueProp && !isConfiguredWire && !isPipe);
     const [expanded, setExpanded] = useState(needsAttention);
 
     const summary = useMemo(() => {
@@ -379,10 +459,17 @@ function PropRow({
                                 // (non-function props). Callbacks always
                                 // fire; they're never receivers.
                                 allowPipe={!isCallbackProp}
-                                onPick={(spec) =>
-                                    onSetSlotWire &&
-                                    onSetSlotWire(nodeId, propName, spec)
-                                }
+                                onPick={(spec) => {
+                                    if (!onSetSlotWire) return;
+                                    onSetSlotWire(
+                                        nodeId,
+                                        propName,
+                                        applyCallbackArgDefaults(
+                                            spec,
+                                            isCallbackProp
+                                        )
+                                    );
+                                }}
                                 onPipe={(sourceNodeId, sourcePropName) =>
                                     onSetSlotPipe &&
                                     onSetSlotPipe(
