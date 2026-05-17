@@ -1326,15 +1326,16 @@ ${
     const isRemixMode = !!effectiveEditContext?.originalWidgetId;
 
     // Chat-pane mode ("build" = AI generates widgets, "discover" = AI
-    // searches the registry, "compose" = stepwise composer with no chat).
-    // Resets to "build" each time the modal opens.
-    const [chatMode, setChatMode] = useState("build");
+    // searches the registry, "compose" = stepwise composer with no
+    // chat). Resets to "compose" each time the modal opens — it's
+    // the more reliable surface today; Build remains one click away.
+    const [chatMode, setChatMode] = useState("compose");
     // Mirror of chatMode in a ref so the chat-messages poller (which
     // stays mounted across mode changes) can read the current mode
     // without resubscribing on every flip. Required so the
     // "messages.length===0 + hadActivity" New-Chat reset branch can
     // skip compose mode, which intentionally never writes messages.
-    const chatModeRef = useRef("build");
+    const chatModeRef = useRef("compose");
     useEffect(() => {
         chatModeRef.current = chatMode;
     }, [chatMode]);
@@ -1505,10 +1506,13 @@ ${
         widgetScope === "ai-built" ||
         (registryUsername && widgetScope === registryUsername);
 
-    // Reset the chat mode toggle to "build" each time the modal reopens.
+    // Reset the chat mode toggle to "compose" each time the modal
+    // reopens. Compose is the more reliable surface today (build
+    // depends on the AI emitting compilable code first try); the
+    // user can flip to Build via the tab strip if they want chat.
     useEffect(() => {
         if (isOpen) {
-            setChatMode("build");
+            setChatMode("compose");
             setDiscoverResults([]);
             lastDiscoverQueryRef.current = "";
         }
@@ -5219,6 +5223,9 @@ ${
                                         setComposerSelectedNodeId
                                     }
                                     providers={providers}
+                                    apiKey={apiKey}
+                                    model={model}
+                                    backend={preferredBackend}
                                     onEmit={(code) => {
                                         setDetectedCode({
                                             componentCode: code.componentCode,

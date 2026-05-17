@@ -32,12 +32,16 @@ import {
     collectProviderDeclarations,
     renderConfigCode,
 } from "./composerEmitter";
-import { walkLeafCells, isContainer } from "./gridLayout";
+import {
+    walkLeafCells,
+    isContainer,
+    cellFillsRow,
+    rowHasFillingCell,
+} from "./gridLayout";
 import { buildHookScaffold } from "./composerHookEmitter";
 import {
     DASH_REACT_COMPONENT_SCHEMAS,
     getInputBinding,
-    componentFillsCell,
 } from "../dashReactComponentSchemas";
 import { PROVIDER_API_REGISTRY } from "../providerApiRegistry";
 
@@ -148,31 +152,6 @@ export function emitGridWidgetCode(grid) {
     });
 
     return { componentCode, configCode };
-}
-
-/**
- * Decide whether a cell wants to fill (vertically) the row it sits
- * in. Containers (Panel/Card/Container) and data-display components
- * (Table/DataList) want fill; primitives like Heading/Tag/Button stay
- * at content height. Empty cells don't drive row sizing — they take
- * whatever the row is. See `componentFillsCell` in the schema.
- */
-function cellFillsRow(grid, cell) {
-    if (!cell) return false;
-    const effectiveKind =
-        cell.kind === "container" && cell.type && !isContainer(cell.type)
-            ? "leaf"
-            : cell.kind;
-    if (effectiveKind === "empty") return false;
-    if (effectiveKind === "container") return true;
-    return componentFillsCell(cell.type);
-}
-
-function rowHasFillingCell(grid, row) {
-    for (const cellId of row.cells) {
-        if (cellFillsRow(grid, grid.cells[cellId])) return true;
-    }
-    return false;
 }
 
 /**

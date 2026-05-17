@@ -159,15 +159,15 @@ export function PropertyInspector({
             className="flex flex-col h-full min-h-0"
             data-testid={`composer-inspector-${node.id}`}
         >
-            <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 shrink-0">
-                <div className="text-xs text-gray-300">
+            <div className="flex items-center justify-between px-3 py-3 border-b border-white/10 shrink-0">
+                <div className="text-sm text-gray-300">
                     <span className="text-gray-500">Editing </span>
                     <span className="text-gray-200">{node.type}</span>
                 </div>
                 <button
                     type="button"
                     onClick={onClose}
-                    className="text-xs text-indigo-400 hover:text-indigo-200"
+                    className="text-sm text-indigo-400 hover:text-indigo-200"
                     data-testid="composer-inspector-close"
                 >
                     ← Back to palette
@@ -338,25 +338,25 @@ function PropRow({
             <button
                 type="button"
                 onClick={() => setExpanded((v) => !v)}
-                className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-white/5"
+                className="w-full flex items-center justify-between px-3 py-3 text-left hover:bg-white/5"
                 data-testid={`composer-prop-toggle-${propName}`}
             >
-                <span className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-gray-500 text-[10px]">
+                <span className="flex items-center gap-2 min-w-0">
+                    <span className="text-gray-500 text-xs">
                         {expanded ? "▾" : "▸"}
                     </span>
-                    <span className="text-[11px] text-gray-300 font-mono">
+                    <span className="text-sm text-gray-300 font-mono">
                         {propName}
                         {propSchema.required && (
                             <span className="text-red-400 ml-0.5">*</span>
                         )}
                     </span>
-                    <span className="text-[10px] text-gray-500">
+                    <span className="text-xs text-gray-500">
                         ({propSchema.type})
                     </span>
                 </span>
                 <span
-                    className={`text-[10px] truncate ml-2 ${
+                    className={`text-xs truncate ml-2 ${
                         needsAttention
                             ? "text-amber-400"
                             : isConfiguredWire || isPipe
@@ -374,7 +374,7 @@ function PropRow({
                 <div className="px-2 pb-2 space-y-1.5">
                     {isDataSlot && !isCallbackProp && (
                         <div className="flex items-center justify-end mb-1">
-                            <div className="flex items-center gap-0.5 text-[10px] bg-gray-800 border border-gray-700 rounded p-0.5">
+                            <div className="flex items-center gap-0.5 text-xs bg-gray-800 border border-gray-700 rounded p-0.5">
                                 <button
                                     type="button"
                                     onClick={() =>
@@ -534,7 +534,7 @@ function StaticValueEditor({
 
     if (type === "function") {
         return (
-            <div className="text-[11px] px-2 py-1.5 rounded border border-gray-700 bg-gray-900/50 text-gray-500 italic">
+            <div className="text-sm px-2 py-1.5 rounded border border-gray-700 bg-gray-900/50 text-gray-500 italic">
                 (callback — set this in code, not the composer)
             </div>
         );
@@ -542,7 +542,7 @@ function StaticValueEditor({
 
     if (type === "ReactNode") {
         return (
-            <div className="text-[11px] px-2 py-1.5 rounded border border-gray-700 bg-gray-900/50 text-gray-500 italic">
+            <div className="text-sm px-2 py-1.5 rounded border border-gray-700 bg-gray-900/50 text-gray-500 italic">
                 (rendered children — nest components in the tree)
             </div>
         );
@@ -580,7 +580,7 @@ function StaticValueEditor({
                         }
                     }
                 }}
-                className="w-full px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
                 data-testid={`composer-input-${propName}`}
             />
         );
@@ -609,7 +609,7 @@ function StaticValueEditor({
                     e.target.value === "" ? undefined : e.target.value
                 )
             }
-            className="w-full px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+            className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
             data-testid={`composer-input-${propName}`}
         />
     );
@@ -654,15 +654,15 @@ function JsonTextarea({ nodeId, propName, value, onChangeProp }) {
                 onBlur={apply}
                 rows={4}
                 placeholder="[ ]"
-                className="w-full px-2 py-1 text-xs font-mono bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 text-sm font-mono bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
                 data-testid={`composer-input-${propName}`}
             />
             {error && (
-                <div className="text-[10px] text-red-400 mt-1">
+                <div className="text-xs text-red-400 mt-1">
                     JSON parse error: {error}
                 </div>
             )}
-            <div className="text-[10px] text-gray-500 mt-0.5">
+            <div className="text-xs text-gray-500 mt-0.5">
                 JSON — applied when the field loses focus
             </div>
         </div>
@@ -693,10 +693,10 @@ function VariantPicker({ nodeId, currentType, onChangeType }) {
             className="flex items-center gap-2"
             data-testid={`composer-variant-picker-${nodeId}`}
         >
-            <span className="text-[10px] uppercase tracking-wide text-gray-500">
+            <span className="text-xs uppercase tracking-wide text-gray-500">
                 Style
             </span>
-            <div className="flex items-center gap-0.5 text-[10px] bg-gray-800 border border-gray-700 rounded p-0.5">
+            <div className="flex items-center gap-0.5 text-xs bg-gray-800 border border-gray-700 rounded p-0.5">
                 {variants.map((name, idx) => {
                     const label = idx === 0 ? "Original" : `Style ${idx + 1}`;
                     const isActive = name === currentType;

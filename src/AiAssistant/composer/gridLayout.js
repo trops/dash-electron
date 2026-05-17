@@ -44,7 +44,10 @@
  * but the per-wire logic is unchanged.
  */
 
-import { getComponentSchema } from "../dashReactComponentSchemas";
+import {
+    getComponentSchema,
+    componentFillsCell,
+} from "../dashReactComponentSchemas";
 
 /**
  * Build a fresh grid containing a single empty row with one empty
@@ -85,9 +88,74 @@ export function isContainer(componentName) {
     return Boolean(schema && schema.props && schema.props.children);
 }
 
+/**
+ * Whether a cell should take the full vertical room of its row
+ * (rather than sit at content height). True for containers and
+ * data-display components flagged `fillsCell` in the schema
+ * (Panel/Card/Container/Table/DataList/Menu). Empty cells don't
+ * drive row sizing.
+ *
+ * Lives here (not in gridEmitter) so both the emitter AND the
+ * editor (`GridEditor`) can apply the same rule — keeps the
+ * editor preview visually faithful to what the user will see in
+ * the rendered widget.
+ */
+export function cellFillsRow(grid, cell) {
+    if (!cell) return false;
+    const effectiveKind =
+        cell.kind === "container" && cell.type && !isContainer(cell.type)
+            ? "leaf"
+            : cell.kind;
+    if (effectiveKind === "empty") return false;
+    if (effectiveKind === "container") return true;
+    return componentFillsCell(cell.type);
+}
+
+/**
+ * Whether any cell in `row` is a filling cell. The row should claim
+ * `flex-1` (taking remaining row-stack space) when true; otherwise
+ * it sits at content height. Same predicate used by gridEmitter and
+ * GridEditor.
+ */
+export function rowHasFillingCell(grid, row) {
+    if (!row || !Array.isArray(row.cells)) return false;
+    for (const cellId of row.cells) {
+        if (cellFillsRow(grid, grid.cells && grid.cells[cellId])) return true;
+    }
+    return false;
+}
+
 function nextCellId(grid) {
     const n = grid._nextCellId || 1;
     return { id: `cell-${n}`, next: n + 1 };
+}
+
+/**
+ * True when the grid is the `makeEmptyGrid` skeleton — one root row
+ * with one empty cell and no nested grids. Used by the composer to
+ * decide whether to show the quick-start onboarding pane (empty) or
+ * the regular grid editor (anything placed).
+ *
+ * Robust to: extra top-level rows whose cells are all empty
+ * placeholders too. So a user who clicks "+ Row" a few times but
+ * doesn't drop any component still sees the onboarding pane —
+ * that's the right call (nothing to lose).
+ */
+export function isGridEmpty(grid) {
+    if (!grid || !grid.rootGridId) return false;
+    const root = grid.grids && grid.grids[grid.rootGridId];
+    if (!root || !Array.isArray(root.rows)) return false;
+    // Any non-root grid present means a container was placed → not empty.
+    const gridIds = Object.keys(grid.grids || {});
+    if (gridIds.length > 1) return false;
+    // Every cell referenced by the root grid must be an empty placeholder.
+    for (const row of root.rows) {
+        for (const cellId of row.cells || []) {
+            const cell = grid.cells && grid.cells[cellId];
+            if (!cell || cell.kind !== "empty") return false;
+        }
+    }
+    return true;
 }
 
 /**
