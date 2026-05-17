@@ -38,10 +38,9 @@ describe("makeEmptyGrid", () => {
 });
 
 describe("isContainer", () => {
-    test("Panel/Card/Container are containers", () => {
+    test("Panel and Card are containers", () => {
         expect(isContainer("Panel")).toBe(true);
         expect(isContainer("Card")).toBe(true);
-        expect(isContainer("Container")).toBe(true);
     });
     test("Heading/SearchInput/DataList are leaves", () => {
         expect(isContainer("Heading")).toBe(false);

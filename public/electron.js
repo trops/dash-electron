@@ -110,6 +110,7 @@ if (!process.env.ESBUILD_BINARY_PATH) {
 const isDev = process.defaultApp || process.env.NODE_ENV === "development";
 const pe = require("pluggable-electron/main");
 const logger = require("./logger");
+const algoliaOps = require("./algoliaOps.cjs");
 
 const { updateElectronApp } = require("update-electron-app");
 
@@ -828,8 +829,7 @@ function createWindow() {
                         dashboardAppId,
                         providerName
                     );
-                    const index = client.initIndex(indexName);
-                    return await index.getSettings();
+                    return await algoliaOps.getSettings(client, { indexName });
                 }
             )
         );
@@ -851,8 +851,10 @@ function createWindow() {
                     dashboardAppId,
                     providerName
                 );
-                const index = client.initIndex(indexName);
-                const result = await index.setSettings(settings);
+                const result = await algoliaOps.setSettings(client, {
+                    indexName,
+                    settings,
+                });
                 responseCache.invalidatePrefix("algolia-get-settings:");
                 return result;
             }
@@ -885,11 +887,11 @@ function createWindow() {
                         dashboardAppId,
                         providerName
                     );
-                    const index = client.initIndex(indexName);
-                    return await index.searchRules({
-                        query: query || "",
-                        ...(hitsPerPage != null ? { hitsPerPage } : {}),
-                        ...(page != null ? { page } : {}),
+                    return await algoliaOps.searchRules(client, {
+                        indexName,
+                        query,
+                        hitsPerPage,
+                        page,
                     });
                 }
             )
@@ -906,8 +908,10 @@ function createWindow() {
                     dashboardAppId,
                     providerName
                 );
-                const index = client.initIndex(indexName);
-                const result = await index.saveRule(rule);
+                const result = await algoliaOps.saveRule(client, {
+                    indexName,
+                    rule,
+                });
                 responseCache.invalidatePrefix("algolia-search-rules:");
                 return result;
             }
@@ -930,8 +934,10 @@ function createWindow() {
                     dashboardAppId,
                     providerName
                 );
-                const index = client.initIndex(indexName);
-                const result = await index.deleteRule(objectID);
+                const result = await algoliaOps.deleteRule(client, {
+                    indexName,
+                    objectID,
+                });
                 responseCache.invalidatePrefix("algolia-search-rules:");
                 return result;
             }

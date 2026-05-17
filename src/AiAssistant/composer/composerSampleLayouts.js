@@ -166,6 +166,22 @@ export const INTENTS = [
             "view / action neatly. Suggest a flexible layout with " +
             "containers (Panel / Card) the user can fill in.",
     },
+    {
+        id: "provider",
+        label: "Provider",
+        icon: "📡",
+        tagline:
+            "Start from a service — Slack, Algolia, Google Drive, " +
+            "GitHub, etc.",
+        // aiHint is overridden at scaffold time by the chosen
+        // provider's name (see QuickStartPane.buildSystemPrompt) —
+        // this string is a fallback if the user lands on the AI
+        // form without picking a provider first.
+        aiHint:
+            "The user wants a widget that connects to a specific " +
+            "external service. Suggest layouts whose data slots are " +
+            "obviously meant to be wired to provider tools.",
+    },
 ];
 
 export const SAMPLE_LAYOUTS = [

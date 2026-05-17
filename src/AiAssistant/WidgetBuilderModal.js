@@ -177,6 +177,7 @@ function PreviewProviderPicker({
                                     )
                                 }
                                 className="flex-1 max-w-xs px-2 py-1 bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
+                                data-testid={`preview-provider-select-${decl.type}`}
                             >
                                 <option value="">— Select a provider —</option>
                                 {options.map((p) => (
@@ -359,6 +360,7 @@ function PreviewTestInputsForm({
                         type="button"
                         onClick={handleApply}
                         disabled={!isDirtyLocal}
+                        data-testid="preview-test-inputs-apply"
                         className={
                             isDirtyLocal
                                 ? "text-[11px] px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white"
@@ -379,6 +381,7 @@ function PreviewTestInputsForm({
                         onChange: (e) => setLocal(fieldName, e.target.value),
                         className:
                             "flex-1 max-w-md px-2 py-1 bg-gray-800/70 border border-gray-700/50 rounded text-xs text-gray-200 focus:border-indigo-500/50 focus:outline-none",
+                        "data-testid": `preview-test-input-${fieldName}`,
                     };
                     let input;
                     if (t === "boolean") {
@@ -2403,13 +2406,28 @@ ${
                         }
                     }
                     setPreviewWidgetDefaults(defaults);
-                    // Reset the test-inputs form to the new defaults
-                    // so a stale value from a previous widget can't
-                    // leak into this one (e.g. the previous widget had
-                    // an `indexName` field set to "airports", new
-                    // widget has none — we don't want "airports"
-                    // ghosting into the new widget's props).
-                    setPreviewTestInputs({});
+                    // Preserve typed test-input values whose key still
+                    // exists in the new userConfig schema; drop only
+                    // keys the new schema doesn't have. Recompile fires
+                    // on every grid edit / streamed-AI keystroke, so a
+                    // blanket reset wiped values the user had just typed
+                    // into unrelated fields (e.g. editing a Heading
+                    // would clear the `indexName` they entered for the
+                    // SearchInput's Algolia wire).
+                    setPreviewTestInputs((prev) => {
+                        const next = {};
+                        for (const key of Object.keys(prev || {})) {
+                            if (
+                                Object.prototype.hasOwnProperty.call(
+                                    userConfig,
+                                    key
+                                )
+                            ) {
+                                next[key] = prev[key];
+                            }
+                        }
+                        return next;
+                    });
 
                     // Provider API hallucination guardrail (slice
                     // 17b.12). Walk the AI's component code looking

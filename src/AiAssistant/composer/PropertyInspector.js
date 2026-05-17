@@ -62,18 +62,34 @@ function getMethodArgs(wire) {
 }
 
 /**
- * Pre-populate args on a freshly-picked callback wire so common
- * "event payload" args (query/value/text/…) default to eventArg
- * instead of an unset literal. The user is already in callback
- * context — the only reason they wired the callback at all is to
- * react to the event, so eventArg is the typical binding.
+ * Pre-populate args on a freshly-picked wire so the user doesn't
+ * fall into the "I wired the method but the call has empty strings"
+ * trap. Two heuristics:
+ *
+ *   - Event-payload arg names (query/value/text/…) on a CALLBACK
+ *     wire bind to {kind: "eventArg"} — the typed value flows
+ *     straight into the method call.
+ *   - Every OTHER arg binds to {kind: "userConfig", field: argName}
+ *     — surfaces as an input in the widget's userConfig form (and
+ *     in the modal's Test inputs panel) so the user gets a labeled
+ *     place to type the value once. Without this default the arg
+ *     stays unbound and the IPC fires with literal "" / undefined,
+ *     which is what burned us with algolia.searchRules.indexName.
+ *
+ * The user can still override either binding by clicking
+ * literal/userConfig/eventArg in the inspector — these are just
+ * sensible defaults, not constraints.
  */
 function applyCallbackArgDefaults(spec, isCallbackProp) {
-    if (!isCallbackProp || !spec) return spec;
+    if (!spec) return spec;
     const args = { ...(spec.args || {}) };
     for (const argName of getMethodArgs(spec)) {
-        if (EVENT_ARG_NAMES.has(argName) && !args[argName]) {
+        if (args[argName]) continue;
+        const isEventPayload = isCallbackProp && EVENT_ARG_NAMES.has(argName);
+        if (isEventPayload) {
             args[argName] = { kind: "eventArg" };
+        } else {
+            args[argName] = { kind: "userConfig", field: argName };
         }
     }
     return { ...spec, args };

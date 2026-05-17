@@ -11,6 +11,14 @@ import {
     isContainer,
 } from "./gridLayout";
 import { INTENTS, getSampleLayoutsForIntent } from "./composerSampleLayouts";
+import { useWirableTypes } from "./wirableTypes";
+
+// Stable empty-object reference for the providers default. Without
+// this, omitting the prop creates a fresh `{}` per render — and
+// useWirableTypes' useEffect depends on providers identity, so it
+// re-runs on every render → setState → re-render → infinite loop.
+// Module-level const keeps the identity stable across all callers.
+const EMPTY_PROVIDERS = {};
 
 /**
  * QuickStartPane — the composer's empty-state onboarding.
@@ -42,15 +50,21 @@ export function QuickStartPane({
     apiKey,
     model,
     backend = "claude-code",
+    providers = EMPTY_PROVIDERS,
 }) {
     // null = step 1 (pick intent). Set to an intent id ("search", etc)
     // to advance to step 2 (tailored starters + AI prompt).
     const [intent, setIntent] = useState(null);
+    // Only meaningful when intent === "provider". Carries the picked
+    // provider's wirable-type record ({id, name, kind, description, …})
+    // so the AI scaffold can name-drop the provider in its prompt.
+    const [providerChoice, setProviderChoice] = useState(null);
     const [aiOpen, setAiOpen] = useState(false);
     const [description, setDescription] = useState("");
     const [status, setStatus] = useState("idle");
     const [error, setError] = useState(null);
     const [suggestions, setSuggestions] = useState([]);
+    const wirable = useWirableTypes(providers);
 
     const resetAi = useCallback(() => {
         setAiOpen(false);
@@ -61,9 +75,18 @@ export function QuickStartPane({
     }, []);
 
     const goBack = useCallback(() => {
+        if (intent === "provider" && providerChoice) {
+            // From provider-detail → back to provider picker, not all
+            // the way to intent picker. One level at a time is more
+            // forgiving for accidental picks.
+            setProviderChoice(null);
+            resetAi();
+            return;
+        }
         setIntent(null);
+        setProviderChoice(null);
         resetAi();
-    }, [resetAi]);
+    }, [intent, providerChoice, resetAi]);
 
     const currentIntent =
         intent && INTENTS.find((i) => i.id === intent) ? intent : null;
@@ -83,16 +106,29 @@ export function QuickStartPane({
             // Retry once with a strict-mode prompt on no-JSON failures
             // (matches the existing SuggestLayoutButton behavior — the
             // common failure mode is a chatty preamble).
+            const promptArgs = {
+                intentHint: intentObj && intentObj.aiHint,
+                providerHint: buildProviderHint(providerChoice),
+            };
+            // Inline the provider context into the user message too.
+            // The system prompt is sometimes downweighted by agent
+            // backends (Claude Code with MCP), so duplicating the
+            // binding directly above the user's words keeps the
+            // model anchored on "this widget uses Algolia / Slack /
+            // …" instead of asking for clarification.
+            const wrappedUserMessage = providerChoice
+                ? `[Widget must use the "${providerChoice.name}" provider — ` +
+                  `interpret ambiguous terms in that context.]\n\n` +
+                  description
+                : description;
             let result;
             try {
                 result = await sendOneShotJson({
                     model,
                     apiKey,
                     backend,
-                    systemPrompt: buildSystemPrompt({
-                        intentHint: intentObj && intentObj.aiHint,
-                    }),
-                    userMessage: description,
+                    systemPrompt: buildSystemPrompt(promptArgs),
+                    userMessage: wrappedUserMessage,
                 });
             } catch (firstErr) {
                 const isNoJson = /JSON block|parse error/i.test(
@@ -104,10 +140,10 @@ export function QuickStartPane({
                     apiKey,
                     backend,
                     systemPrompt: buildSystemPrompt({
+                        ...promptArgs,
                         retry: true,
-                        intentHint: intentObj && intentObj.aiHint,
                     }),
-                    userMessage: description,
+                    userMessage: wrappedUserMessage,
                 });
             }
             const items =
@@ -125,7 +161,7 @@ export function QuickStartPane({
             setError(err.message || String(err));
             setStatus("error");
         }
-    }, [description, model, apiKey, backend, intentObj]);
+    }, [description, model, apiKey, backend, intentObj, providerChoice]);
 
     const pickSuggestion = useCallback(
         (suggestion) => {
@@ -152,10 +188,23 @@ export function QuickStartPane({
         >
             {!currentIntent ? (
                 <IntentPicker onPick={setIntent} />
+            ) : currentIntent === "provider" && !providerChoice ? (
+                <ProviderPicker
+                    intentObj={intentObj}
+                    wirable={wirable}
+                    onPick={(p) => {
+                        setProviderChoice(p);
+                        // Auto-open the AI form on provider pick —
+                        // the AI is the whole point of this branch.
+                        setAiOpen(true);
+                    }}
+                    onBack={goBack}
+                />
             ) : (
                 <IntentDetail
                     intentObj={intentObj}
                     samples={intentSamples}
+                    providerChoice={providerChoice}
                     onBack={goBack}
                     onApplySample={applySample}
                     aiOpen={aiOpen}
@@ -184,6 +233,81 @@ export function QuickStartPane({
                     Or start blank — pick a single component
                 </button>
             </div>
+        </div>
+    );
+}
+
+function ProviderPicker({ intentObj, wirable, onPick, onBack }) {
+    return (
+        <div data-testid="composer-quick-start-providers" className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <div className="text-xs uppercase tracking-wide text-gray-500">
+                        Quick start
+                    </div>
+                    <h2 className="text-base text-gray-100 mt-0.5">
+                        {intentObj.icon} Pick a service
+                    </h2>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                        The widget will be scaffolded around this provider's
+                        common tools. You'll wire specific methods after.
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    onClick={onBack}
+                    className="text-sm text-indigo-400 hover:text-indigo-200 shrink-0"
+                    data-testid="composer-quick-start-back"
+                >
+                    ← Change
+                </button>
+            </div>
+            {wirable.status === "loading" && wirable.types.length === 0 ? (
+                <div className="text-sm px-3 py-3 rounded border border-dashed border-gray-700 bg-gray-900/50 text-gray-500">
+                    Loading provider catalog…
+                </div>
+            ) : wirable.types.length === 0 ? (
+                <div className="text-sm px-3 py-3 rounded border border-dashed border-gray-700 bg-gray-900/50 text-gray-500">
+                    No provider types available.
+                    {wirable.error && (
+                        <span className="block text-red-400 mt-1">
+                            {wirable.error}
+                        </span>
+                    )}
+                </div>
+            ) : (
+                <div
+                    className="rounded border border-gray-700 bg-gray-900/50 p-1 max-h-96 overflow-y-auto"
+                    data-testid="composer-quick-start-providers-list"
+                >
+                    {wirable.types.map((t) => (
+                        <button
+                            key={`${t.kind}:${t.id}`}
+                            type="button"
+                            onClick={() => onPick(t)}
+                            className="block w-full text-left text-sm px-2 py-1.5 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200"
+                            data-testid={`composer-quick-start-provider-${t.id}-${t.kind}`}
+                        >
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="truncate">{t.name}</span>
+                                <span className="text-xs text-gray-500 shrink-0">
+                                    {t.kind}
+                                    {t.hasConfiguredInstance && (
+                                        <span className="ml-1 text-emerald-400">
+                                            ✓ configured
+                                        </span>
+                                    )}
+                                </span>
+                            </div>
+                            {t.description && (
+                                <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                                    {t.description}
+                                </div>
+                            )}
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -221,6 +345,7 @@ function IntentPicker({ onPick }) {
 function IntentDetail({
     intentObj,
     samples,
+    providerChoice,
     onBack,
     onApplySample,
     aiOpen,
@@ -234,6 +359,16 @@ function IntentDetail({
     pickSuggestion,
     resetAi,
 }) {
+    // When the user is in the provider branch and has picked a
+    // provider, show that provider in the header instead of the
+    // generic intent label/tagline.
+    const headerLabel = providerChoice
+        ? `${intentObj.icon} ${providerChoice.name}`
+        : `${intentObj.icon} ${intentObj.label} widget`;
+    const headerTagline = providerChoice
+        ? providerChoice.description ||
+          `Widget that uses the ${providerChoice.name} provider.`
+        : intentObj.tagline;
     return (
         <div
             data-testid={`composer-quick-start-detail-${intentObj.id}`}
@@ -245,10 +380,10 @@ function IntentDetail({
                         Quick start
                     </div>
                     <h2 className="text-base text-gray-100 mt-0.5">
-                        {intentObj.icon} {intentObj.label} widget
+                        {headerLabel}
                     </h2>
                     <div className="text-xs text-gray-400 mt-0.5">
-                        {intentObj.tagline}
+                        {headerTagline}
                     </div>
                 </div>
                 <button
@@ -455,7 +590,30 @@ function placeNode(g, cellId, node) {
     return g;
 }
 
-function buildSystemPrompt({ retry = false, intentHint = null } = {}) {
+/**
+ * Build a one-line hint about the provider the user picked, woven
+ * into the AI system prompt so suggestions include the right tools.
+ * Returns null when no provider was chosen (the AI prompt falls
+ * back to the intent's generic hint).
+ */
+function buildProviderHint(providerChoice) {
+    if (!providerChoice) return null;
+    return (
+        `The user wants this widget to use the ` +
+        `"${providerChoice.name}" provider (${providerChoice.kind}). ` +
+        `Suggest 2-3 layouts that surface common ${providerChoice.name} ` +
+        `interactions (search / list / detail / compose, whichever fit). ` +
+        `The composer wires the actual provider methods in a later ` +
+        `stage — DO NOT include data-fetching props; just pick the ` +
+        `components a ${providerChoice.name} widget would naturally use.`
+    );
+}
+
+function buildSystemPrompt({
+    retry = false,
+    intentHint = null,
+    providerHint = null,
+} = {}) {
     // Filter to palette-visible component names — MenuItem variants
     // are in the schema for import resolution but should not appear
     // in user-facing suggestions.
@@ -467,9 +625,16 @@ function buildSystemPrompt({ retry = false, intentHint = null } = {}) {
             )
     ).join(", ");
     const intentLines = intentHint ? ["INTENT CONTEXT: " + intentHint, ""] : [];
+    // PROVIDER CONTEXT (when present) is a stronger constraint than
+    // the intent hint — it names a specific service the AI should
+    // build around. Emit it first so the model anchors on it.
+    const providerLines = providerHint
+        ? ["PROVIDER CONTEXT: " + providerHint, ""]
+        : [];
     const base = [
         "You are a structured-output API for the Dash widget composer. You do NOT chat.",
         "",
+        ...providerLines,
         ...intentLines,
         "The user describes a widget in one line. You respond with NOTHING but a JSON object of layout candidates.",
         "",
@@ -489,6 +654,10 @@ function buildSystemPrompt({ retry = false, intentHint = null } = {}) {
         "  You have all the information you need in this prompt.",
         "- DO NOT look up which providers are available. The composer's wiring",
         "  stage handles provider/data binding after the user picks a layout.",
+        "- DO NOT ask the user for clarification. If the user's description is",
+        "  ambiguous, pick the most likely interpretation in the provider /",
+        "  intent context above. Suggesting 2-3 alternative layouts already",
+        "  covers the disambiguation — the user picks which one matches.",
         "- Provide 2-3 suggestions. Each suggestion has { label: string, root: TreeNode }.",
         "- Each TreeNode: { type: string, props?: object, children?: TreeNode[] }.",
         '- The root TreeNode of every suggestion MUST have type "Panel".',
@@ -497,6 +666,31 @@ function buildSystemPrompt({ retry = false, intentHint = null } = {}) {
         "- props can include literal string/number/boolean values only — no functions, no JSX expressions, no data-fetching logic.",
         "- Keep each suggestion compact — 3-6 nodes is ideal.",
         "- The composer wires data slots in a later stage. Do NOT include props for `data`, `items`, `options`, or other dataSlot fields.",
+        "",
+        "FILL IN DESCRIPTIVE PROP VALUES — this is critical. The user picks a",
+        "layout and immediately sees the result; without specific labels they",
+        "can't tell what each component is FOR. Required for these props:",
+        "- Heading.title / Heading2.title / Heading3.title — name the section.",
+        '  Example: for an Algolia rules widget, "Index rules" not "Sample".',
+        "- SubHeading.title — name the sub-section similarly.",
+        "- Button.title / Button2.title / Button3.title — name the action.",
+        '  Example: "Add rule", "Refresh", "Search" — verbs that hint at',
+        "  what wiring this button would call.",
+        "- ButtonIcon.text + ButtonIcon.icon — same as Button.",
+        "- Paragraph.text — describe what the user should see in this slot,",
+        "  not literal placeholder content.",
+        "- Tag.text — short label fitting the widget context.",
+        "- InputText.label / TextArea.label / SearchInput.label /",
+        "  SelectInput.label / Slider.label — describe the input.",
+        '  Example: SearchInput.label="Search by name" for a search-list widget.',
+        "- InputText.placeholder / TextArea.placeholder /",
+        "  SearchInput.placeholder — short hint text shown in the empty input.",
+        "- Switch.label / Toggle.label / Checkbox.label — describe what the",
+        "  toggle controls.",
+        "- Alert.title + Alert.message — describe the kind of message this",
+        "  alert is reserved for in the widget.",
+        "These literal values render in the preview AND tell the user what",
+        "the layout is intended to do without any extra commentary.",
     ];
     if (retry) {
         base.push(

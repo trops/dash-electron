@@ -203,6 +203,37 @@ function log(entry) {
 }
 
 /**
+ * Best-effort extraction of a readable error message from any
+ * thrown / rejected value. Error instances get their `.message`;
+ * plain objects with a `message` / `error` / `statusMessage` field
+ * get that; everything else falls back to JSON.stringify (catching
+ * circular refs) then String().
+ *
+ * Used by loggedHandle so an SDK rejection like
+ * `{ status: 400, message: "indexName is required" }` surfaces as a
+ * useful string both in the main-process log and in the renderer
+ * (where IPC re-throws as `Error invoking remote method 'X': <msg>`).
+ */
+function describeErr(err) {
+    if (err == null) return String(err);
+    if (typeof err === "string") return err;
+    if (err instanceof Error) return err.message || err.toString();
+    if (typeof err === "object") {
+        if (typeof err.message === "string" && err.message) return err.message;
+        if (typeof err.error === "string" && err.error) return err.error;
+        if (typeof err.statusMessage === "string" && err.statusMessage) {
+            return err.statusMessage;
+        }
+        try {
+            return JSON.stringify(err);
+        } catch (_) {
+            // fall through
+        }
+    }
+    return String(err);
+}
+
+/**
  * Wraps ipcMain.handle() with timing, logging, and debug broadcast.
  * Logs: channel, timestamp, duration, success/error, userId.
  * Broadcasts enriched entries (with args/result) to the debug console.
@@ -248,6 +279,18 @@ function loggedHandle(channel, handler) {
         } catch (err) {
             const durationMs = Date.now() - start;
 
+            // Many SDKs (notably algolia v4) reject with plain
+            // objects, not Error instances. When Electron's IPC
+            // serializes a non-Error rejection back to the renderer
+            // it gives up and the renderer sees the literal string
+            // "[object Object]" — useless for debugging. Extract the
+            // most informative field we can find (message, error,
+            // statusMessage, JSON) before logging AND re-throw a
+            // real Error so the renderer-side wrapping
+            // ("Error invoking remote method 'X': <message>") is
+            // actually descriptive.
+            const errMsg = describeErr(err);
+
             log({
                 ts: new Date().toISOString(),
                 level: "error",
@@ -255,7 +298,7 @@ function loggedHandle(channel, handler) {
                 channel,
                 durationMs,
                 success: false,
-                error: err?.message || String(err),
+                error: errMsg,
                 userId: _userId,
             });
 
@@ -269,10 +312,16 @@ function loggedHandle(channel, handler) {
                 method: channel,
                 durationMs,
                 success: false,
-                error: err?.message || String(err),
+                error: errMsg,
             });
 
-            throw err;
+            if (err instanceof Error) throw err;
+            // Re-throw as a proper Error so IPC serialization
+            // preserves the message. Stash the original on .cause for
+            // anyone inspecting in the main process.
+            const wrapped = new Error(errMsg);
+            wrapped.cause = err;
+            throw wrapped;
         }
     });
 }
