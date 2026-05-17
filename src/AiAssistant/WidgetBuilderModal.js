@@ -36,6 +36,7 @@ import { ChatProviderGate } from "./ChatProviderGate";
 import { WidgetDraftsList } from "./WidgetDraftsList";
 import { WidgetConsolePane } from "./WidgetConsolePane";
 import { ComposerPane } from "./composer/ComposerPane";
+import { ComposerPaneV2 } from "./composer/ComposerPaneV2";
 // Slice 19G.2: installWidgetConsoleCapture is no longer wired into
 // production — widgets render in an iframe so host-window capture
 // can't see them. The module file stays for its tests + any future
@@ -58,6 +59,12 @@ import {
 import { scanCredentialMethodCalls } from "./widgetCredentialPermissionScanner";
 import { setGrants as setCredentialGrants } from "./widgetCredentialGrants";
 import { WidgetCredentialPermissionModal } from "./WidgetCredentialPermissionModal";
+
+// G2 feature flag — when true, Compose mode renders the new
+// grid-based composer (recursive grid-of-cells layout with nesting)
+// instead of the tree-based ComposerPane. G3 lands the draft
+// migrator and removes the tree path entirely.
+const USE_COMPOSER_V2 = true;
 
 // Slice 17c — iframe-isolated preview is the only path. The legacy
 // localStorage opt-out (`dash:preview-iframe = "0"`) used to flip to
@@ -1319,8 +1326,54 @@ ${
     const isRemixMode = !!effectiveEditContext?.originalWidgetId;
 
     // Chat-pane mode ("build" = AI generates widgets, "discover" = AI
-    // searches the registry). Resets to "build" each time the modal opens.
+    // searches the registry, "compose" = stepwise composer with no chat).
+    // Resets to "build" each time the modal opens.
     const [chatMode, setChatMode] = useState("build");
+    // Mirror of chatMode in a ref so the chat-messages poller (which
+    // stays mounted across mode changes) can read the current mode
+    // without resubscribing on every flip. Required so the
+    // "messages.length===0 + hadActivity" New-Chat reset branch can
+    // skip compose mode, which intentionally never writes messages.
+    const chatModeRef = useRef("build");
+    useEffect(() => {
+        chatModeRef.current = chatMode;
+    }, [chatMode]);
+
+    // Composer tree state. Lifted out of ComposerPane so we can
+    // persist the user's composition in the draft alongside the
+    // generated code. `composerInitialTree` is set from a resumed
+    // draft (paired with a remount via composerSessionKey so the
+    // pane picks up the new tree); composerTree is the live mirror
+    // updated on every in-pane edit via onTreeChange.
+    const [composerTree, setComposerTree] = useState(null);
+    const [composerInitialTree, setComposerInitialTree] = useState(null);
+    const [composerSessionKey, setComposerSessionKey] = useState(0);
+    // V2 grid composer state. Lives alongside the tree state during
+    // the dogfood phase — once G3 flips the default, the tree state
+    // gets migrated and the old fields go away.
+    const [composerGrid, setComposerGrid] = useState(null);
+    // composerInitialGrid will be wired into G3's draft restore path.
+    // For G2, fresh sessions only.
+    // eslint-disable-next-line no-unused-vars
+    const [composerInitialGrid, setComposerInitialGrid] = useState(null);
+    const composerGridRef = useRef(null);
+    useEffect(() => {
+        composerGridRef.current = composerGrid;
+    }, [composerGrid]);
+    // Selected composer node, lifted out of ComposerPane so the
+    // preview iframe's click-to-pick can drive the composer's
+    // inspector. Also lets us pass the current selection back into
+    // the iframe so the highlighted outline stays in sync when the
+    // user picks a node in the composition tree.
+    const [composerSelectedNodeId, setComposerSelectedNodeId] = useState(null);
+    // Mirror in a ref so the auto-save useEffect can read the latest
+    // tree without re-binding on every keystroke. The save effect's
+    // deps already cover code+files; using a ref for tree avoids
+    // re-scheduling the entire effect when the tree mutates.
+    const composerTreeRef = useRef(null);
+    useEffect(() => {
+        composerTreeRef.current = composerTree;
+    }, [composerTree]);
     // Widgets returned by registry.search for the most recent user message
     // in Discover mode. Rendered as cards above the chat.
     const [discoverResults, setDiscoverResults] = useState([]);
@@ -1582,6 +1635,12 @@ ${
             chatHistory,
             pickedProvider: selectedProviderForBuildRef.current,
             mode: "ai",
+            // Compose-mode persistence: stash the live tree + the
+            // active chat mode so resuming restores the composer
+            // back to the user's last composition (not just the
+            // emitted code).
+            chatMode: chatModeRef.current || "build",
+            composerTree: composerTreeRef.current || null,
         };
         // Pass files alongside so the main process materializes them
         // under @ai-built/<name>-draft-<id>/ and stamps packageDir
@@ -2006,11 +2065,28 @@ ${
                     // (either compiled code OR sent at least one message),
                     // so clicking New Chat after Skip-for-now (no compile
                     // yet) still re-opens the provider gate.
-                    const hadActivity =
-                        !!lastCompiledCode.current || lastMsgCount.current > 0;
+                    //
+                    // Slice 20.C1+ — also skip the reset branch while
+                    // the user is in compose mode. Compose never writes
+                    // chat messages, so `msgs.length === 0` is true for
+                    // every poll tick; combined with `hadActivity` from
+                    // the composer's own compiles, the reset would fire
+                    // continuously and nuke the live composer preview.
+                    //
+                    // Use lastMsgCount alone (not lastCompiledCode) as
+                    // the "had activity" signal. The previous OR with
+                    // lastCompiledCode meant that ANY prior compile —
+                    // including ones from the composer — counted as
+                    // chat activity, so switching compose → build
+                    // (still messages.length===0 from the never-used
+                    // chat) would immediately nuke the composer's
+                    // emitted code. Only a real prior chat turn should
+                    // gate this reset.
+                    const hadActivity = lastMsgCount.current > 0;
                     if (
                         msgs.length === 0 &&
                         hadActivity &&
+                        chatModeRef.current !== "compose" &&
                         !effectiveEditContext?.componentCode
                     ) {
                         setPreviewComponent(null);
@@ -3274,6 +3350,12 @@ ${
                             setPreviewError(null);
                             setInstallStatus(null);
                             setSelectedProviderForBuild(null);
+                            // Reset compose-mode state so a fresh
+                            // session doesn't inherit the tree from
+                            // whatever was last loaded.
+                            setComposerInitialTree(null);
+                            setComposerTree(null);
+                            setComposerSessionKey((k) => k + 1);
                             setViewMode("builder");
                         }}
                         onResume={async (draft) => {
@@ -3316,13 +3398,27 @@ ${
                             }
                             // Restore the latest code so the preview +
                             // editor pick up where the user left off.
-                            setDetectedCode({
+                            const restoredCode = {
                                 componentCode: full.componentCode || null,
                                 configCode: full.configCode || null,
                                 files: Array.isArray(full.files)
                                     ? full.files
                                     : [],
-                            });
+                            };
+                            setDetectedCode(restoredCode);
+                            // Compile the restored code so the Preview
+                            // tab actually renders instead of showing
+                            // the empty placeholder from modal open.
+                            // Mirrors the remix/editContext useEffect
+                            // a few hundred lines up — drafts went
+                            // through setDetectedCode but never
+                            // through the compile pipeline, so the
+                            // preview stayed blank until the user
+                            // typed a new message (chat) or edited
+                            // the code tab manually.
+                            if (restoredCode.componentCode) {
+                                compilePreview(restoredCode).catch(() => {});
+                            }
                             // Restore the picked provider so the chat
                             // gate doesn't reappear and the post-process
                             // auto-correct stays consistent.
@@ -3330,6 +3426,22 @@ ${
                                 setSelectedProviderForBuild(
                                     full.pickedProvider
                                 );
+                            }
+                            // Restore compose mode + the saved
+                            // composer tree so the user picks up
+                            // exactly where they left off (palette,
+                            // selected node, wires, field maps).
+                            // composerSessionKey bump forces the
+                            // pane to remount with the new initial
+                            // tree — useState wouldn't otherwise pick
+                            // up the change after the first mount.
+                            if (full.composerTree) {
+                                setComposerInitialTree(full.composerTree);
+                                setComposerTree(full.composerTree);
+                                setComposerSessionKey((k) => k + 1);
+                            }
+                            if (full.chatMode) {
+                                setChatMode(full.chatMode);
                             }
                             setInstallStatus(null);
                             setViewMode("builder");
@@ -4191,88 +4303,99 @@ ${
                                         AI used wrong dash-react prop names,
                                         e.g. `text=` on Heading). Without
                                         this the user sees a black canvas
-                                        with no clue what's wrong. */}
-                                        {previewLooksEmpty && (
-                                            <div className="mx-4 mt-2 px-3 py-2 rounded-md border border-amber-700/40 bg-amber-900/20 text-xs text-amber-200 space-y-1">
-                                                <div className="font-semibold text-amber-300">
-                                                    Widget rendered with no
-                                                    visible content
-                                                </div>
-                                                <div className="text-amber-200/80">
-                                                    Most common cause: wrong
-                                                    prop names on dash-react
-                                                    components. Use{" "}
-                                                    <code className="bg-black/30 px-1 rounded">
-                                                        title
-                                                    </code>{" "}
-                                                    on{" "}
-                                                    <code className="bg-black/30 px-1 rounded">
-                                                        Heading
-                                                    </code>
-                                                    /
-                                                    <code className="bg-black/30 px-1 rounded">
-                                                        Button
-                                                    </code>
-                                                    /
-                                                    <code className="bg-black/30 px-1 rounded">
-                                                        EmptyState
-                                                    </code>{" "}
-                                                    (not{" "}
-                                                    <code className="bg-black/30 px-1 rounded">
-                                                        text
-                                                    </code>{" "}
-                                                    or{" "}
-                                                    <code className="bg-black/30 px-1 rounded">
-                                                        message
-                                                    </code>
-                                                    ). Click "Send to AI to fix"
-                                                    and the chat will request a
-                                                    corrected version.
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        try {
-                                                            const raw =
-                                                                localStorage.getItem(
-                                                                    "dash-widget-builder"
+                                        with no clue what's wrong.
+
+                                        Suppressed in compose mode: an empty
+                                        preview while the user is still
+                                        dragging components into cells is
+                                        expected, not an error. The "Send
+                                        to AI to fix" CTA also doesn't apply
+                                        — compose doesn't go through chat. */}
+                                        {previewLooksEmpty &&
+                                            chatMode !== "compose" && (
+                                                <div className="mx-4 mt-2 px-3 py-2 rounded-md border border-amber-700/40 bg-amber-900/20 text-xs text-amber-200 space-y-1">
+                                                    <div className="font-semibold text-amber-300">
+                                                        Widget rendered with no
+                                                        visible content
+                                                    </div>
+                                                    <div className="text-amber-200/80">
+                                                        Most common cause: wrong
+                                                        prop names on dash-react
+                                                        components. Use{" "}
+                                                        <code className="bg-black/30 px-1 rounded">
+                                                            title
+                                                        </code>{" "}
+                                                        on{" "}
+                                                        <code className="bg-black/30 px-1 rounded">
+                                                            Heading
+                                                        </code>
+                                                        /
+                                                        <code className="bg-black/30 px-1 rounded">
+                                                            Button
+                                                        </code>
+                                                        /
+                                                        <code className="bg-black/30 px-1 rounded">
+                                                            EmptyState
+                                                        </code>{" "}
+                                                        (not{" "}
+                                                        <code className="bg-black/30 px-1 rounded">
+                                                            text
+                                                        </code>{" "}
+                                                        or{" "}
+                                                        <code className="bg-black/30 px-1 rounded">
+                                                            message
+                                                        </code>
+                                                        ). Click "Send to AI to
+                                                        fix" and the chat will
+                                                        request a corrected
+                                                        version.
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            try {
+                                                                const raw =
+                                                                    localStorage.getItem(
+                                                                        "dash-widget-builder"
+                                                                    );
+                                                                const data = raw
+                                                                    ? JSON.parse(
+                                                                          raw
+                                                                      )
+                                                                    : {
+                                                                          messages:
+                                                                              [],
+                                                                      };
+                                                                const msgs =
+                                                                    data?.messages ||
+                                                                    [];
+                                                                msgs.push({
+                                                                    role: "user",
+                                                                    content: `The widget compiled and mounted but rendered no visible content (preview is black). This is almost always a dash-react prop-name mismatch. Please re-emit the component AND config code blocks with corrected prop names: \`<Heading title="...">\` (NOT text=), \`<Button title="...">\` (NOT text=), \`<EmptyState title="..." description="...">\` (NOT message=). Output BOTH the \`\`\`jsx component block and the \`\`\`javascript config block.`,
+                                                                });
+                                                                localStorage.setItem(
+                                                                    "dash-widget-builder",
+                                                                    JSON.stringify(
+                                                                        {
+                                                                            ...data,
+                                                                            messages:
+                                                                                msgs,
+                                                                        }
+                                                                    )
                                                                 );
-                                                            const data = raw
-                                                                ? JSON.parse(
-                                                                      raw
-                                                                  )
-                                                                : {
-                                                                      messages:
-                                                                          [],
-                                                                  };
-                                                            const msgs =
-                                                                data?.messages ||
-                                                                [];
-                                                            msgs.push({
-                                                                role: "user",
-                                                                content: `The widget compiled and mounted but rendered no visible content (preview is black). This is almost always a dash-react prop-name mismatch. Please re-emit the component AND config code blocks with corrected prop names: \`<Heading title="...">\` (NOT text=), \`<Button title="...">\` (NOT text=), \`<EmptyState title="..." description="...">\` (NOT message=). Output BOTH the \`\`\`jsx component block and the \`\`\`javascript config block.`,
-                                                            });
-                                                            localStorage.setItem(
-                                                                "dash-widget-builder",
-                                                                JSON.stringify({
-                                                                    ...data,
-                                                                    messages:
-                                                                        msgs,
-                                                                })
-                                                            );
-                                                            setPreviewLooksEmpty(
-                                                                false
-                                                            );
-                                                        } catch {
-                                                            /* ignore */
-                                                        }
-                                                    }}
-                                                    className="mt-1 px-2 py-1 text-xs rounded border border-amber-600/50 bg-amber-700/30 hover:bg-amber-700/50 text-amber-100"
-                                                >
-                                                    Send to AI to fix
-                                                </button>
-                                            </div>
-                                        )}
+                                                                setPreviewLooksEmpty(
+                                                                    false
+                                                                );
+                                                            } catch {
+                                                                /* ignore */
+                                                            }
+                                                        }}
+                                                        className="mt-1 px-2 py-1 text-xs rounded border border-amber-600/50 bg-amber-700/30 hover:bg-amber-700/50 text-amber-100"
+                                                    >
+                                                        Send to AI to fix
+                                                    </button>
+                                                </div>
+                                            )}
                                         {/* Widget preview — fills available space */}
                                         <div className="flex-1 p-4 overflow-auto">
                                             <div
@@ -4326,6 +4449,13 @@ ${
                                                                     appContext
                                                                 )?.providers ||
                                                                 {},
+                                                            credentials:
+                                                                (
+                                                                    previewAppCtx ||
+                                                                    appContext
+                                                                )
+                                                                    ?.credentials ||
+                                                                null,
                                                         }}
                                                         widgetData={buildPreviewWidgetData(
                                                             {
@@ -4344,6 +4474,33 @@ ${
                                                         }
                                                         onConsoleEvent={
                                                             appendConsoleEvent
+                                                        }
+                                                        // Compose-mode
+                                                        // click-to-select.
+                                                        // Only active in
+                                                        // compose mode —
+                                                        // chat/build keep
+                                                        // the preview
+                                                        // passive so
+                                                        // installed-widget
+                                                        // interactions
+                                                        // (button clicks,
+                                                        // selections)
+                                                        // aren't
+                                                        // intercepted.
+                                                        selectable={
+                                                            chatMode ===
+                                                            "compose"
+                                                        }
+                                                        selectedNodeId={
+                                                            composerSelectedNodeId
+                                                        }
+                                                        onComposerNodeClick={({
+                                                            nodeId,
+                                                        }) =>
+                                                            setComposerSelectedNodeId(
+                                                                nodeId
+                                                            )
                                                         }
                                                     />
                                                 )}
@@ -4948,59 +5105,89 @@ ${
                     <div
                         className={`flex flex-col flex-1 min-w-0 border-l ${borderColor}`}
                     >
-                        {/* Build / Discover mode toggle */}
-                        <div className="flex items-center gap-2 px-3 pt-2 shrink-0">
-                            <div className="flex items-center gap-1 bg-gray-800/50 rounded-md border border-gray-700/50 p-0.5">
-                                <button
-                                    type="button"
-                                    onClick={() => setChatMode("build")}
-                                    className={`px-3 py-1 text-xs rounded transition-colors ${
-                                        chatMode === "build"
-                                            ? "bg-indigo-600/30 text-indigo-300 font-medium"
-                                            : "text-gray-500 hover:text-gray-300"
-                                    }`}
-                                    title="Generate a custom widget from scratch with AI"
-                                >
-                                    Build
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setChatMode("discover")}
-                                    className={`px-3 py-1 text-xs rounded transition-colors ${
-                                        chatMode === "discover"
-                                            ? "bg-indigo-600/30 text-indigo-300 font-medium"
-                                            : "text-gray-500 hover:text-gray-300"
-                                    }`}
-                                    title="Search the Dash registry for existing widgets"
-                                >
-                                    Discover
-                                </button>
-                                {/* Slice 20.C1: Compose mode — stepwise
-                                    widget composition (pick components,
-                                    wire data slots) without going through
-                                    an AI prompt. Replaces the chat pane
-                                    with the ComposerPane when active. */}
-                                <button
-                                    type="button"
-                                    onClick={() => setChatMode("compose")}
-                                    className={`px-3 py-1 text-xs rounded transition-colors ${
-                                        chatMode === "compose"
-                                            ? "bg-indigo-600/30 text-indigo-300 font-medium"
-                                            : "text-gray-500 hover:text-gray-300"
-                                    }`}
-                                    title="Build a widget by picking components and wiring data slots — no AI prompt needed"
-                                    data-testid="chat-mode-compose"
-                                >
-                                    Compose
-                                </button>
+                        {/* Build / Compose are the two CREATE paths,
+                            grouped in a segmented control. Discover is
+                            a separate path entirely (search the
+                            registry for existing widgets, not build a
+                            new one) so it sits outside the toggle as
+                            its own button with different styling. */}
+                        <div className="flex items-center justify-between gap-2 px-3 pt-2 shrink-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <div className="flex items-center gap-1 bg-gray-800/50 rounded-md border border-gray-700/50 p-0.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setChatMode("build")}
+                                        className={`px-3 py-1 text-xs rounded transition-colors ${
+                                            chatMode === "build"
+                                                ? "bg-indigo-600/30 text-indigo-300 font-medium"
+                                                : "text-gray-500 hover:text-gray-300"
+                                        }`}
+                                        title="Generate a custom widget from scratch with AI"
+                                    >
+                                        Build
+                                    </button>
+                                    {/* Slice 20.C1: Compose mode —
+                                        stepwise widget composition (pick
+                                        components, wire data slots)
+                                        without going through an AI
+                                        prompt. Replaces the chat pane
+                                        with the ComposerPane when
+                                        active. */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setChatMode("compose")}
+                                        className={`px-3 py-1 text-xs rounded transition-colors ${
+                                            chatMode === "compose"
+                                                ? "bg-indigo-600/30 text-indigo-300 font-medium"
+                                                : "text-gray-500 hover:text-gray-300"
+                                        }`}
+                                        title="Build a widget by picking components and wiring data slots — no AI prompt needed"
+                                        data-testid="chat-mode-compose"
+                                    >
+                                        Compose
+                                    </button>
+                                </div>
+                                <span className="text-[11px] text-gray-500 truncate">
+                                    {chatMode === "compose"
+                                        ? "Pick components, wire data slots — no prompt needed"
+                                        : chatMode === "discover"
+                                        ? "Searching the registry for existing widgets"
+                                        : "AI will generate a custom widget"}
+                                </span>
                             </div>
-                            <span className="text-[11px] text-gray-500 truncate">
-                                {chatMode === "build"
-                                    ? "AI will generate a custom widget"
-                                    : chatMode === "compose"
-                                    ? "Pick components, wire data slots — no prompt needed"
-                                    : "AI will search the registry"}
-                            </span>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setChatMode(
+                                        chatMode === "discover"
+                                            ? "build"
+                                            : "discover"
+                                    )
+                                }
+                                className={`flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border transition-colors shrink-0 ${
+                                    chatMode === "discover"
+                                        ? "bg-amber-600/20 border-amber-700/50 text-amber-200"
+                                        : "border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600"
+                                }`}
+                                title={
+                                    chatMode === "discover"
+                                        ? "Back to Build mode"
+                                        : "Search the Dash registry for existing widgets instead of building one"
+                                }
+                                data-testid="chat-mode-discover"
+                            >
+                                <FontAwesomeIcon
+                                    icon={
+                                        chatMode === "discover"
+                                            ? "arrow-left"
+                                            : "magnifying-glass"
+                                    }
+                                    className="h-2.5 w-2.5"
+                                />
+                                {chatMode === "discover"
+                                    ? "Back to Build"
+                                    : "Discover existing"}
+                            </button>
                         </div>
 
                         {/* Chat content + provider gate. Relative wrapper
@@ -5022,19 +5209,69 @@ ${
                                 edit through the same compilePreview
                                 pipeline the chat path uses, so the
                                 left-side Preview tab updates live. */}
-                            {chatMode === "compose" && (
+                            {chatMode === "compose" && USE_COMPOSER_V2 && (
+                                <ComposerPaneV2
+                                    key={composerSessionKey}
+                                    initialGrid={composerInitialGrid}
+                                    onChange={setComposerGrid}
+                                    selectedCellId={composerSelectedNodeId}
+                                    onSelectedCellChange={
+                                        setComposerSelectedNodeId
+                                    }
+                                    providers={providers}
+                                    onEmit={(code) => {
+                                        setDetectedCode({
+                                            componentCode: code.componentCode,
+                                            configCode: code.configCode,
+                                            files: code.files || null,
+                                        });
+                                        compilePreview(code).catch(() => {});
+                                    }}
+                                />
+                            )}
+                            {chatMode === "compose" && !USE_COMPOSER_V2 && (
                                 <ComposerPane
+                                    key={composerSessionKey}
+                                    initialTree={composerInitialTree}
+                                    onTreeChange={setComposerTree}
+                                    selectedNodeId={composerSelectedNodeId}
+                                    onSelectedNodeChange={
+                                        setComposerSelectedNodeId
+                                    }
                                     providers={providers}
                                     apiKey={apiKey}
                                     model={model}
+                                    backend={preferredBackend}
                                     onEmit={(code) => {
+                                        // Mirror the composer's
+                                        // emitted code into
+                                        // detectedCode so the Code
+                                        // and Configure tabs (gated
+                                        // on detectedCode.componentCode)
+                                        // become active. Without
+                                        // this, the user can't see
+                                        // or edit the source the
+                                        // composer is generating.
+                                        setDetectedCode({
+                                            componentCode: code.componentCode,
+                                            configCode: code.configCode,
+                                            files: code.files || null,
+                                        });
                                         compilePreview(code).catch(() => {});
-                                        setActiveTab("preview");
+                                        // Intentionally NOT yanking
+                                        // the user back to Preview
+                                        // on every composer edit —
+                                        // when they're reading the
+                                        // Code tab, the auto-switch
+                                        // is disruptive. Preview
+                                        // content updates regardless
+                                        // of which tab is active.
                                     }}
                                 />
                             )}
                             {chatMode === "build" &&
-                                selectedProviderForBuild === null && (
+                                selectedProviderForBuild === null &&
+                                !detectedCode?.componentCode && (
                                     <ChatProviderGate
                                         onChange={setSelectedProviderForBuild}
                                         builtInCatalog={builtInCatalog}
@@ -5096,7 +5333,8 @@ ${
                                 user selects. */}
                             {chatMode !== "compose" &&
                                 (chatMode !== "build" ||
-                                    selectedProviderForBuild !== null) && (
+                                    selectedProviderForBuild !== null ||
+                                    detectedCode?.componentCode) && (
                                     <ChatCore
                                         title=""
                                         model={model}
@@ -5153,6 +5391,29 @@ ${
                                                     effectiveEditContext.configCode ||
                                                     ""
                                                 }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
+                                            }
+                                            // Hand-off path: user
+                                            // composed a widget in
+                                            // Compose mode, then
+                                            // switched to Build to
+                                            // ask AI for tweaks.
+                                            // detectedCode is
+                                            // populated but there's
+                                            // no editContext (this
+                                            // isn't an install they
+                                            // came back to edit).
+                                            // Treat the composed code
+                                            // as the starting point
+                                            // so the AI iterates
+                                            // instead of generating
+                                            // from scratch.
+                                            if (detectedCode?.componentCode) {
+                                                return `${base}\n\nThe user started this widget in Compose mode and now wants AI help to refine it. Here is the CURRENT source they composed:\n\nComponent (jsx):\n\`\`\`jsx\n${
+                                                    detectedCode.componentCode
+                                                }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
+                                                    detectedCode.configCode ||
+                                                    ""
+                                                }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above. Do NOT throw away what they composed unless they explicitly ask you to start over.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences acknowledging what they've built so far and asking what they'd like to change. No lists, no bullet points, under 30 words.`;
                                             }
                                             return base;
                                         })()}

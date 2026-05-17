@@ -42,10 +42,44 @@ export function sendOneShot({
     apiKey = null,
     systemPrompt,
     userMessage,
-    backend = "anthropic",
+    backend = "claude-code",
     timeoutMs = 60_000,
+    // CLI quiescence window: after this many ms with no new delta
+    // event, assume the stream is done and resolve with whatever
+    // has accumulated. The Claude CLI bridge's close handler only
+    // emits LLM_STREAM_COMPLETE if the final stdout line parses as
+    // a stream-json `result` event. When the model finishes via
+    // `assistant`+text deltas and exits without a result line (the
+    // common case for prompt-mode runs with no tool use), no
+    // complete event ever fires — we'd otherwise wait until the
+    // 60s hard timeout despite having the full answer in hand.
+    deltaQuiescenceMs = 4_000,
 } = {}) {
     return new Promise((resolve, reject) => {
+        // Test-only override hook. E2E specs can install
+        // `window.__DASH_LLM_ONE_SHOT_OVERRIDE` as an async
+        // function taking the same params object and resolving to
+        // a string — used to exercise the SuggestLayoutButton
+        // pipeline without depending on the real CLI or mock-LLM
+        // server (contextBridge freezes window.mainApi so direct
+        // bridge stubbing isn't possible from the page side).
+        // The override completely short-circuits the listener
+        // plumbing below.
+        if (
+            typeof window !== "undefined" &&
+            typeof window.__DASH_LLM_ONE_SHOT_OVERRIDE === "function"
+        ) {
+            Promise.resolve(
+                window.__DASH_LLM_ONE_SHOT_OVERRIDE({
+                    model,
+                    apiKey,
+                    backend,
+                    systemPrompt,
+                    userMessage,
+                })
+            ).then(resolve, reject);
+            return;
+        }
         if (
             typeof window === "undefined" ||
             !window.mainApi ||
@@ -58,9 +92,28 @@ export function sendOneShot({
         const llm = window.mainApi.llm;
         const requestId = `composer-suggest-${Date.now()}-${nextRequestSeq++}`;
 
+        // Diagnostic breadcrumbs — kept on window so devtools can
+        // surface them without console-strip in dash-core eating
+        // them. Helped chase the v0.0.713 "timeout, no events" bug
+        // where the CLI bridge was being called but no stream
+        // events came back to the renderer.
+        if (typeof window !== "undefined") {
+            window.__DASH_DEBUG = window.__DASH_DEBUG || [];
+            window.__DASH_DEBUG.push({
+                t: Date.now(),
+                kind: "llmOneShot.start",
+                requestId,
+                backend,
+                hasApiKey: !!apiKey,
+                model,
+            });
+        }
+
         let accumulated = "";
         let settled = false;
+        let quiescenceTimer = null;
         const listenerIds = [];
+        const events = [];
 
         const cleanup = () => {
             for (const id of listenerIds) {
@@ -71,6 +124,25 @@ export function sendOneShot({
                 }
             }
             clearTimeout(timer);
+            if (quiescenceTimer) clearTimeout(quiescenceTimer);
+        };
+
+        // Bumped after every accepted delta. When this fires without
+        // a prior settle, we resolve with whatever has accumulated.
+        const bumpQuiescence = () => {
+            if (quiescenceTimer) clearTimeout(quiescenceTimer);
+            quiescenceTimer = setTimeout(() => {
+                if (typeof window !== "undefined") {
+                    window.__DASH_DEBUG = window.__DASH_DEBUG || [];
+                    window.__DASH_DEBUG.push({
+                        t: Date.now(),
+                        kind: "llmOneShot.quiescence-resolve",
+                        requestId,
+                        accumulatedLen: accumulated.length,
+                    });
+                }
+                settle(resolve, accumulated);
+            }, deltaQuiescenceMs);
         };
 
         const settle = (fn, val) => {
@@ -80,38 +152,107 @@ export function sendOneShot({
             fn(val);
         };
 
-        const timer = setTimeout(
-            () =>
-                settle(
-                    reject,
-                    new Error(`LLM request timed out after ${timeoutMs}ms`)
-                ),
-            timeoutMs
-        );
+        const timer = setTimeout(() => {
+            if (typeof window !== "undefined") {
+                window.__DASH_DEBUG = window.__DASH_DEBUG || [];
+                window.__DASH_DEBUG.push({
+                    t: Date.now(),
+                    kind: "llmOneShot.timeout",
+                    requestId,
+                    backend,
+                    eventsObserved: events.length,
+                    events,
+                });
+            }
+            const hint =
+                events.length === 0
+                    ? " (no stream events received — the LLM bridge fired sendMessage but no delta/complete/error came back. Check Settings → Claude CLI auth, then DevTools window.__DASH_DEBUG.)"
+                    : "";
+            settle(
+                reject,
+                new Error(`LLM request timed out after ${timeoutMs}ms${hint}`)
+            );
+        }, timeoutMs);
 
         try {
             listenerIds.push(
                 llm.onStreamDelta((evt) => {
-                    if (!evt || evt.requestId !== requestId) return;
-                    if (typeof evt.text === "string") accumulated += evt.text;
-                    else if (typeof evt.delta === "string")
+                    events.push({
+                        k: "delta",
+                        reqMatch: evt?.requestId === requestId,
+                        gotReqId: evt?.requestId,
+                        textLen:
+                            typeof evt?.text === "string"
+                                ? evt.text.length
+                                : null,
+                    });
+                    // Defensive: if events arrive with no requestId
+                    // field at all (a future bridge shape change),
+                    // accept them too — better to overflow with text
+                    // than time out silently.
+                    if (
+                        evt &&
+                        evt.requestId !== undefined &&
+                        evt.requestId !== null &&
+                        evt.requestId !== requestId
+                    ) {
+                        return;
+                    }
+                    if (typeof evt?.text === "string") accumulated += evt.text;
+                    else if (typeof evt?.delta === "string")
                         accumulated += evt.delta;
+                    bumpQuiescence();
                 })
             );
             listenerIds.push(
                 llm.onStreamComplete((evt) => {
-                    if (!evt || evt.requestId !== requestId) return;
-                    // Some backends include the final text on the complete
-                    // event rather than via deltas — prefer it when present.
+                    events.push({
+                        k: "complete",
+                        reqMatch: evt?.requestId === requestId,
+                        gotReqId: evt?.requestId,
+                        hasContent: Array.isArray(evt?.content),
+                        hasText: typeof evt?.text === "string",
+                    });
+                    if (
+                        evt &&
+                        evt.requestId !== undefined &&
+                        evt.requestId !== null &&
+                        evt.requestId !== requestId
+                    ) {
+                        return;
+                    }
+                    // CLI bridge emits { requestId, content: [{type,text}],
+                    // stopReason, usage }; Anthropic bridge may emit a
+                    // top-level `text`. Try every reasonable surface
+                    // before falling back to the accumulated deltas.
                     const finalText =
-                        (typeof evt.text === "string" && evt.text) ||
+                        (typeof evt?.text === "string" && evt.text) ||
+                        (Array.isArray(evt?.content)
+                            ? evt.content
+                                  .filter((b) => b && b.type === "text")
+                                  .map((b) => b.text || "")
+                                  .join("")
+                            : "") ||
                         accumulated;
                     settle(resolve, finalText);
                 })
             );
             listenerIds.push(
                 llm.onStreamError((evt) => {
-                    if (!evt || evt.requestId !== requestId) return;
+                    events.push({
+                        k: "error",
+                        reqMatch: evt?.requestId === requestId,
+                        gotReqId: evt?.requestId,
+                        msg: evt?.error || evt?.message,
+                    });
+                    if (
+                        evt &&
+                        evt.requestId !== undefined &&
+                        evt.requestId !== null &&
+                        evt.requestId !== requestId
+                    ) {
+                        return;
+                    }
                     settle(
                         reject,
                         new Error(
@@ -126,21 +267,56 @@ export function sendOneShot({
             return;
         }
 
+        // Resolve a scratch cwd for the CLI backend so the
+        // dash-electron project's CLAUDE.md and skills folder don't
+        // auto-load and make the model conversational. The renderer
+        // can't read os.tmpdir() directly — go through the bridge
+        // helper added in preload. Non-CLI backends ignore cwd, so
+        // we only bother to fetch it for claude-code.
+        const cwdPromise =
+            backend === "claude-code" &&
+            window.mainApi &&
+            window.mainApi.aiAssistant &&
+            typeof window.mainApi.aiAssistant.composerScratchDir === "function"
+                ? Promise.resolve(
+                      window.mainApi.aiAssistant
+                          .composerScratchDir()
+                          .catch(() => undefined)
+                  )
+                : Promise.resolve(undefined);
+
         const messages = [{ role: "user", content: userMessage }];
-        Promise.resolve(
-            llm.sendMessage(requestId, {
-                model,
-                apiKey,
-                backend,
-                systemPrompt,
-                messages,
-                // Lock down tool usage — these are pure structured
-                // completions, no MCP / Bash / Read needed.
-                replaceSystemPrompt: true,
-                disableTools: true,
-                maxToolRounds: 0,
-            })
-        ).catch((err) => settle(reject, err));
+        cwdPromise.then((cwd) =>
+            Promise.resolve(
+                llm.sendMessage(requestId, {
+                    model,
+                    // For the CLI backend, passing apiKey: null is a
+                    // no-op; passing it as undefined matches what
+                    // ChatCore does and avoids any defensive branch
+                    // in the bridge that might treat null as "use
+                    // anthropic path" by accident.
+                    apiKey: backend === "claude-code" ? undefined : apiKey,
+                    backend,
+                    systemPrompt,
+                    messages,
+                    // Scratch cwd keeps the CLI from auto-loading
+                    // CLAUDE.md + skills folder. Undefined for
+                    // non-CLI backends — they ignore cwd anyway.
+                    cwd,
+                    // INTENTIONALLY no widgetUuid — each Suggest
+                    // call is a fresh CLI session with no context
+                    // continuity. A previous shared-session bug had
+                    // the model responding "I just built..." because
+                    // it remembered an earlier turn.
+                    // Lock down tool usage — these are pure
+                    // structured completions, no MCP / Bash / Read
+                    // needed.
+                    replaceSystemPrompt: true,
+                    disableTools: true,
+                    maxToolRounds: 0,
+                })
+            ).catch((err) => settle(reject, err))
+        );
     });
 }
 

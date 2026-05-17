@@ -23,9 +23,15 @@ import { ComposerPane } from "./ComposerPane";
 import { DASH_REACT_COMPONENT_SCHEMAS } from "../dashReactComponentSchemas";
 
 describe("ComposerPane", () => {
-    test("renders an add button for every schema entry", () => {
+    test("renders an add button for every palette-visible schema entry", () => {
         render(<ComposerPane />);
-        for (const name of Object.keys(DASH_REACT_COMPONENT_SCHEMAS)) {
+        for (const [name, schema] of Object.entries(
+            DASH_REACT_COMPONENT_SCHEMAS
+        )) {
+            // Schemas marked hideFromPalette (MenuItem variants) exist
+            // for import bookkeeping but aren't user-droppable, so no
+            // palette button is rendered for them.
+            if (schema.hideFromPalette) continue;
             expect(
                 screen.getByTestId(`composer-add-${name}`)
             ).toBeInTheDocument();
@@ -53,7 +59,7 @@ describe("ComposerPane", () => {
         const lastCall = onEmit.mock.calls[onEmit.mock.calls.length - 1][0];
         expect(typeof lastCall.componentCode).toBe("string");
         expect(lastCall.componentCode).toContain("<Heading");
-        expect(lastCall.componentCode).toContain("<Panel>");
+        expect(lastCall.componentCode).toMatch(/<Panel[^>]*>/);
         expect(typeof lastCall.configCode).toBe("string");
         expect(lastCall.configCode).toContain('component: "ComposedWidget"');
     });

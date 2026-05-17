@@ -96,6 +96,16 @@ export function PreviewIframe({
     // event the iframe shell forwards via `bridge:console` lands here.
     // Caller (the widget builder modal) feeds it into the Console tab.
     onConsoleEvent,
+    // Composer click-to-select. When `selectable` is true the shell
+    // injects hover outlines, intercepts clicks on any element
+    // marked with data-composer-node-id (emitted by the composer),
+    // and posts bridge:composer-clicked back here. `selectedNodeId`
+    // tells the shell which node currently shows the "selected"
+    // solid outline. `onComposerNodeClick({nodeId})` is the caller's
+    // hook — wire it into the composer's selectedNodeId state.
+    selectable = false,
+    selectedNodeId = null,
+    onComposerNodeClick,
     className,
     style,
 }) {
@@ -152,12 +162,19 @@ export function PreviewIframe({
             if (typeof onConsoleEvent === "function") onConsoleEvent(payload);
         });
 
+        const offClick = bridge.on("bridge:composer-clicked", (payload) => {
+            if (typeof onComposerNodeClick === "function") {
+                onComposerNodeClick(payload);
+            }
+        });
+
         return () => {
             offReady();
             offMounted();
             offError();
             offStats();
             offConsole();
+            offClick();
             bridge.destroy();
             bridgeRef.current = null;
             readyRef.current = false;
@@ -168,8 +185,33 @@ export function PreviewIframe({
         onError,
         onRenderStats,
         onConsoleEvent,
+        onComposerNodeClick,
         writeHostModules,
     ]);
+
+    // Push the selectable flag into the iframe whenever it flips.
+    // Cheap — the shell only installs CSS once on first true, and
+    // gates its click interceptor on this flag so the chat/build
+    // flows aren't affected when selectable is false.
+    useEffect(() => {
+        if (status !== "mounted" && status !== "ready") return;
+        if (!bridgeRef.current) return;
+        bridgeRef.current.send("bridge:set-selectable", {
+            selectable: !!selectable,
+        });
+    }, [selectable, status]);
+
+    // Push the currently-selected node id so the shell can keep its
+    // "selected" outline in sync with the composer's selection
+    // (including the case where the user clicks a node in the
+    // composition tree and we want the preview to highlight it).
+    useEffect(() => {
+        if (status !== "mounted" && status !== "ready") return;
+        if (!bridgeRef.current) return;
+        bridgeRef.current.send("bridge:set-selected", {
+            nodeId: selectedNodeId || null,
+        });
+    }, [selectedNodeId, status]);
 
     // Send bridge:load-bundle when the bundle source / component
     // name change AND the iframe handshake has completed.

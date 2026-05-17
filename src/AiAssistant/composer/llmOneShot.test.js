@@ -153,6 +153,60 @@ describe("sendOneShot", () => {
         await expect(p).rejects.toThrow("blew up");
     });
 
+    test("CLI backend: fetches a scratch cwd from mainApi.aiAssistant and passes it to sendMessage", async () => {
+        const { fire, llm } = setupFakeBridge();
+        window.mainApi.aiAssistant = {
+            composerScratchDir: jest
+                .fn()
+                .mockResolvedValue("/tmp/dash-composer-suggest"),
+        };
+        const p = sendOneShot({
+            model: "x",
+            backend: "claude-code",
+            systemPrompt: "p",
+            userMessage: "m",
+        });
+        // Wait for the cwd lookup + sendMessage call to flush.
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(
+            window.mainApi.aiAssistant.composerScratchDir
+        ).toHaveBeenCalledTimes(1);
+        expect(llm.sendMessage).toHaveBeenCalled();
+        const [requestId, params] = llm.sendMessage.mock.calls[0];
+        expect(params.cwd).toBe("/tmp/dash-composer-suggest");
+        // Each Suggest run uses a fresh CLI session (no widgetUuid).
+        expect(params.widgetUuid).toBeUndefined();
+        // Settle the promise so jest doesn't complain about a
+        // hanging request at end of test.
+        fire("complete", { requestId, text: "ok" });
+        await expect(p).resolves.toBe("ok");
+    });
+
+    test("anthropic backend: does NOT call composerScratchDir", async () => {
+        const { fire, llm } = setupFakeBridge();
+        window.mainApi.aiAssistant = {
+            composerScratchDir: jest.fn(),
+        };
+        const p = sendOneShot({
+            model: "x",
+            apiKey: "sk-test",
+            backend: "anthropic",
+            systemPrompt: "p",
+            userMessage: "m",
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(
+            window.mainApi.aiAssistant.composerScratchDir
+        ).not.toHaveBeenCalled();
+        const [requestId, params] = llm.sendMessage.mock.calls[0];
+        expect(params.cwd).toBeUndefined();
+        fire("complete", { requestId, text: "ok" });
+        await expect(p).resolves.toBe("ok");
+    });
+
     test("uses text on the complete event when present (no deltas)", async () => {
         const { fire, llm } = setupFakeBridge();
         const p = sendOneShot({
@@ -164,6 +218,87 @@ describe("sendOneShot", () => {
         const [requestId] = llm.sendMessage.mock.calls[0];
         fire("complete", { requestId, text: "all at once" });
         await expect(p).resolves.toBe("all at once");
+    });
+
+    test("resolves with accumulated deltas after the quiescence window when complete never fires", async () => {
+        // The Claude CLI bridge sometimes finishes a stream-json
+        // run without ever emitting a `result` line, so no
+        // LLM_STREAM_COMPLETE event reaches the renderer. The
+        // wrapper must still resolve — once deltas stop arriving
+        // for `deltaQuiescenceMs`, we treat the stream as done and
+        // return the accumulated text.
+        jest.useFakeTimers();
+        try {
+            const { fire, llm } = setupFakeBridge();
+            const p = sendOneShot({
+                model: "x",
+                systemPrompt: "p",
+                userMessage: "m",
+                deltaQuiescenceMs: 100,
+            });
+            await Promise.resolve();
+            const [requestId] = llm.sendMessage.mock.calls[0];
+            fire("delta", { requestId, text: "part 1 " });
+            fire("delta", { requestId, text: "part 2" });
+            // No complete event. Advance past the quiescence window.
+            jest.advanceTimersByTime(150);
+            await expect(p).resolves.toBe("part 1 part 2");
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    test("complete event arriving inside the quiescence window wins over the timer", async () => {
+        jest.useFakeTimers();
+        try {
+            const { fire, llm } = setupFakeBridge();
+            const p = sendOneShot({
+                model: "x",
+                systemPrompt: "p",
+                userMessage: "m",
+                deltaQuiescenceMs: 100,
+            });
+            await Promise.resolve();
+            const [requestId] = llm.sendMessage.mock.calls[0];
+            fire("delta", { requestId, text: "streaming" });
+            jest.advanceTimersByTime(50);
+            fire("complete", {
+                requestId,
+                content: [{ type: "text", text: "final" }],
+            });
+            await expect(p).resolves.toBe("final");
+            // Ensure no late quiescence resolve fires (would surface
+            // as an unhandled promise warning).
+            jest.advanceTimersByTime(200);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    test("unwraps content[] shape on the complete event (CLI bridge shape)", async () => {
+        // The CLI bridge emits LLM_STREAM_COMPLETE with shape
+        //   { requestId, content: [{ type: "text", text: "..." }], stopReason, usage }
+        // and NOT with a top-level `text` field. The Anthropic
+        // streaming branch uses `text`. The wrapper has to handle
+        // both.
+        const { fire, llm } = setupFakeBridge();
+        const p = sendOneShot({
+            model: "x",
+            systemPrompt: "p",
+            userMessage: "m",
+        });
+        await Promise.resolve();
+        const [requestId] = llm.sendMessage.mock.calls[0];
+        fire("complete", {
+            requestId,
+            content: [
+                { type: "text", text: "hello " },
+                { type: "tool_use", id: "x" },
+                { type: "text", text: "world" },
+            ],
+            stopReason: "end_turn",
+        });
+        await expect(p).resolves.toBe("hello world");
     });
 });
 

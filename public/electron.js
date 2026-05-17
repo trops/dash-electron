@@ -2223,6 +2223,27 @@ function createWindow() {
             return result;
         });
 
+        // Scratch cwd for one-shot LLM calls in the Compose-mode
+        // Suggest flow. Returning a tmp-located path keeps the
+        // Claude CLI from auto-loading dash-electron's CLAUDE.md +
+        // skills folder, which otherwise primes the model to be
+        // conversational about widget-building when we want strict
+        // JSON output. Idempotent: created on first call, reused.
+        logger.loggedHandle("ai-assistant:composer-scratch-dir", async () => {
+            const os = require("os");
+            const fsp = require("fs").promises;
+            const dir = path.join(os.tmpdir(), "dash-composer-suggest");
+            try {
+                await fsp.mkdir(dir, { recursive: true });
+            } catch (err) {
+                console.error(
+                    "[ai-assistant:composer-scratch-dir] mkdir failed:",
+                    err
+                );
+            }
+            return dir;
+        });
+
         // ── Multi-file payload helpers ──────────────────────────────
         //
         // The AI Widget Builder may emit a multi-file package (Phase 2):

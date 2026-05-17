@@ -1,4 +1,10 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import {
     DASH_REACT_COMPONENT_SCHEMAS,
     getSchemasByCategory,
@@ -11,12 +17,36 @@ import {
     updateNodeProp,
     setSlotMode,
     setSlotWire,
+    setSlotPipe,
     clearSlotWire,
     setSlotArg,
+    setSlotFieldMap,
     getNodeById,
 } from "./composerEmitter";
 import { PropertyInspector } from "./PropertyInspector";
 import { SuggestLayoutButton } from "./SuggestLayoutButton";
+
+/**
+ * Walk a tree and return the largest N from any `node-N` id seen.
+ * Returns 0 for a tree with no numbered ids. Used to seed the id
+ * counter when starting from an existing composition (draft resume,
+ * suggested layout) so future inserts don't collide with existing
+ * ids.
+ */
+function maxNodeId(root) {
+    let max = 0;
+    const visit = (n) => {
+        if (!n) return;
+        const m = (n.id || "").match(/^node-(\d+)$/);
+        if (m) {
+            const v = parseInt(m[1], 10);
+            if (v > max) max = v;
+        }
+        if (Array.isArray(n.children)) n.children.forEach(visit);
+    };
+    visit(root);
+    return max;
+}
 
 /**
  * ComposerPane — Compose-mode replacement for the chat panel in
@@ -51,20 +81,133 @@ import { SuggestLayoutButton } from "./SuggestLayoutButton";
  */
 export function ComposerPane({
     onEmit,
+    onTreeChange,
     providers = {},
     initialTree = null,
     apiKey = null,
     model = "claude-sonnet-4-20250514",
+    backend = "claude-code",
+    // Lifted selection so the host (modal) can drive selection
+    // from the preview iframe's click-to-pick. Optional — when not
+    // provided, the pane manages its own selection internally.
+    selectedNodeId: controlledSelectedNodeId = null,
+    onSelectedNodeChange,
 }) {
-    const [tree, setTree] = useState(() => initialTree || makeEmptyTree());
-    const idCounter = useRef(1);
+    const [tree, setTreeRaw] = useState(() => initialTree || makeEmptyTree());
+    // Monotonic id source for new nodes. Seeded from the initial
+    // tree's highest node-N id (draft resume) and kept in sync via
+    // the effect below — so any path that mutates the tree (palette
+    // insert, suggested layout, future external setters) stays
+    // collision-free without having to remember to update the ref
+    // manually. The ref persists across renders so rapid successive
+    // adds within the same event loop also stay unique (functional
+    // setTree wouldn't help here because emit() needs the resolved
+    // tree synchronously after each insert).
+    const idCounter = useRef(initialTree ? maxNodeId(initialTree.root) : 0);
+    // Mirror every internal tree mutation out to the host so it can
+    // persist the composition with the rest of the draft. Wrapping
+    // setTree (rather than firing in every handler) means all in-pane
+    // edits — palette inserts, prop changes, wires, pipes, suggested
+    // layouts — get observed without each handler needing to remember.
+    const setTree = useCallback(
+        (next) => {
+            setTreeRaw((prev) => {
+                const resolved = typeof next === "function" ? next(prev) : next;
+                if (typeof onTreeChange === "function" && resolved !== prev) {
+                    onTreeChange(resolved);
+                }
+                return resolved;
+            });
+        },
+        [onTreeChange]
+    );
+    // Keep idCounter ≥ the tree's actual max node-N id. Runs after
+    // every tree mutation so handleApplySuggestedTree / draft
+    // resume / any future external setter doesn't need to remember
+    // to bump the ref. Without this, applying a suggested layout
+    // with node-7 then clicking Add would have given the new node
+    // an id colliding with one of the suggestion's nodes.
+    useEffect(() => {
+        const m = maxNodeId(tree.root);
+        if (m > idCounter.current) idCounter.current = m;
+    }, [tree]);
     const [collapsedCategories, setCollapsedCategories] = useState(
         () => new Set()
     );
+    // Tracks whether the user has manually renamed. We only auto-rename
+    // to avoid collisions while the name is still the default (or
+    // already a default-with-numeric-suffix we ourselves picked).
+    const userRenamedRef = useRef(false);
+
+    // On first mount (when starting from the default tree) ask the main
+    // process for the currently installed @ai-built/ packages and bump
+    // the default "ComposedWidget" to "ComposedWidget2", "...3", etc.
+    // until it doesn't collide. Without this each install silently
+    // overwrites the previous ComposedWidget.
+    useEffect(() => {
+        if (initialTree) return; // user/host supplied a name
+        if (userRenamedRef.current) return;
+        const getConfigs = window.mainApi?.widgets?.getComponentConfigs;
+        if (typeof getConfigs !== "function") return; // jsdom / tests
+        let cancelled = false;
+        (async () => {
+            try {
+                const configs = (await getConfigs()) || [];
+                if (cancelled) return;
+                const taken = new Set();
+                for (const c of configs) {
+                    if (c?.componentName)
+                        taken.add(String(c.componentName).toLowerCase());
+                    if (c?.widgetPackage) {
+                        const pkg = String(c.widgetPackage).toLowerCase();
+                        const slug = pkg.startsWith("@ai-built/")
+                            ? pkg.slice("@ai-built/".length)
+                            : pkg;
+                        taken.add(slug);
+                    }
+                }
+                const base = "ComposedWidget";
+                if (!taken.has(base.toLowerCase())) return; // default is fine
+                let n = 2;
+                while (taken.has(`${base}${n}`.toLowerCase())) n += 1;
+                setTree((prev) => ({ ...prev, widgetName: `${base}${n}` }));
+                emit({ ...tree, widgetName: `${base}${n}` });
+            } catch {
+                // Lookup failed (e.g. fresh install with no
+                // ComponentManager yet) — leave the default name; the
+                // install pipeline can still error visibly if there's a
+                // real collision.
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+        // Intentionally one-shot at mount.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     // C2: when a tree node is selected, the bottom pane flips from
     // palette → property inspector for that node. null = no
     // selection → palette is shown.
-    const [selectedNodeId, setSelectedNodeId] = useState(null);
+    //
+    // Selection is "controlled" when the host supplies
+    // `selectedNodeId` + `onSelectedNodeChange` (so preview-iframe
+    // clicks can drive selection). Otherwise we keep an internal
+    // state for the standalone case (tests, embeds).
+    const [internalSelectedNodeId, setInternalSelectedNodeId] = useState(null);
+    const isControlled = typeof onSelectedNodeChange === "function";
+    const selectedNodeId = isControlled
+        ? controlledSelectedNodeId
+        : internalSelectedNodeId;
+    const setSelectedNodeId = useCallback(
+        (id) => {
+            if (isControlled) {
+                onSelectedNodeChange(id);
+            } else {
+                setInternalSelectedNodeId(id);
+            }
+        },
+        [isControlled, onSelectedNodeChange]
+    );
     const selectedNode = useMemo(
         () => getNodeById(tree, selectedNodeId),
         [tree, selectedNodeId]
@@ -94,7 +237,7 @@ export function ComposerPane({
             setTree(next);
             emit(next);
         },
-        [tree, emit]
+        [tree, emit, setTree]
     );
 
     const handleRemove = useCallback(
@@ -105,7 +248,7 @@ export function ComposerPane({
             // Deselect if the user nuked the node they were editing.
             if (selectedNodeId === nodeId) setSelectedNodeId(null);
         },
-        [tree, emit, selectedNodeId]
+        [tree, emit, selectedNodeId, setTree, setSelectedNodeId]
     );
 
     const handleChangeProp = useCallback(
@@ -114,7 +257,7 @@ export function ComposerPane({
             setTree(next);
             emit(next);
         },
-        [tree, emit]
+        [tree, emit, setTree]
     );
 
     const handleSetSlotMode = useCallback(
@@ -123,7 +266,7 @@ export function ComposerPane({
             setTree(next);
             emit(next);
         },
-        [tree, emit]
+        [tree, emit, setTree]
     );
 
     const handleSetSlotWire = useCallback(
@@ -132,7 +275,7 @@ export function ComposerPane({
             setTree(next);
             emit(next);
         },
-        [tree, emit]
+        [tree, emit, setTree]
     );
 
     const handleClearSlotWire = useCallback(
@@ -141,7 +284,22 @@ export function ComposerPane({
             setTree(next);
             emit(next);
         },
-        [tree, emit]
+        [tree, emit, setTree]
+    );
+
+    const handleSetSlotPipe = useCallback(
+        (nodeId, propName, sourceNodeId, sourcePropName) => {
+            const next = setSlotPipe(
+                tree,
+                nodeId,
+                propName,
+                sourceNodeId,
+                sourcePropName
+            );
+            setTree(next);
+            emit(next);
+        },
+        [tree, emit, setTree]
     );
 
     const handleSetSlotArg = useCallback(
@@ -150,7 +308,16 @@ export function ComposerPane({
             setTree(next);
             emit(next);
         },
-        [tree, emit]
+        [tree, emit, setTree]
+    );
+
+    const handleSetSlotFieldMap = useCallback(
+        (nodeId, propName, fieldMap) => {
+            const next = setSlotFieldMap(tree, nodeId, propName, fieldMap);
+            setTree(next);
+            emit(next);
+        },
+        [tree, emit, setTree]
     );
 
     const handleRename = useCallback(
@@ -162,30 +329,18 @@ export function ComposerPane({
             // require an identifier — silently sanitizing here is
             // friendlier than rejecting the keystroke.
             const sanitized = raw.replace(/[^A-Za-z0-9_]/g, "");
+            userRenamedRef.current = true;
             const next = { ...tree, widgetName: sanitized || "ComposedWidget" };
             setTree(next);
             emit(next);
         },
-        [tree, emit]
+        [tree, emit, setTree]
     );
 
     const handleApplySuggestedTree = useCallback(
         (suggestion) => {
-            // Reset the id counter to reflect the suggested tree's
-            // node count so future inserts keep monotonic ids.
-            let maxId = 0;
-            const visit = (n) => {
-                if (!n) return;
-                const m = (n.id || "").match(/^node-(\d+)$/);
-                if (m) {
-                    const v = parseInt(m[1], 10);
-                    if (v > maxId) maxId = v;
-                }
-                if (Array.isArray(n.children)) n.children.forEach(visit);
-            };
-            visit(suggestion.root);
-            idCounter.current = maxId;
-
+            // No manual idCounter bump needed — the useEffect above
+            // syncs it from the new tree on commit.
             const nextTree = {
                 widgetName: suggestion.widgetName || tree.widgetName,
                 root: suggestion.root,
@@ -194,7 +349,7 @@ export function ComposerPane({
             setSelectedNodeId(null);
             emit(nextTree);
         },
-        [tree.widgetName, emit]
+        [tree.widgetName, emit, setTree, setSelectedNodeId]
     );
 
     const toggleCategory = useCallback((cat) => {
@@ -245,12 +400,15 @@ export function ComposerPane({
                 <div className="flex-1 min-h-0">
                     <PropertyInspector
                         node={selectedNode}
+                        tree={tree}
                         providers={providers}
                         onChangeProp={handleChangeProp}
                         onSetSlotMode={handleSetSlotMode}
                         onSetSlotWire={handleSetSlotWire}
                         onClearSlotWire={handleClearSlotWire}
+                        onSetSlotPipe={handleSetSlotPipe}
                         onSetSlotArg={handleSetSlotArg}
+                        onSetSlotFieldMap={handleSetSlotFieldMap}
                         onClose={() => setSelectedNodeId(null)}
                     />
                 </div>
@@ -259,6 +417,7 @@ export function ComposerPane({
                     <SuggestLayoutButton
                         apiKey={apiKey}
                         model={model}
+                        backend={backend}
                         onApplyTree={handleApplySuggestedTree}
                     />
                     <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">

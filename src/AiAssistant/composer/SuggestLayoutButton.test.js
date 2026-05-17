@@ -81,6 +81,55 @@ describe("SuggestLayoutButton", () => {
         expect(screen.getByText("A simple list")).toBeInTheDocument();
     });
 
+    test("forwards the backend prop to the LLM helper (so claude-code CLI is used when configured)", async () => {
+        sendOneShotJson.mockResolvedValue({
+            suggestions: [
+                {
+                    label: "x",
+                    root: { type: "Panel", children: [] },
+                },
+            ],
+        });
+        render(
+            <SuggestLayoutButton
+                onApplyTree={() => {}}
+                model="m"
+                backend="claude-code"
+            />
+        );
+        fireEvent.click(screen.getByTestId("composer-suggest-layout-open"));
+        fireEvent.change(screen.getByTestId("composer-suggest-layout-input"), {
+            target: { value: "x" },
+        });
+        await act(async () => {
+            fireEvent.click(
+                screen.getByTestId("composer-suggest-layout-submit")
+            );
+        });
+        const call = sendOneShotJson.mock.calls[0][0];
+        expect(call.backend).toBe("claude-code");
+    });
+
+    test("defaults to claude-code backend when none is passed (no apiKey required)", async () => {
+        sendOneShotJson.mockResolvedValue({
+            suggestions: [
+                { label: "x", root: { type: "Panel", children: [] } },
+            ],
+        });
+        render(<SuggestLayoutButton onApplyTree={() => {}} model="m" />);
+        fireEvent.click(screen.getByTestId("composer-suggest-layout-open"));
+        fireEvent.change(screen.getByTestId("composer-suggest-layout-input"), {
+            target: { value: "x" },
+        });
+        await act(async () => {
+            fireEvent.click(
+                screen.getByTestId("composer-suggest-layout-submit")
+            );
+        });
+        const call = sendOneShotJson.mock.calls[0][0];
+        expect(call.backend).toBe("claude-code");
+    });
+
     test("picking a suggestion fires onApplyTree with ids assigned and resets the form", async () => {
         sendOneShotJson.mockResolvedValue({
             suggestions: [
@@ -189,6 +238,72 @@ describe("SuggestLayoutButton", () => {
         expect(
             screen.getByTestId("composer-suggest-layout-error")
         ).toBeInTheDocument();
+    });
+
+    test("retries once with a stricter prompt when the first response has no JSON", async () => {
+        // First call: model returns prose ("I'll help you build...").
+        // Second call (retry with stricter prompt): real JSON.
+        sendOneShotJson
+            .mockRejectedValueOnce(
+                new Error(
+                    "LLM response did not contain a JSON block. Raw text: hi"
+                )
+            )
+            .mockResolvedValueOnce({
+                suggestions: [
+                    {
+                        label: "retry suggestion",
+                        root: {
+                            type: "Panel",
+                            children: [
+                                { type: "Heading", props: { title: "OK" } },
+                            ],
+                        },
+                    },
+                ],
+            });
+
+        render(<SuggestLayoutButton onApplyTree={() => {}} model="m" />);
+        fireEvent.click(screen.getByTestId("composer-suggest-layout-open"));
+        fireEvent.change(screen.getByTestId("composer-suggest-layout-input"), {
+            target: { value: "a thing" },
+        });
+        await act(async () => {
+            fireEvent.click(
+                screen.getByTestId("composer-suggest-layout-submit")
+            );
+        });
+
+        // Two calls total: first failed, second succeeded with the
+        // retry prompt that includes the "PRIOR ATTEMPT FAILED"
+        // instruction.
+        expect(sendOneShotJson).toHaveBeenCalledTimes(2);
+        const secondPrompt = sendOneShotJson.mock.calls[1][0].systemPrompt;
+        expect(secondPrompt).toMatch(/PRIOR ATTEMPT FAILED/);
+        // Picker renders with the retry suggestion.
+        expect(screen.getByText("retry suggestion")).toBeInTheDocument();
+    });
+
+    test("does NOT retry on non-no-JSON errors (timeout / bridge error)", async () => {
+        sendOneShotJson.mockRejectedValueOnce(
+            new Error("LLM request timed out after 60000ms")
+        );
+        render(<SuggestLayoutButton onApplyTree={() => {}} model="m" />);
+        fireEvent.click(screen.getByTestId("composer-suggest-layout-open"));
+        fireEvent.change(screen.getByTestId("composer-suggest-layout-input"), {
+            target: { value: "x" },
+        });
+        await act(async () => {
+            fireEvent.click(
+                screen.getByTestId("composer-suggest-layout-submit")
+            );
+        });
+        // No retry — error surfaces immediately so we don't double-bill
+        // on transport failures.
+        expect(sendOneShotJson).toHaveBeenCalledTimes(1);
+        expect(
+            screen.getByTestId("composer-suggest-layout-error").textContent
+        ).toMatch(/timed out/i);
     });
 
     test("surfaces LLM errors in the form", async () => {

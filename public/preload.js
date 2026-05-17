@@ -133,6 +133,15 @@ const extendedApi = {
         // the UI can show a banner with the actual problem instead of
         // letting the user hit an opaque ENOENT mid-compile.
         healthCheck: () => ipcRenderer.invoke("ai-assistant:health-check"),
+        // Returns an absolute scratch directory the renderer can hand
+        // to llm.sendMessage as `cwd` for one-shot LLM calls (like
+        // the Compose-mode Suggest button). Spawning the CLI in a
+        // scratch dir prevents the dash-electron project's CLAUDE.md
+        // and skill folders from auto-loading and making the model
+        // conversational — we want JSON-only structured output.
+        // Idempotent: the dir is created on first call and reused.
+        composerScratchDir: () =>
+            ipcRenderer.invoke("ai-assistant:composer-scratch-dir"),
     },
     drafts: {
         // Auto-saved widget builds. See public/widgetDrafts.cjs.

@@ -13,7 +13,8 @@
  *   - auto-supplies the credential triplet (providerHash/dashboardAppId/
  *     providerName) without the user binding them
  *   - literal-kind args render as JSON-encoded values
- *   - userConfig-kind args render as `userConfig.<field>` and
+ *   - userConfig-kind args render as `props.<field>` (matches the
+ *     flat-prop convention dash-core's WidgetFactory delivers) and
  *     populate the userConfigFields set
  *   - return-shape heuristic: methods returning {hits:Array} unwrap
  *     to result?.hits; methods returning Array unwrap with Array.isArray;
@@ -132,7 +133,9 @@ describe("buildHookScaffold", () => {
 
         const text = s.hookLines.join("\n");
         expect(text).toContain("useProviderClient(provider_MyAlgolia)");
-        expect(text).toContain("useState(null)");
+        // listIndices returns Array<…> so the initial value is []
+        // (not null) — prevents the consumer crashing on .map(null).
+        expect(text).toContain("useState([])");
         expect(text).toContain("window.mainApi.algolia.listIndices");
         // Auto-supplied credential triplet.
         expect(text).toContain("providerHash: pc_MyAlgolia.providerHash");
@@ -229,8 +232,8 @@ describe("buildHookScaffold", () => {
             "searchTerm",
         ]);
         const text = s.hookLines.join("\n");
-        expect(text).toContain("indexName: userConfig.indexName");
-        expect(text).toContain("query: userConfig.searchTerm");
+        expect(text).toContain("indexName: props.indexName");
+        expect(text).toContain("query: props.searchTerm");
     });
 
     test("provider hook renders once when two slots use the same instance", () => {
@@ -274,6 +277,163 @@ describe("buildHookScaffold", () => {
         // (one provider instance, multiple slots).
         const matches = text.match(/useProviderClient\(provider_A\)/g) || [];
         expect(matches.length).toBe(1);
+    });
+
+    test("callback wire (propType=function) emits useCallback + result-capture state, no useEffect", () => {
+        // Pretend the wired prop is a function callback. Emitter
+        // should produce a useCallback handler that fires the tool
+        // when invoked, not a useState/useEffect data-fetch.
+        const tree = makeTree();
+        tree.root.children.push({
+            id: "node-1",
+            type: "Button",
+            props: {},
+            wires: {
+                onClick: {
+                    provider: "MyAlgolia",
+                    providerType: "algolia",
+                    providerClass: "credential",
+                    method: "search",
+                    args: {
+                        indexName: { kind: "literal", value: "products" },
+                        query: { kind: "literal", value: "" },
+                    },
+                },
+            },
+            children: [],
+        });
+        const getPropType = (componentType, propName) => {
+            if (componentType === "Button" && propName === "onClick")
+                return "function";
+            return "any";
+        };
+        const s = buildHookScaffold(tree, fakeRegistry, getPropType);
+        expect(s.extraReactImports.has("useCallback")).toBe(true);
+        // useState IS imported — callback wires allocate a result-
+        // capture state so downstream `pipe` wires can read the
+        // tool's return value. useEffect is NOT imported (no data
+        // wires).
+        expect(s.extraReactImports.has("useState")).toBe(true);
+        expect(s.extraReactImports.has("useEffect")).toBe(false);
+        const text = s.hookLines.join("\n");
+        expect(text).toContain(
+            "const onClick = useCallback(async (eventArg) => {"
+        );
+        expect(text).toContain("window.mainApi.algolia.search");
+        // Auto args still supplied.
+        expect(text).toContain("providerHash: pc_MyAlgolia.providerHash");
+        // Result-capture state allocated; the handler writes the
+        // unwrapped result so a downstream pipe sees the data.
+        expect(text).toContain(
+            "const [onClickResult, set_onClickResult] = useState([]);"
+        );
+        expect(text).toContain("set_onClickResult(result?.hits || [])");
+    });
+
+    test("MCP wire result-capture inlines an unwrap helper that handles content[].text and newline-split fallback", () => {
+        const tree = makeTree();
+        tree.root.children.push({
+            id: "node-1",
+            type: "DataList",
+            props: {},
+            wires: {
+                items: {
+                    providerType: "google-drive",
+                    providerClass: "mcp",
+                    method: "search",
+                    args: { query: { kind: "literal", value: "x" } },
+                },
+            },
+            children: [],
+        });
+        const getPropType = () => "Array<{label,value}>";
+        const s = buildHookScaffold(tree, fakeRegistry, getPropType);
+        const text = s.hookLines.join("\n");
+        // Unwrap reads result.content[0].type === "text", tries
+        // JSON.parse, falls back to text.split("\\n").
+        expect(text).toContain("Array.isArray(result.content)");
+        expect(text).toContain("JSON.parse(_t)");
+        expect(text).toContain('_t.split("\\n")');
+        expect(text).toContain("label: s, value: s");
+    });
+
+    test("MCP callback wire emits useCallback + callTool", () => {
+        const tree = makeTree();
+        tree.root.children.push({
+            id: "node-1",
+            type: "Button",
+            props: {},
+            wires: {
+                onClick: {
+                    provider: null,
+                    providerType: "filesystem",
+                    providerClass: "mcp",
+                    method: "write_file",
+                    args: { path: { kind: "literal", value: "/tmp/x" } },
+                },
+            },
+            children: [],
+        });
+        const getPropType = () => "function";
+        const s = buildHookScaffold(tree, fakeRegistry, getPropType);
+        expect(s.extraReactImports.has("useCallback")).toBe(true);
+        expect(s.coreImports.has("useMcpProvider")).toBe(true);
+        const text = s.hookLines.join("\n");
+        expect(text).toContain(
+            "const onClick = useCallback(async (eventArg) => {"
+        );
+        expect(text).toContain('mcp_filesystem.callTool("write_file"');
+    });
+
+    test("mixed: one data wire + one callback wire share the provider hook", () => {
+        const tree = makeTree();
+        // Data wire (Table.data → listIndices).
+        tree.root.children.push({
+            id: "node-1",
+            type: "Table",
+            props: {},
+            wires: {
+                data: {
+                    provider: "A",
+                    providerType: "algolia",
+                    providerClass: "credential",
+                    method: "listIndices",
+                    args: {},
+                },
+            },
+            children: [],
+        });
+        // Callback wire (Button.onClick → search) on the same instance.
+        tree.root.children.push({
+            id: "node-2",
+            type: "Button",
+            props: {},
+            wires: {
+                onClick: {
+                    provider: "A",
+                    providerType: "algolia",
+                    providerClass: "credential",
+                    method: "search",
+                    args: { indexName: { kind: "literal", value: "x" } },
+                },
+            },
+            children: [],
+        });
+        const getPropType = (_t, p) =>
+            p === "onClick" ? "function" : "Array<Object>";
+        const s = buildHookScaffold(tree, fakeRegistry, getPropType);
+        expect(s.extraReactImports.has("useState")).toBe(true);
+        expect(s.extraReactImports.has("useEffect")).toBe(true);
+        expect(s.extraReactImports.has("useCallback")).toBe(true);
+        const text = s.hookLines.join("\n");
+        // One useProviderClient line — the two wires share it.
+        const pcMatches = text.match(/useProviderClient\(provider_A\)/g) || [];
+        expect(pcMatches.length).toBe(1);
+        // listIndices returns Array — initial state is [].
+        expect(text).toContain("const [data, set_data] = useState([]);");
+        expect(text).toContain(
+            "const onClick = useCallback(async (eventArg) => {"
+        );
     });
 
     test("disambiguates slot var names when same propName wired on multiple nodes", () => {

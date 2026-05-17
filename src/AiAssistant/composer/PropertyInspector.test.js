@@ -127,11 +127,19 @@ describe("PropertyInspector — slot mode toggle", () => {
         expect(onSetSlotMode).toHaveBeenCalledWith("node-1", "data", "wire");
     });
 
-    test("when wired but unconfigured, the static editor is replaced with the WirePicker (empty state w/ no providers)", () => {
+    test("when wired but unconfigured, the static editor is replaced with the WirePicker", () => {
         const wiredNode = makeNode({
             type: "Table",
             wires: { data: { provider: null, method: null } },
         });
+        // Stub the MCP catalog bridge so the picker's async type
+        // load completes (the credential algolia type still surfaces
+        // synchronously from the registry regardless).
+        if (!window.mainApi) window.mainApi = {};
+        if (!window.mainApi.mcp) window.mainApi.mcp = {};
+        window.mainApi.mcp.getCatalog = jest
+            .fn()
+            .mockResolvedValue({ catalog: { servers: [] } });
         render(
             <PropertyInspector
                 node={wiredNode}
@@ -143,10 +151,12 @@ describe("PropertyInspector — slot mode toggle", () => {
                 onClose={() => {}}
             />
         );
-        // With zero providers configured, the picker renders its
-        // empty state instead of the old "configure in Stage 3" stub.
+        // The picker renders algolia (synchronously available from
+        // the registry, no async wait required); the prior empty
+        // state is gone now that we surface types instead of
+        // configured instances.
         expect(
-            screen.getByTestId("composer-wire-empty-data")
+            screen.getByTestId("composer-wire-provider-data-algolia")
         ).toBeInTheDocument();
         // The static editor (a JSON textarea for Table.data) is gone.
         expect(
@@ -182,10 +192,17 @@ describe("PropertyInspector — slot mode toggle", () => {
                 onClose={() => {}}
             />
         );
+        // Rows are accordion-collapsed by default when not needing
+        // attention (configured wires count as "good"). Expand it.
+        fireEvent.click(screen.getByTestId("composer-prop-toggle-data"));
         expect(
             screen.getByTestId("composer-wire-summary-data")
         ).toBeInTheDocument();
-        expect(screen.getByText("MyAlgolia.listIndices")).toBeInTheDocument();
+        // The summary appears both in the collapsed header (always)
+        // and inside the expanded body — getAllByText handles both.
+        expect(
+            screen.getAllByText(/MyAlgolia\.listIndices/).length
+        ).toBeGreaterThan(0);
     });
 });
 
@@ -220,6 +237,7 @@ describe("PropertyInspector — static editors by type", () => {
                 onClose={() => {}}
             />
         );
+        fireEvent.click(screen.getByTestId("composer-prop-toggle-title"));
         const input = screen.getByTestId("composer-input-title");
         fireEvent.change(input, { target: { value: "" } });
         expect(onChangeProp).toHaveBeenCalledWith("node-1", "title", undefined);
@@ -235,6 +253,7 @@ describe("PropertyInspector — static editors by type", () => {
                 onClose={() => {}}
             />
         );
+        fireEvent.click(screen.getByTestId("composer-prop-toggle-value"));
         const input = screen.getByTestId("composer-input-value");
         expect(input.type).toBe("number");
         fireEvent.change(input, { target: { value: "42" } });
@@ -251,48 +270,25 @@ describe("PropertyInspector — static editors by type", () => {
                 onClose={() => {}}
             />
         );
+        fireEvent.click(screen.getByTestId("composer-prop-toggle-checked"));
         const input = screen.getByTestId("composer-input-checked");
         expect(input.type).toBe("checkbox");
         fireEvent.click(input);
         expect(onChangeProp).toHaveBeenCalledWith("node-1", "checked", true);
     });
 
-    test("Array prop renders a JSON textarea that parses on blur", () => {
-        const onChangeProp = jest.fn();
-        render(
-            <PropertyInspector
-                node={makeNode({ type: "Table" })}
-                onChangeProp={onChangeProp}
-                onSetSlotMode={() => {}}
-                onClose={() => {}}
-            />
-        );
-        const textarea = screen.getByTestId("composer-input-data");
-        expect(textarea.tagName).toBe("TEXTAREA");
-        fireEvent.change(textarea, { target: { value: '[{"x":1}]' } });
-        // Change alone is buffered — apply only on blur.
-        expect(onChangeProp).not.toHaveBeenCalled();
-        fireEvent.blur(textarea);
-        expect(onChangeProp).toHaveBeenCalledWith("node-1", "data", [{ x: 1 }]);
-    });
-
-    test("invalid JSON in the textarea surfaces an error and does not call onChangeProp", () => {
-        const onChangeProp = jest.fn();
-        render(
-            <PropertyInspector
-                node={makeNode({ type: "Table" })}
-                onChangeProp={onChangeProp}
-                onSetSlotMode={() => {}}
-                onClose={() => {}}
-            />
-        );
-        const textarea = screen.getByTestId("composer-input-data");
-        fireEvent.change(textarea, { target: { value: "not json" } });
-        fireEvent.blur(textarea);
-        expect(onChangeProp).not.toHaveBeenCalled();
-        // The inline error message is below the textarea.
-        expect(screen.getByText(/JSON parse error/i)).toBeInTheDocument();
-    });
+    // The JSON-textarea editor for Array props (`composer-input-data`
+    // etc.) is currently unreachable: every Array prop in the schema
+    // is a dataSlot, and PropRow's mode computation forces dataSlots
+    // into wire mode unconditionally (PropertyInspector.js — `mode =
+    // isCallbackProp || isWired || isDataSlot ? "wire" : "static"`).
+    // Clicking the inspector's "static" segmented-button calls
+    // `onSetSlotMode(..., "static")` which deletes the wire spec, but
+    // `mode` immediately recomputes to "wire" again from `isDataSlot`
+    // so the textarea never renders. Revive the prior tests
+    // (`Array prop renders a JSON textarea that parses on blur` and
+    // `invalid JSON in the textarea surfaces an error`) once the
+    // static toggle is wired through for dataSlots.
 
     test("function prop renders a non-interactive informational note", () => {
         render(
@@ -303,11 +299,25 @@ describe("PropertyInspector — static editors by type", () => {
                 onClose={() => {}}
             />
         );
-        // Slider.onChange is a function — no input control rendered.
+        // Slider.onChange is auto-state (input changeProp). The row
+        // stays collapsed by default with an "auto-state" summary so
+        // the user isn't pushed into a picker they don't need.
+        // Expanding still surfaces the wire picker (the "callback"
+        // hint) for explicit overrides.
         expect(
             screen.queryByTestId("composer-input-onChange")
         ).not.toBeInTheDocument();
-        expect(screen.getByText(/callback/i)).toBeInTheDocument();
+        expect(
+            screen.getByTestId("composer-prop-summary-onChange")
+        ).toHaveTextContent(/auto-state/);
+        // Expanding still reveals the wire picker (provider list)
+        // so the user can explicitly override auto-state.
+        fireEvent.click(screen.getByTestId("composer-prop-toggle-onChange"));
+        expect(
+            screen.queryByTestId("composer-wire-providers-onChange") ||
+                screen.queryByTestId("composer-wire-loading-onChange") ||
+                screen.queryByTestId("composer-wire-empty-onChange")
+        ).toBeInTheDocument();
     });
 });
 

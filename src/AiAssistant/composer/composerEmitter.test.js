@@ -29,9 +29,11 @@ import {
     updateNodeProp,
     setSlotMode,
     setSlotWire,
+    setSlotPipe,
     setSlotArg,
     clearSlotWire,
     getNodeById,
+    renderNodeJsx,
 } from "./composerEmitter";
 
 describe("makeEmptyTree", () => {
@@ -96,7 +98,7 @@ describe("emitWidgetCode — minimal cases", () => {
         expect(componentCode).toContain(
             "export default function ComposedWidget()"
         );
-        expect(componentCode).toContain("<Panel />");
+        expect(componentCode).toMatch(/<Panel\s[^>]*\/>/);
         expect(configCode).toContain('component: "ComposedWidget"');
         expect(configCode).toContain('workspace: "ai-built"');
     });
@@ -117,6 +119,46 @@ describe("emitWidgetCode — minimal cases", () => {
         });
         expect(componentCode).toContain("<div />");
     });
+
+    test("renderNodeJsx({ wrapperFill: true }) emits the fill style on any node, not just root — used by the grid emitter for every leaf cell", () => {
+        const node = {
+            id: "cell-7",
+            type: "Heading",
+            props: { title: "Hi" },
+            children: [],
+        };
+        const out = renderNodeJsx(node, 0, null, { wrapperFill: true });
+        expect(out).toMatch(
+            /<div data-composer-node-id="cell-7" style=\{\{ height: "100%", width: "100%", display: "flex", flexDirection: "column" \}\}>/
+        );
+        const outNoFill = renderNodeJsx(node, 0, null);
+        expect(outNoFill).toContain('<div data-composer-node-id="cell-7">');
+        expect(outNoFill).not.toMatch(/cell-7" style=/);
+    });
+
+    test("root wrapper carries full-size flex style; non-root wrappers don't", () => {
+        // The root wrapper has to give percentage-height components
+        // (Panel defaults to h-full) a sized parent to resolve
+        // against — otherwise a single-Panel composition collapses
+        // to content height in the preview canvas. Non-root wrappers
+        // stay unstyled so children size against their parent
+        // component instead of the composer plumbing.
+        const tree = makeEmptyTree();
+        const withChild = insertChild(
+            tree,
+            "root",
+            { type: "Heading", props: { title: "Hi" } },
+            1
+        );
+        const { componentCode } = emitWidgetCode(withChild);
+        expect(componentCode).toMatch(
+            /<div data-composer-node-id="root" style=\{\{ height: "100%", width: "100%", display: "flex", flexDirection: "column" \}\}>/
+        );
+        expect(componentCode).toContain('<div data-composer-node-id="node-1">');
+        expect(componentCode).not.toMatch(
+            /<div data-composer-node-id="node-1" style=/
+        );
+    });
 });
 
 describe("emitWidgetCode — props", () => {
@@ -129,7 +171,7 @@ describe("emitWidgetCode — props", () => {
             1
         );
         const { componentCode } = emitWidgetCode(next);
-        expect(componentCode).toContain('<Heading title="Hello there" />');
+        expect(componentCode).toContain('<Heading title="Hello there"');
     });
 
     test("escapes embedded double quotes in string props", () => {
@@ -141,7 +183,7 @@ describe("emitWidgetCode — props", () => {
             1
         );
         const { componentCode } = emitWidgetCode(next);
-        expect(componentCode).toContain('<Heading title="He said \\"hi\\"" />');
+        expect(componentCode).toContain('<Heading title="He said \\"hi\\""');
     });
 
     test("renders number and boolean props as brace expressions", () => {
@@ -153,7 +195,14 @@ describe("emitWidgetCode — props", () => {
             1
         );
         const { componentCode } = emitWidgetCode(withSlider);
-        expect(componentCode).toMatch(/<Slider[^>]*value=\{50\}/);
+        // Slider is an input component — value is auto-managed
+        // via useState. The user-set value becomes the initial
+        // state (useState(50)) and the JSX binds to the var.
+        expect(componentCode).toContain(
+            "const [sliderValue, setSliderValue] = useState(50);"
+        );
+        expect(componentCode).toMatch(/<Slider[^>]*value=\{sliderValue\}/);
+        // min/max are static (not input-bound) — render literally.
         expect(componentCode).toMatch(/min=\{0\}/);
         expect(componentCode).toMatch(/max=\{100\}/);
     });
@@ -190,7 +239,7 @@ describe("emitWidgetCode — required-prop placeholders", () => {
         // expr for a `string` type is the quoted literal "Sample".
         // Bare-attribute form (title="…") is reserved for user-set
         // string props rendered via renderPropLiteral.
-        expect(componentCode).toContain('<Heading title={"Sample"} />');
+        expect(componentCode).toContain('<Heading title={"Sample"}');
     });
 
     test("fills required Array prop with []", () => {
@@ -220,7 +269,7 @@ describe("emitWidgetCode — required-prop placeholders", () => {
         // Paragraph has children: ReactNode, required.
         const next = insertChild(tree, "root", { type: "Paragraph" }, 1);
         const { componentCode } = emitWidgetCode(next);
-        expect(componentCode).toContain("<Paragraph>Sample</Paragraph>");
+        expect(componentCode).toMatch(/<Paragraph[^>]*>Sample<\/Paragraph>/);
     });
 });
 
@@ -258,9 +307,9 @@ describe("emitWidgetCode — nesting and imports", () => {
             2
         );
         const { componentCode } = emitWidgetCode(t3);
-        expect(componentCode).toContain("<Panel>");
-        expect(componentCode).toContain("<Card>");
-        expect(componentCode).toContain('<Heading title="Inside the card" />');
+        expect(componentCode).toMatch(/<Panel[^>]*>/);
+        expect(componentCode).toMatch(/<Card[^>]*>/);
+        expect(componentCode).toContain('<Heading title="Inside the card"');
         expect(componentCode).toContain("</Card>");
         expect(componentCode).toContain("</Panel>");
     });
@@ -358,7 +407,7 @@ describe("updateNodeProp", () => {
         const t2 = insertChild(tree, "root", { type: "Heading" }, 1);
         const t3 = updateNodeProp(t2, "node-1", "title", "Hello");
         const { componentCode } = emitWidgetCode(t3);
-        expect(componentCode).toContain('<Heading title="Hello" />');
+        expect(componentCode).toContain('<Heading title="Hello"');
     });
 });
 
@@ -456,16 +505,23 @@ describe("emitWidgetCode — hook scaffolding for configured wires (C4)", () => 
         expect(componentCode).toContain(
             "useProviderClient(provider_MyAlgolia)"
         );
+        // listIndices returns Array → initial state is [] so the
+        // Table doesn't crash with .map(null) on the first render
+        // before the fetch completes.
         expect(componentCode).toContain(
-            "const [data, set_data] = useState(null);"
+            "const [data, set_data] = useState([]);"
         );
         expect(componentCode).toContain("window.mainApi.algolia.listIndices");
         // Wired prop binds to the slot var instead of [] placeholder.
-        expect(componentCode).toContain("<Table data={data} columns={[]} />");
-        // Component now takes a userConfig prop because at least one
-        // wire is configured (even though no userConfig args set).
+        expect(componentCode).toMatch(
+            /<Table data=\{data\} columns=\{\[\]\}[^>]*\/>/
+        );
+        // Component now takes a `props` parameter because at least
+        // one wire is configured. The flat-prop shape matches what
+        // dash-core's WidgetFactory delivers (userConfig values
+        // spread as top-level props).
         expect(componentCode).toContain(
-            "export default function WiredWidget({ userConfig = {} })"
+            "export default function WiredWidget(props)"
         );
     });
 
@@ -479,6 +535,191 @@ describe("emitWidgetCode — hook scaffolding for configured wires (C4)", () => 
         expect(componentCode).toContain(
             "export default function ComposedWidget()"
         );
+    });
+
+    test("callback wire (Button.onClick → algolia.search) emits useCallback binding", () => {
+        const tree = makeEmptyTree("CtaWidget");
+        const t2 = insertChild(
+            tree,
+            "root",
+            { type: "Button", props: { title: "Search" } },
+            1
+        );
+        const t3 = setSlotWire(t2, "node-1", "onClick", {
+            provider: "MyAlgolia",
+            providerType: "algolia",
+            providerClass: "credential",
+            method: "search",
+            args: {
+                indexName: { kind: "literal", value: "products" },
+                query: { kind: "literal", value: "" },
+            },
+        });
+        const { componentCode } = emitWidgetCode(t3);
+        // useState is also imported for the result-capture state
+        // that downstream pipe wires read from.
+        expect(componentCode).toContain(
+            'import React, { useCallback, useState } from "react";'
+        );
+        expect(componentCode).toContain(
+            "const onClick = useCallback(async (eventArg) => {"
+        );
+        expect(componentCode).toContain("window.mainApi.algolia.search");
+        expect(componentCode).toContain(
+            "const [onClickResult, set_onClickResult] = useState([]);"
+        );
+        // JSX binds the callback to the prop.
+        expect(componentCode).toMatch(/<Button[^>]*onClick=\{onClick\}/);
+    });
+
+    test("enriched .dash.js: providers declared from wires, userConfig from bindings", () => {
+        // Compose a widget that wires Table.data → algolia.search
+        // with one userConfig-bound arg. Config should declare both
+        // the algolia credential provider AND the userConfig field.
+        const tree = makeEmptyTree("EnrichedWidget");
+        const t2 = insertChild(tree, "root", { type: "Table" }, 1);
+        const t3 = setSlotWire(t2, "node-1", "data", {
+            provider: null,
+            providerType: "algolia",
+            providerClass: "credential",
+            method: "search",
+            args: {
+                indexName: { kind: "userConfig", field: "indexName" },
+                query: { kind: "userConfig", field: "searchQuery" },
+            },
+        });
+        const { componentCode, configCode } = emitWidgetCode(t3);
+        // Provider declaration emitted.
+        expect(configCode).toMatch(/providers:\s*\[/);
+        expect(configCode).toContain('type: "algolia"');
+        expect(configCode).toContain('providerClass: "credential"');
+        expect(configCode).toContain("required: true");
+        // userConfig declarations emitted, sorted, one per bound field.
+        expect(configCode).toMatch(/userConfig:\s*\{/);
+        expect(configCode).toContain('"indexName"');
+        expect(configCode).toContain('"searchQuery"');
+        expect(configCode).toContain('displayName: "Index Name"');
+        expect(configCode).toContain('displayName: "Search Query"');
+        // Component code references the bindings via flat props
+        // (matches dash-core WidgetFactory's `{...userPrefs}` spread).
+        // Without this, the wired call resolves `undefined` and the
+        // preview / installed widget silently fetches with nothing.
+        expect(componentCode).toContain("indexName: props.indexName");
+        expect(componentCode).toContain("query: props.searchQuery");
+    });
+
+    test("enriched .dash.js: pipe wires don't duplicate the source's provider declaration", () => {
+        const tree = makeEmptyTree("PipeProviderWidget");
+        // Button.onClick → google-drive.search (the source).
+        const t2 = insertChild(tree, "root", { type: "Button" }, 1);
+        const t3 = setSlotWire(t2, "node-1", "onClick", {
+            providerType: "google-drive",
+            providerClass: "mcp",
+            method: "search",
+        });
+        // DataList.items piped from the same callback.
+        const t4 = insertChild(t3, "root", { type: "DataList" }, 2);
+        const t5 = setSlotPipe(t4, "node-2", "items", "node-1", "onClick");
+        const { configCode } = emitWidgetCode(t5);
+        // One provider entry — pipe wire doesn't add a second.
+        const matches = configCode.match(/type: "google-drive"/g) || [];
+        expect(matches.length).toBe(1);
+        expect(configCode).toContain('providerClass: "mcp"');
+    });
+
+    test("data-less tree emits the original sparse config (no providers, no userConfig)", () => {
+        const tree = makeEmptyTree();
+        const { configCode } = emitWidgetCode(tree);
+        expect(configCode).not.toMatch(/providers:/);
+        expect(configCode).not.toMatch(/userConfig:/);
+        expect(configCode).toContain('component: "ComposedWidget"');
+    });
+
+    test("input component (SearchInput) auto-allocates value state and binds onChange to setter", () => {
+        // Just a SearchInput with no wires — emitter should still
+        // produce a useState binding so the component captures the
+        // typed value into state.
+        const tree = makeEmptyTree("StatefulSearch");
+        const t2 = insertChild(tree, "root", { type: "SearchInput" }, 1);
+        const { componentCode } = emitWidgetCode(t2);
+        expect(componentCode).toContain(
+            'import React, { useState } from "react";'
+        );
+        expect(componentCode).toMatch(
+            /const \[searchInputValue, setSearchInputValue\] = useState\(""\);/
+        );
+        expect(componentCode).toMatch(
+            /<SearchInput[^>]*value=\{searchInputValue\}/
+        );
+        expect(componentCode).toMatch(
+            /<SearchInput[^>]*onChange=\{setSearchInputValue\}/
+        );
+    });
+
+    test("input + wired onChange merges setter call into the tool-call handler; eventArg binding works", () => {
+        // SearchInput.onChange wired to google-drive.search with
+        // query bound to the event arg (the typed string).
+        const tree = makeEmptyTree("LiveSearch");
+        const t2 = insertChild(tree, "root", { type: "SearchInput" }, 1);
+        const t3 = setSlotWire(t2, "node-1", "onChange", {
+            providerType: "google-drive",
+            providerClass: "mcp",
+            method: "search",
+            args: {
+                query: { kind: "eventArg" },
+            },
+        });
+        const { componentCode } = emitWidgetCode(t3);
+        // useState for the input value, useCallback for the tool
+        // handler.
+        expect(componentCode).toContain(
+            'import React, { useCallback, useState } from "react";'
+        );
+        expect(componentCode).toMatch(
+            /const \[searchInputValue, setSearchInputValue\] = useState\(""\);/
+        );
+        // Handler signature uses eventArg (so arg-binding can
+        // reference it).
+        expect(componentCode).toContain(
+            "const onChange = useCallback(async (eventArg) => {"
+        );
+        // Setter call prepended — captures the typed value into
+        // state even though the user wired onChange.
+        expect(componentCode).toContain("setSearchInputValue(eventArg);");
+        // eventArg arg binding renders as the literal `eventArg`.
+        expect(componentCode).toContain("query: eventArg");
+        // JSX binds onChange to the wired handler (not the setter).
+        expect(componentCode).toMatch(
+            /<SearchInput[^>]*value=\{searchInputValue\}[^>]*onChange=\{onChange\}/
+        );
+    });
+
+    test("pipe wire (DataList.items piped from Button.onClick) binds to the callback's result state", () => {
+        const tree = makeEmptyTree("PipeWidget");
+        // Add a Button + wire its onClick to algolia.search.
+        const t2 = insertChild(tree, "root", { type: "Button" }, 1);
+        const t3 = setSlotWire(t2, "node-1", "onClick", {
+            provider: "MyAlgolia",
+            providerType: "algolia",
+            providerClass: "credential",
+            method: "search",
+            args: { indexName: { kind: "literal", value: "p" } },
+        });
+        // Add a DataList + pipe its items from node-1's onClick.
+        const t4 = insertChild(t3, "root", { type: "DataList" }, 2);
+        const t5 = setSlotPipe(t4, "node-2", "items", "node-1", "onClick");
+        const { componentCode } = emitWidgetCode(t5);
+        // No second useEffect / useCallback for the pipe — it's
+        // a JSX-level rebind.
+        const useCallbackCount = (componentCode.match(/useCallback\(/g) || [])
+            .length;
+        expect(useCallbackCount).toBe(1);
+        // DataList is rendered as an iteration of DataList.Item
+        // children; the bound slot var is the source array.
+        expect(componentCode).toMatch(
+            /Array\.isArray\(onClickResult\)\s*\?\s*onClickResult\s*:\s*\[\]/
+        );
+        expect(componentCode).toContain("<DataList.Item");
     });
 
     test("mcp-class wire emits useMcpProvider + callTool", () => {
@@ -500,7 +741,10 @@ describe("emitWidgetCode — hook scaffolding for configured wires (C4)", () => 
         expect(componentCode).toContain('useMcpProvider("filesystem")');
         expect(componentCode).toContain('mcp_filesystem.callTool("read_file"');
         expect(componentCode).toContain('path: "/tmp/x.json"');
-        expect(componentCode).toContain("<DataList items={items} />");
+        expect(componentCode).toMatch(
+            /Array\.isArray\(items\)\s*\?\s*items\s*:\s*\[\]/
+        );
+        expect(componentCode).toContain("<DataList.Item");
     });
 });
 
