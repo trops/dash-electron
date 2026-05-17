@@ -360,6 +360,7 @@ function PreviewTestInputsForm({
                         type="button"
                         onClick={handleApply}
                         disabled={!isDirtyLocal}
+                        data-testid="preview-test-inputs-apply"
                         className={
                             isDirtyLocal
                                 ? "text-[11px] px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white"
@@ -380,6 +381,7 @@ function PreviewTestInputsForm({
                         onChange: (e) => setLocal(fieldName, e.target.value),
                         className:
                             "flex-1 max-w-md px-2 py-1 bg-gray-800/70 border border-gray-700/50 rounded text-xs text-gray-200 focus:border-indigo-500/50 focus:outline-none",
+                        "data-testid": `preview-test-input-${fieldName}`,
                     };
                     let input;
                     if (t === "boolean") {
