@@ -81,6 +81,26 @@ function buildDashboardSummary() {
     return g;
 }
 
+function buildSubmitForm() {
+    // Panel { InputText, InputText, Button } — minimal form. User
+    // wires the Button.onClick to a tool that consumes the inputs
+    // via componentValue arg bindings.
+    let g = makeEmptyGrid();
+    const root = g.rootGridId;
+    const seed = g.grids[root].rows[0].cells[0];
+    g = setCellComponent(g, seed, "Panel");
+    const panelGridId = g.cells[seed].gridId;
+    const firstCell = g.grids[panelGridId].rows[0].cells[0];
+    g = setCellComponent(g, firstCell, "InputText", { label: "Name" });
+    g = addRow(g, panelGridId);
+    const secondCell = g.grids[panelGridId].rows[1].cells[0];
+    g = setCellComponent(g, secondCell, "InputText", { label: "Notes" });
+    g = addRow(g, panelGridId);
+    const buttonCell = g.grids[panelGridId].rows[2].cells[0];
+    g = setCellComponent(g, buttonCell, "Button", { title: "Submit" });
+    return g;
+}
+
 function buildTableViewer() {
     // Panel { Heading, Table } — list-of-records pattern. User wires
     // Table.data to a fetch and edits Table.columns to define the
@@ -98,10 +118,61 @@ function buildTableViewer() {
     return g;
 }
 
+/**
+ * Intent tags drive the intent-first quick-start UI: after the user
+ * picks an intent (search / view / act / else), QuickStartPane shows
+ * only the matching layouts. A layout can fit multiple intents (e.g.
+ * Two-column split is generic enough for search OR free-form), so
+ * each entry carries an array.
+ */
+export const INTENTS = [
+    {
+        id: "search",
+        label: "Search",
+        icon: "🔍",
+        tagline: "Find or filter data — input on top, results below.",
+        aiHint:
+            "The user wants a SEARCH widget: prioritize layouts with " +
+            "an input (SearchInput / InputText) up top driving a " +
+            "results region (DataList / Table) below it.",
+    },
+    {
+        id: "view",
+        label: "View",
+        icon: "📊",
+        tagline: "Show data, stats, or records — a read-only surface.",
+        aiHint:
+            "The user wants a VIEW widget: prioritize layouts that " +
+            "display data (Heading + Table / DataList / Card with " +
+            "stats). No input controls unless filtering is essential.",
+    },
+    {
+        id: "act",
+        label: "Act",
+        icon: "⚡",
+        tagline: "Submit a form or fire an action — inputs + a button.",
+        aiHint:
+            "The user wants an ACTION widget: include input fields " +
+            "(InputText / TextArea / SelectInput) and a Button to " +
+            "submit. The Button.onClick will be wired to a tool.",
+    },
+    {
+        id: "else",
+        label: "Custom",
+        icon: "✨",
+        tagline: "Something else — start free-form or let AI propose.",
+        aiHint:
+            "The user wants a CUSTOM widget that doesn't fit search / " +
+            "view / action neatly. Suggest a flexible layout with " +
+            "containers (Panel / Card) the user can fill in.",
+    },
+];
+
 export const SAMPLE_LAYOUTS = [
     {
         id: "search-and-list",
         label: "Search & list",
+        intents: ["search"],
         description:
             "Type-ahead search across a provider, with a list of " +
             "matching items below.",
@@ -111,6 +182,7 @@ export const SAMPLE_LAYOUTS = [
     {
         id: "two-column-split",
         label: "Two-column split",
+        intents: ["search", "view", "else"],
         description:
             "Two side-by-side cards. Drop different content in each — " +
             "filters + results, metrics + chart, etc.",
@@ -120,6 +192,7 @@ export const SAMPLE_LAYOUTS = [
     {
         id: "dashboard-summary",
         label: "Dashboard summary",
+        intents: ["view"],
         description:
             "Titled panel with a single card surface for a hero " +
             "metric or short summary.",
@@ -131,10 +204,35 @@ export const SAMPLE_LAYOUTS = [
     {
         id: "table-viewer",
         label: "Table viewer",
+        intents: ["view"],
         description:
             "Titled panel containing a Table. Wire Table.data to a " +
             "provider fetch.",
         outline: ["Panel", " ├─ Heading", " └─ Table"].join("\n"),
         buildGrid: buildTableViewer,
     },
+    {
+        id: "submit-form",
+        label: "Submit form",
+        intents: ["act"],
+        description:
+            "Two text inputs and a submit button. Wire the button's " +
+            "onClick to a tool that reads the inputs.",
+        outline: ["Panel", " ├─ InputText", " ├─ InputText", " └─ Button"].join(
+            "\n"
+        ),
+        buildGrid: buildSubmitForm,
+    },
 ];
+
+/**
+ * Sample layouts filtered to a given intent. Returns the full list
+ * when intent is null/unknown (defensive). Always at least one
+ * entry per intent in the shipped fixture set.
+ */
+export function getSampleLayoutsForIntent(intentId) {
+    if (!intentId) return SAMPLE_LAYOUTS;
+    return SAMPLE_LAYOUTS.filter(
+        (l) => Array.isArray(l.intents) && l.intents.includes(intentId)
+    );
+}

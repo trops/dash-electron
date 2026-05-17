@@ -9,7 +9,11 @@
  *      malformed grids before they crash the editor).
  */
 
-import { SAMPLE_LAYOUTS } from "./composerSampleLayouts";
+import {
+    SAMPLE_LAYOUTS,
+    INTENTS,
+    getSampleLayoutsForIntent,
+} from "./composerSampleLayouts";
 import { isGridEmpty, findCellLocation, walkLeafCells } from "./gridLayout";
 import { emitGridWidgetCode } from "./gridEmitter";
 
@@ -42,4 +46,24 @@ describe("composerSampleLayouts", () => {
             expect(componentCode).not.toContain("unknown component");
         }
     );
+
+    test("every layout tags at least one intent", () => {
+        for (const layout of SAMPLE_LAYOUTS) {
+            expect(Array.isArray(layout.intents)).toBe(true);
+            expect(layout.intents.length).toBeGreaterThan(0);
+        }
+    });
+
+    test("every intent has at least one sample layout to offer", () => {
+        for (const intent of INTENTS) {
+            const matches = getSampleLayoutsForIntent(intent.id);
+            expect(matches.length).toBeGreaterThan(0);
+        }
+    });
+
+    test("getSampleLayoutsForIntent returns the full list when intent is null", () => {
+        expect(getSampleLayoutsForIntent(null).length).toBe(
+            SAMPLE_LAYOUTS.length
+        );
+    });
 });

@@ -10,31 +10,30 @@ import {
     setCellComponent,
     isContainer,
 } from "./gridLayout";
-import { SAMPLE_LAYOUTS } from "./composerSampleLayouts";
+import { INTENTS, getSampleLayoutsForIntent } from "./composerSampleLayouts";
 
 /**
  * QuickStartPane — the composer's empty-state onboarding.
  *
  * Rendered by ComposerPaneV2 when `isGridEmpty(grid)` is true.
- * Replaces the bare GridEditor + palette with two onramps:
+ * Two-step intent-first wizard:
  *
- *   1. AI quick-start — user types a one-line widget description;
- *      a single-shot LLM call returns 2-3 candidate layouts; user
- *      picks one and the composer drops the corresponding grid in.
- *   2. Sample layouts — a curated gallery of starter grids
- *      (Search & list, Two-column split, etc.) the user can apply
- *      without writing a prompt.
+ *   Step 1 — pick the widget's purpose: Search / View / Act / Custom.
+ *     The four intents cover ~all common widget shapes; the user
+ *     answers ONE question instead of scanning a 4-card sample grid
+ *     + an AI form + an escape hatch (which the flat list felt like).
  *
- * Either path produces a grid handed to `onApplyGrid`. There's no
- * dismissal state — the pane naturally hides as soon as the grid is
- * no longer empty (a sample apply, an AI pick, or the "start from
- * scratch" escape hatch that opens the palette on the seed cell).
+ *   Step 2 — show only the starters that match the chosen intent,
+ *     plus an AI prompt scoped to that intent (the system prompt
+ *     gets the intent's `aiHint` so suggestions match the flavor).
+ *     A Back button returns to step 1. The "Start blank" escape
+ *     hatch is reachable from both steps.
  *
- * AI output format reuses the tree-shape contract from
- * SuggestLayoutButton (well-tested prompt; smaller surface than the
- * full grid shape). We convert tree → grid below via the same
- * mutators the user-driven flow uses, so the produced grid passes
- * every invariant the editor expects.
+ * Apply path is unchanged: AI suggestions go through tree→grid
+ * conversion; sample layouts call their own `buildGrid()` mutator
+ * chain. Either way the final grid is handed to `onApplyGrid`,
+ * which fires `onChange`/`onEmit` via ComposerPaneV2's setGrid
+ * effect.
  */
 export function QuickStartPane({
     onApplyGrid,
@@ -44,6 +43,9 @@ export function QuickStartPane({
     model,
     backend = "claude-code",
 }) {
+    // null = step 1 (pick intent). Set to an intent id ("search", etc)
+    // to advance to step 2 (tailored starters + AI prompt).
+    const [intent, setIntent] = useState(null);
     const [aiOpen, setAiOpen] = useState(false);
     const [description, setDescription] = useState("");
     const [status, setStatus] = useState("idle");
@@ -57,6 +59,20 @@ export function QuickStartPane({
         setError(null);
         setSuggestions([]);
     }, []);
+
+    const goBack = useCallback(() => {
+        setIntent(null);
+        resetAi();
+    }, [resetAi]);
+
+    const currentIntent =
+        intent && INTENTS.find((i) => i.id === intent) ? intent : null;
+    const intentObj = currentIntent
+        ? INTENTS.find((i) => i.id === currentIntent)
+        : null;
+    const intentSamples = currentIntent
+        ? getSampleLayoutsForIntent(currentIntent)
+        : [];
 
     const submitAi = useCallback(async () => {
         if (description.trim().length === 0) return;
@@ -73,7 +89,9 @@ export function QuickStartPane({
                     model,
                     apiKey,
                     backend,
-                    systemPrompt: buildSystemPrompt(),
+                    systemPrompt: buildSystemPrompt({
+                        intentHint: intentObj && intentObj.aiHint,
+                    }),
                     userMessage: description,
                 });
             } catch (firstErr) {
@@ -85,7 +103,10 @@ export function QuickStartPane({
                     model,
                     apiKey,
                     backend,
-                    systemPrompt: buildSystemPrompt({ retry: true }),
+                    systemPrompt: buildSystemPrompt({
+                        retry: true,
+                        intentHint: intentObj && intentObj.aiHint,
+                    }),
                     userMessage: description,
                 });
             }
@@ -104,7 +125,7 @@ export function QuickStartPane({
             setError(err.message || String(err));
             setStatus("error");
         }
-    }, [description, model, apiKey, backend]);
+    }, [description, model, apiKey, backend, intentObj]);
 
     const pickSuggestion = useCallback(
         (suggestion) => {
@@ -126,149 +147,262 @@ export function QuickStartPane({
 
     return (
         <div
-            className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-4"
+            className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-4"
             data-testid="composer-quick-start"
         >
-            <div>
-                <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">
-                    Quick start
-                </div>
-                <p className="text-[11px] text-gray-400">
-                    Describe what you want to build, or pick a sample layout to
-                    start from. Refine the result by clicking components and
-                    wiring their data slots.
-                </p>
-            </div>
+            {!currentIntent ? (
+                <IntentPicker onPick={setIntent} />
+            ) : (
+                <IntentDetail
+                    intentObj={intentObj}
+                    samples={intentSamples}
+                    onBack={goBack}
+                    onApplySample={applySample}
+                    aiOpen={aiOpen}
+                    setAiOpen={setAiOpen}
+                    description={description}
+                    setDescription={setDescription}
+                    status={status}
+                    error={error}
+                    suggestions={suggestions}
+                    submitAi={submitAi}
+                    pickSuggestion={pickSuggestion}
+                    resetAi={resetAi}
+                />
+            )}
 
-            {/* AI form */}
-            <div
-                className="rounded border border-indigo-700/40 bg-indigo-900/10 p-2 space-y-2"
-                data-testid="composer-quick-start-ai"
-            >
-                {!aiOpen ? (
-                    <button
-                        type="button"
-                        onClick={() => setAiOpen(true)}
-                        className="w-full px-2 py-1.5 text-xs rounded text-indigo-200 hover:bg-indigo-800/30"
-                        data-testid="composer-quick-start-ai-open"
-                    >
-                        ✦ Describe your widget — scaffold it with AI
-                    </button>
-                ) : (
-                    <>
-                        <div className="flex items-center justify-between">
-                            <div className="text-[11px] uppercase tracking-wide text-indigo-200">
-                                Describe the widget
-                            </div>
-                            <button
-                                type="button"
-                                onClick={resetAi}
-                                className="text-[10px] text-gray-400 hover:text-gray-200"
-                                data-testid="composer-quick-start-ai-close"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                        <textarea
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="e.g., Search Algolia indices, show matching docs in a list"
-                            rows={3}
-                            className="w-full px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
-                            data-testid="composer-quick-start-ai-input"
-                        />
-                        <button
-                            type="button"
-                            onClick={submitAi}
-                            disabled={
-                                status === "loading" ||
-                                description.trim().length === 0
-                            }
-                            className="w-full px-2 py-1 text-xs rounded bg-indigo-700 hover:bg-indigo-600 disabled:bg-gray-700 disabled:text-gray-500 text-white"
-                            data-testid="composer-quick-start-ai-submit"
-                        >
-                            {status === "loading"
-                                ? "Asking…"
-                                : "Scaffold with AI"}
-                        </button>
-                        {status === "error" && error && (
-                            <div
-                                className="text-[10px] text-red-400"
-                                data-testid="composer-quick-start-ai-error"
-                            >
-                                {error}
-                            </div>
-                        )}
-                        {status === "ok" && suggestions.length > 0 && (
-                            <div
-                                className="space-y-1"
-                                data-testid="composer-quick-start-ai-results"
-                            >
-                                <div className="text-[10px] text-gray-400">
-                                    Pick a suggestion to apply:
-                                </div>
-                                {suggestions.map((s, i) => (
-                                    <button
-                                        key={i}
-                                        type="button"
-                                        onClick={() => pickSuggestion(s)}
-                                        className="block w-full text-left px-2 py-1.5 rounded border border-gray-700 bg-gray-900/50 hover:border-indigo-500 hover:bg-indigo-900/30"
-                                        data-testid={`composer-quick-start-ai-pick-${i}`}
-                                    >
-                                        <div className="text-xs text-gray-200">
-                                            {s.label}
-                                        </div>
-                                        <div className="text-[10px] text-gray-500 mt-0.5 font-mono whitespace-pre">
-                                            {summarizeTree(s.root)}
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </>
-                )}
-            </div>
-
-            {/* Sample layouts gallery */}
-            <div data-testid="composer-quick-start-samples">
-                <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">
-                    Or pick a sample layout
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                    {SAMPLE_LAYOUTS.map((layout) => (
-                        <button
-                            key={layout.id}
-                            type="button"
-                            onClick={() => applySample(layout)}
-                            className="text-left rounded border border-gray-700 bg-gray-900/50 hover:border-indigo-500 hover:bg-indigo-900/20 p-2 space-y-1"
-                            data-testid={`composer-quick-start-sample-${layout.id}`}
-                        >
-                            <div className="text-xs text-gray-200">
-                                {layout.label}
-                            </div>
-                            <div className="text-[10px] text-gray-500">
-                                {layout.description}
-                            </div>
-                            <div className="text-[10px] text-gray-500 font-mono whitespace-pre pt-1 border-t border-gray-800">
-                                {layout.outline}
-                            </div>
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* Escape hatch — drop into the palette on the seed cell. */}
+            {/* Escape hatch — drop into the palette on the seed cell.
+                Always visible so the user can bail at any step. */}
             <div className="border-t border-white/10 pt-3">
                 <button
                     type="button"
                     onClick={() => seedCellId && onRequestPalette(seedCellId)}
                     disabled={!seedCellId}
-                    className="w-full px-2 py-1.5 text-xs rounded border border-dashed border-gray-700 text-gray-400 hover:text-indigo-300 hover:border-indigo-500 disabled:opacity-30"
+                    className="w-full px-3 py-3 text-sm rounded border border-dashed border-gray-700 text-gray-400 hover:text-indigo-300 hover:border-indigo-500 disabled:opacity-30"
                     data-testid="composer-quick-start-scratch"
                 >
-                    Or start from scratch — pick a single component
+                    Or start blank — pick a single component
                 </button>
             </div>
+        </div>
+    );
+}
+
+function IntentPicker({ onPick }) {
+    return (
+        <div data-testid="composer-quick-start-intents">
+            <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+                Quick start
+            </div>
+            <h2 className="text-base text-gray-100 mb-3">
+                What kind of widget do you want?
+            </h2>
+            <div className="grid grid-cols-2 gap-3">
+                {INTENTS.map((it) => (
+                    <button
+                        key={it.id}
+                        type="button"
+                        onClick={() => onPick(it.id)}
+                        className="text-left rounded border border-gray-700 bg-gray-900/50 hover:border-indigo-500 hover:bg-indigo-900/20 p-3 space-y-1"
+                        data-testid={`composer-quick-start-intent-${it.id}`}
+                    >
+                        <div className="text-2xl leading-none">{it.icon}</div>
+                        <div className="text-sm text-gray-100">{it.label}</div>
+                        <div className="text-xs text-gray-500">
+                            {it.tagline}
+                        </div>
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function IntentDetail({
+    intentObj,
+    samples,
+    onBack,
+    onApplySample,
+    aiOpen,
+    setAiOpen,
+    description,
+    setDescription,
+    status,
+    error,
+    suggestions,
+    submitAi,
+    pickSuggestion,
+    resetAi,
+}) {
+    return (
+        <div
+            data-testid={`composer-quick-start-detail-${intentObj.id}`}
+            className="space-y-4"
+        >
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <div className="text-xs uppercase tracking-wide text-gray-500">
+                        Quick start
+                    </div>
+                    <h2 className="text-base text-gray-100 mt-0.5">
+                        {intentObj.icon} {intentObj.label} widget
+                    </h2>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                        {intentObj.tagline}
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    onClick={onBack}
+                    className="text-sm text-indigo-400 hover:text-indigo-200 shrink-0"
+                    data-testid="composer-quick-start-back"
+                >
+                    ← Change
+                </button>
+            </div>
+
+            {samples.length > 0 && (
+                <div data-testid="composer-quick-start-samples">
+                    <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+                        Starter layouts
+                    </div>
+                    <div className="space-y-2">
+                        {samples.map((layout) => (
+                            <button
+                                key={layout.id}
+                                type="button"
+                                onClick={() => onApplySample(layout)}
+                                className="block w-full text-left rounded border border-gray-700 bg-gray-900/50 hover:border-indigo-500 hover:bg-indigo-900/20 p-3 space-y-1"
+                                data-testid={`composer-quick-start-sample-${layout.id}`}
+                            >
+                                <div className="text-sm text-gray-100">
+                                    {layout.label}
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                    {layout.description}
+                                </div>
+                                <div className="text-xs text-gray-500 font-mono whitespace-pre pt-2 border-t border-gray-800">
+                                    {layout.outline}
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <AiForm
+                aiOpen={aiOpen}
+                setAiOpen={setAiOpen}
+                description={description}
+                setDescription={setDescription}
+                status={status}
+                error={error}
+                suggestions={suggestions}
+                submitAi={submitAi}
+                pickSuggestion={pickSuggestion}
+                resetAi={resetAi}
+            />
+        </div>
+    );
+}
+
+function AiForm({
+    aiOpen,
+    setAiOpen,
+    description,
+    setDescription,
+    status,
+    error,
+    suggestions,
+    submitAi,
+    pickSuggestion,
+    resetAi,
+}) {
+    return (
+        <div
+            className="rounded border border-indigo-700/40 bg-indigo-900/10 p-3 space-y-2"
+            data-testid="composer-quick-start-ai"
+        >
+            {!aiOpen ? (
+                <button
+                    type="button"
+                    onClick={() => setAiOpen(true)}
+                    className="w-full px-3 py-2 text-sm rounded text-indigo-200 hover:bg-indigo-800/30"
+                    data-testid="composer-quick-start-ai-open"
+                >
+                    ✦ Or describe what you want — scaffold it with AI
+                </button>
+            ) : (
+                <>
+                    <div className="flex items-center justify-between">
+                        <div className="text-xs uppercase tracking-wide text-indigo-200">
+                            Describe the widget
+                        </div>
+                        <button
+                            type="button"
+                            onClick={resetAi}
+                            className="text-xs text-gray-400 hover:text-gray-200"
+                            data-testid="composer-quick-start-ai-close"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                    <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="e.g., Search Algolia indices, show matching docs in a list"
+                        rows={3}
+                        className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                        data-testid="composer-quick-start-ai-input"
+                    />
+                    <button
+                        type="button"
+                        onClick={submitAi}
+                        disabled={
+                            status === "loading" ||
+                            description.trim().length === 0
+                        }
+                        className="w-full px-3 py-2 text-sm font-medium rounded bg-indigo-700 hover:bg-indigo-600 disabled:bg-gray-700 disabled:text-gray-500 text-white"
+                        data-testid="composer-quick-start-ai-submit"
+                    >
+                        {status === "loading" ? "Asking…" : "Scaffold with AI"}
+                    </button>
+                    {status === "error" && error && (
+                        <div
+                            className="text-xs text-red-400"
+                            data-testid="composer-quick-start-ai-error"
+                        >
+                            {error}
+                        </div>
+                    )}
+                    {status === "ok" && suggestions.length > 0 && (
+                        <div
+                            className="space-y-2"
+                            data-testid="composer-quick-start-ai-results"
+                        >
+                            <div className="text-xs text-gray-400">
+                                Pick a suggestion to apply:
+                            </div>
+                            {suggestions.map((s, i) => (
+                                <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => pickSuggestion(s)}
+                                    className="block w-full text-left px-3 py-2 rounded border border-gray-700 bg-gray-900/50 hover:border-indigo-500 hover:bg-indigo-900/30"
+                                    data-testid={`composer-quick-start-ai-pick-${i}`}
+                                >
+                                    <div className="text-sm text-gray-200">
+                                        {s.label}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1 font-mono whitespace-pre">
+                                        {summarizeTree(s.root)}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </>
+            )}
         </div>
     );
 }
@@ -321,7 +455,7 @@ function placeNode(g, cellId, node) {
     return g;
 }
 
-function buildSystemPrompt({ retry = false } = {}) {
+function buildSystemPrompt({ retry = false, intentHint = null } = {}) {
     // Filter to palette-visible component names — MenuItem variants
     // are in the schema for import resolution but should not appear
     // in user-facing suggestions.
@@ -332,9 +466,11 @@ function buildSystemPrompt({ retry = false } = {}) {
                 DASH_REACT_COMPONENT_SCHEMAS[name].hideFromPalette
             )
     ).join(", ");
+    const intentLines = intentHint ? ["INTENT CONTEXT: " + intentHint, ""] : [];
     const base = [
         "You are a structured-output API for the Dash widget composer. You do NOT chat.",
         "",
+        ...intentLines,
         "The user describes a widget in one line. You respond with NOTHING but a JSON object of layout candidates.",
         "",
         "OUTPUT FORMAT — emit exactly this and nothing else:",
