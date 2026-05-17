@@ -2404,13 +2404,28 @@ ${
                         }
                     }
                     setPreviewWidgetDefaults(defaults);
-                    // Reset the test-inputs form to the new defaults
-                    // so a stale value from a previous widget can't
-                    // leak into this one (e.g. the previous widget had
-                    // an `indexName` field set to "airports", new
-                    // widget has none — we don't want "airports"
-                    // ghosting into the new widget's props).
-                    setPreviewTestInputs({});
+                    // Preserve typed test-input values whose key still
+                    // exists in the new userConfig schema; drop only
+                    // keys the new schema doesn't have. Recompile fires
+                    // on every grid edit / streamed-AI keystroke, so a
+                    // blanket reset wiped values the user had just typed
+                    // into unrelated fields (e.g. editing a Heading
+                    // would clear the `indexName` they entered for the
+                    // SearchInput's Algolia wire).
+                    setPreviewTestInputs((prev) => {
+                        const next = {};
+                        for (const key of Object.keys(prev || {})) {
+                            if (
+                                Object.prototype.hasOwnProperty.call(
+                                    userConfig,
+                                    key
+                                )
+                            ) {
+                                next[key] = prev[key];
+                            }
+                        }
+                        return next;
+                    });
 
                     // Provider API hallucination guardrail (slice
                     // 17b.12). Walk the AI's component code looking

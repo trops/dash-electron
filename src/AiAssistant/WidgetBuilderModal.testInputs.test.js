@@ -37,7 +37,11 @@ describe("WidgetBuilderModal — test-inputs form (slice 17b.9)", () => {
         // Slice 17c.7 — the inline `<PreviewComponent>` mount was
         // removed; props now flow through the `<PreviewIframe>`
         // mount's `props={{ ... }}` attribute.
-        const iframeMount = source.indexOf("<PreviewIframe");
+        // Skip the explanatory comment at line ~1527 that also
+        // contains "<PreviewIframe " — anchor on the JSX mount by
+        // requiring a newline immediately after the tag name (the
+        // comment writes the whole tag inline on one line).
+        const iframeMount = source.search(/<PreviewIframe\s*\n/);
         const iframeEnd = source.indexOf("/>", iframeMount);
         expect(iframeMount).toBeGreaterThan(-1);
         const block = source.slice(iframeMount, iframeEnd);
@@ -57,18 +61,45 @@ describe("WidgetBuilderModal — test-inputs form (slice 17b.9)", () => {
         expect(testInputsPos).toBeLessThan(userPrefsPos);
     });
 
-    test("test inputs reset when a new config compiles", () => {
-        // setPreviewTestInputs({}) must be called inside the
-        // compile-success branch so a stale value from a previous
-        // widget can't leak into the next one.
-        const compileBranch = source.indexOf(
-            "Reset the test-inputs form to the new defaults"
+    test("test inputs preserve keys still in the new userConfig schema on recompile", () => {
+        // Recompile fires on every grid edit and every streamed AI
+        // keystroke. A blanket setPreviewTestInputs({}) wiped values
+        // the user had typed into unrelated fields (editing a Heading
+        // shouldn't clear the `indexName` they typed for the
+        // SearchInput's Algolia wire).
+        //
+        // The success branch must use an updater that keeps entries
+        // whose key still exists in the new userConfig schema and drops
+        // only keys the schema no longer has.
+        const anchor = source.indexOf(
+            "Preserve typed test-input values whose key still"
         );
-        expect(compileBranch).toBeGreaterThan(-1);
-        // Within ~600 chars (multi-line comment + indentation) of
-        // that anchor we expect the actual reset call.
-        const nextChunk = source.slice(compileBranch, compileBranch + 600);
-        expect(nextChunk).toMatch(/setPreviewTestInputs\(\{\}\)/);
+        expect(anchor).toBeGreaterThan(-1);
+        const nextChunk = source.slice(anchor, anchor + 1500);
+        // Updater form, not a blanket reset.
+        expect(nextChunk).toMatch(/setPreviewTestInputs\(\(prev\)\s*=>/);
+        // Iterates the previous keys.
+        expect(nextChunk).toMatch(/Object\.keys\(prev\b/);
+        // Filters by membership in the new userConfig. Use [\s\S]*?
+        // to allow prettier to break the call across lines without
+        // breaking the test.
+        expect(nextChunk).toMatch(
+            /hasOwnProperty\.call\([\s\S]*?userConfig[\s\S]*?key[\s\S]*?\)/
+        );
+        // The blanket reset must NOT live inside the success branch
+        // — it survives in the fallback branch (unparseable widget)
+        // and as the explicit Reset button below the form.
+        const successBranchStart = source.indexOf(
+            'match && typeof match.config.component === "function"'
+        );
+        const successBranchEnd = source.indexOf("} else {", successBranchStart);
+        expect(successBranchStart).toBeGreaterThan(-1);
+        expect(successBranchEnd).toBeGreaterThan(successBranchStart);
+        const successBranch = source.slice(
+            successBranchStart,
+            successBranchEnd
+        );
+        expect(successBranch).not.toMatch(/setPreviewTestInputs\(\{\}\)/);
     });
 
     test("the rendered form is mounted above the preview wrapper", () => {
