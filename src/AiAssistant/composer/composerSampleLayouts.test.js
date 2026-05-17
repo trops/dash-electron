@@ -54,8 +54,12 @@ describe("composerSampleLayouts", () => {
         }
     });
 
-    test("every intent has at least one sample layout to offer", () => {
+    test("every layout-driven intent has at least one sample layout", () => {
+        // The `provider` intent is purely AI-led — it routes through a
+        // provider picker rather than a static sample gallery — so
+        // it's exempt from this invariant.
         for (const intent of INTENTS) {
+            if (intent.id === "provider") continue;
             const matches = getSampleLayoutsForIntent(intent.id);
             expect(matches.length).toBeGreaterThan(0);
         }

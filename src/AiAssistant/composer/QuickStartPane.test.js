@@ -157,6 +157,90 @@ describe("QuickStartPane — step 2 (intent detail)", () => {
     });
 });
 
+describe("QuickStartPane — provider intent", () => {
+    test("picking the provider intent shows the provider list, not the sample/AI detail", () => {
+        render(
+            <QuickStartPane
+                onApplyGrid={() => {}}
+                onRequestPalette={() => {}}
+                seedCellId="cell-1"
+            />
+        );
+        fireEvent.click(
+            screen.getByTestId("composer-quick-start-intent-provider")
+        );
+        expect(
+            screen.getByTestId("composer-quick-start-providers")
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByTestId("composer-quick-start-detail-provider")
+        ).not.toBeInTheDocument();
+        // The provider catalog enumerates wirable types
+        // asynchronously, but credential types (algolia) come from
+        // PROVIDER_API_REGISTRY synchronously and render on first
+        // commit — confirm at least one provider button exists so the
+        // user can actually click through.
+        expect(
+            screen.getByTestId(
+                "composer-quick-start-provider-algolia-credential"
+            )
+        ).toBeInTheDocument();
+    });
+
+    test("picking a provider advances to detail view with provider name in header", () => {
+        render(
+            <QuickStartPane
+                onApplyGrid={() => {}}
+                onRequestPalette={() => {}}
+                seedCellId="cell-1"
+            />
+        );
+        fireEvent.click(
+            screen.getByTestId("composer-quick-start-intent-provider")
+        );
+        fireEvent.click(
+            screen.getByTestId(
+                "composer-quick-start-provider-algolia-credential"
+            )
+        );
+        expect(
+            screen.getByTestId("composer-quick-start-detail-provider")
+        ).toBeInTheDocument();
+        // Header shows the provider name (Algolia) not the generic
+        // "Provider widget" label.
+        expect(
+            screen.getByTestId("composer-quick-start-detail-provider")
+        ).toHaveTextContent(/Algolia/);
+    });
+
+    test("Change link from provider-detail goes back to the provider picker, not all the way to intent picker", () => {
+        render(
+            <QuickStartPane
+                onApplyGrid={() => {}}
+                onRequestPalette={() => {}}
+                seedCellId="cell-1"
+            />
+        );
+        fireEvent.click(
+            screen.getByTestId("composer-quick-start-intent-provider")
+        );
+        fireEvent.click(
+            screen.getByTestId(
+                "composer-quick-start-provider-algolia-credential"
+            )
+        );
+        fireEvent.click(screen.getByTestId("composer-quick-start-back"));
+        // Back to provider picker (one step), NOT all the way to
+        // intent picker.
+        expect(
+            screen.getByTestId("composer-quick-start-providers")
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByTestId("composer-quick-start-intents")
+        ).not.toBeInTheDocument();
+    });
+});
+
 describe("QuickStartPane — escape hatch", () => {
     test("clicking 'start blank' opens the palette on the seed cell from step 1", () => {
         const onRequestPalette = jest.fn();

@@ -86,14 +86,13 @@ export const DASH_REACT_COMPONENT_SCHEMAS = {
         dataSlots: [],
         fillsCell: true,
     },
-    Container: {
-        category: "layout",
-        props: {
-            children: { type: "ReactNode" },
-        },
-        dataSlots: [],
-        fillsCell: true,
-    },
+    // Container intentionally omitted: dash-react's Container is
+    // currently broken at runtime (references getUUID without an
+    // import → throws inside the iframe preview). Panel and Card
+    // cover the same "generic surface" niche while we wait for the
+    // upstream fix. Re-add when Container can render without
+    // crashing.
+    //
     // Tabs and Accordion are intentionally omitted: dash-react
     // requires sub-component nesting (<Tabs.List>, <Tabs.Trigger
     // value=…>, <Tabs.Content value=…> / <Accordion.Item>,

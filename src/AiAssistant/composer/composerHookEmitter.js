@@ -278,6 +278,28 @@ function emitMcpUnwrapLines(setterCall, indent = "        ") {
  * Returns a JS expression source — caller drops it into the
  * useState() call as-is.
  */
+/**
+ * Render the JS source for a try-catch error handler that logs to
+ * the iframe console with a useful message regardless of the error
+ * shape. Electron IPC rejections often come back as plain Objects
+ * (no `.message`); concatenating them into a console.error template
+ * literal produces "[object Object]" with no actionable info.
+ * JSON.stringify is the next-best fallback; String() the last
+ * resort (handles circular refs).
+ *
+ * Returns an array of source lines. `errBinding` is the catch-clause
+ * variable name (usually "err"). `label` becomes the prefix in the
+ * logged line — typically "<providerType>.<method>".
+ */
+function emitErrorHandlerLines(errBinding, label, indent = "            ") {
+    return [
+        `${indent}const _msg = (${errBinding} && ${errBinding}.message) ||`,
+        `${indent}    (() => { try { return JSON.stringify(${errBinding}); }`,
+        `${indent}      catch (_) { return String(${errBinding}); } })();`,
+        `${indent}console.error("[composer] ${label} failed:", _msg);`,
+    ];
+}
+
 function initialResultValue(returnsType) {
     if (typeof returnsType !== "string") return "null";
     if (/^Array(<|$)/.test(returnsType)) return "[]";
@@ -627,15 +649,19 @@ export function buildHookScaffold(
                     "",
                     `    const ${varName} = useCallback(async (eventArg) => {`,
                     setterLine + `        if (!${handle}?.isConnected) return;`,
+                    `        const _args = ${argsLiteral};`,
+                    `        console.log("[composer] ${wire.providerType}.${wire.method} call", _args);`,
                     `        try {`,
                     `            const result = await ${handle}.callTool(${JSON.stringify(
                         wire.method
-                    )}, ${argsLiteral});`,
+                    )}, _args);`,
+                    `            console.log("[composer] ${wire.providerType}.${wire.method} result", result);`,
                     ...unwrapLines,
                     `        } catch (err) {`,
-                    `            // Tool errors are swallowed here so a CTA`,
-                    `            // failure doesn't crash the widget. Production`,
-                    `            // widgets should add user-visible error UI.`,
+                    ...emitErrorHandlerLines(
+                        "err",
+                        `${wire.providerType}.${wire.method}`
+                    ),
                     `        }`,
                     `    }, [${handle}?.isConnected]);`
                 );
@@ -648,11 +674,17 @@ export function buildHookScaffold(
                     `    const ${varName} = useCallback(async (eventArg) => {`,
                     setterLine +
                         `        if (!${handle}?.providerHash) return;`,
+                    `        const _args = ${argsLiteral};`,
+                    `        console.log("[composer] ${wire.providerType}.${wire.method} call", _args);`,
                     `        try {`,
-                    `            const result = await window.mainApi.${wire.providerType}.${wire.method}(${argsLiteral});`,
+                    `            const result = await window.mainApi.${wire.providerType}.${wire.method}(_args);`,
+                    `            console.log("[composer] ${wire.providerType}.${wire.method} result", result);`,
                     `            set_${varName}Result(${unwrap});`,
                     `        } catch (err) {`,
-                    `            console.error("[composer] ${wire.providerType}.${wire.method} failed:", err && (err.message || err));`,
+                    ...emitErrorHandlerLines(
+                        "err",
+                        `${wire.providerType}.${wire.method}`
+                    ),
                     `        }`,
                     `    }, [${handle}?.providerHash]);`
                 );
@@ -694,14 +726,23 @@ export function buildHookScaffold(
                 `    useEffect(() => {`,
                 `        if (!${handle}?.isConnected) return;`,
                 `        let cancelled = false;`,
+                `        const _args = ${argsLiteral};`,
+                `        console.log("[composer] ${wire.providerType}.${wire.method} call", _args);`,
                 `        ${handle}.callTool(${JSON.stringify(
                     wire.method
-                )}, ${argsLiteral})`,
+                )}, _args)`,
                 `            .then((result) => {`,
                 `                if (cancelled) return;`,
+                `                console.log("[composer] ${wire.providerType}.${wire.method} result", result);`,
                 ...unwrapLines,
                 `            })`,
-                `            .catch(() => {});`,
+                `            .catch((err) => {`,
+                ...emitErrorHandlerLines(
+                    "err",
+                    `${wire.providerType}.${wire.method}`,
+                    "                "
+                ),
+                `            });`,
                 `        return () => {`,
                 `            cancelled = true;`,
                 `        };`,
@@ -742,12 +783,21 @@ export function buildHookScaffold(
                 `    useEffect(() => {`,
                 `        if (!${handle}?.providerHash) return;`,
                 `        let cancelled = false;`,
-                `        window.mainApi.${wire.providerType}.${wire.method}(${argsLiteral})`,
+                `        const _args = ${argsLiteral};`,
+                `        console.log("[composer] ${wire.providerType}.${wire.method} call", _args);`,
+                `        window.mainApi.${wire.providerType}.${wire.method}(_args)`,
                 `            .then((result) => {`,
                 `                if (cancelled) return;`,
+                `                console.log("[composer] ${wire.providerType}.${wire.method} result", result);`,
                 `                ${setFn}(${unwrap});`,
                 `            })`,
-                `            .catch(() => {});`,
+                `            .catch((err) => {`,
+                ...emitErrorHandlerLines(
+                    "err",
+                    `${wire.providerType}.${wire.method}`,
+                    "                "
+                ),
+                `            });`,
                 `        return () => {`,
                 `            cancelled = true;`,
                 `        };`,

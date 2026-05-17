@@ -422,6 +422,7 @@ export function ComposerPaneV2({
                     apiKey={apiKey}
                     model={model}
                     backend={backend}
+                    providers={providers}
                 />
             ) : (
                 <div className="flex-1 min-h-0 flex flex-col px-3 py-2 gap-1">

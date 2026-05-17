@@ -53,14 +53,23 @@ export function PaletteView({ onPick, onCancel }) {
                             </div>
                             <div className="flex flex-col">
                                 {entries.map((name) => (
-                                    <MenuItem
+                                    // dash-react's MenuItem doesn't
+                                    // forward data-* attributes, so
+                                    // the testid lives on a wrapper
+                                    // div instead. Without this the
+                                    // e2e specs can't address each
+                                    // palette entry by name.
+                                    <div
                                         key={name}
-                                        onClick={() => onPick(name)}
-                                        className="cursor-pointer"
                                         data-testid={`composer-palette-pick-${name}`}
                                     >
-                                        {name}
-                                    </MenuItem>
+                                        <MenuItem
+                                            onClick={() => onPick(name)}
+                                            className="cursor-pointer"
+                                        >
+                                            {name}
+                                        </MenuItem>
+                                    </div>
                                 ))}
                             </div>
                         </div>

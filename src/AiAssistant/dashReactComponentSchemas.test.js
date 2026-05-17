@@ -97,7 +97,14 @@ describe("dashReactComponentSchemas — convenience helpers", () => {
             (sum, arr) => sum + arr.length,
             0
         );
-        expect(total).toBe(Object.keys(DASH_REACT_COMPONENT_SCHEMAS).length);
+        // getSchemasByCategory deliberately filters out hideFromPalette
+        // entries (MenuItem variants live in the schema only for the
+        // import collector). Compare against the visible-schema count,
+        // not the raw key count.
+        const paletteVisibleCount = Object.values(
+            DASH_REACT_COMPONENT_SCHEMAS
+        ).filter((s) => !s.hideFromPalette).length;
+        expect(total).toBe(paletteVisibleCount);
         for (const cat of Object.keys(groups)) {
             expect(VALID_CATEGORIES.has(cat)).toBe(true);
             const sorted = [...groups[cat]].sort();

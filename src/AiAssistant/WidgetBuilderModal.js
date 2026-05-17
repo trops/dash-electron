@@ -177,6 +177,7 @@ function PreviewProviderPicker({
                                     )
                                 }
                                 className="flex-1 max-w-xs px-2 py-1 bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
+                                data-testid={`preview-provider-select-${decl.type}`}
                             >
                                 <option value="">— Select a provider —</option>
                                 {options.map((p) => (
