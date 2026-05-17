@@ -86,6 +86,13 @@ export function ComposerPaneV2({
 }) {
     const [grid, setGridRaw] = useState(() => initialGrid || makeEmptyGrid());
     const [internalSelectedCellId, setInternalSelectedCellId] = useState(null);
+    // True once the user has typed in the widget-name input. Gates
+    // the on-mount collision-avoidance effect so it doesn't fight a
+    // manually-chosen name. V1 ComposerPane had the same gate; V2
+    // lost it when it forked, which let "ComposedWidget" collide
+    // with an existing @ai-built/composedwidget on install and
+    // silently overwrite that widget's code.
+    const userRenamedRef = useRef(false);
     // When set, the pane swaps to the full-pane PaletteView, and
     // picking a component fills this cell. Separate from selection
     // so the inspector state stays untouched while the user picks.
@@ -136,6 +143,63 @@ export function ComposerPaneV2({
             onEmitRef.current(emitGridWidgetCode(grid));
         }
     }, [grid]);
+
+    // On first mount (no draft resume): ask the main process for
+    // already-installed @ai-built/ widgets and bump the default
+    // "ComposedWidget" to "ComposedWidget2", "...3", etc. until
+    // the name is unique. Without this, installing a fresh widget
+    // overwrites the previously-installed ComposedWidget — the
+    // install pipeline keys on componentName, so a name collision
+    // silently rewrites the existing widget's code. Ported from V1
+    // ComposerPane after a V2 regression let the default name
+    // through unchanged.
+    useEffect(() => {
+        if (initialGrid) return; // resuming a draft — keep its name
+        if (userRenamedRef.current) return; // user typed something
+        const getConfigs = window.mainApi?.widgets?.getComponentConfigs;
+        if (typeof getConfigs !== "function") return; // jsdom / tests
+        let cancelled = false;
+        (async () => {
+            try {
+                const configs = (await getConfigs()) || [];
+                if (cancelled) return;
+                // Re-check after the await — the user may have typed
+                // a name while we waited for the IPC to come back.
+                if (userRenamedRef.current) return;
+                const taken = new Set();
+                for (const c of configs) {
+                    if (c?.componentName)
+                        taken.add(String(c.componentName).toLowerCase());
+                    if (c?.widgetPackage) {
+                        const pkg = String(c.widgetPackage).toLowerCase();
+                        const slug = pkg.startsWith("@ai-built/")
+                            ? pkg.slice("@ai-built/".length)
+                            : pkg;
+                        taken.add(slug);
+                    }
+                }
+                const base = "ComposedWidget";
+                if (!taken.has(base.toLowerCase())) return; // default is fine
+                let n = 2;
+                while (taken.has(`${base}${n}`.toLowerCase())) n += 1;
+                const nextName = `${base}${n}`;
+                setGridRaw((prev) =>
+                    prev.widgetName === nextName
+                        ? prev
+                        : { ...prev, widgetName: nextName }
+                );
+            } catch {
+                // Lookup failed — leave the default name. The install
+                // pipeline still errors visibly on a real collision,
+                // so this is a UX nicety, not a safety net.
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+        // One-shot at mount only.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // ── Grid editor handlers ────────────────────────────────────
     const handleAddRow = useCallback(
@@ -357,6 +421,11 @@ export function ComposerPaneV2({
                     type="text"
                     value={grid.widgetName}
                     onChange={(e) => {
+                        // Mark before sanitize/setGrid so the on-mount
+                        // collision-bump effect (which is async) won't
+                        // overwrite the user's typed name if it lands
+                        // between this keystroke and the next render.
+                        userRenamedRef.current = true;
                         const sanitized = e.target.value.replace(
                             /[^A-Za-z0-9_]/g,
                             ""
