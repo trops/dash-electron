@@ -6,6 +6,7 @@
 import {
     makeEmptyGrid,
     isContainer,
+    isGridEmpty,
     addRow,
     removeRow,
     splitCell,
@@ -485,6 +486,39 @@ describe("moveCellWithinGrid", () => {
         });
         // Unchanged: same grid reference.
         expect(next).toBe(g);
+    });
+});
+
+describe("isGridEmpty", () => {
+    test("true for a freshly-made grid (one empty cell)", () => {
+        expect(isGridEmpty(makeEmptyGrid())).toBe(true);
+    });
+
+    test("true even after adding empty rows that the user hasn't filled", () => {
+        let g = makeEmptyGrid();
+        g = addRow(g, g.rootGridId);
+        g = addRow(g, g.rootGridId);
+        expect(isGridEmpty(g)).toBe(true);
+    });
+
+    test("false after placing any component in a cell", () => {
+        let g = makeEmptyGrid();
+        const cellId = g.grids[g.rootGridId].rows[0].cells[0];
+        g = setCellComponent(g, cellId, "Heading", { title: "Hi" });
+        expect(isGridEmpty(g)).toBe(false);
+    });
+
+    test("false after placing a container (creates a nested grid)", () => {
+        let g = makeEmptyGrid();
+        const cellId = g.grids[g.rootGridId].rows[0].cells[0];
+        g = setCellComponent(g, cellId, "Panel");
+        expect(isGridEmpty(g)).toBe(false);
+    });
+
+    test("false for malformed input (null/missing fields)", () => {
+        expect(isGridEmpty(null)).toBe(false);
+        expect(isGridEmpty({})).toBe(false);
+        expect(isGridEmpty({ rootGridId: "x", grids: {} })).toBe(false);
     });
 });
 

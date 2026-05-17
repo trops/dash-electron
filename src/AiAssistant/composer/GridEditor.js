@@ -23,7 +23,12 @@
 
 import React, { useState } from "react";
 import { getComponentSchema } from "../dashReactComponentSchemas";
-import { findCellLocation, isContainer } from "./gridLayout";
+import {
+    findCellLocation,
+    isContainer,
+    cellFillsRow,
+    rowHasFillingCell,
+} from "./gridLayout";
 
 /**
  * Per-category color tokens. Renders containers + leaves with a
@@ -136,7 +141,10 @@ export function GridEditor({
     };
 
     return (
-        <div data-testid="composer-grid-editor">
+        <div
+            data-testid="composer-grid-editor"
+            className="h-full w-full flex flex-col min-h-0 min-w-0"
+        >
             <GridNode
                 grid={grid}
                 gridId={grid.rootGridId}
@@ -181,55 +189,70 @@ function GridNode({
     if (!targetGrid) return null;
     return (
         <div
-            className="border border-gray-700 rounded p-1 space-y-1"
+            className="border border-gray-700 rounded p-2 flex flex-col gap-2 h-full w-full min-h-0 min-w-0"
             data-testid={`composer-grid-${gridId}`}
         >
-            {targetGrid.rows.map((row, rowIdx) => (
-                <div
-                    key={rowIdx}
-                    className="flex flex-row gap-1 items-stretch"
-                    data-testid={`composer-grid-${gridId}-row-${rowIdx}`}
-                >
-                    <div className="flex-1 grid gap-1" style={cellsStyle(row)}>
-                        {row.cells.map((cellId) => (
-                            <CellNode
-                                key={cellId}
-                                grid={grid}
-                                cell={grid.cells[cellId]}
-                                isSelected={selectedCellId === cellId}
-                                onSelectCell={onSelectCell}
-                                onSplitCell={onSplitCell}
-                                onRemoveCell={onRemoveCell}
-                                onRequestPalette={onRequestPalette}
-                                onAddRow={onAddRow}
-                                onRemoveRow={onRemoveRow}
-                                selectedCellId={selectedCellId}
-                                dragInfo={dragInfo}
-                                dropInfo={dropInfo}
-                                onDragStartCell={onDragStartCell}
-                                onDragEndCell={onDragEndCell}
-                                onDragOverCell={onDragOverCell}
-                                onDragLeaveCell={onDragLeaveCell}
-                                onDropCell={onDropCell}
-                            />
-                        ))}
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => onRemoveRow(gridId, rowIdx)}
-                        disabled={targetGrid.rows.length <= 1}
-                        className="text-xs text-gray-500 hover:text-red-300 disabled:opacity-30 px-1"
-                        title="Remove row"
-                        data-testid={`composer-grid-${gridId}-remove-row-${rowIdx}`}
+            {targetGrid.rows.map((row, rowIdx) => {
+                // Rows containing a fill-component (Panel/Card/Table/
+                // DataList/...) claim the remaining vertical space —
+                // same predicate the emitter uses, so the editor's
+                // proportions match what the user will see in the
+                // rendered widget. Heading-only rows stay at content
+                // height.
+                const fill = rowHasFillingCell(grid, row);
+                const rowClass = fill
+                    ? "flex flex-row gap-2 items-stretch flex-1 min-h-0"
+                    : "flex flex-row gap-2 items-stretch";
+                return (
+                    <div
+                        key={rowIdx}
+                        className={rowClass}
+                        data-testid={`composer-grid-${gridId}-row-${rowIdx}`}
                     >
-                        ×
-                    </button>
-                </div>
-            ))}
+                        <div
+                            className="flex-1 grid gap-2"
+                            style={cellsStyle(row)}
+                        >
+                            {row.cells.map((cellId) => (
+                                <CellNode
+                                    key={cellId}
+                                    grid={grid}
+                                    cell={grid.cells[cellId]}
+                                    isSelected={selectedCellId === cellId}
+                                    onSelectCell={onSelectCell}
+                                    onSplitCell={onSplitCell}
+                                    onRemoveCell={onRemoveCell}
+                                    onRequestPalette={onRequestPalette}
+                                    onAddRow={onAddRow}
+                                    onRemoveRow={onRemoveRow}
+                                    selectedCellId={selectedCellId}
+                                    dragInfo={dragInfo}
+                                    dropInfo={dropInfo}
+                                    onDragStartCell={onDragStartCell}
+                                    onDragEndCell={onDragEndCell}
+                                    onDragOverCell={onDragOverCell}
+                                    onDragLeaveCell={onDragLeaveCell}
+                                    onDropCell={onDropCell}
+                                />
+                            ))}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => onRemoveRow(gridId, rowIdx)}
+                            disabled={targetGrid.rows.length <= 1}
+                            className="text-xs text-gray-500 hover:text-red-300 disabled:opacity-30 px-1"
+                            title="Remove row"
+                            data-testid={`composer-grid-${gridId}-remove-row-${rowIdx}`}
+                        >
+                            ×
+                        </button>
+                    </div>
+                );
+            })}
             <button
                 type="button"
                 onClick={() => onAddRow(gridId)}
-                className="w-full text-xs text-indigo-400 hover:text-indigo-200 border border-dashed border-gray-700 rounded py-0.5"
+                className="shrink-0 w-full text-sm text-indigo-400 hover:text-indigo-200 border border-dashed border-gray-700 rounded py-2"
                 data-testid={`composer-grid-${gridId}-add-row`}
             >
                 + Row
@@ -430,7 +453,7 @@ function CellNode({
                 <button
                     type="button"
                     onClick={() => onRequestPalette(cell.id)}
-                    className="flex-1 py-3 text-xs text-gray-500 hover:text-indigo-300"
+                    className="flex-1 py-4 text-sm text-gray-500 hover:text-indigo-300"
                     data-testid={`composer-cell-${cell.id}-add`}
                 >
                     + Add component
@@ -458,18 +481,23 @@ function CellNode({
     }
     if (effectiveKind === "leaf") {
         const color = getCategoryColor(cell.type);
+        // Fill cells (Table, DataList, …) take the row's full height
+        // so the editor mirrors what the runtime widget does. Natural
+        // leaves (Heading, Button, …) sit at content height.
+        const fills = cellFillsRow(grid, cell);
+        const fillClass = fills ? " h-full min-h-0" : "";
         return (
             <div
                 {...dragProps}
-                className={`relative border border-l-4 ${color.border} ${selectionClass} rounded p-1.5 bg-gray-900 hover:bg-gray-800 ${draggingOpacity}`}
+                className={`relative border border-l-4 ${color.border} ${selectionClass} rounded p-3 bg-gray-900 hover:bg-gray-800 ${draggingOpacity}${fillClass}`}
                 data-testid={`composer-cell-${cell.id}`}
             >
                 {dropIndicator}
-                <div className="flex items-center justify-between gap-1">
+                <div className="flex items-center justify-between gap-2">
                     <button
                         type="button"
                         onClick={() => onSelectCell(cell.id)}
-                        className={`text-xs ${color.labelText} font-mono truncate hover:text-white text-left flex-1`}
+                        className={`text-sm ${color.labelText} font-mono truncate hover:text-white text-left flex-1`}
                         data-testid={`composer-cell-${cell.id}-select`}
                     >
                         {cell.type}
@@ -498,20 +526,23 @@ function CellNode({
     }
     if (effectiveKind === "container" && cell.gridId) {
         const color = getCategoryColor(cell.type);
+        // Containers always fill — the editor shows the inner grid
+        // expanding to the parent's height so the user sees the same
+        // proportions the runtime will render.
         return (
             <div
                 {...dragProps}
-                className={`relative border border-l-4 ${color.border} ${selectionClass} rounded bg-gray-900 ${draggingOpacity}`}
+                className={`relative border border-l-4 ${color.border} ${selectionClass} rounded bg-gray-900 ${draggingOpacity} h-full min-h-0 flex flex-col`}
                 data-testid={`composer-cell-${cell.id}`}
             >
                 {dropIndicator}
                 <div
-                    className={`flex items-center justify-between gap-1 px-1.5 py-1 border-b border-gray-700 ${color.headerBg}`}
+                    className={`shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-700 ${color.headerBg}`}
                 >
                     <button
                         type="button"
                         onClick={() => onSelectCell(cell.id)}
-                        className={`text-xs ${color.labelText} font-mono truncate hover:text-white text-left flex-1`}
+                        className={`text-sm ${color.labelText} font-mono truncate hover:text-white text-left flex-1`}
                         data-testid={`composer-cell-${cell.id}-select`}
                     >
                         {cell.type}
@@ -533,7 +564,7 @@ function CellNode({
                         ×
                     </button>
                 </div>
-                <div className="p-1.5">
+                <div className="p-2 flex-1 min-h-0 flex flex-col">
                     <GridNode
                         grid={grid}
                         gridId={cell.gridId}

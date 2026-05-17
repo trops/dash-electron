@@ -34,7 +34,9 @@ import {
     setCellType,
     clearCellComponent,
     moveCellWithinGrid,
+    isGridEmpty,
 } from "./gridLayout";
+import { QuickStartPane } from "./QuickStartPane";
 import { emitGridWidgetCode } from "./gridEmitter";
 import {
     updateNodeProp,
@@ -76,6 +78,11 @@ export function ComposerPaneV2({
     initialGrid = null,
     selectedCellId: controlledSelectedCellId = null,
     onSelectedCellChange,
+    // LLM context for the empty-state quick-start pane. Same shape
+    // the modal already threads into SuggestLayoutButton in V1.
+    apiKey = null,
+    model = null,
+    backend = "claude-code",
 }) {
     const [grid, setGridRaw] = useState(() => initialGrid || makeEmptyGrid());
     const [internalSelectedCellId, setInternalSelectedCellId] = useState(null);
@@ -363,12 +370,16 @@ export function ComposerPaneV2({
                     data-testid="composer-widget-name"
                 />
             </div>
-            {/* Three view modes share the pane below the name input:
-                  - palette    (user clicked + Add on an empty cell)
-                  - inspector  (user clicked a filled cell to edit it)
-                  - composition (default)
+            {/* Four view modes share the pane below the name input:
+                  - palette     (user clicked + Add on an empty cell)
+                  - inspector   (user clicked a filled cell to edit it)
+                  - quick-start (grid is empty — onboarding pane)
+                  - composition (default — the grid editor)
                 Each takes the full pane height so the user isn't
-                fighting cramped sections. */}
+                fighting cramped sections. The quick-start branch
+                naturally hides as soon as the grid is no longer
+                empty, so a sample-apply / AI-pick / drop transitions
+                straight into the composition view. */}
             {paletteTargetCellId ? (
                 <PaletteView
                     onPick={handlePalettePick}
@@ -392,33 +403,53 @@ export function ComposerPaneV2({
                             onClose={() => setSelectedCellId(null)}
                         />
                     </div>
-                    <div className="shrink-0 border-t border-white/10 px-3 py-2 bg-gray-900">
+                    <div className="shrink-0 border-t border-white/10 px-3 py-3 bg-gray-900">
                         <button
                             type="button"
                             onClick={() => setSelectedCellId(null)}
-                            className="w-full px-3 py-1.5 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white"
+                            className="w-full px-3 py-3 text-sm font-medium rounded bg-indigo-600 hover:bg-indigo-500 text-white"
                             data-testid="composer-inspector-done"
                         >
                             Done editing
                         </button>
                     </div>
                 </div>
+            ) : isGridEmpty(grid) ? (
+                <QuickStartPane
+                    onApplyGrid={(next) => setGrid(next)}
+                    onRequestPalette={handleRequestPalette}
+                    seedCellId={grid.grids[grid.rootGridId].rows[0].cells[0]}
+                    apiKey={apiKey}
+                    model={model}
+                    backend={backend}
+                />
             ) : (
-                <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2">
-                    <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">
+                <div className="flex-1 min-h-0 flex flex-col px-3 py-2 gap-1">
+                    <div className="text-xs uppercase tracking-wide text-gray-500 shrink-0">
                         Composition
                     </div>
-                    <GridEditor
-                        grid={grid}
-                        selectedCellId={selectedCellId}
-                        onSelectCell={setSelectedCellId}
-                        onAddRow={handleAddRow}
-                        onRemoveRow={handleRemoveRow}
-                        onSplitCell={handleSplitCell}
-                        onRemoveCell={handleRemoveCell}
-                        onRequestPalette={handleRequestPalette}
-                        onMoveCell={handleMoveCell}
-                    />
+                    {/* Editor flexes to fill the remaining height so
+                        the runtime-mirrored sizing rules inside it
+                        (containers fill, primitives sit at content
+                        height) have an actual height to resolve
+                        against. min-h-0 lets nested grids shrink
+                        below their content's intrinsic size. */}
+                    <div
+                        className="flex-1 min-h-0 overflow-y-auto"
+                        data-testid="composer-grid-editor-host"
+                    >
+                        <GridEditor
+                            grid={grid}
+                            selectedCellId={selectedCellId}
+                            onSelectCell={setSelectedCellId}
+                            onAddRow={handleAddRow}
+                            onRemoveRow={handleRemoveRow}
+                            onSplitCell={handleSplitCell}
+                            onRemoveCell={handleRemoveCell}
+                            onRequestPalette={handleRequestPalette}
+                            onMoveCell={handleMoveCell}
+                        />
+                    </div>
                 </div>
             )}
             {/* clearCellComponent isn't surfaced as a button yet — it
