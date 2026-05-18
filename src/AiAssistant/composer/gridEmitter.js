@@ -44,6 +44,34 @@ import {
     getInputBinding,
 } from "../dashReactComponentSchemas";
 import { PROVIDER_API_REGISTRY } from "../providerApiRegistry";
+import { HEADING_CONVENTIONS, LAYOUT_CONVENTIONS } from "./widgetConventions";
+
+/**
+ * Phase C step 3 — emission-time guardrails.
+ *
+ * Backstop for the AI / starter / hand-author still occasionally
+ * placing a raw <Heading> inside a widget cell. The conventions
+ * (widgetConventions.js) forbid Heading in-widget; the prompt + the
+ * starter layouts respect this, but a stray "Heading" persists in
+ * older drafts and any future code path the conventions aren't piped
+ * into. Rewriting at emit time keeps the runtime widget shipped with
+ * the right variant regardless of upstream source.
+ *
+ * applyHeadingGuardrail: leaf cells with type in HEADING_CONVENTIONS.
+ * forbidden are rewritten to HEADING_CONVENTIONS.preferredTitle
+ * (SubHeading2). The user can still explicitly pick raw Heading via
+ * the variant picker — at that point the cell's type IS the picker's
+ * stored type, and the picker is the user's signal of intent, not a
+ * default. The guardrail only rewrites the default path.
+ *
+ * Returns the same cell reference when nothing needed rewriting so
+ * downstream identity checks (===) keep working.
+ */
+function applyHeadingGuardrail(cell) {
+    if (!cell || cell.kind !== "leaf") return cell;
+    if (!HEADING_CONVENTIONS.forbidden.includes(cell.type)) return cell;
+    return { ...cell, type: HEADING_CONVENTIONS.preferredTitle };
+}
 
 /**
  * Emit the componentCode + configCode pair for a composition grid.
@@ -63,7 +91,14 @@ export function emitGridWidgetCode(grid) {
     // pointing at the leaves so the existing code path runs
     // unchanged.
     const leafNodes = [];
-    walkLeafCells(grid, (cell) => leafNodes.push(cellToNode(cell)));
+    // Apply the heading guardrail before the leaf reaches the hook
+    // scaffold so any provider/wire bookkeeping it might do agrees
+    // with the type the JSX renderer will emit. Heading has no
+    // wires/state today so this is defensive, not load-bearing —
+    // but keeping the two passes in lockstep is cheap.
+    walkLeafCells(grid, (cell) =>
+        leafNodes.push(cellToNode(applyHeadingGuardrail(cell)))
+    );
     const treeShim = {
         widgetName,
         root: {
@@ -170,7 +205,15 @@ function renderGridJsx(grid, gridId, indent, slotVarBySlotKey) {
     const pad = "    ".repeat(indent);
     const targetGrid = grid.grids[gridId];
     if (!targetGrid) return `${pad}<div />`;
-    const gridClass = "flex flex-col gap-2 h-full w-full min-h-0 min-w-0";
+    // Phase C step 3 — multi-row grids get the conventions' sectionGap
+    // (gap-4) so consecutive components aren't visually fused. Single-
+    // row grids keep the tighter gap-2 since there's no inter-row
+    // spacing to reveal. LAYOUT_CONVENTIONS.sectionGap is the source
+    // of truth — a future tweak there ripples through every emitted
+    // multi-row widget at the next compile.
+    const rowGap =
+        targetGrid.rows.length > 1 ? LAYOUT_CONVENTIONS.sectionGap : "gap-2";
+    const gridClass = `flex flex-col ${rowGap} h-full w-full min-h-0 min-w-0`;
     const lines = [
         `${pad}<div data-composer-node-id="${gridId}" className="${gridClass}">`,
     ];
@@ -190,9 +233,14 @@ function renderGridJsx(grid, gridId, indent, slotVarBySlotKey) {
     return lines.join("\n");
 }
 
-function renderCellJsx(grid, cell, indent, slotVarBySlotKey) {
+function renderCellJsx(grid, cellIn, indent, slotVarBySlotKey) {
     const pad = "    ".repeat(indent);
-    if (!cell) return `${pad}{/* missing cell */}`;
+    if (!cellIn) return `${pad}{/* missing cell */}`;
+    // Apply emission-time guardrails BEFORE deciding effective kind
+    // or delegating to the per-node renderer. The downgraded cell
+    // looks identical structurally to the original; only its `type`
+    // string changes, so the kind machinery below is unaffected.
+    const cell = applyHeadingGuardrail(cellIn);
     // Same effective-kind override as the editor: if the cell's
     // recorded kind disagrees with the current schema (Paragraph
     // used to be a container and isn't anymore), render against
@@ -293,8 +341,16 @@ function collectUsedComponentNames(grid) {
     const out = new Set();
     if (!grid || !grid.cells) return out;
     for (const cell of Object.values(grid.cells)) {
-        if (cell.kind === "leaf" && cell.type) out.add(cell.type);
-        if (cell.kind === "container" && cell.type) out.add(cell.type);
+        // Apply the same heading guardrail used at render time so the
+        // import block contains the rewritten type (SubHeading2), not
+        // the original Heading. Otherwise the emitted module would
+        // import Heading but render SubHeading2 — "SubHeading2 is not
+        // defined" at compile time.
+        const effective = applyHeadingGuardrail(cell);
+        if (effective.kind === "leaf" && effective.type)
+            out.add(effective.type);
+        if (effective.kind === "container" && effective.type)
+            out.add(effective.type);
     }
     for (const name of [...out]) {
         if (name === "Menu" || name === "Menu2" || name === "Menu3") {
