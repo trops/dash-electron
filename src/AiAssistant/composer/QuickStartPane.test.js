@@ -91,12 +91,13 @@ describe("QuickStartPane — step 2 (intent detail)", () => {
             ).toBeInTheDocument();
         }
         // A sample that doesn't match the search intent is hidden.
-        const dashboardSample = SAMPLE_LAYOUTS.find(
-            (l) => l.id === "dashboard-summary"
-        );
+        // stat-tile is intents: ["view"] only — should not appear
+        // when the user picked Search.
+        const viewOnlySample = SAMPLE_LAYOUTS.find((l) => l.id === "stat-tile");
+        expect(viewOnlySample).toBeTruthy();
         expect(
             screen.queryByTestId(
-                `composer-quick-start-sample-${dashboardSample.id}`
+                `composer-quick-start-sample-${viewOnlySample.id}`
             )
         ).not.toBeInTheDocument();
         // AI form opener is present.
