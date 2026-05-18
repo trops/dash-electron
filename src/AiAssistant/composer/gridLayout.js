@@ -263,9 +263,35 @@ export function removeCell(grid, cellId) {
     const targetGrid = grid.grids[gridId];
     const targetRow = targetGrid.rows[rowIdx];
     const nextRowCells = targetRow.cells.filter((_, i) => i !== cellIdx);
-    const nextRows = targetGrid.rows.map((r, i) =>
-        i === rowIdx ? { ...r, cells: nextRowCells } : r
-    );
+
+    // Invariant: a grid's rows never carry empty `cells: []`. An
+    // empty row is either dropped (when there are siblings) or
+    // re-seeded with a placeholder (when it's the only row in the
+    // grid) so the QuickStartPane / palette / drop affordances always
+    // have a real seed cell to target. Without this, removing the
+    // last component sent the user to a QuickStartPane whose "Start
+    // blank" button was permanently disabled (its target cell-id
+    // came from `rows[0].cells[0]`, which was now undefined).
+    let nextRows;
+    let nextNextCellId = grid._nextCellId;
+    let seededPlaceholderId = null;
+    if (nextRowCells.length === 0 && targetGrid.rows.length > 1) {
+        // Drop the now-empty row entirely — having dead rows in the
+        // middle of a grid produces phantom +/- buttons with nothing
+        // to click between.
+        nextRows = targetGrid.rows.filter((_, i) => i !== rowIdx);
+    } else if (nextRowCells.length === 0) {
+        // Only row in the grid — refill the seed cell so the empty
+        // state matches what `makeEmptyGrid` produces.
+        const seeded = nextCellId({ _nextCellId: nextNextCellId });
+        seededPlaceholderId = seeded.id;
+        nextNextCellId = seeded.next;
+        nextRows = [{ cells: [seededPlaceholderId] }];
+    } else {
+        nextRows = targetGrid.rows.map((r, i) =>
+            i === rowIdx ? { ...r, cells: nextRowCells } : r
+        );
+    }
     let nextGrids = {
         ...grid.grids,
         [gridId]: { ...targetGrid, rows: nextRows },
@@ -276,7 +302,21 @@ export function removeCell(grid, cellId) {
         nextCells,
         cellId
     ));
-    return { ...grid, grids: nextGrids, cells: nextCells };
+    if (seededPlaceholderId) {
+        nextCells = {
+            ...nextCells,
+            [seededPlaceholderId]: {
+                id: seededPlaceholderId,
+                kind: "empty",
+            },
+        };
+    }
+    return {
+        ...grid,
+        grids: nextGrids,
+        cells: nextCells,
+        _nextCellId: nextNextCellId,
+    };
 }
 
 /**
