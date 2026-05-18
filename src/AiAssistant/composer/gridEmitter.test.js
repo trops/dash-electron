@@ -180,12 +180,15 @@ describe("emitGridWidgetCode", () => {
         );
     });
 
-    test("a primitive cell (Heading) does NOT emit the wrapper fill style — it sits at content height", () => {
-        // Heading isn't fillsCell, so a Heading-only widget shouldn't
+    test("a primitive cell (Heading2) does NOT emit the wrapper fill style — it sits at content height", () => {
+        // Heading2 isn't fillsCell, so a Heading2-only widget shouldn't
         // stretch a tiny title across the full preview canvas.
+        // (Uses Heading2 rather than raw Heading because the Phase C
+        // emitter guardrail rewrites Heading → SubHeading2 — this test
+        // is about fillsCell behavior, not the guardrail.)
         const g0 = makeEmptyGrid();
         const cellId = g0.grids[g0.rootGridId].rows[0].cells[0];
-        const g1 = setCellComponent(g0, cellId, "Heading", { title: "Hi" });
+        const g1 = setCellComponent(g0, cellId, "Heading2", { title: "Hi" });
         const { componentCode } = emitGridWidgetCode(g1);
         expect(componentCode).not.toMatch(
             /data-composer-node-id="cell-1" style=/
@@ -210,12 +213,16 @@ describe("emitGridWidgetCode", () => {
     });
 
     test("a leaf component cell renders the component with the composer wrapper", () => {
+        // Uses Heading2 rather than raw Heading because the Phase C
+        // emitter guardrail rewrites Heading → SubHeading2 — this test
+        // is about the wrapper + prop pass-through, not the guardrail
+        // (covered by its own tests below).
         const g0 = makeEmptyGrid();
         const cellId = g0.grids[g0.rootGridId].rows[0].cells[0];
-        const g1 = setCellComponent(g0, cellId, "Heading", { title: "Hello" });
+        const g1 = setCellComponent(g0, cellId, "Heading2", { title: "Hello" });
         const { componentCode } = emitGridWidgetCode(g1);
         expect(componentCode).toMatch(
-            /data-composer-node-id="cell-1"[\s\S]*<Heading title="Hello"/
+            /data-composer-node-id="cell-1"[\s\S]*<Heading2 title="Hello"/
         );
     });
 
@@ -235,7 +242,11 @@ describe("emitGridWidgetCode", () => {
         );
     });
 
-    test("nested container — Panel containing Card containing Heading", () => {
+    test("nested container — Panel containing Card containing Heading2", () => {
+        // Uses Heading2 (not raw Heading) so this test exercises pure
+        // container nesting without the Phase C emitter guardrail
+        // rewriting the leaf type. Heading→SubHeading2 downgrade is
+        // tested separately below.
         const g0 = makeEmptyGrid();
         const outerCell = g0.grids[g0.rootGridId].rows[0].cells[0];
         const g1 = setCellComponent(g0, outerCell, "Panel");
@@ -245,16 +256,16 @@ describe("emitGridWidgetCode", () => {
         const card = g2.cells[innerCell];
         const cardInnerGrid = card.gridId;
         const headingCell = g2.grids[cardInnerGrid].rows[0].cells[0];
-        const g3 = setCellComponent(g2, headingCell, "Heading", {
+        const g3 = setCellComponent(g2, headingCell, "Heading2", {
             title: "Inside the card",
         });
         const { componentCode } = emitGridWidgetCode(g3);
         // All three components show up in the import list and the JSX.
-        expect(componentCode).toContain("import { Card, Heading, Panel }");
+        expect(componentCode).toContain("import { Card, Heading2, Panel }");
         expect(componentCode).toMatch(
-            /<Panel[^>]*>[\s\S]*<Card[^>]*>[\s\S]*<Heading/
+            /<Panel[^>]*>[\s\S]*<Card[^>]*>[\s\S]*<Heading2/
         );
-        // Closing-tag order: Card closes before Panel (Heading is a
+        // Closing-tag order: Card closes before Panel (Heading2 is a
         // self-closing leaf and has no close tag).
         expect(componentCode).toMatch(/<\/Card>[\s\S]*<\/Panel>/);
     });
@@ -284,6 +295,107 @@ describe("emitGridWidgetCode", () => {
         const { componentCode } = emitGridWidgetCode(g1);
         expect(componentCode).toContain(
             'import { SearchInput } from "@trops/dash-react";'
+        );
+    });
+});
+
+describe("emitGridWidgetCode — Phase C step 3 guardrails", () => {
+    test("Heading is downgraded to SubHeading2 in the emitted JSX (the H1 rule)", () => {
+        // The user's H1 complaint: AI / old drafts emit raw <Heading>
+        // (H1 size) inside widgets where SubHeading2 belongs. The
+        // emitter rewrites at output time so a stale Heading in the
+        // grid still ships as a section-sized heading.
+        const g0 = makeEmptyGrid();
+        const cellId = g0.grids[g0.rootGridId].rows[0].cells[0];
+        const g1 = setCellComponent(g0, cellId, "Heading", {
+            title: "Reports",
+        });
+        const { componentCode } = emitGridWidgetCode(g1);
+        expect(componentCode).toContain('<SubHeading2 title="Reports"');
+        // Guarded against the bare <Heading> tag — word-boundary
+        // pattern (matches "<Heading " and "<Heading/" but not
+        // "<Heading2", "<SubHeading2").
+        expect(componentCode).not.toMatch(/<Heading[\s/>]/);
+    });
+
+    test("Heading downgrade flows through to the dash-react import block", () => {
+        // If the import block still listed Heading while the JSX
+        // emitted SubHeading2, the compiled module would fail with
+        // "SubHeading2 is not defined" at runtime.
+        const g0 = makeEmptyGrid();
+        const cellId = g0.grids[g0.rootGridId].rows[0].cells[0];
+        const g1 = setCellComponent(g0, cellId, "Heading", { title: "X" });
+        const { componentCode } = emitGridWidgetCode(g1);
+        expect(componentCode).toMatch(/import \{[^}]*SubHeading2[^}]*\}/);
+        // Heading should NOT be imported — the original type was
+        // rewritten before the import set was built.
+        expect(componentCode).not.toMatch(/import \{[^}]*\bHeading\b[^}]*\}/);
+    });
+
+    test("Heading2 / Heading3 / SubHeading2 are NOT downgraded (only raw Heading is forbidden)", () => {
+        for (const variant of [
+            "Heading2",
+            "Heading3",
+            "SubHeading2",
+            "SubHeading3",
+        ]) {
+            const g0 = makeEmptyGrid();
+            const cellId = g0.grids[g0.rootGridId].rows[0].cells[0];
+            const g1 = setCellComponent(g0, cellId, variant, { title: "X" });
+            const { componentCode } = emitGridWidgetCode(g1);
+            expect(componentCode).toContain(`<${variant}`);
+        }
+    });
+
+    test("Heading downgrade preserves the props (title etc.)", () => {
+        const g0 = makeEmptyGrid();
+        const cellId = g0.grids[g0.rootGridId].rows[0].cells[0];
+        const g1 = setCellComponent(g0, cellId, "Heading", {
+            title: "Quarterly Stats",
+        });
+        const { componentCode } = emitGridWidgetCode(g1);
+        expect(componentCode).toContain('title="Quarterly Stats"');
+    });
+
+    test("multi-row grid uses gap-4 (LAYOUT_CONVENTIONS.sectionGap)", () => {
+        // The conventions specify gap-4 between top-level rows. Old
+        // emitter used gap-2 everywhere — components visually fused.
+        // Two rows → gap-4. A grid wrapper match like:
+        //   <div data-composer-node-id="grid-root" className="... gap-4 ...">
+        const g0 = makeEmptyGrid();
+        const g1 = addRow(g0, g0.rootGridId);
+        const { componentCode } = emitGridWidgetCode(g1);
+        expect(componentCode).toMatch(
+            /data-composer-node-id="grid-root"[^>]*gap-4/
+        );
+        expect(componentCode).not.toMatch(
+            /data-composer-node-id="grid-root"[^>]*gap-2/
+        );
+    });
+
+    test("single-row grid keeps the tighter gap-2 (no inter-row spacing to reveal)", () => {
+        const g = makeEmptyGrid();
+        const { componentCode } = emitGridWidgetCode(g);
+        expect(componentCode).toMatch(
+            /data-composer-node-id="grid-root"[^>]*gap-2/
+        );
+        expect(componentCode).not.toMatch(
+            /data-composer-node-id="grid-root"[^>]*gap-4/
+        );
+    });
+
+    test("multi-row inner grid (inside a Panel) also gets gap-4", () => {
+        // The guardrail applies at every grid level, not just root.
+        // A Panel with multiple child rows should still get gap-4 on
+        // its inner grid.
+        const g0 = makeEmptyGrid();
+        const outerCell = g0.grids[g0.rootGridId].rows[0].cells[0];
+        const g1 = setCellComponent(g0, outerCell, "Panel");
+        const innerGridId = g1.cells[outerCell].gridId;
+        const g2 = addRow(g1, innerGridId);
+        const { componentCode } = emitGridWidgetCode(g2);
+        expect(componentCode).toMatch(
+            new RegExp(`data-composer-node-id="${innerGridId}"[^>]*gap-4`)
         );
     });
 });
