@@ -55,7 +55,7 @@ const dashboardConfig = {
                 width: "w-full",
                 height: "h-full",
                 grid: {
-                    rows: 4,
+                    rows: 5,
                     cols: 3,
                     gap: "gap-2",
                     1.1: { component: 2, hide: false },
@@ -70,6 +70,10 @@ const dashboardConfig = {
                     4.1: { component: 11, hide: false },
                     4.2: { component: 12, hide: false },
                     4.3: { component: 13, hide: false },
+                    // Phase B widget #1: SlackListChannels (publishes
+                    // channelSelected — pairs with future
+                    // SlackChannelMessages widget #2 in cell 5.2).
+                    5.1: { component: 14, hide: false },
                 },
             },
             {
@@ -202,6 +206,16 @@ const dashboardConfig = {
                 scrollable: true,
                 workspace: "layout",
             },
+            {
+                id: 14,
+                component: "trops.slack.SlackListChannels",
+                type: "widget",
+                parent: 1,
+                order: 13,
+                hasChildren: 0,
+                scrollable: true,
+                workspace: "layout",
+            },
         ],
         menuId: 1,
     },
@@ -251,6 +265,16 @@ const dashboardConfig = {
             scope: "trops",
             packageName: "slack",
             widgetName: "SlackWidget",
+            package: "slack",
+            version: "*",
+            required: true,
+            author: "John P. Giatropoulos",
+        },
+        {
+            id: "trops.slack.SlackListChannels",
+            scope: "trops",
+            packageName: "slack",
+            widgetName: "SlackListChannels",
             package: "slack",
             version: "*",
             required: true,
@@ -338,7 +362,7 @@ const dashboardConfig = {
             type: "slack",
             providerClass: "mcp",
             required: false,
-            usedBy: ["SlackWidget"],
+            usedBy: ["SlackWidget", "SlackListChannels"],
         },
         {
             type: "gmail",

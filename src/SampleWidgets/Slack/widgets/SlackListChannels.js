@@ -139,24 +139,34 @@ function SlackListChannelsContent({ title, widgetId }) {
                 </div>
             )}
 
-            {!loading && channels.length === 0 && (
-                <div className="text-xs text-gray-500">
-                    No channels loaded. Click Refresh to fetch.
+            {/* Empty state — distinct from loading + connection-error
+                so the user knows whether to wait, configure Slack, or
+                just refresh. */}
+            {!loading && !error && channels.length === 0 && (
+                <div className="text-xs text-gray-500 italic">
+                    {isConnected
+                        ? "No channels found. Click Refresh to retry."
+                        : "Connect the Slack provider in Settings to load channels."}
                 </div>
             )}
 
-            {/* Result */}
-            {result && (
-                <div
-                    className={`p-2 rounded text-xs border ${
-                        result.type === "error"
-                            ? "bg-red-900/30 border-red-700 text-red-300"
-                            : "bg-green-900/30 border-green-700 text-green-300"
-                    }`}
-                >
-                    <pre className="whitespace-pre-wrap overflow-auto max-h-32">
-                        {result.text}
-                    </pre>
+            {/* No-match state for the filter — separate so a typo
+                doesn't make it look like there are no channels at all. */}
+            {!loading &&
+                channels.length > 0 &&
+                filtered.length === 0 &&
+                filter.length > 0 && (
+                    <div className="text-xs text-gray-500 italic">
+                        No channels match "{filter}".
+                    </div>
+                )}
+
+            {/* Last-call status: subtle inline feedback, not a verbose
+                panel. Errors already render above; this just confirms
+                a successful refresh. */}
+            {result && result.type === "error" && (
+                <div className="text-xs text-red-400">
+                    Last fetch failed: {result.text}
                 </div>
             )}
         </div>

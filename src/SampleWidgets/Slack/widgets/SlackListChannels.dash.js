@@ -27,6 +27,8 @@ const widgetDefinition = {
             type: "text",
             defaultValue: "Slack Channels",
             displayName: "Title",
+            instructions:
+                "Header shown above the channel list. Defaults to 'Slack Channels'.",
             required: false,
         },
     },
