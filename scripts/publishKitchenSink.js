@@ -78,6 +78,7 @@ const dashboardConfig = {
                     5.2: { component: 15, hide: false }, // SlackChannelMessages
                     5.3: { component: 16, hide: false }, // AlgoliaRulesList
                     6.1: { component: 17, hide: false }, // GitHubPRList (configRepo)
+                    6.2: { component: 18, hide: false }, // GmailUnreadCount (stat)
                 },
             },
             {
@@ -269,6 +270,19 @@ const dashboardConfig = {
                 // PRs without needing a paired GitHubRepoList. Also
                 // accepts repoSelected events as before.
             },
+            {
+                id: 18,
+                component: "trops.gmail.GmailUnreadCount",
+                type: "widget",
+                parent: 1,
+                order: 17,
+                hasChildren: 0,
+                scrollable: true,
+                workspace: "layout",
+                // Stat widget — single big number for unread-email
+                // count. Auto-refreshes every 60s by default; publishes
+                // unreadCountUpdated so notification widgets can react.
+            },
         ],
         menuId: 1,
     },
@@ -359,6 +373,16 @@ const dashboardConfig = {
             packageName: "git-hub",
             widgetName: "GitHubPRList",
             package: "git-hub",
+            version: "*",
+            required: true,
+            author: "John P. Giatropoulos",
+        },
+        {
+            id: "trops.gmail.GmailUnreadCount",
+            scope: "trops",
+            packageName: "gmail",
+            widgetName: "GmailUnreadCount",
+            package: "gmail",
             version: "*",
             required: true,
             author: "John P. Giatropoulos",
@@ -455,7 +479,7 @@ const dashboardConfig = {
             type: "gmail",
             providerClass: "mcp",
             required: false,
-            usedBy: ["GmailWidget"],
+            usedBy: ["GmailWidget", "GmailUnreadCount"],
         },
         {
             type: "google-calendar",
