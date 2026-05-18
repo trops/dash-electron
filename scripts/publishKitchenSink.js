@@ -70,13 +70,14 @@ const dashboardConfig = {
                     4.1: { component: 11, hide: false },
                     4.2: { component: 12, hide: false },
                     4.3: { component: 13, hide: false },
-                    // Phase B widget #1: SlackListChannels (publishes
-                    // channelSelected). Cell 5.2 paired with widget #2
-                    // SlackChannelMessages (listens for channelSelected
-                    // → loads message history) so the user sees the
-                    // cross-widget event flow side-by-side.
-                    5.1: { component: 14, hide: false },
-                    5.2: { component: 15, hide: false },
+                    // Phase B widgets — each PR appends one. Row 5
+                    // currently shows the Slack pair (channels list ↔
+                    // messages, via channelSelected) and the Algolia
+                    // rules list as a standalone demo of the
+                    // credential-provider pattern.
+                    5.1: { component: 14, hide: false }, // SlackListChannels
+                    5.2: { component: 15, hide: false }, // SlackChannelMessages
+                    5.3: { component: 16, hide: false }, // AlgoliaRulesList
                 },
             },
             {
@@ -239,6 +240,21 @@ const dashboardConfig = {
                     ],
                 },
             },
+            {
+                id: 16,
+                component: "trops.algolia.AlgoliaRulesList",
+                type: "widget",
+                parent: 1,
+                order: 15,
+                hasChildren: 0,
+                scrollable: true,
+                workspace: "layout",
+                // Demonstrates the credential-provider pattern
+                // (window.mainApi.algolia.searchRules via the
+                // providerHash triplet). Set indexName in widget
+                // settings, or pair with a widget that publishes
+                // indexSelected (e.g. AlgoliaIndexDashboardWidget).
+            },
         ],
         menuId: 1,
     },
@@ -309,6 +325,16 @@ const dashboardConfig = {
             packageName: "slack",
             widgetName: "SlackChannelMessages",
             package: "slack",
+            version: "*",
+            required: true,
+            author: "John P. Giatropoulos",
+        },
+        {
+            id: "trops.algolia.AlgoliaRulesList",
+            scope: "trops",
+            packageName: "algolia",
+            widgetName: "AlgoliaRulesList",
+            package: "algolia",
             version: "*",
             required: true,
             author: "John P. Giatropoulos",
@@ -424,6 +450,12 @@ const dashboardConfig = {
             providerClass: "mcp",
             required: false,
             usedBy: ["FilesystemWidget"],
+        },
+        {
+            type: "algolia",
+            providerClass: "credential",
+            required: false,
+            usedBy: ["AlgoliaRulesList"],
         },
     ],
     eventWiring: [

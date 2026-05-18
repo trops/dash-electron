@@ -13,3 +13,4 @@ export * as AlgoliaHighlightSnippetWidget from "./AlgoliaHighlightSnippetWidget.
 export * as AlgoliaTypoToleranceWidget from "./AlgoliaTypoToleranceWidget.dash.js";
 export * as AlgoliaPaginationWidget from "./AlgoliaPaginationWidget.dash.js";
 export * as AlgoliaDistinctWidget from "./AlgoliaDistinctWidget.dash.js";
+export * as AlgoliaRulesList from "./AlgoliaRulesList.dash.js";
