@@ -214,6 +214,76 @@ describe("QuickStartPane — provider intent", () => {
         ).toHaveTextContent(/Algolia/);
     });
 
+    test("Phase D — applying a sample from provider-intent forwards providerChoice as onApplyGrid's second arg", () => {
+        // Plumbing-only contract: ComposerPaneV2 listens for the
+        // second arg and stashes it via ComposerProviderChoiceContext.
+        // The contract change is what lets a future auto-wire feature
+        // detect "user picked Algolia in the wizard" without prop-
+        // drilling through every handler.
+        const onApplyGrid = jest.fn();
+        render(
+            <QuickStartPane
+                onApplyGrid={onApplyGrid}
+                onRequestPalette={() => {}}
+                seedCellId="cell-1"
+            />
+        );
+        // Walk: intent picker → provider picker → algolia → detail.
+        fireEvent.click(
+            screen.getByTestId("composer-quick-start-intent-provider")
+        );
+        fireEvent.click(
+            screen.getByTestId(
+                "composer-quick-start-provider-algolia-credential"
+            )
+        );
+        // The provider-flavored algolia-rules-list starter floats to
+        // the top of the gallery via getSampleLayoutsForIntent's
+        // providerChoice ranking; pick it.
+        fireEvent.click(
+            screen.getByTestId("composer-quick-start-sample-algolia-rules-list")
+        );
+        // Spy received (grid, providerChoice). providerChoice is the
+        // wirable-type record (id: "algolia", kind: "credential").
+        expect(onApplyGrid).toHaveBeenCalledTimes(1);
+        const [grid, providerChoice] = onApplyGrid.mock.calls[0];
+        expect(grid).toBeTruthy();
+        expect(providerChoice).toMatchObject({
+            id: "algolia",
+            kind: "credential",
+        });
+    });
+
+    test("Phase D — applying a sample from a non-provider intent passes null/undefined as providerChoice", () => {
+        // Non-provider intents (search/view/act/else) leave
+        // providerChoice null. The contract holds either way — second
+        // arg is always present, just nullable.
+        const onApplyGrid = jest.fn();
+        render(
+            <QuickStartPane
+                onApplyGrid={onApplyGrid}
+                onRequestPalette={() => {}}
+                seedCellId="cell-1"
+            />
+        );
+        fireEvent.click(
+            screen.getByTestId("composer-quick-start-intent-search")
+        );
+        // Pick the first search-tagged starter (algolia-rules-list
+        // when no provider context, since it's first in SAMPLE_LAYOUTS
+        // and tagged for search intent).
+        const firstSample = screen.getAllByTestId(
+            /^composer-quick-start-sample-/
+        )[0];
+        fireEvent.click(firstSample);
+        expect(onApplyGrid).toHaveBeenCalledTimes(1);
+        const [grid, providerChoice] = onApplyGrid.mock.calls[0];
+        expect(grid).toBeTruthy();
+        // No provider was picked → second arg is null (the
+        // providerChoice state's initial value).
+        expect(providerChoice).toBeNull();
+    });
+
     test("Change link from provider-detail goes back to the provider picker, not all the way to intent picker", () => {
         render(
             <QuickStartPane
