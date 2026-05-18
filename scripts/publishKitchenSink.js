@@ -71,9 +71,12 @@ const dashboardConfig = {
                     4.2: { component: 12, hide: false },
                     4.3: { component: 13, hide: false },
                     // Phase B widget #1: SlackListChannels (publishes
-                    // channelSelected — pairs with future
-                    // SlackChannelMessages widget #2 in cell 5.2).
+                    // channelSelected). Cell 5.2 paired with widget #2
+                    // SlackChannelMessages (listens for channelSelected
+                    // → loads message history) so the user sees the
+                    // cross-widget event flow side-by-side.
                     5.1: { component: 14, hide: false },
+                    5.2: { component: 15, hide: false },
                 },
             },
             {
@@ -216,6 +219,26 @@ const dashboardConfig = {
                 scrollable: true,
                 workspace: "layout",
             },
+            {
+                id: 15,
+                component: "trops.slack.SlackChannelMessages",
+                type: "widget",
+                parent: 1,
+                order: 14,
+                hasChildren: 0,
+                scrollable: true,
+                workspace: "layout",
+                // Listens for channelSelected published by widget id 14
+                // (SlackListChannels). The cross-widget event flow is
+                // resolved at runtime by useWidgetEvents — this
+                // listener entry is just declarative documentation
+                // matching the existing EventSender/Receiver pattern.
+                listeners: {
+                    channelSelected: [
+                        "trops.slack.SlackListChannels[14].channelSelected",
+                    ],
+                },
+            },
         ],
         menuId: 1,
     },
@@ -275,6 +298,16 @@ const dashboardConfig = {
             scope: "trops",
             packageName: "slack",
             widgetName: "SlackListChannels",
+            package: "slack",
+            version: "*",
+            required: true,
+            author: "John P. Giatropoulos",
+        },
+        {
+            id: "trops.slack.SlackChannelMessages",
+            scope: "trops",
+            packageName: "slack",
+            widgetName: "SlackChannelMessages",
             package: "slack",
             version: "*",
             required: true,
@@ -362,7 +395,11 @@ const dashboardConfig = {
             type: "slack",
             providerClass: "mcp",
             required: false,
-            usedBy: ["SlackWidget", "SlackListChannels"],
+            usedBy: [
+                "SlackWidget",
+                "SlackListChannels",
+                "SlackChannelMessages",
+            ],
         },
         {
             type: "gmail",

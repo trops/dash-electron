@@ -7,7 +7,7 @@
  *
  * @package Slack
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
@@ -24,12 +24,20 @@ function SlackChannelMessagesContent({ title, widgetId }) {
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
 
+    // useRef-stored handler so re-renders don't tear the listener
+    // down and re-register it every cycle (rubric: "useWidgetEvents
+    // → publishEvent + listen with useRef handlers"). The ref's
+    // current always points at the latest setters so the closure
+    // doesn't go stale.
+    const channelSelectedRef = useRef(null);
+    channelSelectedRef.current = (payload) => {
+        setChannelId(payload.id);
+        setChannelName(payload.name);
+    };
+
     useEffect(() => {
         listen(listeners, {
-            channelSelected: (payload) => {
-                setChannelId(payload.id);
-                setChannelName(payload.name);
-            },
+            channelSelected: (payload) => channelSelectedRef.current(payload),
         });
     }, [listen, listeners]);
 
@@ -171,28 +179,29 @@ function SlackChannelMessagesContent({ title, widgetId }) {
                 </div>
             )}
 
+            {/* No-channel state — distinct from "channel picked but
+                no messages" so the user sees a clear next step
+                (pair this widget with SlackListChannels). */}
             {!loading && !channelId && (
-                <div className="text-xs text-gray-500">
-                    Select a channel to view messages.
+                <div className="text-xs text-gray-500 italic">
+                    {isConnected
+                        ? "Pick a channel in SlackListChannels to load its messages."
+                        : "Connect the Slack provider in Settings to load messages."}
                 </div>
             )}
 
-            {!loading && channelId && messages.length === 0 && (
-                <div className="text-xs text-gray-500">No messages found.</div>
+            {/* Channel picked, but the history is empty. */}
+            {!loading && channelId && messages.length === 0 && !error && (
+                <div className="text-xs text-gray-500 italic">
+                    #{channelName || "channel"} has no recent messages.
+                </div>
             )}
 
-            {/* Result */}
-            {result && (
-                <div
-                    className={`p-2 rounded text-xs border ${
-                        result.type === "error"
-                            ? "bg-red-900/30 border-red-700 text-red-300"
-                            : "bg-green-900/30 border-green-700 text-green-300"
-                    }`}
-                >
-                    <pre className="whitespace-pre-wrap overflow-auto max-h-32">
-                        {result.text}
-                    </pre>
+            {/* Last-fetch failure: subtle inline notice. The provider-
+                level error already renders in the panel above. */}
+            {result && result.type === "error" && (
+                <div className="text-xs text-red-400">
+                    Last fetch failed: {result.text}
                 </div>
             )}
         </div>
