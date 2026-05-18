@@ -4,6 +4,7 @@ import {
     DASH_REACT_COMPONENT_SCHEMAS,
 } from "../dashReactComponentSchemas";
 import { sendOneShotJson } from "./llmOneShot";
+import { WIDGET_CONVENTIONS } from "./widgetConventions";
 import {
     makeEmptyGrid,
     addRow,
@@ -609,7 +610,7 @@ function buildProviderHint(providerChoice) {
     );
 }
 
-function buildSystemPrompt({
+export function buildSystemPrompt({
     retry = false,
     intentHint = null,
     providerHint = null,
@@ -691,6 +692,46 @@ function buildSystemPrompt({
         "  alert is reserved for in the widget.",
         "These literal values render in the preview AND tell the user what",
         "the layout is intended to do without any extra commentary.",
+        "",
+        // The user's specific complaint that drove the conventions
+        // rewrite: AI was defaulting to raw <Heading> (H1) for the
+        // widget's title, which is "like adding H1 to a tweet — its
+        // enormous and does not look ok." Conventions live in
+        // widgetConventions.js; this interpolation keeps the prompt
+        // in sync if the rule changes.
+        "HEADING VARIANT RULE — most-violated rule in past outputs:",
+        WIDGET_CONVENTIONS.headings.rule,
+        `- ALWAYS use ${WIDGET_CONVENTIONS.headings.preferredTitle} for the widget's title.`,
+        `- ALWAYS use ${WIDGET_CONVENTIONS.headings.preferredSubsection} for sub-section labels.`,
+        `- NEVER use these in widgets: ${WIDGET_CONVENTIONS.headings.forbidden.join(
+            ", "
+        )}.`,
+        `- Only use ${WIDGET_CONVENTIONS.headings.allowedNumericDisplay.join(
+            " or "
+        )} for numeric display (the big number in a stat widget).`,
+        "",
+        "REQUIRED VISIBLE STATES — for any widget that fetches data:",
+        ...WIDGET_CONVENTIONS.requiredStates.map(
+            (s) =>
+                `- ${s}: render a clear visible indication, NOT just console.error.`
+        ),
+        "",
+        // Few-shot examples — concrete trees derived from real
+        // accepted widgets (see WIDGET_CONVENTIONS.referencedWidgets).
+        // Stronger anchor than rules-only; the model sees three
+        // different shapes (stat / list / search) it can pattern-
+        // match against.
+        "FEW-SHOT EXAMPLES — these are reference shapes from real",
+        "Dash widgets that have passed the acceptance bar. Match this",
+        "level of compactness and prop specificity:",
+        "",
+        ...WIDGET_CONVENTIONS.fewShotExamples.flatMap((ex, i) => [
+            `Example ${i + 1} — ${ex.description}:`,
+            "```json",
+            JSON.stringify({ suggestions: [ex.tree] }, null, 2),
+            "```",
+            "",
+        ]),
     ];
     if (retry) {
         base.push(

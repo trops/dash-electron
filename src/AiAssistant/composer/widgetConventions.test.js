@@ -17,6 +17,9 @@
  * widgets.
  */
 
+const fs = require("fs");
+const path = require("path");
+
 import {
     WIDGET_CONVENTIONS,
     HEADING_CONVENTIONS,
@@ -25,6 +28,8 @@ import {
     REQUIRED_STATES,
     USER_CONFIG_CONVENTIONS,
     ACCEPTANCE_CHECKLIST,
+    FEW_SHOT_EXAMPLES,
+    REFERENCED_WIDGETS,
 } from "./widgetConventions";
 
 describe("HEADING_CONVENTIONS", () => {
@@ -139,9 +144,109 @@ describe("WIDGET_CONVENTIONS aggregator", () => {
         expect(WIDGET_CONVENTIONS.userConfig).toBe(USER_CONFIG_CONVENTIONS);
     });
 
-    test("fewShotExamples + referencedWidgets are arrays (Phase C populates them)", () => {
+    test("fewShotExamples + referencedWidgets are populated arrays (Phase C populated them)", () => {
         expect(Array.isArray(WIDGET_CONVENTIONS.fewShotExamples)).toBe(true);
         expect(Array.isArray(WIDGET_CONVENTIONS.referencedWidgets)).toBe(true);
+        expect(WIDGET_CONVENTIONS.fewShotExamples.length).toBeGreaterThan(0);
+        expect(WIDGET_CONVENTIONS.referencedWidgets.length).toBeGreaterThan(0);
+    });
+});
+
+describe("REFERENCED_WIDGETS", () => {
+    test("lists exactly the 8 Phase B widgets", () => {
+        expect(REFERENCED_WIDGETS.length).toBe(8);
+    });
+
+    test("every referenced widget path exists on disk — stale entries fail loud", () => {
+        // The few-shot examples are derived from these widgets; a
+        // moved/deleted file would silently teach the AI a pattern
+        // from a widget that no longer exists. Failing here forces
+        // the conventions to be updated alongside any widget move.
+        const repoRoot = path.resolve(__dirname, "..", "..", "..");
+        for (const relPath of REFERENCED_WIDGETS) {
+            const full = path.join(repoRoot, relPath);
+            expect(fs.existsSync(full)).toBe(true);
+        }
+    });
+
+    test("paths point at .js (not .dash.js) — the component, not the config", () => {
+        for (const relPath of REFERENCED_WIDGETS) {
+            expect(relPath.endsWith(".js")).toBe(true);
+            expect(relPath.endsWith(".dash.js")).toBe(false);
+        }
+    });
+});
+
+describe("FEW_SHOT_EXAMPLES", () => {
+    test("has at least 3 examples covering different shapes", () => {
+        // Three shapes minimum: stat / list / search. Phase C uses
+        // these as the in-prompt teaching material — fewer than 3 is
+        // too narrow a pattern set to anchor the AI.
+        expect(FEW_SHOT_EXAMPLES.length).toBeGreaterThanOrEqual(3);
+    });
+
+    test("every example has a description string and a tree shape", () => {
+        for (const ex of FEW_SHOT_EXAMPLES) {
+            expect(typeof ex.description).toBe("string");
+            expect(ex.description.length).toBeGreaterThan(10);
+            expect(ex.tree).toBeTruthy();
+            expect(ex.tree.root).toBeTruthy();
+        }
+    });
+
+    test("every example's tree.root.type is 'Panel' (the AI output schema rule)", () => {
+        for (const ex of FEW_SHOT_EXAMPLES) {
+            expect(ex.tree.root.type).toBe("Panel");
+        }
+    });
+
+    test("no example uses raw Heading — only SubHeading2/SubHeading3 or numeric Heading2/Heading3", () => {
+        const walk = (node) => {
+            if (!node || typeof node !== "object") return;
+            if (node.type === "Heading") {
+                throw new Error(
+                    `few-shot example "${ex.description}" uses forbidden Heading`
+                );
+            }
+            if (Array.isArray(node.children)) node.children.forEach(walk);
+        };
+        let ex;
+        for (ex of FEW_SHOT_EXAMPLES) walk(ex.tree.root);
+    });
+
+    test("every node's type is in the allowed conventions (SubHeading2 / SubHeading3 / Heading2 / Heading3 for any heading-like node)", () => {
+        // Walk every node, when type matches a heading family it
+        // must be one of the allowed forms.
+        const walk = (node, ex) => {
+            if (!node || typeof node !== "object") return;
+            if (
+                typeof node.type === "string" &&
+                node.type.includes("Heading")
+            ) {
+                const allowed = [
+                    HEADING_CONVENTIONS.preferredTitle,
+                    HEADING_CONVENTIONS.preferredSubsection,
+                    ...HEADING_CONVENTIONS.allowedNumericDisplay,
+                ];
+                expect(allowed).toContain(node.type);
+            }
+            if (Array.isArray(node.children))
+                node.children.forEach((c) => walk(c, ex));
+        };
+        for (const ex of FEW_SHOT_EXAMPLES) walk(ex.tree.root, ex);
+    });
+
+    test("examples are compact — under 8 nodes each (prompt's 'keep each suggestion compact' rule)", () => {
+        const count = (node) => {
+            if (!node || typeof node !== "object") return 0;
+            const childCount = Array.isArray(node.children)
+                ? node.children.reduce((n, c) => n + count(c), 0)
+                : 0;
+            return 1 + childCount;
+        };
+        for (const ex of FEW_SHOT_EXAMPLES) {
+            expect(count(ex.tree.root)).toBeLessThanOrEqual(8);
+        }
     });
 });
 
