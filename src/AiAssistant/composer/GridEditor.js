@@ -552,6 +552,7 @@ function CellNode({
                         onClick={() => onSplitCell(cell.id)}
                         className="text-xs text-gray-500 hover:text-indigo-300 px-1"
                         title="Add column to the right"
+                        data-testid={`composer-cell-${cell.id}-split`}
                     >
                         +
                     </button>
@@ -560,6 +561,7 @@ function CellNode({
                         onClick={() => onRemoveCell(cell.id)}
                         className="text-xs text-gray-500 hover:text-red-300 px-1"
                         title="Remove container (and everything inside)"
+                        data-testid={`composer-cell-${cell.id}-remove`}
                     >
                         ×
                     </button>

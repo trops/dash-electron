@@ -116,7 +116,7 @@ describe("splitCell", () => {
 });
 
 describe("removeCell", () => {
-    test("drops a cell and its inner grid (container)", () => {
+    test("drops a cell and its inner grid (container); re-seeds the sole row with a placeholder", () => {
         const g0 = makeEmptyGrid();
         const cellId = g0.grids[g0.rootGridId].rows[0].cells[0];
         const g1 = setCellComponent(g0, cellId, "Panel");
@@ -124,8 +124,19 @@ describe("removeCell", () => {
         const g2 = removeCell(g1, cellId);
         expect(g2.cells[cellId]).toBeUndefined();
         expect(g2.grids[innerGridId]).toBeUndefined();
-        // Row remains, now empty of cells.
-        expect(g2.grids[g2.rootGridId].rows[0].cells.length).toBe(0);
+        // Invariant: removing the only cell from the only row of a
+        // grid re-seeds the row with a fresh empty cell. Without
+        // this, downstream UI (QuickStartPane "Start blank" button,
+        // GridEditor drop indicators) would read undefined cell ids
+        // from rows[0].cells[0] and silently dead-end.
+        const row = g2.grids[g2.rootGridId].rows[0];
+        expect(row.cells.length).toBe(1);
+        const seededId = row.cells[0];
+        expect(g2.cells[seededId]).toBeDefined();
+        expect(g2.cells[seededId].kind).toBe("empty");
+        // The grid now structurally matches makeEmptyGrid (same
+        // isGridEmpty result).
+        expect(isGridEmpty(g2)).toBe(true);
     });
 
     test("drops a leaf cell without affecting siblings", () => {
@@ -136,6 +147,24 @@ describe("removeCell", () => {
         const g3 = removeCell(g2, a);
         expect(g3.cells[a]).toBeUndefined();
         expect(g3.cells[b]).toBeDefined();
+        // Sibling still in place — no re-seeding because the row
+        // didn't go empty.
+        expect(g3.grids[g3.rootGridId].rows[0].cells).toEqual([b]);
+    });
+
+    test("multi-row: emptying a non-last row drops the row entirely", () => {
+        // Two rows, each with one Heading. Removing the cell from
+        // row 0 should collapse the grid to a single row holding
+        // row 1's content — not leave a dangling empty row.
+        const g0 = makeEmptyGrid();
+        const seed = g0.grids[g0.rootGridId].rows[0].cells[0];
+        const g1 = setCellComponent(g0, seed, "Heading");
+        const g2 = addRow(g1, g1.rootGridId);
+        const secondCell = g2.grids[g2.rootGridId].rows[1].cells[0];
+        const g3 = setCellComponent(g2, secondCell, "Heading");
+        const g4 = removeCell(g3, seed);
+        expect(g4.grids[g4.rootGridId].rows.length).toBe(1);
+        expect(g4.grids[g4.rootGridId].rows[0].cells).toEqual([secondCell]);
     });
 });
 
