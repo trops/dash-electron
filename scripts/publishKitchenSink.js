@@ -79,6 +79,7 @@ const dashboardConfig = {
                     5.3: { component: 16, hide: false }, // AlgoliaRulesList
                     6.1: { component: 17, hide: false }, // GitHubPRList (configRepo)
                     6.2: { component: 18, hide: false }, // GmailUnreadCount (stat)
+                    6.3: { component: 19, hide: false }, // GoogleDriveRecentFiles
                 },
             },
             {
@@ -283,6 +284,19 @@ const dashboardConfig = {
                 // count. Auto-refreshes every 60s by default; publishes
                 // unreadCountUpdated so notification widgets can react.
             },
+            {
+                id: 19,
+                component: "trops.google-drive.GoogleDriveRecentFiles",
+                type: "widget",
+                parent: 1,
+                order: 18,
+                hasChildren: 0,
+                scrollable: true,
+                workspace: "layout",
+                // Top N most-recently modified files; auto-refreshes
+                // every 5 minutes by default. Click opens the file
+                // in the browser AND publishes fileSelected.
+            },
         ],
         menuId: 1,
     },
@@ -383,6 +397,16 @@ const dashboardConfig = {
             packageName: "gmail",
             widgetName: "GmailUnreadCount",
             package: "gmail",
+            version: "*",
+            required: true,
+            author: "John P. Giatropoulos",
+        },
+        {
+            id: "trops.google-drive.GoogleDriveRecentFiles",
+            scope: "trops",
+            packageName: "google-drive",
+            widgetName: "GoogleDriveRecentFiles",
+            package: "google-drive",
             version: "*",
             required: true,
             author: "John P. Giatropoulos",
@@ -498,6 +522,12 @@ const dashboardConfig = {
             providerClass: "mcp",
             required: false,
             usedBy: ["FilesystemWidget"],
+        },
+        {
+            type: "google-drive",
+            providerClass: "mcp",
+            required: false,
+            usedBy: ["GoogleDriveRecentFiles"],
         },
         {
             type: "algolia",
