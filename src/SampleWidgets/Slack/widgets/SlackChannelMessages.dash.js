@@ -27,6 +27,8 @@ const widgetDefinition = {
             type: "text",
             defaultValue: "Channel Messages",
             displayName: "Title",
+            instructions:
+                "Header shown above the message list. Defaults to 'Channel Messages'. The displayed channel name updates automatically when SlackListChannels publishes a channelSelected event.",
             required: false,
         },
     },
