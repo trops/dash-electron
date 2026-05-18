@@ -55,7 +55,7 @@ const dashboardConfig = {
                 width: "w-full",
                 height: "h-full",
                 grid: {
-                    rows: 5,
+                    rows: 6,
                     cols: 3,
                     gap: "gap-2",
                     1.1: { component: 2, hide: false },
@@ -70,14 +70,14 @@ const dashboardConfig = {
                     4.1: { component: 11, hide: false },
                     4.2: { component: 12, hide: false },
                     4.3: { component: 13, hide: false },
-                    // Phase B widgets — each PR appends one. Row 5
-                    // currently shows the Slack pair (channels list ↔
-                    // messages, via channelSelected) and the Algolia
-                    // rules list as a standalone demo of the
-                    // credential-provider pattern.
+                    // Phase B widgets — one row per PR cluster. Row 5
+                    // is the Slack pair (channels list ↔ messages, via
+                    // channelSelected) plus the Algolia rules list.
+                    // Row 6 starts with GitHubPRList in standalone mode.
                     5.1: { component: 14, hide: false }, // SlackListChannels
                     5.2: { component: 15, hide: false }, // SlackChannelMessages
                     5.3: { component: 16, hide: false }, // AlgoliaRulesList
+                    6.1: { component: 17, hide: false }, // GitHubPRList (configRepo)
                 },
             },
             {
@@ -255,6 +255,20 @@ const dashboardConfig = {
                 // settings, or pair with a widget that publishes
                 // indexSelected (e.g. AlgoliaIndexDashboardWidget).
             },
+            {
+                id: 17,
+                component: "trops.git-hub.GitHubPRList",
+                type: "widget",
+                parent: 1,
+                order: 16,
+                hasChildren: 0,
+                scrollable: true,
+                workspace: "layout",
+                // Standalone mode: set the Repository in widget
+                // settings (e.g. "trops/dash-electron") to see open
+                // PRs without needing a paired GitHubRepoList. Also
+                // accepts repoSelected events as before.
+            },
         ],
         menuId: 1,
     },
@@ -340,6 +354,16 @@ const dashboardConfig = {
             author: "John P. Giatropoulos",
         },
         {
+            id: "trops.git-hub.GitHubPRList",
+            scope: "trops",
+            packageName: "git-hub",
+            widgetName: "GitHubPRList",
+            package: "git-hub",
+            version: "*",
+            required: true,
+            author: "John P. Giatropoulos",
+        },
+        {
             id: "trops.gmail.GmailWidget",
             scope: "trops",
             packageName: "gmail",
@@ -415,7 +439,7 @@ const dashboardConfig = {
             type: "github",
             providerClass: "mcp",
             required: false,
-            usedBy: ["GitHubWidget"],
+            usedBy: ["GitHubWidget", "GitHubPRList"],
         },
         {
             type: "slack",

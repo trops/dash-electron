@@ -11,16 +11,34 @@ import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
-function GitHubPRListContent({ title }) {
+function GitHubPRListContent({ title, configRepo, stateFilter }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("github");
     const { publishEvent, listen, listeners } = useWidgetEvents();
 
-    const [repo, setRepo] = useState(null);
+    // Seed from the userConfig.repo so the widget renders something
+    // useful standalone (without needing a paired GitHubRepoList).
+    // The runtime repoSelected event still overrides this — see the
+    // listener below.
+    const [repo, setRepo] = useState(configRepo || null);
     const [prs, setPrs] = useState([]);
     const [selectedPR, setSelectedPR] = useState(null);
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
+
+    // Re-sync from userConfig.repo when the config-pane edit fires
+    // (parent re-renders with a new configRepo prop). Track the
+    // last-applied config so a runtime event-driven override isn't
+    // clobbered by a no-op re-render.
+    const configRepoRef = useRef(configRepo);
+    useEffect(() => {
+        if (configRepo !== configRepoRef.current) {
+            configRepoRef.current = configRepo;
+            setRepo(configRepo || null);
+            setPrs([]);
+            setSelectedPR(null);
+        }
+    }, [configRepo]);
 
     const fetchPRs = useCallback(
         async (fullName) => {
@@ -29,10 +47,14 @@ function GitHubPRListContent({ title }) {
             setResult(null);
             try {
                 const [owner, name] = fullName.split("/");
-                const res = await callTool("list_pull_requests", {
-                    owner,
-                    repo: name,
-                });
+                const args = { owner, repo: name };
+                // GitHub MCP list_pull_requests accepts `state` —
+                // pass through whatever the user chose. Default
+                // "open" matches what most status dashboards want.
+                if (stateFilter && stateFilter !== "open") {
+                    args.state = stateFilter;
+                }
+                const res = await callTool("list_pull_requests", args);
                 const { data, error: mcpError } = parseMcpResponse(res, {
                     arrayKeys: ["pull_requests", "items", "pulls"],
                 });
@@ -47,8 +69,17 @@ function GitHubPRListContent({ title }) {
                 setLoading(false);
             }
         },
-        [isConnected, callTool]
+        [isConnected, callTool, stateFilter]
     );
+
+    // Auto-load on mount / when the repo or connection changes —
+    // standalone use case (configRepo set, no paired widget needed).
+    useEffect(() => {
+        if (isConnected && repo) {
+            fetchPRs(repo);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isConnected, repo, stateFilter]);
 
     const [listenerStatus, setListenerStatus] = useState("not configured");
 
@@ -129,20 +160,17 @@ function GitHubPRListContent({ title }) {
                 <span className="text-gray-600">({tools.length} tools)</span>
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
-                <span
-                    className={`inline-block w-2 h-2 rounded-full ${
-                        listenerStatus === "listening"
-                            ? "bg-green-500"
-                            : "bg-yellow-500"
-                    }`}
-                />
-                <span className="text-gray-500">
-                    {listenerStatus === "listening"
-                        ? "Listening for repoSelected"
-                        : "No event listeners configured"}
-                </span>
-            </div>
+            {/* Only surface the listener row when something IS wired
+                — standalone (config-driven) use is first-class, so
+                the absence of listeners isn't an error worth a row. */}
+            {listenerStatus === "listening" && (
+                <div className="flex items-center gap-2 text-xs">
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                    <span className="text-gray-500">
+                        Listening for repoSelected
+                    </span>
+                </div>
+            )}
 
             {error && (
                 <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
@@ -217,10 +245,10 @@ function GitHubPRListContent({ title }) {
                     </div>
                 </div>
             ) : (
-                <div className="text-xs text-gray-600 italic">
-                    {listenerStatus === "no listeners assigned"
-                        ? "No event listeners configured. Wire repoSelected from a GitHubRepoList widget."
-                        : "Select a repository from the GitHubRepoList widget to view pull requests."}
+                <div className="text-xs text-gray-500 italic">
+                    Set Repository in this widget's settings, or pair it with a
+                    widget that publishes a repoSelected event (e.g.
+                    GitHubRepoList).
                 </div>
             )}
 
@@ -234,11 +262,20 @@ function GitHubPRListContent({ title }) {
     );
 }
 
-export const GitHubPRList = ({ title = "GitHub PRs", ...props }) => {
+export const GitHubPRList = ({
+    title = "GitHub PRs",
+    repo = "",
+    stateFilter = "open",
+    ...props
+}) => {
     return (
         <Widget {...props} width="w-full" height="h-full">
             <Panel>
-                <GitHubPRListContent title={title} />
+                <GitHubPRListContent
+                    title={title}
+                    configRepo={repo}
+                    stateFilter={stateFilter || "open"}
+                />
             </Panel>
         </Widget>
     );
