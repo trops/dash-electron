@@ -51,6 +51,7 @@ import { GridEditor } from "./GridEditor";
 import { PaletteView } from "./PaletteView";
 import { PropertyInspector } from "./PropertyInspector";
 import { getComponentSchema } from "../dashReactComponentSchemas";
+import { ComposerProviderChoiceContext } from "./ComposerProviderChoiceContext";
 
 /**
  * True when the component's schema exposes nothing the inspector
@@ -86,6 +87,13 @@ export function ComposerPaneV2({
 }) {
     const [grid, setGridRaw] = useState(() => initialGrid || makeEmptyGrid());
     const [internalSelectedCellId, setInternalSelectedCellId] = useState(null);
+    // Phase D — captured from QuickStartPane.onApplyGrid's second arg
+    // when the user picked a provider in the wizard. Surfaced to
+    // descendants via ComposerProviderChoiceContext so future
+    // auto-wire consumers (Inspector defaults, palette drop handlers)
+    // can read the provider context without prop-drilling. Today
+    // nothing consumes — Phase D is plumbing only.
+    const [lastProviderChoice, setLastProviderChoice] = useState(null);
     // True once the user has typed in the widget-name input. Gates
     // the on-mount collision-avoidance effect so it doesn't fight a
     // manually-chosen name. V1 ComposerPane had the same gate; V2
@@ -405,41 +413,50 @@ export function ComposerPaneV2({
     }, [grid]);
 
     return (
-        <div
-            className="flex flex-col h-full min-h-0 text-gray-200"
-            data-testid="composer-pane-v2"
-        >
-            <div className="px-3 py-2 border-b border-white/10 shrink-0">
-                <label
-                    className="block text-xs text-gray-400 mb-1"
-                    htmlFor="composer-widget-name-v2"
-                >
-                    Widget name
-                </label>
-                <input
-                    id="composer-widget-name-v2"
-                    type="text"
-                    value={grid.widgetName}
-                    onChange={(e) => {
-                        // Mark before sanitize/setGrid so the on-mount
-                        // collision-bump effect (which is async) won't
-                        // overwrite the user's typed name if it lands
-                        // between this keystroke and the next render.
-                        userRenamedRef.current = true;
-                        const sanitized = e.target.value.replace(
-                            /[^A-Za-z0-9_]/g,
-                            ""
-                        );
-                        setGrid((g) => ({
-                            ...g,
-                            widgetName: sanitized || "ComposedWidget",
-                        }));
-                    }}
-                    className="w-full px-2 py-1 text-sm bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
-                    data-testid="composer-widget-name"
-                />
-            </div>
-            {/* Four view modes share the pane below the name input:
+        // Phase D — make the picked provider available to every
+        // descendant via context. Inspector / palette handlers /
+        // future auto-wire features read it via
+        // `useComposerProviderChoice()` from
+        // ComposerProviderChoiceContext.
+        <ComposerProviderChoiceContext.Provider value={lastProviderChoice}>
+            <div
+                className="flex flex-col h-full min-h-0 text-gray-200"
+                data-testid="composer-pane-v2"
+                data-last-provider-choice={
+                    lastProviderChoice ? lastProviderChoice.id : ""
+                }
+            >
+                <div className="px-3 py-2 border-b border-white/10 shrink-0">
+                    <label
+                        className="block text-xs text-gray-400 mb-1"
+                        htmlFor="composer-widget-name-v2"
+                    >
+                        Widget name
+                    </label>
+                    <input
+                        id="composer-widget-name-v2"
+                        type="text"
+                        value={grid.widgetName}
+                        onChange={(e) => {
+                            // Mark before sanitize/setGrid so the on-mount
+                            // collision-bump effect (which is async) won't
+                            // overwrite the user's typed name if it lands
+                            // between this keystroke and the next render.
+                            userRenamedRef.current = true;
+                            const sanitized = e.target.value.replace(
+                                /[^A-Za-z0-9_]/g,
+                                ""
+                            );
+                            setGrid((g) => ({
+                                ...g,
+                                widgetName: sanitized || "ComposedWidget",
+                            }));
+                        }}
+                        className="w-full px-2 py-1 text-sm bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                        data-testid="composer-widget-name"
+                    />
+                </div>
+                {/* Four view modes share the pane below the name input:
                   - palette     (user clicked + Add on an empty cell)
                   - inspector   (user clicked a filled cell to edit it)
                   - quick-start (grid is empty — onboarding pane)
@@ -449,84 +466,101 @@ export function ComposerPaneV2({
                 naturally hides as soon as the grid is no longer
                 empty, so a sample-apply / AI-pick / drop transitions
                 straight into the composition view. */}
-            {paletteTargetCellId ? (
-                <PaletteView
-                    onPick={handlePalettePick}
-                    onCancel={handlePaletteCancel}
-                />
-            ) : selectedNode ? (
-                <div className="flex-1 min-h-0 flex flex-col">
-                    <div className="flex-1 min-h-0 overflow-y-auto">
-                        <PropertyInspector
-                            node={selectedNode}
-                            tree={treeShimForPipes}
-                            providers={providers}
-                            onChangeProp={handleChangeProp}
-                            onChangeType={handleChangeType}
-                            onSetSlotMode={handleSetSlotMode}
-                            onSetSlotWire={handleSetSlotWire}
-                            onClearSlotWire={handleClearSlotWire}
-                            onSetSlotPipe={handleSetSlotPipe}
-                            onSetSlotArg={handleSetSlotArg}
-                            onSetSlotFieldMap={handleSetSlotFieldMap}
-                            onClose={() => setSelectedCellId(null)}
-                        />
+                {paletteTargetCellId ? (
+                    <PaletteView
+                        onPick={handlePalettePick}
+                        onCancel={handlePaletteCancel}
+                    />
+                ) : selectedNode ? (
+                    <div className="flex-1 min-h-0 flex flex-col">
+                        <div className="flex-1 min-h-0 overflow-y-auto">
+                            <PropertyInspector
+                                node={selectedNode}
+                                tree={treeShimForPipes}
+                                providers={providers}
+                                onChangeProp={handleChangeProp}
+                                onChangeType={handleChangeType}
+                                onSetSlotMode={handleSetSlotMode}
+                                onSetSlotWire={handleSetSlotWire}
+                                onClearSlotWire={handleClearSlotWire}
+                                onSetSlotPipe={handleSetSlotPipe}
+                                onSetSlotArg={handleSetSlotArg}
+                                onSetSlotFieldMap={handleSetSlotFieldMap}
+                                onClose={() => setSelectedCellId(null)}
+                            />
+                        </div>
+                        <div className="shrink-0 border-t border-white/10 px-3 py-3 bg-gray-900">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedCellId(null)}
+                                className="w-full px-3 py-3 text-sm font-medium rounded bg-indigo-600 hover:bg-indigo-500 text-white"
+                                data-testid="composer-inspector-done"
+                            >
+                                Done editing
+                            </button>
+                        </div>
                     </div>
-                    <div className="shrink-0 border-t border-white/10 px-3 py-3 bg-gray-900">
-                        <button
-                            type="button"
-                            onClick={() => setSelectedCellId(null)}
-                            className="w-full px-3 py-3 text-sm font-medium rounded bg-indigo-600 hover:bg-indigo-500 text-white"
-                            data-testid="composer-inspector-done"
-                        >
-                            Done editing
-                        </button>
-                    </div>
-                </div>
-            ) : isGridEmpty(grid) ? (
-                <QuickStartPane
-                    onApplyGrid={(next) => setGrid(next)}
-                    onRequestPalette={handleRequestPalette}
-                    seedCellId={grid.grids[grid.rootGridId].rows[0].cells[0]}
-                    apiKey={apiKey}
-                    model={model}
-                    backend={backend}
-                    providers={providers}
-                />
-            ) : (
-                <div className="flex-1 min-h-0 flex flex-col px-3 py-2 gap-1">
-                    <div className="text-xs uppercase tracking-wide text-gray-500 shrink-0">
-                        Composition
-                    </div>
-                    {/* Editor flexes to fill the remaining height so
+                ) : isGridEmpty(grid) ? (
+                    <QuickStartPane
+                        onApplyGrid={(next, pickedProvider) => {
+                            setGrid(next);
+                            // Stash the picked provider for downstream
+                            // consumers via context. Apply paths that
+                            // don't pass a second arg (or pass null —
+                            // intent picks that weren't through the
+                            // provider branch) leave the existing value
+                            // alone rather than clearing it; that way a
+                            // user who picks Algolia → applies a sample,
+                            // then later applies a SECOND sample from
+                            // the same session, retains the Algolia
+                            // context.
+                            if (pickedProvider)
+                                setLastProviderChoice(pickedProvider);
+                        }}
+                        onRequestPalette={handleRequestPalette}
+                        seedCellId={
+                            grid.grids[grid.rootGridId].rows[0].cells[0]
+                        }
+                        apiKey={apiKey}
+                        model={model}
+                        backend={backend}
+                        providers={providers}
+                    />
+                ) : (
+                    <div className="flex-1 min-h-0 flex flex-col px-3 py-2 gap-1">
+                        <div className="text-xs uppercase tracking-wide text-gray-500 shrink-0">
+                            Composition
+                        </div>
+                        {/* Editor flexes to fill the remaining height so
                         the runtime-mirrored sizing rules inside it
                         (containers fill, primitives sit at content
                         height) have an actual height to resolve
                         against. min-h-0 lets nested grids shrink
                         below their content's intrinsic size. */}
-                    <div
-                        className="flex-1 min-h-0 overflow-y-auto"
-                        data-testid="composer-grid-editor-host"
-                    >
-                        <GridEditor
-                            grid={grid}
-                            selectedCellId={selectedCellId}
-                            onSelectCell={setSelectedCellId}
-                            onAddRow={handleAddRow}
-                            onRemoveRow={handleRemoveRow}
-                            onSplitCell={handleSplitCell}
-                            onRemoveCell={handleRemoveCell}
-                            onRequestPalette={handleRequestPalette}
-                            onMoveCell={handleMoveCell}
-                        />
+                        <div
+                            className="flex-1 min-h-0 overflow-y-auto"
+                            data-testid="composer-grid-editor-host"
+                        >
+                            <GridEditor
+                                grid={grid}
+                                selectedCellId={selectedCellId}
+                                onSelectCell={setSelectedCellId}
+                                onAddRow={handleAddRow}
+                                onRemoveRow={handleRemoveRow}
+                                onSplitCell={handleSplitCell}
+                                onRemoveCell={handleRemoveCell}
+                                onRequestPalette={handleRequestPalette}
+                                onMoveCell={handleMoveCell}
+                            />
+                        </div>
                     </div>
-                </div>
-            )}
-            {/* clearCellComponent isn't surfaced as a button yet — it
+                )}
+                {/* clearCellComponent isn't surfaced as a button yet — it
                 lives on the gridLayout API for future "reset cell"
                 affordances. Referenced here so the linter sees it
                 as intentionally imported. */}
-            {false && clearCellComponent}
-        </div>
+                {false && clearCellComponent}
+            </div>
+        </ComposerProviderChoiceContext.Provider>
     );
 }

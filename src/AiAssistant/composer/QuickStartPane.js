@@ -172,18 +172,22 @@ export function QuickStartPane({
         (suggestion) => {
             const grid = treeToGrid(suggestion);
             if (!grid) return;
-            onApplyGrid(grid);
+            // Phase D — forward the providerChoice along with the grid.
+            // ComposerPaneV2 stashes it in state + exposes via context
+            // for future auto-wire consumers. Today's behavior is
+            // unchanged; this is plumbing only.
+            onApplyGrid(grid, providerChoice);
             resetAi();
         },
-        [onApplyGrid, resetAi]
+        [onApplyGrid, resetAi, providerChoice]
     );
 
     const applySample = useCallback(
         (layout) => {
             const grid = layout.buildGrid();
-            onApplyGrid(grid);
+            onApplyGrid(grid, providerChoice);
         },
-        [onApplyGrid]
+        [onApplyGrid, providerChoice]
     );
 
     return (
