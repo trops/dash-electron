@@ -94,8 +94,12 @@ export function QuickStartPane({
     const intentObj = currentIntent
         ? INTENTS.find((i) => i.id === currentIntent)
         : null;
+    // Phase C: when the user picked a provider (provider-intent
+    // branch), `getSampleLayoutsForIntent` ranks flavored starters
+    // first. Passing through is a no-op for non-provider intents
+    // since `providerChoice` is null in those branches.
     const intentSamples = currentIntent
-        ? getSampleLayoutsForIntent(currentIntent)
+        ? getSampleLayoutsForIntent(currentIntent, providerChoice)
         : [];
 
     const submitAi = useCallback(async () => {
