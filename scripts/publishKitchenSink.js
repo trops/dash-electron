@@ -80,9 +80,10 @@ const dashboardConfig = {
                     6.1: { component: 17, hide: false }, // GitHubPRList (configRepo)
                     6.2: { component: 18, hide: false }, // GmailUnreadCount (stat)
                     6.3: { component: 19, hide: false }, // GoogleDriveRecentFiles
-                    // Row 7 — Notion + the last two widgets in the
-                    // Phase B batch (Filesystem next).
+                    // Row 7 — Notion + Filesystem complete the Phase
+                    // B batch (8/8 widgets total).
                     7.1: { component: 20, hide: false }, // NotionPageSearch
+                    7.2: { component: 21, hide: false }, // FilesystemDirectoryViewer
                 },
             },
             {
@@ -313,6 +314,20 @@ const dashboardConfig = {
                 // publishes pageSelected so a future page-viewer
                 // widget can render the chosen page's content.
             },
+            {
+                id: 21,
+                component: "trops.filesystem.FilesystemDirectoryViewer",
+                type: "widget",
+                parent: 1,
+                order: 20,
+                hasChildren: 0,
+                scrollable: true,
+                workspace: "layout",
+                // Tree-style filesystem browser; lazy-expands folders.
+                // Set Root path in widget settings to an absolute path
+                // inside one of the Filesystem provider's allowed
+                // directories.
+            },
         ],
         menuId: 1,
     },
@@ -438,6 +453,16 @@ const dashboardConfig = {
             author: "John P. Giatropoulos",
         },
         {
+            id: "trops.filesystem.FilesystemDirectoryViewer",
+            scope: "trops",
+            packageName: "filesystem",
+            widgetName: "FilesystemDirectoryViewer",
+            package: "filesystem",
+            version: "*",
+            required: true,
+            author: "John P. Giatropoulos",
+        },
+        {
             id: "trops.gmail.GmailWidget",
             scope: "trops",
             packageName: "gmail",
@@ -547,7 +572,7 @@ const dashboardConfig = {
             type: "filesystem",
             providerClass: "mcp",
             required: false,
-            usedBy: ["FilesystemWidget"],
+            usedBy: ["FilesystemWidget", "FilesystemDirectoryViewer"],
         },
         {
             type: "google-drive",
