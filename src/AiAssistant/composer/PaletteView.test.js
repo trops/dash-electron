@@ -132,6 +132,29 @@ describe("PaletteView — search + category filter", () => {
         ).not.toBeInTheDocument();
     });
 
+    test("entries within a category render alphabetically (numeric-aware)", () => {
+        render(<PaletteView onPick={() => {}} onCancel={() => {}} />);
+        // Pull all entries inside the "display" section (the largest
+        // category with many numbered variants like Heading/Heading2/
+        // Heading3), then assert their DOM order matches the same list
+        // sorted alphabetically. Numeric-aware sort means Heading10
+        // would land after Heading2, not before.
+        const section = screen.getByTestId("composer-palette-category-display");
+        const renderedNames = Array.from(
+            section.querySelectorAll('[data-testid^="composer-palette-pick-"]')
+        ).map((el) =>
+            el
+                .getAttribute("data-testid")
+                .replace(/^composer-palette-pick-/, "")
+        );
+        const sorted = [...renderedNames].sort((a, b) =>
+            a.localeCompare(b, undefined, { numeric: true })
+        );
+        expect(renderedNames).toEqual(sorted);
+        // Sanity: ordering must not be a single-element accident.
+        expect(renderedNames.length).toBeGreaterThan(3);
+    });
+
     test("clicking an entry fires onPick with the component name", () => {
         const onPick = jest.fn();
         render(<PaletteView onPick={onPick} onCancel={() => {}} />);

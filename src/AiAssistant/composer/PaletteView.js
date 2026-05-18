@@ -50,11 +50,17 @@ export function PaletteView({ onPick, onCancel }) {
         const out = {};
         for (const cat of visibleCategories) {
             const entries = grouped[cat] || [];
-            out[cat] = normalizedQuery
+            const matching = normalizedQuery
                 ? entries.filter((name) =>
                       name.toLowerCase().includes(normalizedQuery)
                   )
                 : entries;
+            // Alphabetize within each category. localeCompare so
+            // "Heading10" sorts after "Heading2" the way a user
+            // expects (default sort would put "Heading10" before).
+            out[cat] = [...matching].sort((a, b) =>
+                a.localeCompare(b, undefined, { numeric: true })
+            );
         }
         return out;
         // visibleCategories is derived from `category`, no need to
