@@ -126,6 +126,107 @@ export const USER_CONFIG_CONVENTIONS = {
 };
 
 /**
+ * The 8 Phase B widgets — each was reviewed against the
+ * ACCEPTANCE_CHECKLIST and merged, so the AI prompt's few-shot
+ * examples are derived from real, accepted outputs (not hypothetical
+ * "what good looks like" sketches).
+ *
+ * Paths are repo-relative so the test that pins this list can
+ * `fs.existsSync` each one and fail-loud if a referenced file moves
+ * or is deleted (a stale few-shot would silently teach the AI a
+ * pattern from a widget that no longer exists).
+ */
+export const REFERENCED_WIDGETS = [
+    "src/SampleWidgets/Slack/widgets/SlackListChannels.js",
+    "src/SampleWidgets/Slack/widgets/SlackChannelMessages.js",
+    "src/SampleWidgets/Algolia/widgets/AlgoliaRulesList.js",
+    "src/SampleWidgets/GitHub/widgets/GitHubPRList.js",
+    "src/SampleWidgets/Gmail/widgets/GmailUnreadCount.js",
+    "src/SampleWidgets/GoogleDrive/widgets/GoogleDriveRecentFiles.js",
+    "src/SampleWidgets/Notion/widgets/NotionPageSearch.js",
+    "src/SampleWidgets/Filesystem/widgets/FilesystemDirectoryViewer.js",
+];
+
+/**
+ * Few-shot examples for the AI scaffold prompt. Each entry is a
+ * `{description, tree}` pair the prompt builder concatenates into a
+ * FEW-SHOT EXAMPLES section. Trees match the schema the AI is asked
+ * to emit (root.type === "Panel", nested children with type + props),
+ * NOT the grid shape — the composer's treeToGrid converts at apply
+ * time.
+ *
+ * Each example was distilled from one of the accepted Phase B
+ * widgets, picked to teach a different shape:
+ *   - STAT (single big number) — GmailUnreadCount
+ *   - LIST + REFRESH — GitHubPRList
+ *   - SEARCH-DRIVEN LIST — NotionPageSearch
+ *
+ * Examples are deliberately compact (3–5 nodes) per the prompt's
+ * own "keep each suggestion compact" rule. They also intentionally
+ * use SubHeading2 (not raw Heading), descriptive prop values, and
+ * NO data-fetching props — exactly what we want the AI to do.
+ */
+export const FEW_SHOT_EXAMPLES = [
+    {
+        description: "Show a single big number for my unread email count",
+        tree: {
+            widgetName: "GmailUnreadCount",
+            root: {
+                type: "Panel",
+                children: [
+                    { type: "SubHeading2", props: { title: "Unread Email" } },
+                    { type: "Heading2", props: { title: "0" } },
+                    { type: "Paragraph", props: { text: "unread email" } },
+                    { type: "Button", props: { title: "Refresh" } },
+                ],
+            },
+        },
+    },
+    {
+        description:
+            "List open GitHub pull requests for a repo with a refresh button",
+        tree: {
+            widgetName: "GitHubPRList",
+            root: {
+                type: "Panel",
+                children: [
+                    {
+                        type: "SubHeading2",
+                        props: { title: "Open Pull Requests" },
+                    },
+                    {
+                        type: "SubHeading3",
+                        props: { title: "trops/dash-electron" },
+                    },
+                    { type: "DataList" },
+                    { type: "Button", props: { title: "Refresh" } },
+                ],
+            },
+        },
+    },
+    {
+        description: "Search Notion pages and click one to view it",
+        tree: {
+            widgetName: "NotionPageSearch",
+            root: {
+                type: "Panel",
+                children: [
+                    { type: "SubHeading2", props: { title: "Notion Search" } },
+                    {
+                        type: "SearchInput",
+                        props: {
+                            placeholder: "Search pages…",
+                            label: "Search by title",
+                        },
+                    },
+                    { type: "DataList" },
+                ],
+            },
+        },
+    },
+];
+
+/**
  * Aggregator. Consumers (the AI prompt builder, the emitter guardrails,
  * tests) import this rather than the individual sub-objects so they
  * stay in sync if anything is added.
@@ -136,8 +237,8 @@ export const WIDGET_CONVENTIONS = {
     statePatterns: STATE_PATTERNS,
     requiredStates: REQUIRED_STATES,
     userConfig: USER_CONFIG_CONVENTIONS,
-    fewShotExamples: [],
-    referencedWidgets: [],
+    fewShotExamples: FEW_SHOT_EXAMPLES,
+    referencedWidgets: REFERENCED_WIDGETS,
 };
 
 /**
