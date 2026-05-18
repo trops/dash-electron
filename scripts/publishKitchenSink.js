@@ -55,7 +55,7 @@ const dashboardConfig = {
                 width: "w-full",
                 height: "h-full",
                 grid: {
-                    rows: 6,
+                    rows: 7,
                     cols: 3,
                     gap: "gap-2",
                     1.1: { component: 2, hide: false },
@@ -80,6 +80,9 @@ const dashboardConfig = {
                     6.1: { component: 17, hide: false }, // GitHubPRList (configRepo)
                     6.2: { component: 18, hide: false }, // GmailUnreadCount (stat)
                     6.3: { component: 19, hide: false }, // GoogleDriveRecentFiles
+                    // Row 7 — Notion + the last two widgets in the
+                    // Phase B batch (Filesystem next).
+                    7.1: { component: 20, hide: false }, // NotionPageSearch
                 },
             },
             {
@@ -297,6 +300,19 @@ const dashboardConfig = {
                 // every 5 minutes by default. Click opens the file
                 // in the browser AND publishes fileSelected.
             },
+            {
+                id: 20,
+                component: "trops.notion.NotionPageSearch",
+                type: "widget",
+                parent: 1,
+                order: 19,
+                hasChildren: 0,
+                scrollable: true,
+                workspace: "layout",
+                // Debounced Notion page/database search. Click
+                // publishes pageSelected so a future page-viewer
+                // widget can render the chosen page's content.
+            },
         ],
         menuId: 1,
     },
@@ -412,6 +428,16 @@ const dashboardConfig = {
             author: "John P. Giatropoulos",
         },
         {
+            id: "trops.notion.NotionPageSearch",
+            scope: "trops",
+            packageName: "notion",
+            widgetName: "NotionPageSearch",
+            package: "notion",
+            version: "*",
+            required: true,
+            author: "John P. Giatropoulos",
+        },
+        {
             id: "trops.gmail.GmailWidget",
             scope: "trops",
             packageName: "gmail",
@@ -515,7 +541,7 @@ const dashboardConfig = {
             type: "notion",
             providerClass: "mcp",
             required: false,
-            usedBy: ["NotionWidget"],
+            usedBy: ["NotionWidget", "NotionPageSearch"],
         },
         {
             type: "filesystem",
