@@ -183,83 +183,174 @@ export function evaluateScorecard(code) {
     });
 }
 
+// Group rows by status for the rendered scorecard. Failed rules show
+// first (most actionable — these are the things the user wants to fix
+// or ask the AI to fix), then passed (confirmation), then n/a
+// (informational, can't be statically verified).
+function groupRowsByStatus(rows) {
+    const failed = rows.filter((r) => r.pass === false);
+    const passed = rows.filter((r) => r.pass === true);
+    const na = rows.filter((r) => r.pass === null);
+    return { failed, passed, na };
+}
+
+function ScorecardRow({ row, expanded, onToggle }) {
+    const expandable = row.pass === false && row.matches.length > 0;
+    const isOpen = expanded === row.index;
+    const marker =
+        row.pass === true ? "✓" : row.pass === false ? "✗" : "·";
+    const markerTone =
+        row.pass === true
+            ? "text-emerald-400"
+            : row.pass === false
+              ? "text-rose-400"
+              : "text-gray-500";
+    const rowBg =
+        row.pass === false
+            ? "bg-rose-950/30 border border-rose-900/40"
+            : row.pass === true
+              ? ""
+              : "";
+    const textTone =
+        row.pass === false
+            ? "text-gray-100"
+            : row.pass === true
+              ? "text-gray-300"
+              : "text-gray-400";
+
+    return (
+        <li
+            data-testid={`acceptance-scorecard-row-${row.index}`}
+            data-pass={row.pass === null ? "na" : String(row.pass)}
+            className={`flex flex-col rounded ${rowBg}`}
+        >
+            <button
+                type="button"
+                onClick={() =>
+                    expandable ? onToggle(isOpen ? null : row.index) : undefined
+                }
+                disabled={!expandable}
+                className="flex items-start gap-3 px-2 py-1.5 text-left text-sm disabled:cursor-default w-full"
+            >
+                <span
+                    className={`font-mono w-4 shrink-0 text-base leading-tight ${markerTone}`}
+                    aria-hidden="true"
+                >
+                    {marker}
+                </span>
+                <span className={`flex-1 leading-snug ${textTone}`}>
+                    {row.item}
+                </span>
+                {expandable && (
+                    <span className="text-xs text-rose-300 shrink-0">
+                        {isOpen ? "Hide" : "Details"}
+                    </span>
+                )}
+            </button>
+            {expandable && isOpen && (
+                <ul
+                    className="ml-9 mb-1.5 mr-2 flex flex-col gap-0.5 font-mono text-xs text-rose-200"
+                    data-testid={`acceptance-scorecard-matches-${row.index}`}
+                >
+                    {row.matches.map((m, i) => (
+                        <li
+                            key={i}
+                            className="bg-rose-900/30 px-2 py-0.5 rounded"
+                        >
+                            {m}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </li>
+    );
+}
+
 export function AcceptanceScorecard({ code }) {
     const rows = useMemo(() => evaluateScorecard(code || ""), [code]);
     const [expanded, setExpanded] = useState(null);
 
-    const passCount = rows.filter((r) => r.pass === true).length;
-    const failCount = rows.filter((r) => r.pass === false).length;
-    const naCount = rows.filter((r) => r.pass === null).length;
+    const { failed, passed, na } = groupRowsByStatus(rows);
+    const passCount = passed.length;
+    const failCount = failed.length;
+    const naCount = na.length;
+    const totalChecked = passCount + failCount;
+    const headlineTone =
+        failCount === 0 ? "text-emerald-300" : "text-rose-300";
+    const headline =
+        failCount === 0
+            ? totalChecked === 0
+                ? "Awaiting widget code"
+                : `All ${totalChecked} statically-checkable rules pass`
+            : `${failCount} of ${totalChecked} rules failing — fix these or ask the AI to`;
 
     return (
         <div
             data-testid="acceptance-scorecard"
-            className="flex flex-col gap-1 text-xs"
+            className="flex flex-col gap-3"
         >
             <div
-                className="flex items-center justify-between"
+                className="flex items-center justify-between flex-wrap gap-2"
                 data-testid="acceptance-scorecard-summary"
             >
-                <span className="font-medium">Acceptance scorecard</span>
-                <span className="text-gray-500">
+                <span className={`text-base font-semibold ${headlineTone}`}>
+                    {headline}
+                </span>
+                <span className="text-sm text-gray-400">
                     {passCount} pass · {failCount} fail · {naCount} n/a
                 </span>
             </div>
-            <ul className="flex flex-col gap-0.5">
-                {rows.map((row) => {
-                    const marker =
-                        row.pass === true
-                            ? "✓"
-                            : row.pass === false
-                            ? "✗"
-                            : "·";
-                    const tone =
-                        row.pass === true
-                            ? "text-emerald-400"
-                            : row.pass === false
-                            ? "text-rose-400"
-                            : "text-gray-500";
-                    const expandable =
-                        row.pass === false && row.matches.length > 0;
-                    const isOpen = expanded === row.index;
-                    return (
-                        <li
-                            key={row.index}
-                            data-testid={`acceptance-scorecard-row-${row.index}`}
-                            data-pass={
-                                row.pass === null ? "na" : String(row.pass)
-                            }
-                            className="flex flex-col"
-                        >
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    expandable
-                                        ? setExpanded(isOpen ? null : row.index)
-                                        : undefined
-                                }
-                                disabled={!expandable}
-                                className="flex items-start gap-2 text-left disabled:cursor-default"
-                            >
-                                <span className={`font-mono w-3 ${tone}`}>
-                                    {marker}
-                                </span>
-                                <span>{row.item}</span>
-                            </button>
-                            {expandable && isOpen && (
-                                <ul
-                                    className="ml-5 mt-0.5 flex flex-col gap-0.5 font-mono"
-                                    data-testid={`acceptance-scorecard-matches-${row.index}`}
-                                >
-                                    {row.matches.map((m, i) => (
-                                        <li key={i}>{m}</li>
-                                    ))}
-                                </ul>
-                            )}
-                        </li>
-                    );
-                })}
-            </ul>
+            {failed.length > 0 && (
+                <section className="flex flex-col gap-1.5">
+                    <h4 className="text-xs uppercase tracking-wide text-rose-400/80 font-semibold">
+                        Failing
+                    </h4>
+                    <ul className="flex flex-col gap-1.5">
+                        {failed.map((row) => (
+                            <ScorecardRow
+                                key={row.index}
+                                row={row}
+                                expanded={expanded}
+                                onToggle={setExpanded}
+                            />
+                        ))}
+                    </ul>
+                </section>
+            )}
+            {passed.length > 0 && (
+                <section className="flex flex-col gap-1">
+                    <h4 className="text-xs uppercase tracking-wide text-emerald-400/70 font-semibold">
+                        Passing
+                    </h4>
+                    <ul className="flex flex-col">
+                        {passed.map((row) => (
+                            <ScorecardRow
+                                key={row.index}
+                                row={row}
+                                expanded={expanded}
+                                onToggle={setExpanded}
+                            />
+                        ))}
+                    </ul>
+                </section>
+            )}
+            {na.length > 0 && (
+                <section className="flex flex-col gap-1">
+                    <h4 className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
+                        Not statically checkable
+                    </h4>
+                    <ul className="flex flex-col">
+                        {na.map((row) => (
+                            <ScorecardRow
+                                key={row.index}
+                                row={row}
+                                expanded={expanded}
+                                onToggle={setExpanded}
+                            />
+                        ))}
+                    </ul>
+                </section>
+            )}
         </div>
     );
 }
