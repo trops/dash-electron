@@ -1248,19 +1248,74 @@ export const WidgetBuilderModal = ({
         setConsoleEvents([]);
     }, []);
 
+    // "User has acted in this modal session" gate — flips true the
+    // first time the chat message count grows past its mount-time
+    // snapshot. Used to suppress the scorecard tab badge + the
+    // "Widget rendered with no visible content" warning on the
+    // initial Build-mode screen: a stale draft loaded from
+    // localStorage shouldn't make the user feel like they did
+    // something wrong before they've even typed.
+    //
+    // ChatCore persists messages at the "dash-widget-builder"
+    // localStorage key as { messages: [...] }. Same-window writes
+    // don't fire the `storage` event, so we poll the key cheaply
+    // (one JSON.parse every 500ms) until the count grows or the
+    // user closes the modal — once the gate flips we tear the
+    // interval down. Done as state, not a ref, so the gate flipping
+    // triggers a re-render of the affected UI.
+    const mountChatMessageCountRef = useRef(null);
+    const [hasActedThisSession, setHasActedThisSession] = useState(false);
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem("dash-widget-builder");
+            const data = raw ? JSON.parse(raw) : null;
+            mountChatMessageCountRef.current = Array.isArray(data?.messages)
+                ? data.messages.length
+                : 0;
+        } catch {
+            mountChatMessageCountRef.current = 0;
+        }
+    }, []);
+    useEffect(() => {
+        if (hasActedThisSession) return undefined;
+        const id = setInterval(() => {
+            try {
+                const raw = localStorage.getItem("dash-widget-builder");
+                const data = raw ? JSON.parse(raw) : null;
+                const count = Array.isArray(data?.messages)
+                    ? data.messages.length
+                    : 0;
+                if (
+                    mountChatMessageCountRef.current !== null &&
+                    count > mountChatMessageCountRef.current
+                ) {
+                    setHasActedThisSession(true);
+                }
+            } catch {
+                // ignore — gate stays false on parse error
+            }
+        }, 500);
+        return () => clearInterval(id);
+    }, [hasActedThisSession]);
+
     // Acceptance scorecard counts — fed by the static-analysis pass
     // over the AI-generated widget source. Drives the Scorecard tab
     // badge (red count when ✗ items > 0). Recomputed only when the
     // emitted componentCode changes; for a 200-line widget the regex
     // pass is sub-millisecond, but memoizing keeps it off the render
     // hot path.
+    //
+    // Failure count zeroes out until the user has acted this session
+    // — the tab still exists for the user who wants to peek at their
+    // draft's score, but it doesn't ambush them with a red badge on
+    // the initial render of a pre-loaded draft.
     const scorecardRows = useMemo(() => {
         if (!detectedCode?.componentCode) return [];
         return evaluateScorecard(detectedCode.componentCode);
     }, [detectedCode?.componentCode]);
-    const scorecardFailCount = scorecardRows.filter(
-        (r) => r.pass === false
-    ).length;
+    const scorecardFailCount = hasActedThisSession
+        ? scorecardRows.filter((r) => r.pass === false).length
+        : 0;
 
     // Slice 19G.2 + 19H — push a "fix this runtime error" user
     // message into the ChatCore conversation via the
@@ -4404,7 +4459,8 @@ ${
                                         to AI to fix" CTA also doesn't apply
                                         — compose doesn't go through chat. */}
                                         {previewLooksEmpty &&
-                                            chatMode !== "compose" && (
+                                            chatMode !== "compose" &&
+                                            hasActedThisSession && (
                                                 <div className="mx-4 mt-2 px-3 py-2 rounded-md border border-amber-700/40 bg-amber-900/20 text-xs text-amber-200 space-y-1">
                                                     <div className="font-semibold text-amber-300">
                                                         Widget rendered with no
