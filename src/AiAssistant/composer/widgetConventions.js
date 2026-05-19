@@ -27,6 +27,116 @@
  */
 
 /**
+ * The single rule that the dash-electron *chrome* (sidebar, modals,
+ * settings, popovers) follows but widgets currently break from the
+ * inside out: every UI element comes from a `@trops/dash-react`
+ * primitive whose color is delivered via `ThemeContext`. The chrome's
+ * cohesion is a direct consequence of this rule — theme switches
+ * propagate because color is never embedded at the call site.
+ *
+ * Widgets today ship with hand-rolled `bg-purple-600` brand buttons,
+ * `bg-green-900/50 text-green-400` status pills, and `bg-red-900/30`
+ * error boxes. The colors don't theme, each widget reinvents its own,
+ * and the result is a visual rift between chrome and content. This
+ * rule is the closing of that gap.
+ *
+ * Consumed by:
+ *   - the AI scaffold prompt (Phase 4) — interpolated verbatim as
+ *     the "NEVER emit Tailwind color utilities" instruction
+ *   - the build-mode prompt (Phase 4) — same
+ *   - the dash-widget-builder skill (Phase 4) — quoted in the
+ *     Color Rule callout
+ *   - the acceptance scorecard (Phase 5) — static-analysis regex
+ *
+ * Theme-neutral utilities (spacing, sizing, flex/grid, opacity-N
+ * where N is a number, animations) remain allowed; the rule only
+ * bans `bg-{color}-{shade}` / `text-{color}-{shade}` / `border-…`
+ * class fragments that embed a color decision.
+ */
+export const COLOR_RULE =
+    "No widget code may use Tailwind color utility classes " +
+    "(bg-{color}-{shade}, text-{color}-{shade}, border-{color}-{shade}, " +
+    "hover:bg-…, hover:text-…). All color must be delivered by a " +
+    "@trops/dash-react primitive that reads ThemeContext (Button, " +
+    "Button2, Card, Panel, StatusBadge, EmptyState, Alert, Tag, etc.). " +
+    "Theme-neutral utilities (spacing, sizing, flex/grid, opacity-N, " +
+    "transitions, animations) remain allowed.";
+
+/**
+ * Use-case → primitive lookup. The AI prompt cites this verbatim so
+ * the model knows which `@trops/dash-react` import to reach for in
+ * each pattern instead of guessing or inventing styling.
+ *
+ * `forbidden` lists the patterns the AI MUST NOT emit (raw `<button>`
+ * tags etc.); the emitter guardrails (Phase 2 Step 2.2) reject these
+ * at emit time as a second line of defense.
+ *
+ * The chrome already uses these primitives everywhere — every entry
+ * here is "the primitive the chrome reaches for in the equivalent
+ * situation," not a widget-specific invention.
+ */
+export const PRIMITIVE_CONVENTIONS = {
+    button: {
+        primitives: ["Button", "Button2", "Button3"],
+        defaultChoice: "Button2",
+        rule:
+            "Every clickable action uses a dash-react Button variant. " +
+            "Button2 is the chrome-default secondary; Button is the " +
+            "primary CTA; Button3 is tertiary/dismissive. NEVER emit " +
+            'raw <button className="..."> tags.',
+        forbidden: ["<button"],
+    },
+    statusOrBadge: {
+        primitives: ["StatusBadge", "Tag", "Tag2", "Tag3"],
+        defaultChoice: "StatusBadge",
+        rule:
+            "Status indicators (open/closed/pending/error/success/warning) " +
+            "use StatusBadge with a state prop. Generic category labels " +
+            "use Tag. NEVER hand-roll `bg-green-900/50 text-green-400` " +
+            "pills.",
+        forbidden: ["bg-green-9", "bg-red-9", "bg-yellow-9", "bg-amber-9"],
+    },
+    errorRegion: {
+        primitives: ["Alert", "Alert2"],
+        defaultChoice: "Alert2",
+        rule:
+            "Visible error regions (the in-widget banner shown when a " +
+            "provider call fails) use Alert/Alert2 with a title + " +
+            'message. NEVER hand-roll `<div className="bg-red-900/30 ' +
+            'border-red-700 text-red-300">`.',
+        forbidden: ["bg-red-9"],
+    },
+    emptyState: {
+        primitives: ["EmptyState"],
+        defaultChoice: "EmptyState",
+        rule:
+            'When the result set is zero, render <EmptyState title="…" ' +
+            'description="…" />. NEVER render bare italic strings like ' +
+            '`<p className="text-gray-600 italic">No results</p>`.',
+        forbidden: ['italic"', "italic\\s"],
+    },
+    loadingState: {
+        primitives: ["Skeleton", "Skeleton.Text", "Skeleton.Card"],
+        defaultChoice: "Skeleton.Text",
+        rule:
+            "While data is in flight, render <Skeleton.Text lines={N} /> " +
+            'for list shapes or <Skeleton width="…" height="…" /> ' +
+            "for ad-hoc loading affordances. NEVER render `Loading…` " +
+            "plaintext.",
+        forbidden: [],
+    },
+    statTile: {
+        primitives: ["StatCard"],
+        defaultChoice: "StatCard",
+        rule:
+            "Single-number widgets (unread count, file count, etc.) use " +
+            "<StatCard label value change trend />. NEVER manually compose " +
+            "a Heading2 + Paragraph + Button layout for stat tiles.",
+        forbidden: [],
+    },
+};
+
+/**
  * Component variant guidance. The user's specific complaint that
  * triggered this whole effort: AI defaults to raw `<Heading>` (H1
  * size), which is correct on a full page but visually catastrophic
@@ -148,6 +258,31 @@ export const REFERENCED_WIDGETS = [
 ];
 
 /**
+ * Widgets that have been actively migrated to the post-cohesion rubric
+ * (no hardcoded Tailwind color utilities, every UI element rendered by
+ * a dash-react primitive that reads ThemeContext). The widget-convention
+ * lint test scans these for color-Tailwind drift and fails CI if any
+ * leak through.
+ *
+ * Phase 2 ships this empty — REFERENCED_WIDGETS (the Phase B history)
+ * still has its hardcoded patterns, and a noisy CI failure on the day
+ * the rule lands would be a self-inflicted regression. Phase 3 fills
+ * this with the 4 re-authored exemplar widgets (Slack, GitHub, Gmail,
+ * Algolia); from that point the lint test enforces the rule for any
+ * future PR touching them.
+ *
+ * Eventual end state: bulk-cleanup pass migrates the remaining sample
+ * widgets onto the new primitives, REFERENCED_WIDGETS gets unified into
+ * EXEMPLAR_WIDGETS, and the rule applies everywhere.
+ */
+export const EXEMPLAR_WIDGETS = [
+    "src/SampleWidgets/Slack/widgets/SlackListChannels.js",
+    "src/SampleWidgets/GitHub/widgets/GitHubPRList.js",
+    "src/SampleWidgets/Gmail/widgets/GmailUnreadCount.js",
+    "src/SampleWidgets/Algolia/widgets/AlgoliaRulesList.js",
+];
+
+/**
  * Few-shot examples for the AI scaffold prompt. Each entry is a
  * `{description, tree}` pair the prompt builder concatenates into a
  * FEW-SHOT EXAMPLES section. Trees match the schema the AI is asked
@@ -175,16 +310,27 @@ export const FEW_SHOT_EXAMPLES = [
                 type: "Panel",
                 children: [
                     { type: "SubHeading2", props: { title: "Unread Email" } },
-                    { type: "Heading2", props: { title: "0" } },
-                    { type: "Paragraph", props: { text: "unread email" } },
-                    { type: "Button", props: { title: "Refresh" } },
+                    // StatCard is the chrome-cohesive stat-tile primitive:
+                    // label + big value + trend in one themed component.
+                    // Preferred over hand-composing Heading2 + Paragraph +
+                    // raw color spans (every widget would otherwise reinvent
+                    // the stat-card aesthetic).
+                    {
+                        type: "StatCard",
+                        props: {
+                            label: "Unread",
+                            value: "0",
+                            helpText: "in inbox",
+                        },
+                    },
+                    { type: "Button2", props: { title: "Refresh" } },
                 ],
             },
         },
     },
     {
         description:
-            "List open GitHub pull requests for a repo with a refresh button",
+            "List open GitHub pull requests with state badges and a refresh button",
         tree: {
             widgetName: "GitHubPRList",
             root: {
@@ -198,8 +344,14 @@ export const FEW_SHOT_EXAMPLES = [
                         type: "SubHeading3",
                         props: { title: "trops/dash-electron" },
                     },
+                    // Each row in the DataList renders a StatusBadge for the
+                    // PR state — the composed code (Build mode) uses
+                    // <StatusBadge state="open|closed|pending" /> inside the
+                    // row template. The tree only carries the data slot;
+                    // the per-row composition is the AI's responsibility
+                    // when emitting full widget code.
                     { type: "DataList" },
-                    { type: "Button", props: { title: "Refresh" } },
+                    { type: "Button2", props: { title: "Refresh" } },
                 ],
             },
         },
@@ -220,6 +372,18 @@ export const FEW_SHOT_EXAMPLES = [
                         },
                     },
                     { type: "DataList" },
+                    // When the result set is empty the rendered code wraps
+                    // the DataList branch in a conditional that renders an
+                    // EmptyState instead — Build mode handles that
+                    // composition; the tree just carries the primitives
+                    // that participate.
+                    {
+                        type: "EmptyState",
+                        props: {
+                            title: "No pages found",
+                            description: "Try a different search term.",
+                        },
+                    },
                 ],
             },
         },
@@ -239,7 +403,26 @@ export const WIDGET_CONVENTIONS = {
     userConfig: USER_CONFIG_CONVENTIONS,
     fewShotExamples: FEW_SHOT_EXAMPLES,
     referencedWidgets: REFERENCED_WIDGETS,
+    colorRule: COLOR_RULE,
+    primitives: PRIMITIVE_CONVENTIONS,
 };
+
+/**
+ * Regex matching any Tailwind color-utility fragment that would embed
+ * a color decision at the call site (the rule COLOR_RULE bans). Used
+ * by:
+ *   - the EXEMPLAR_WIDGETS lint test below (CI-blocking once Phase 3
+ *     populates the list)
+ *   - the Phase 5 acceptance scorecard in WidgetBuilderModal preview
+ *
+ * Matches: bg-red-500, text-emerald-300, border-amber-700,
+ *          hover:bg-blue-600, hover:text-rose-400, etc.
+ * Skips:   bg-black, bg-white, text-white, bg-transparent (the safelist
+ *          legitimately includes these as theme-neutral primitives),
+ *          opacity-N, grid-cols-N, transition-*, flex/grid/spacing utilities.
+ */
+export const COLOR_TAILWIND_REGEX =
+    /(?:hover:)?(?:bg|text|border)-(?:gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950)/;
 
 /**
  * Phase B / Phase C self-scoring rubric. Concrete YES/NO items the
@@ -262,4 +445,8 @@ export const ACCEPTANCE_CHECKLIST = [
     "Compiles via dash-electron build with no warnings (npm run ci exits clean).",
     "Visible padding + gap classes on containers — content not visually fused.",
     "Events published / listened via useWidgetEvents (when the widget participates in cross-widget flow).",
+    "No hardcoded Tailwind color utility classes (bg-{color}-{shade}, text-{color}-{shade}, border-{color}-{shade}) in widget code — color comes from @trops/dash-react primitives that read ThemeContext.",
+    'Every button is a dash-react Button / Button2 / Button3 — never a raw <button className="..."> tag.',
+    "Every status indicator or badge uses StatusBadge (state-based) or Tag (categorical) — never hand-rolled colored spans.",
+    "Empty / loading / error states use EmptyState / Skeleton.Text / Alert respectively — never bare italic strings or 'Loading…' plaintext.",
 ];

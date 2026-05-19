@@ -75,7 +75,7 @@ test("populated-updates state lists package rows + auth-gated 'Sign in to Regist
     // Verify the override actually took effect — fixtures should be
     // present in the test page.
     const overrideTotal = await window.evaluate(
-        () => window.__DASH_APP_UPDATES_OVERRIDE?.totalUpdates,
+        () => window.__DASH_APP_UPDATES_OVERRIDE?.totalUpdates
     );
     expect(overrideTotal).toBe(2);
 
@@ -83,7 +83,7 @@ test("populated-updates state lists package rows + auth-gated 'Sign in to Regist
     // no leftover portals to fight.
     const popoverButton = window
         .locator(
-            'aside button:has([data-icon="user"]), aside button:has([data-icon="circle-user"])',
+            'aside button:has([data-icon="user"]), aside button:has([data-icon="circle-user"])'
         )
         .last();
     await expect(popoverButton).toBeVisible({ timeout: 10000 });
@@ -106,13 +106,13 @@ test("populated-updates state lists package rows + auth-gated 'Sign in to Regist
     // Each pending package gets a row with its version transition.
     await expect(
         window.locator(
-            '[data-testid="app-updates-modal-widget-row-@trops/pipeline"]',
-        ),
+            '[data-testid="app-updates-modal-widget-row-@trops/pipeline"]'
+        )
     ).toHaveText(/@trops\/pipeline.*1\.0\.0.*1\.0\.8/);
     await expect(
         window.locator(
-            '[data-testid="app-updates-modal-widget-row-@trops/slack"]',
-        ),
+            '[data-testid="app-updates-modal-widget-row-@trops/slack"]'
+        )
     ).toHaveText(/@trops\/slack.*0\.0\.700.*0\.0\.735/);
 
     // Hermetic user is NOT signed in to the registry. The modal's
@@ -123,15 +123,13 @@ test("populated-updates state lists package rows + auth-gated 'Sign in to Regist
     // This pins the regression where the modal previously showed
     // Update → click → silent fail on stale auth.
     await expect(
-        window.locator(
-            '[data-testid="app-updates-modal-sign-in-registry"]',
-        ),
+        window.locator('[data-testid="app-updates-modal-sign-in-registry"]')
     ).toBeVisible({ timeout: 10000 });
     await expect(
-        window.getByText(/Sign in to the registry to install 2 widget/),
+        window.getByText(/Sign in to the registry to install 2 widget/)
     ).toBeVisible();
     // No "Update 2 widgets" button — gated until sign-in.
     await expect(
-        window.getByRole("button", { name: "Update 2 widgets" }),
+        window.getByRole("button", { name: "Update 2 widgets" })
     ).not.toBeVisible();
 });

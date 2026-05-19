@@ -118,6 +118,7 @@ export const DASH_REACT_COMPONENTS = new Set([
     "Skeleton",
     "Slider",
     "StatCard",
+    "StatusBadge",
     "Stepper",
     "SubHeading",
     "SubHeading2",

@@ -42,7 +42,7 @@ test("popover 'Check for updates' opens modal → empty-updates state shows 'You
     // circle-user icon in the sidebar footer area.
     const popoverButton = window
         .locator(
-            'aside button:has([data-icon="user"]), aside button:has([data-icon="circle-user"])',
+            'aside button:has([data-icon="user"]), aside button:has([data-icon="circle-user"])'
         )
         .last();
     await expect(popoverButton).toBeVisible({ timeout: 10000 });
@@ -70,7 +70,7 @@ test("popover 'Check for updates' opens modal → empty-updates state shows 'You
     // the entire pipeline ran: trigger → manual recheck → both checks
     // settled → modal rendered the resolved state.
     const upToDate = window.locator(
-        '[data-testid="app-updates-modal-uptodate"]',
+        '[data-testid="app-updates-modal-uptodate"]'
     );
     await expect(upToDate).toBeVisible({ timeout: 15000 });
 

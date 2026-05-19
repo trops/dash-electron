@@ -4,32 +4,64 @@
  * List pull requests for a GitHub repository via the GitHub MCP provider.
  * Listens for repoSelected events and publishes prSelected events.
  *
+ * Exemplar widget (post-cohesion rubric): every UI element is a
+ * `@trops/dash-react` primitive that reads ThemeContext.
+ *
  * @package GitHub
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    Caption,
+    Caption2,
+    Button2,
+    Menu,
+    MenuItem,
+    StatusBadge,
+    EmptyState,
+    Alert2,
+    Skeleton,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
+
+function connectionState({ isConnected, isConnecting, error }) {
+    if (isConnected) return "success";
+    if (isConnecting) return "pending";
+    if (error) return "error";
+    return "neutral";
+}
+
+function prState(pr) {
+    if (pr.merged || pr.merged_at) return "closed";
+    if (pr.state === "closed") return "error";
+    return "open";
+}
+
+function prStateLabel(pr) {
+    if (pr.merged || pr.merged_at) return "merged";
+    return pr.state || "open";
+}
+
+function reviewState(decision) {
+    if (decision === "APPROVED") return "success";
+    if (decision === "CHANGES_REQUESTED") return "error";
+    return "neutral";
+}
 
 function GitHubPRListContent({ title, configRepo, stateFilter }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("github");
     const { publishEvent, listen, listeners } = useWidgetEvents();
 
-    // Seed from the userConfig.repo so the widget renders something
-    // useful standalone (without needing a paired GitHubRepoList).
-    // The runtime repoSelected event still overrides this — see the
-    // listener below.
     const [repo, setRepo] = useState(configRepo || null);
     const [prs, setPrs] = useState([]);
     const [selectedPR, setSelectedPR] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [result, setResult] = useState(null);
+    const [fetchError, setFetchError] = useState(null);
 
-    // Re-sync from userConfig.repo when the config-pane edit fires
-    // (parent re-renders with a new configRepo prop). Track the
-    // last-applied config so a runtime event-driven override isn't
-    // clobbered by a no-op re-render.
     const configRepoRef = useRef(configRepo);
     useEffect(() => {
         if (configRepo !== configRepoRef.current) {
@@ -44,13 +76,10 @@ function GitHubPRListContent({ title, configRepo, stateFilter }) {
         async (fullName) => {
             if (!fullName || !isConnected) return;
             setLoading(true);
-            setResult(null);
+            setFetchError(null);
             try {
                 const [owner, name] = fullName.split("/");
                 const args = { owner, repo: name };
-                // GitHub MCP list_pull_requests accepts `state` —
-                // pass through whatever the user chose. Default
-                // "open" matches what most status dashboards want.
                 if (stateFilter && stateFilter !== "open") {
                     args.state = stateFilter;
                 }
@@ -59,12 +88,12 @@ function GitHubPRListContent({ title, configRepo, stateFilter }) {
                     arrayKeys: ["pull_requests", "items", "pulls"],
                 });
                 if (mcpError) {
-                    setResult({ type: "error", text: mcpError });
+                    setFetchError(mcpError);
                     return;
                 }
                 setPrs(Array.isArray(data) ? data : []);
             } catch (err) {
-                setResult({ type: "error", text: err.message });
+                setFetchError(err.message);
             } finally {
                 setLoading(false);
             }
@@ -72,16 +101,12 @@ function GitHubPRListContent({ title, configRepo, stateFilter }) {
         [isConnected, callTool, stateFilter]
     );
 
-    // Auto-load on mount / when the repo or connection changes —
-    // standalone use case (configRepo set, no paired widget needed).
     useEffect(() => {
         if (isConnected && repo) {
             fetchPRs(repo);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isConnected, repo, stateFilter]);
-
-    const [listenerStatus, setListenerStatus] = useState("not configured");
 
     const handlerRef = useRef(null);
     handlerRef.current = useCallback(
@@ -105,158 +130,113 @@ function GitHubPRListContent({ title, configRepo, stateFilter }) {
                 typeof listeners === "object" &&
                 Object.keys(listeners).length > 0;
             if (hasListeners) {
-                setListenerStatus("listening");
-                const handlers = {
+                listen(listeners, {
                     repoSelected: (data) => handlerRef.current(data),
-                };
-                listen(listeners, handlers);
-            } else {
-                setListenerStatus("no listeners assigned");
+                });
             }
         }
     }, [listeners, listen]);
 
     const handleSelectPR = (pr) => {
-        const payload = {
+        setSelectedPR(pr.number);
+        publishEvent("prSelected", {
             id: pr.id || null,
             number: pr.number,
             title: pr.title,
             repo: repo,
-        };
-        setSelectedPR(pr.number);
-        publishEvent("prSelected", payload);
-    };
-
-    const getStatusColor = (pr) => {
-        if (pr.merged || pr.merged_at)
-            return "bg-purple-900/50 text-purple-400";
-        if (pr.state === "closed") return "bg-red-900/50 text-red-400";
-        return "bg-green-900/50 text-green-400";
-    };
-
-    const getStatusLabel = (pr) => {
-        if (pr.merged || pr.merged_at) return "merged";
-        return pr.state || "open";
+        });
     };
 
     return (
-        <div className="flex flex-col gap-4 h-full text-sm overflow-y-auto">
+        <div className="flex flex-col gap-4 h-full overflow-y-auto">
             <SubHeading2 title={title} />
 
-            {/* Connection Status */}
-            <div className="flex items-center gap-2 text-xs">
-                <span
-                    className={`inline-block w-2 h-2 rounded-full ${
-                        isConnected
-                            ? "bg-green-500"
-                            : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
-                            : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
-                    }`}
+            <div className="flex items-center gap-2">
+                <StatusBadge
+                    state={connectionState({
+                        isConnected,
+                        isConnecting,
+                        error,
+                    })}
+                    label={status}
+                    compact
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 text={`(${tools.length} tools)`} />
             </div>
 
-            {/* Only surface the listener row when something IS wired
-                — standalone (config-driven) use is first-class, so
-                the absence of listeners isn't an error worth a row. */}
-            {listenerStatus === "listening" && (
-                <div className="flex items-center gap-2 text-xs">
-                    <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-                    <span className="text-gray-500">
-                        Listening for repoSelected
-                    </span>
-                </div>
-            )}
-
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <Alert2 title="GitHub connection error" message={error} />
+            )}
+            {fetchError && (
+                <Alert2
+                    title="Failed to load pull requests"
+                    message={fetchError}
+                />
             )}
 
-            {/* PR List */}
-            {repo ? (
-                <div className="space-y-2">
+            {!repo && (
+                <EmptyState
+                    title="No repository configured"
+                    description="Set the Repository in this widget's settings, or pair it with a widget that publishes a repoSelected event."
+                />
+            )}
+
+            {repo && (
+                <>
                     <div className="flex items-center justify-between">
                         <SubHeading3 title={`Pull Requests: ${repo}`} />
-                        <button
+                        <Button2
+                            title={loading ? "Loading..." : "Refresh"}
                             onClick={() => fetchPRs(repo)}
                             disabled={!isConnected || loading}
-                            className="px-2 py-0.5 text-xs rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white"
-                        >
-                            {loading ? "..." : "Refresh"}
-                        </button>
+                            size="sm"
+                        />
                     </div>
-                    <div className="max-h-64 overflow-y-auto space-y-1">
-                        {prs.length === 0 && !loading ? (
-                            <div className="text-xs text-gray-600 italic">
-                                No pull requests found.
-                            </div>
-                        ) : (
-                            prs.map((pr, i) => (
-                                <button
+
+                    {loading && <Skeleton.Text lines={4} />}
+
+                    {!loading && prs.length === 0 && !fetchError && (
+                        <EmptyState
+                            title="No pull requests"
+                            description={`No ${
+                                stateFilter || "open"
+                            } PRs in ${repo}.`}
+                        />
+                    )}
+
+                    {!loading && prs.length > 0 && (
+                        <Menu className="flex-1 overflow-y-auto space-y-1">
+                            {prs.map((pr, i) => (
+                                <MenuItem
                                     key={pr.number || i}
                                     onClick={() => handleSelectPR(pr)}
-                                    className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
-                                        selectedPR === pr.number
-                                            ? "bg-gray-700 border border-gray-500"
-                                            : "bg-white/5 hover:bg-white/10"
-                                    }`}
+                                    selected={selectedPR === pr.number}
                                 >
-                                    <div className="flex items-center gap-2">
-                                        <span
-                                            className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${getStatusColor(
-                                                pr
-                                            )}`}
-                                        >
-                                            {getStatusLabel(pr)}
-                                        </span>
-                                        <span className="text-gray-500 font-mono">
-                                            #{pr.number}
-                                        </span>
-                                        <span className="text-gray-300 truncate">
-                                            {pr.title || JSON.stringify(pr)}
-                                        </span>
-                                    </div>
-                                    {pr.review_decision && (
-                                        <div className="mt-1">
-                                            <span
-                                                className={`px-1 py-0.5 rounded text-[10px] ${
-                                                    pr.review_decision ===
-                                                    "APPROVED"
-                                                        ? "bg-green-900/50 text-green-400"
-                                                        : pr.review_decision ===
-                                                          "CHANGES_REQUESTED"
-                                                        ? "bg-red-900/50 text-red-400"
-                                                        : "bg-gray-700 text-gray-400"
-                                                }`}
-                                            >
-                                                {pr.review_decision}
+                                    <div className="flex flex-col gap-1 w-full">
+                                        <div className="flex items-center gap-2 w-full">
+                                            <StatusBadge
+                                                state={prState(pr)}
+                                                label={prStateLabel(pr)}
+                                            />
+                                            <Caption2 text={`#${pr.number}`} />
+                                            <span className="truncate">
+                                                {pr.title || JSON.stringify(pr)}
                                             </span>
                                         </div>
-                                    )}
-                                </button>
-                            ))
-                        )}
-                    </div>
-                </div>
-            ) : (
-                <div className="text-xs text-gray-500 italic">
-                    Set Repository in this widget's settings, or pair it with a
-                    widget that publishes a repoSelected event (e.g.
-                    GitHubRepoList).
-                </div>
-            )}
-
-            {/* Error */}
-            {result?.type === "error" && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {result.text}
-                </div>
+                                        {pr.review_decision && (
+                                            <StatusBadge
+                                                state={reviewState(
+                                                    pr.review_decision
+                                                )}
+                                                label={pr.review_decision}
+                                            />
+                                        )}
+                                    </div>
+                                </MenuItem>
+                            ))}
+                        </Menu>
+                    )}
+                </>
             )}
         </div>
     );
