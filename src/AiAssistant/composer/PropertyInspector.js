@@ -7,6 +7,7 @@ import {
 import { WirePicker, WiredSlotSummary, PipedSlotSummary } from "./WirePicker";
 import { PROVIDER_API_REGISTRY } from "../providerApiRegistry";
 import { getKnownToolArgs } from "./mcpKnownTools";
+import { getAllowedVariantsForType } from "./widgetConventions";
 
 /**
  * Return the ordered list of variant component names sharing a base
@@ -14,9 +15,25 @@ import { getKnownToolArgs } from "./mcpKnownTools";
  * "Heading3"]. Base is the name with any trailing digit stripped.
  * Returns an empty list when fewer than 2 variants exist (nothing
  * meaningful to swap between).
+ *
+ * For component bases that have widget-specific recommendations in
+ * `widgetConventions.ALLOWED_VARIANTS` (today: Heading + SubHeading,
+ * which need to cross families to surface SubHeading2 as the proper
+ * title for a widget), the recommended list takes precedence over
+ * the schema's numbered-suffix family. The forbidden raw `Heading`
+ * stays out of the picker by construction — the conventions don't
+ * include it — so a user staring at a `Heading` cell can only swap
+ * to widget-friendly forms.
  */
 function listVariants(componentName) {
     if (typeof componentName !== "string") return [];
+    const recommended = getAllowedVariantsForType(componentName);
+    if (recommended && Array.isArray(recommended.allowed)) {
+        const filtered = recommended.allowed.filter((name) =>
+            Boolean(DASH_REACT_COMPONENT_SCHEMAS[name])
+        );
+        return filtered.length >= 2 ? filtered : [];
+    }
     const base = componentName.replace(/[0-9]+$/, "");
     if (!base) return [];
     const variants = [];
@@ -26,6 +43,19 @@ function listVariants(componentName) {
         if (DASH_REACT_COMPONENT_SCHEMAS[name]) variants.push(name);
     }
     return variants.length >= 2 ? variants : [];
+}
+
+/**
+ * Human label for a variant pill. When the conventions provide a
+ * semantic label (e.g. SubHeading2 → "Section title") that wins; we
+ * fall back to "Original" / "Style N" for the default code path.
+ */
+function variantLabel(currentType, name, idx) {
+    const recommended = getAllowedVariantsForType(currentType);
+    if (recommended && recommended.labels && recommended.labels[name]) {
+        return recommended.labels[name];
+    }
+    return idx === 0 ? "Original" : `Style ${idx + 1}`;
 }
 
 const CREDENTIAL_AUTO_ARGS = new Set([
@@ -714,7 +744,7 @@ function VariantPicker({ nodeId, currentType, onChangeType }) {
             </span>
             <div className="flex items-center gap-0.5 text-xs bg-gray-800 border border-gray-700 rounded p-0.5">
                 {variants.map((name, idx) => {
-                    const label = idx === 0 ? "Original" : `Style ${idx + 1}`;
+                    const label = variantLabel(currentType, name, idx);
                     const isActive = name === currentType;
                     return (
                         <button

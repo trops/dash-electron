@@ -48,6 +48,7 @@ import {
     buildPreviewWidgetData,
 } from "./widgetPreviewData";
 import { PreviewIframe } from "./PreviewIframe";
+import { AcceptanceScorecard } from "./composer/AcceptanceScorecard";
 import {
     validateProviderApiUsage,
     buildAiCorrectionMessage,
@@ -4542,6 +4543,29 @@ ${
                                                 )}
                                             </div>
                                         </div>
+                                        {/* Acceptance scorecard — Phase 5 step 5.2.
+                                            Static analysis of the AI-generated widget
+                                            source against widgetConventions.ACCEPTANCE_CHECKLIST.
+                                            Build mode only — Compose mode emits
+                                            primitives via the grid emitter which
+                                            already enforces the rule structurally.
+                                            Hidden when the user is browsing a
+                                            registry widget (not their own
+                                            generation). */}
+                                        {chatMode === "build" &&
+                                            !browsingPackage &&
+                                            detectedCode?.componentCode && (
+                                                <div
+                                                    className={`px-6 py-3 border-t ${borderColor} shrink-0 max-h-48 overflow-y-auto`}
+                                                    data-testid="build-mode-acceptance-scorecard"
+                                                >
+                                                    <AcceptanceScorecard
+                                                        code={
+                                                            detectedCode.componentCode
+                                                        }
+                                                    />
+                                                </div>
+                                            )}
                                         {/* Registry-preview footer (shown when user is browsing a registry widget) */}
                                         {browsingPackage && (
                                             <div

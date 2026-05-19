@@ -65,9 +65,15 @@ jest.mock("@trops/dash-react", () => {
                 "data-message": props.message ?? "",
                 "data-compact": props.compact ? "true" : "false",
                 "data-disabled": props.disabled ? "true" : "false",
-                "data-on-click": typeof props.onClick === "function" ? "true" : "false",
+                "data-on-click":
+                    typeof props.onClick === "function" ? "true" : "false",
             },
-            props.title ?? props.label ?? props.message ?? props.text ?? props.children ?? null
+            props.title ??
+                props.label ??
+                props.message ??
+                props.text ??
+                props.children ??
+                null
         );
     const passthrough = (name) =>
         function Passthrough(props) {
@@ -173,11 +179,15 @@ function assertNoRawButtons(container) {
 
 describe("SlackListChannels — disconnected render", () => {
     test("mounts without throwing", () => {
-        expect(() => render(<SlackListChannels title="Slack Channels" />)).not.toThrow();
+        expect(() =>
+            render(<SlackListChannels title="Slack Channels" />)
+        ).not.toThrow();
     });
 
     test("renders StatusBadge for the connection indicator (compact mode, neutral state)", () => {
-        const { container } = render(<SlackListChannels title="Slack Channels" />);
+        const { container } = render(
+            <SlackListChannels title="Slack Channels" />
+        );
         const badges = container.querySelectorAll('[data-stub="StatusBadge"]');
         expect(badges.length).toBeGreaterThanOrEqual(1);
         // The connection badge in disconnected mode renders in compact
@@ -190,7 +200,9 @@ describe("SlackListChannels — disconnected render", () => {
     });
 
     test("renders EmptyState with the Slack-not-connected message", () => {
-        const { container } = render(<SlackListChannels title="Slack Channels" />);
+        const { container } = render(
+            <SlackListChannels title="Slack Channels" />
+        );
         const empties = container.querySelectorAll('[data-stub="EmptyState"]');
         expect(empties.length).toBeGreaterThanOrEqual(1);
         const titles = Array.from(empties).map((e) =>
@@ -202,7 +214,9 @@ describe("SlackListChannels — disconnected render", () => {
     });
 
     test("no raw <button> tags in output", () => {
-        const { container } = render(<SlackListChannels title="Slack Channels" />);
+        const { container } = render(
+            <SlackListChannels title="Slack Channels" />
+        );
         assertNoRawButtons(container);
     });
 });
@@ -277,7 +291,9 @@ describe("AlgoliaRulesList — no-provider render", () => {
     });
 
     test("renders StatusBadge for the connection indicator", () => {
-        const { container } = render(<AlgoliaRulesList title="Algolia Rules" />);
+        const { container } = render(
+            <AlgoliaRulesList title="Algolia Rules" />
+        );
         const badges = container.querySelectorAll('[data-stub="StatusBadge"]');
         const compactBadge = Array.from(badges).find(
             (b) => b.getAttribute("data-compact") === "true"
@@ -286,7 +302,9 @@ describe("AlgoliaRulesList — no-provider render", () => {
     });
 
     test("renders 'No Algolia provider' EmptyState when credentials missing", () => {
-        const { container } = render(<AlgoliaRulesList title="Algolia Rules" />);
+        const { container } = render(
+            <AlgoliaRulesList title="Algolia Rules" />
+        );
         const empties = container.querySelectorAll('[data-stub="EmptyState"]');
         const titles = Array.from(empties).map((e) =>
             e.getAttribute("data-title")
@@ -297,7 +315,9 @@ describe("AlgoliaRulesList — no-provider render", () => {
     });
 
     test("no raw <button> tags in output", () => {
-        const { container } = render(<AlgoliaRulesList title="Algolia Rules" />);
+        const { container } = render(
+            <AlgoliaRulesList title="Algolia Rules" />
+        );
         assertNoRawButtons(container);
     });
 });
@@ -308,12 +328,15 @@ describe("Cohesion rule — every exemplar's tree uses only dash-react primitive
         ["GitHubPRList", GitHubPRList],
         ["GmailUnreadCount", GmailUnreadCount],
         ["AlgoliaRulesList", AlgoliaRulesList],
-    ])("%s renders only primitives + layout divs (no raw input / button / span pills)", (name, Widget) => {
-        const { container } = render(<Widget title={`Test ${name}`} />);
-        // Raw HTML controls that should never appear (the widgets must
-        // route through dash-react's InputText / Button* / StatusBadge
-        // / Tag instead).
-        expect(container.querySelectorAll("button").length).toBe(0);
-        expect(container.querySelectorAll("input").length).toBe(0);
-    });
+    ])(
+        "%s renders only primitives + layout divs (no raw input / button / span pills)",
+        (name, Widget) => {
+            const { container } = render(<Widget title={`Test ${name}`} />);
+            // Raw HTML controls that should never appear (the widgets must
+            // route through dash-react's InputText / Button* / StatusBadge
+            // / Tag instead).
+            expect(container.querySelectorAll("button").length).toBe(0);
+            expect(container.querySelectorAll("input").length).toBe(0);
+        }
+    );
 });
