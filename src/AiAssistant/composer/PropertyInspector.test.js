@@ -338,7 +338,12 @@ describe("PropertyInspector — close button", () => {
 });
 
 describe("PropertyInspector — variant picker", () => {
-    test("renders Original/Style 2/Style 3 for a component with variants and invokes onChangeType", () => {
+    test("Heading family — picker offers widget-friendly variants (SubHeading2/3 + Heading2/3), NOT raw Heading", () => {
+        // Phase 5 step 5.1: the inspector picker reads from
+        // widgetConventions.ALLOWED_VARIANTS for the Heading family so
+        // a user on a `Heading` cell can swap into SubHeading2 (the
+        // proper section title for a widget). Raw `Heading` is
+        // forbidden in widgets and must NOT appear in the picker.
         const onChangeType = jest.fn();
         render(
             <PropertyInspector
@@ -349,11 +354,14 @@ describe("PropertyInspector — variant picker", () => {
                 onClose={() => {}}
             />
         );
-        // Picker rendered with all three Heading variants.
         const picker = screen.getByTestId("composer-variant-picker-node-1");
         expect(picker).toBeInTheDocument();
+        // The four widget-friendly variants are present.
         expect(
-            screen.getByTestId("composer-variant-node-1-Heading")
+            screen.getByTestId("composer-variant-node-1-SubHeading2")
+        ).toBeInTheDocument();
+        expect(
+            screen.getByTestId("composer-variant-node-1-SubHeading3")
         ).toBeInTheDocument();
         expect(
             screen.getByTestId("composer-variant-node-1-Heading2")
@@ -361,8 +369,70 @@ describe("PropertyInspector — variant picker", () => {
         expect(
             screen.getByTestId("composer-variant-node-1-Heading3")
         ).toBeInTheDocument();
-        fireEvent.click(screen.getByTestId("composer-variant-node-1-Heading3"));
-        expect(onChangeType).toHaveBeenCalledWith("node-1", "Heading3");
+        // Raw `Heading` is gated out of the picker — the conventions
+        // ban it inside widget cells.
+        expect(
+            screen.queryByTestId("composer-variant-node-1-Heading")
+        ).not.toBeInTheDocument();
+        // Click "Section title" (SubHeading2) → onChangeType fires
+        // with the widget-correct variant.
+        fireEvent.click(
+            screen.getByTestId("composer-variant-node-1-SubHeading2")
+        );
+        expect(onChangeType).toHaveBeenCalledWith("node-1", "SubHeading2");
+    });
+
+    test("Heading family — picker labels surface semantic intent (Section title / Stat number / …)", () => {
+        // The picker labels come from widgetConventions.ALLOWED_VARIANTS.labels
+        // — semantic intent, not the generic "Style 2 / Style 3"
+        // numbering. Pinning this so a future label tweak gets caught.
+        render(
+            <PropertyInspector
+                node={makeNode({ type: "Heading2" })}
+                onChangeProp={() => {}}
+                onSetSlotMode={() => {}}
+                onChangeType={() => {}}
+                onClose={() => {}}
+            />
+        );
+        expect(
+            screen.getByTestId("composer-variant-node-1-SubHeading2")
+        ).toHaveTextContent("Section title");
+        expect(
+            screen.getByTestId("composer-variant-node-1-SubHeading3")
+        ).toHaveTextContent("Sub-section");
+        expect(
+            screen.getByTestId("composer-variant-node-1-Heading2")
+        ).toHaveTextContent("Stat number");
+        expect(
+            screen.getByTestId("composer-variant-node-1-Heading3")
+        ).toHaveTextContent("Small stat");
+    });
+
+    test("Numbered-suffix families without conventions overrides still render their schema variants", () => {
+        // Tag/Button/Card etc. don't have widget-specific guidance, so
+        // the picker uses the schema's Tag/Tag2/Tag3 family directly
+        // with the legacy "Original / Style 2 / Style 3" labels.
+        render(
+            <PropertyInspector
+                node={makeNode({ type: "Tag" })}
+                onChangeProp={() => {}}
+                onSetSlotMode={() => {}}
+                onChangeType={() => {}}
+                onClose={() => {}}
+            />
+        );
+        const picker = screen.getByTestId("composer-variant-picker-node-1");
+        expect(picker).toBeInTheDocument();
+        expect(
+            screen.getByTestId("composer-variant-node-1-Tag")
+        ).toBeInTheDocument();
+        expect(
+            screen.getByTestId("composer-variant-node-1-Tag2")
+        ).toBeInTheDocument();
+        expect(
+            screen.getByTestId("composer-variant-node-1-Tag3")
+        ).toBeInTheDocument();
     });
 
     test("does NOT render the variant picker for single-form components (Container, DataList)", () => {

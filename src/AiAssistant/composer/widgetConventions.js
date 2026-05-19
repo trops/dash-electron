@@ -391,6 +391,62 @@ export const FEW_SHOT_EXAMPLES = [
 ];
 
 /**
+ * Cross-family variant guidance for the PropertyInspector's variant
+ * picker (Phase 5 Step 5.1).
+ *
+ * Today the picker is driven by the schema's numbered-suffix family
+ * (Heading → Heading/Heading2/Heading3). That works for most types
+ * but leaks the H1-is-too-big problem: a user staring at a "Heading"
+ * cell sees Heading/Heading2/Heading3 as their style options, with
+ * no path to the preferred SubHeading2 title. The conventions know
+ * the right answer — surfacing it here lets the inspector recommend
+ * widget-friendly forms even across families.
+ *
+ * Per-base entry:
+ *   - allowed: ordered list of variant types the picker offers in a
+ *     widget context. Roughly best-first.
+ *   - labels: optional map from variant → short human label for the
+ *     picker pill. Falls back to a "Style N" naming when absent.
+ *
+ * Bases without an entry use the existing numbered-suffix logic —
+ * Tag, Button, Panel, Card, Alert etc. don't need cross-family
+ * recommendations, so they stay in the default code path.
+ */
+export const ALLOWED_VARIANTS = {
+    Heading: {
+        allowed: ["SubHeading2", "SubHeading3", "Heading2", "Heading3"],
+        labels: {
+            SubHeading2: "Section title",
+            SubHeading3: "Sub-section",
+            Heading2: "Stat number",
+            Heading3: "Small stat",
+        },
+    },
+    SubHeading: {
+        allowed: ["SubHeading2", "SubHeading3", "Heading2", "Heading3"],
+        labels: {
+            SubHeading2: "Section title",
+            SubHeading3: "Sub-section",
+            Heading2: "Stat number",
+            Heading3: "Small stat",
+        },
+    },
+};
+
+/**
+ * Look up the allowed variants for a component name. Returns null
+ * when there's no widget-specific recommendation; callers fall back
+ * to the schema's numbered-suffix family.
+ */
+export function getAllowedVariantsForType(type) {
+    if (typeof type !== "string") return null;
+    // Strip the numeric suffix — Heading2/Heading3/SubHeading2/etc.
+    // all share the family entry keyed on the base.
+    const base = type.replace(/[0-9]+$/, "");
+    return ALLOWED_VARIANTS[base] || null;
+}
+
+/**
  * Aggregator. Consumers (the AI prompt builder, the emitter guardrails,
  * tests) import this rather than the individual sub-objects so they
  * stay in sync if anything is added.
@@ -405,6 +461,7 @@ export const WIDGET_CONVENTIONS = {
     referencedWidgets: REFERENCED_WIDGETS,
     colorRule: COLOR_RULE,
     primitives: PRIMITIVE_CONVENTIONS,
+    allowedVariants: ALLOWED_VARIANTS,
 };
 
 /**

@@ -34,6 +34,8 @@ import {
     PRIMITIVE_CONVENTIONS,
     COLOR_TAILWIND_REGEX,
     EXEMPLAR_WIDGETS,
+    ALLOWED_VARIANTS,
+    getAllowedVariantsForType,
 } from "./widgetConventions";
 
 describe("HEADING_CONVENTIONS", () => {
@@ -148,6 +150,7 @@ describe("WIDGET_CONVENTIONS aggregator", () => {
         expect(WIDGET_CONVENTIONS.userConfig).toBe(USER_CONFIG_CONVENTIONS);
         expect(WIDGET_CONVENTIONS.colorRule).toBe(COLOR_RULE);
         expect(WIDGET_CONVENTIONS.primitives).toBe(PRIMITIVE_CONVENTIONS);
+        expect(WIDGET_CONVENTIONS.allowedVariants).toBe(ALLOWED_VARIANTS);
     });
 
     test("fewShotExamples + referencedWidgets are populated arrays (Phase C populated them)", () => {
@@ -344,6 +347,71 @@ describe("COLOR_TAILWIND_REGEX", () => {
         "animate-pulse",
     ])("does NOT match theme-neutral utility %s", (cls) => {
         expect(cls).not.toMatch(COLOR_TAILWIND_REGEX);
+    });
+});
+
+describe("ALLOWED_VARIANTS (PropertyInspector variant-picker source of truth)", () => {
+    test("Heading + SubHeading bases both list the same widget-friendly variants", () => {
+        // Same allowed set on both bases so a click on Heading vs
+        // SubHeading vs Heading2 all surface the same option set —
+        // the rule is "what's widget-friendly", not "what's in the
+        // same numbered-suffix family".
+        expect(ALLOWED_VARIANTS.Heading).toBeTruthy();
+        expect(ALLOWED_VARIANTS.SubHeading).toBeTruthy();
+        expect(ALLOWED_VARIANTS.Heading.allowed).toEqual(
+            ALLOWED_VARIANTS.SubHeading.allowed
+        );
+    });
+
+    test("Raw `Heading` is NOT in the allowed list (forbidden in widgets)", () => {
+        // The whole point of the inspector hook — Heading is H1 and
+        // banned in widget interiors. Phase 3's exemplars all use
+        // SubHeading2 for the widget title; the inspector must
+        // reflect that.
+        expect(ALLOWED_VARIANTS.Heading.allowed).not.toContain("Heading");
+    });
+
+    test("Each variant has a semantic label for the picker pill", () => {
+        for (const name of ALLOWED_VARIANTS.Heading.allowed) {
+            expect(typeof ALLOWED_VARIANTS.Heading.labels[name]).toBe("string");
+            expect(
+                ALLOWED_VARIANTS.Heading.labels[name].length
+            ).toBeGreaterThan(2);
+        }
+    });
+
+    test("getAllowedVariantsForType resolves family from suffixed variants", () => {
+        // Inspector calls this with whatever the cell's current type
+        // happens to be — Heading2, Heading3, SubHeading2 all need
+        // to map to the same family entry. Base-stripping is the
+        // contract.
+        expect(getAllowedVariantsForType("Heading")).toBe(
+            ALLOWED_VARIANTS.Heading
+        );
+        expect(getAllowedVariantsForType("Heading2")).toBe(
+            ALLOWED_VARIANTS.Heading
+        );
+        expect(getAllowedVariantsForType("Heading3")).toBe(
+            ALLOWED_VARIANTS.Heading
+        );
+        expect(getAllowedVariantsForType("SubHeading2")).toBe(
+            ALLOWED_VARIANTS.SubHeading
+        );
+    });
+
+    test("getAllowedVariantsForType returns null for families without overrides", () => {
+        // Tag/Button/Card etc. fall through to the schema's numbered-
+        // suffix logic — they don't need cross-family swaps.
+        expect(getAllowedVariantsForType("Tag")).toBe(null);
+        expect(getAllowedVariantsForType("Button")).toBe(null);
+        expect(getAllowedVariantsForType("Panel")).toBe(null);
+    });
+
+    test("getAllowedVariantsForType safely handles bad input", () => {
+        expect(getAllowedVariantsForType(null)).toBe(null);
+        expect(getAllowedVariantsForType(undefined)).toBe(null);
+        expect(getAllowedVariantsForType(42)).toBe(null);
+        expect(getAllowedVariantsForType("")).toBe(null);
     });
 });
 
