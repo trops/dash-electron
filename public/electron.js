@@ -528,6 +528,7 @@ const {
     REGISTRY_INSPECT_WIDGET_PACKAGE,
     REGISTRY_SCAN_WIDGET_DEFAULTS,
     REGISTRY_PREVIEW_FETCH,
+    REGISTRY_FETCH_PACKAGE_MANIFEST,
     THEME_PUBLISH,
     THEME_INSTALL_FROM_REGISTRY,
     THEME_PUBLISH_PREVIEW,
@@ -1652,6 +1653,9 @@ function createWindow() {
                     packageName,
                     componentName
                 )
+        );
+        logger.loggedHandle(REGISTRY_FETCH_PACKAGE_MANIFEST, (e, packageName) =>
+            registryController.fetchPackageManifest(packageName)
         );
 
         // --- Theme Registry ---

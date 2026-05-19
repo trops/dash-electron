@@ -27,6 +27,32 @@ import {
     FontAwesomeIcon,
 } from "@trops/dash-react";
 
+function _isSubsetOfArray(declared, granted) {
+    if (!Array.isArray(declared) || declared.length === 0) return true;
+    const grantedSet = new Set(granted || []);
+    return declared.every((x) => grantedSet.has(x));
+}
+
+/**
+ * Returns true when every tool/path the widget declared is already in
+ * the user's granted blob — meaning there's nothing left to ask. Used
+ * to suppress redundant post-install consent prompts after the
+ * pre-install preflight in AppUpdatesModal has already written the
+ * grants the new version needed.
+ */
+function isDeclaredFullyGranted(declared, granted) {
+    const declaredServers = declared?.servers || {};
+    const grantedServers = granted?.servers || {};
+    for (const [name, perms] of Object.entries(declaredServers)) {
+        const g = grantedServers[name];
+        if (!g) return false;
+        if (!_isSubsetOfArray(perms.tools, g.tools)) return false;
+        if (!_isSubsetOfArray(perms.readPaths, g.readPaths)) return false;
+        if (!_isSubsetOfArray(perms.writePaths, g.writePaths)) return false;
+    }
+    return true;
+}
+
 const buildInitialSelectionForRequest = (payload) => {
     const servers = payload.declared?.servers || {};
     const sel = {};
@@ -66,8 +92,32 @@ export const WidgetMcpConsentModal = () => {
     useEffect(() => {
         if (!window.mainApi?.widgetMcp?.onConsentRequired) return;
         const cleanup = window.mainApi.widgetMcp.onConsentRequired(
-            (payload) => {
+            async (payload) => {
                 if (!payload?.widgetId || !payload?.declared) return;
+                // Skip if the user has already granted everything in
+                // the declared blob (e.g. when the pre-install
+                // preflight in AppUpdatesModal wrote the grants
+                // before the install fired). Without this, the
+                // batch-install flow would still pop this modal
+                // immediately after the user just approved
+                // everything in preflight — the same questions in a
+                // different modal.
+                try {
+                    const allRows =
+                        (await window.mainApi.widgetMcp?.listAll?.()) || [];
+                    const row = allRows.find(
+                        (r) => r.widgetId === payload.widgetId
+                    );
+                    if (
+                        row &&
+                        isDeclaredFullyGranted(payload.declared, row.granted)
+                    ) {
+                        return;
+                    }
+                } catch (_) {
+                    // listAll unavailable / IPC error — fall through
+                    // and prompt; safer than silently dropping.
+                }
                 setSelection((prev) => ({
                     ...prev,
                     [payload.widgetId]:
