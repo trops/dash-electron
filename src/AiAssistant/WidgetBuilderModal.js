@@ -16,6 +16,7 @@ import React, {
     useContext,
     useCallback,
     useEffect,
+    useMemo,
     useRef,
 } from "react";
 import {
@@ -48,7 +49,10 @@ import {
     buildPreviewWidgetData,
 } from "./widgetPreviewData";
 import { PreviewIframe } from "./PreviewIframe";
-import { AcceptanceScorecard } from "./composer/AcceptanceScorecard";
+import {
+    AcceptanceScorecard,
+    evaluateScorecard,
+} from "./composer/AcceptanceScorecard";
 import {
     validateProviderApiUsage,
     buildAiCorrectionMessage,
@@ -1243,6 +1247,20 @@ export const WidgetBuilderModal = ({
         consoleEventsRef.current = [];
         setConsoleEvents([]);
     }, []);
+
+    // Acceptance scorecard counts — fed by the static-analysis pass
+    // over the AI-generated widget source. Drives the Scorecard tab
+    // badge (red count when ✗ items > 0). Recomputed only when the
+    // emitted componentCode changes; for a 200-line widget the regex
+    // pass is sub-millisecond, but memoizing keeps it off the render
+    // hot path.
+    const scorecardRows = useMemo(() => {
+        if (!detectedCode?.componentCode) return [];
+        return evaluateScorecard(detectedCode.componentCode);
+    }, [detectedCode?.componentCode]);
+    const scorecardFailCount = scorecardRows.filter(
+        (r) => r.pass === false
+    ).length;
 
     // Slice 19G.2 + 19H — push a "fix this runtime error" user
     // message into the ChatCore conversation via the
@@ -3579,6 +3597,43 @@ ${
                                         </span>
                                     )}
                                 </button>
+                                {chatMode === "build" && (
+                                    <button
+                                        onClick={() =>
+                                            setActiveTab("scorecard")
+                                        }
+                                        disabled={!detectedCode.componentCode}
+                                        className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
+                                            activeTab === "scorecard"
+                                                ? "bg-indigo-600/20 text-indigo-300"
+                                                : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
+                                        } ${
+                                            !detectedCode.componentCode
+                                                ? "opacity-30 cursor-not-allowed"
+                                                : ""
+                                        }`}
+                                        data-testid="tab-scorecard"
+                                        title="Cohesion-rule checklist for the generated widget"
+                                    >
+                                        <FontAwesomeIcon
+                                            icon="circle-check"
+                                            className="h-2.5 w-2.5"
+                                        />
+                                        Scorecard
+                                        {scorecardFailCount > 0 && (
+                                            <span
+                                                className="ml-1 px-1 rounded bg-rose-700 text-rose-100 text-[10px]"
+                                                title={`${scorecardFailCount} cohesion rule${
+                                                    scorecardFailCount === 1
+                                                        ? ""
+                                                        : "s"
+                                                } failing`}
+                                            >
+                                                {scorecardFailCount}
+                                            </span>
+                                        )}
+                                    </button>
+                                )}
                             </div>
                             {isCompiling && (
                                 <div className="flex items-center gap-1.5 text-xs text-indigo-400">
@@ -4543,29 +4598,6 @@ ${
                                                 )}
                                             </div>
                                         </div>
-                                        {/* Acceptance scorecard — Phase 5 step 5.2.
-                                            Static analysis of the AI-generated widget
-                                            source against widgetConventions.ACCEPTANCE_CHECKLIST.
-                                            Build mode only — Compose mode emits
-                                            primitives via the grid emitter which
-                                            already enforces the rule structurally.
-                                            Hidden when the user is browsing a
-                                            registry widget (not their own
-                                            generation). */}
-                                        {chatMode === "build" &&
-                                            !browsingPackage &&
-                                            detectedCode?.componentCode && (
-                                                <div
-                                                    className={`px-6 py-3 border-t ${borderColor} shrink-0 max-h-48 overflow-y-auto`}
-                                                    data-testid="build-mode-acceptance-scorecard"
-                                                >
-                                                    <AcceptanceScorecard
-                                                        code={
-                                                            detectedCode.componentCode
-                                                        }
-                                                    />
-                                                </div>
-                                            )}
                                         {/* Registry-preview footer (shown when user is browsing a registry widget) */}
                                         {browsingPackage && (
                                             <div
@@ -5159,6 +5191,24 @@ ${
                                 onSendErrorToAI={handleSendConsoleErrorToAI}
                             />
                         )}
+                        {activeTab === "scorecard" &&
+                            detectedCode.componentCode && (
+                                <div
+                                    className="px-4 py-3 overflow-y-auto"
+                                    data-testid="build-mode-acceptance-scorecard"
+                                >
+                                    <div className="text-xs text-gray-400 mb-2">
+                                        Static-analysis pass over the
+                                        AI-generated widget source against the
+                                        cohesion rubric. ✓ confirmed, ✗ failing
+                                        (click to see the offending substring),
+                                        · not statically checkable.
+                                    </div>
+                                    <AcceptanceScorecard
+                                        code={detectedCode.componentCode}
+                                    />
+                                </div>
+                            )}
                     </div>
 
                     {/* Right: Chat (1/3) */}
