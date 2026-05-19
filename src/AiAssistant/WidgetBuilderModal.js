@@ -5194,16 +5194,9 @@ ${
                         {activeTab === "scorecard" &&
                             detectedCode.componentCode && (
                                 <div
-                                    className="px-4 py-3 overflow-y-auto"
+                                    className="px-4 py-4 overflow-y-auto"
                                     data-testid="build-mode-acceptance-scorecard"
                                 >
-                                    <div className="text-xs text-gray-400 mb-2">
-                                        Static-analysis pass over the
-                                        AI-generated widget source against the
-                                        cohesion rubric. ✓ confirmed, ✗ failing
-                                        (click to see the offending substring),
-                                        · not statically checkable.
-                                    </div>
                                     <AcceptanceScorecard
                                         code={detectedCode.componentCode}
                                     />
