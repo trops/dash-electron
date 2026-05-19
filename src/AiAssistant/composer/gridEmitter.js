@@ -37,6 +37,7 @@ import {
     isContainer,
     cellFillsRow,
     rowHasFillingCell,
+    isGridEmpty,
 } from "./gridLayout";
 import { buildHookScaffold } from "./composerHookEmitter";
 import {
@@ -78,10 +79,62 @@ function applyHeadingGuardrail(cell) {
  * Return shape matches emitWidgetCode so the modal routes through
  * the same compilePreview pipeline.
  */
+/**
+ * Emit a friendly placeholder widget for a composer in its empty
+ * onboarding state. Without this the default emission was a stack of
+ * dashed-border `<div>` cells with no imports, no primitives, and no
+ * widget shape — which fails the acceptance scorecard before the
+ * user has done anything, and triggers the "rendered with no visible
+ * content" warning on the preview.
+ *
+ * The placeholder uses Panel + SubHeading2 + EmptyState so:
+ *   - the preview shows a recognizable "this is an empty widget, drop
+ *     components into it" message instead of a black canvas
+ *   - the scorecard's static checks (Title uses SubHeading2, EmptyState
+ *     present, no hardcoded color Tailwind) all pass from the first
+ *     render
+ *   - the code is something the user could legitimately ship if they
+ *     chose to — no fake imports, no synthetic markup, no special
+ *     case for the preview iframe to handle
+ */
+function emitEmptyGridPlaceholder(widgetName) {
+    const componentCode =
+        'import React from "react";\n' +
+        'import { Panel, SubHeading2, EmptyState } from "@trops/dash-react";\n' +
+        "\n" +
+        `export default function ${widgetName}() {\n` +
+        "    return (\n" +
+        "        <Panel>\n" +
+        '            <div className="flex flex-col gap-4 h-full overflow-y-auto">\n' +
+        `                <SubHeading2 title="${widgetName}" />\n` +
+        "                <EmptyState\n" +
+        '                    title="Empty widget"\n' +
+        '                    description="Drop components from the palette to start building."\n' +
+        "                />\n" +
+        "            </div>\n" +
+        "        </Panel>\n" +
+        "    );\n" +
+        "}\n";
+    const configCode = renderConfigCode({
+        widgetName,
+        providerDeclarations: [],
+        userConfigFields: [],
+    });
+    return { componentCode, configCode };
+}
+
 export function emitGridWidgetCode(grid) {
     const widgetName =
         (grid && typeof grid.widgetName === "string" && grid.widgetName) ||
         "ComposedWidget";
+
+    // Empty composer — emit a friendly placeholder instead of the
+    // raw empty-cell grid that has no primitives, no title, and looks
+    // like a black canvas at preview time. See emitEmptyGridPlaceholder
+    // for the rationale.
+    if (isGridEmpty(grid)) {
+        return emitEmptyGridPlaceholder(widgetName);
+    }
 
     // Flatten the grid into a list of per-leaf nodes the existing
     // hook scaffold + provider-decls passes can consume. The

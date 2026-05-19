@@ -8,16 +8,29 @@ import { makeEmptyGrid, addRow, setCellComponent } from "./gridLayout";
 import { emitGridWidgetCode } from "./gridEmitter";
 
 describe("emitGridWidgetCode", () => {
-    test("empty grid emits a single-cell placeholder wrapped in the root grid div", () => {
+    test("empty grid emits a Panel + SubHeading2 + EmptyState placeholder widget (not raw empty cells)", () => {
+        // Phase 5 fix: an empty composer's emitted code used to be a
+        // stack of dashed-border `<div>` placeholders. The preview
+        // showed a black canvas + tripped the scorecard's "no visible
+        // content" warning before the user had done anything. The
+        // emitter now produces a real widget shape so initial preview
+        // is "this widget is empty — drop components to start" and
+        // the scorecard passes the basic rubric items.
         const g = makeEmptyGrid();
         const { componentCode } = emitGridWidgetCode(g);
-        // Root grid wrapper is now a vertical flex stack so rows can
-        // mix auto + fill heights without the user picking a knob.
+        // Wrapped in Panel, with SubHeading2 + EmptyState — the real
+        // widget shape the conventions prefer.
+        expect(componentCode).toMatch(/<Panel>/);
+        expect(componentCode).toMatch(/<SubHeading2 title="/);
+        expect(componentCode).toMatch(/<EmptyState/);
+        expect(componentCode).toMatch(/title="Empty widget"/);
+        // Imports the primitives it uses.
         expect(componentCode).toMatch(
-            /data-composer-node-id="grid-root"[^>]*flex[^>]*flex-col/
+            /import \{[^}]*Panel[^}]*SubHeading2[^}]*EmptyState[^}]*\} from "@trops\/dash-react"/
         );
-        // The single empty cell renders its own placeholder div.
-        expect(componentCode).toMatch(/data-composer-node-id="cell-1"/);
+        // Doesn't leak the composer's editor markup (data-composer-node-id)
+        // into the placeholder — that's editor chrome, not widget runtime.
+        expect(componentCode).not.toMatch(/data-composer-node-id/);
     });
 
     test("root grid wrapper fills its parent so single-component compositions don't collapse", () => {
@@ -270,22 +283,30 @@ describe("emitGridWidgetCode", () => {
         expect(componentCode).toMatch(/<\/Card>[\s\S]*<\/Panel>/);
     });
 
-    test("multi-row grid emits one flex-row wrapper per row", () => {
+    test("populated multi-row grid emits one flex-row wrapper per row", () => {
+        // Place a component in each row so the grid is no longer
+        // considered empty — the emitter switches from the placeholder
+        // path to the real per-row emission we're exercising here.
         const g0 = makeEmptyGrid();
-        // Add a second row so the root grid has two rows.
-        const g1 = addRow(g0, g0.rootGridId);
-        const { componentCode } = emitGridWidgetCode(g1);
-        // Two `<div className="flex flex-row ...">` row wrappers
-        // inside the root grid stack.
+        const row1Cell = g0.grids[g0.rootGridId].rows[0].cells[0];
+        const g1 = setCellComponent(g0, row1Cell, "SubHeading2");
+        const g2 = addRow(g1, g1.rootGridId);
+        const row2Cell = g2.grids[g2.rootGridId].rows[1].cells[0];
+        const g3 = setCellComponent(g2, row2Cell, "SearchInput");
+        const { componentCode } = emitGridWidgetCode(g3);
         const rowMatches =
             componentCode.match(/<div className="flex flex-row[^"]*">/g) || [];
         expect(rowMatches.length).toBe(2);
     });
 
-    test("does NOT emit the dash-react import line when no components are placed", () => {
+    test("empty composer DOES emit the dash-react import (Panel + SubHeading2 + EmptyState for the placeholder)", () => {
+        // Previous behavior: empty grid emitted no dash-react import
+        // because nothing was placed. Phase 5 fix: empty grid now
+        // renders a real placeholder widget that uses dash-react
+        // primitives, so the import IS expected.
         const g = makeEmptyGrid();
         const { componentCode } = emitGridWidgetCode(g);
-        expect(componentCode).not.toContain("@trops/dash-react");
+        expect(componentCode).toContain("@trops/dash-react");
     });
 
     test("emits the dash-react import when at least one component is placed", () => {
@@ -357,14 +378,19 @@ describe("emitGridWidgetCode — Phase C step 3 guardrails", () => {
         expect(componentCode).toContain('title="Quarterly Stats"');
     });
 
-    test("multi-row grid uses gap-4 (LAYOUT_CONVENTIONS.sectionGap)", () => {
+    test("populated multi-row grid uses gap-4 (LAYOUT_CONVENTIONS.sectionGap)", () => {
         // The conventions specify gap-4 between top-level rows. Old
         // emitter used gap-2 everywhere — components visually fused.
-        // Two rows → gap-4. A grid wrapper match like:
-        //   <div data-composer-node-id="grid-root" className="... gap-4 ...">
+        // Populate the rows so the emitter takes the real grid path
+        // (not the placeholder path, which doesn't render the
+        // composer's data-composer-node-id grid wrapper).
         const g0 = makeEmptyGrid();
-        const g1 = addRow(g0, g0.rootGridId);
-        const { componentCode } = emitGridWidgetCode(g1);
+        const row1Cell = g0.grids[g0.rootGridId].rows[0].cells[0];
+        const g1 = setCellComponent(g0, row1Cell, "SubHeading2");
+        const g2 = addRow(g1, g1.rootGridId);
+        const row2Cell = g2.grids[g2.rootGridId].rows[1].cells[0];
+        const g3 = setCellComponent(g2, row2Cell, "SearchInput");
+        const { componentCode } = emitGridWidgetCode(g3);
         expect(componentCode).toMatch(
             /data-composer-node-id="grid-root"[^>]*gap-4/
         );
@@ -373,9 +399,14 @@ describe("emitGridWidgetCode — Phase C step 3 guardrails", () => {
         );
     });
 
-    test("single-row grid keeps the tighter gap-2 (no inter-row spacing to reveal)", () => {
-        const g = makeEmptyGrid();
-        const { componentCode } = emitGridWidgetCode(g);
+    test("populated single-row grid keeps the tighter gap-2 (no inter-row spacing to reveal)", () => {
+        // Populate the single row so we exercise the real grid path
+        // — an empty grid renders the placeholder widget which has no
+        // `data-composer-node-id="grid-root"` wrapper.
+        const g0 = makeEmptyGrid();
+        const cellId = g0.grids[g0.rootGridId].rows[0].cells[0];
+        const g1 = setCellComponent(g0, cellId, "SubHeading2");
+        const { componentCode } = emitGridWidgetCode(g1);
         expect(componentCode).toMatch(
             /data-composer-node-id="grid-root"[^>]*gap-2/
         );
