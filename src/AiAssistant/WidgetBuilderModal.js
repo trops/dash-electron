@@ -5194,9 +5194,38 @@ ${
                         {activeTab === "scorecard" &&
                             detectedCode.componentCode && (
                                 <div
-                                    className="px-4 py-4 overflow-y-auto"
+                                    className="px-4 py-4 overflow-y-auto flex flex-col gap-3"
                                     data-testid="build-mode-acceptance-scorecard"
                                 >
+                                    <div className="text-sm text-gray-300 leading-relaxed">
+                                        <div className="font-medium text-gray-100">
+                                            Scoring{" "}
+                                            <code className="px-1.5 py-0.5 rounded bg-gray-800 text-indigo-300 font-mono text-xs">
+                                                {widgetName || "current widget"}
+                                            </code>
+                                        </div>
+                                        <div className="text-xs text-gray-400 mt-1">
+                                            The scorecard runs over whatever
+                                            widget code is currently in the
+                                            editor — your draft, a remixed
+                                            registry widget, or a fresh AI
+                                            generation. Drafts from before the
+                                            cohesion rubric existed will show
+                                            failures here; to fix them, ask the
+                                            AI in the chat panel to regenerate,
+                                            or edit directly in the{" "}
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setActiveTab("code")
+                                                }
+                                                className="underline text-indigo-300 hover:text-indigo-200"
+                                            >
+                                                Code
+                                            </button>{" "}
+                                            tab.
+                                        </div>
+                                    </div>
                                     <AcceptanceScorecard
                                         code={detectedCode.componentCode}
                                     />
