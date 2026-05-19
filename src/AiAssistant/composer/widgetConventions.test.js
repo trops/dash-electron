@@ -30,6 +30,10 @@ import {
     ACCEPTANCE_CHECKLIST,
     FEW_SHOT_EXAMPLES,
     REFERENCED_WIDGETS,
+    COLOR_RULE,
+    PRIMITIVE_CONVENTIONS,
+    COLOR_TAILWIND_REGEX,
+    EXEMPLAR_WIDGETS,
 } from "./widgetConventions";
 
 describe("HEADING_CONVENTIONS", () => {
@@ -142,6 +146,8 @@ describe("WIDGET_CONVENTIONS aggregator", () => {
         expect(WIDGET_CONVENTIONS.statePatterns).toBe(STATE_PATTERNS);
         expect(WIDGET_CONVENTIONS.requiredStates).toBe(REQUIRED_STATES);
         expect(WIDGET_CONVENTIONS.userConfig).toBe(USER_CONFIG_CONVENTIONS);
+        expect(WIDGET_CONVENTIONS.colorRule).toBe(COLOR_RULE);
+        expect(WIDGET_CONVENTIONS.primitives).toBe(PRIMITIVE_CONVENTIONS);
     });
 
     test("fewShotExamples + referencedWidgets are populated arrays (Phase C populated them)", () => {
@@ -250,11 +256,176 @@ describe("FEW_SHOT_EXAMPLES", () => {
     });
 });
 
+describe("COLOR_RULE", () => {
+    test("is a non-empty string describing the no-hardcoded-color contract", () => {
+        expect(typeof COLOR_RULE).toBe("string");
+        expect(COLOR_RULE.length).toBeGreaterThan(80);
+    });
+
+    test("names the three banned utility prefixes (bg-, text-, border-)", () => {
+        expect(COLOR_RULE).toMatch(/bg-\{color\}/);
+        expect(COLOR_RULE).toMatch(/text-\{color\}/);
+        expect(COLOR_RULE).toMatch(/border-\{color\}/);
+    });
+
+    test("names ThemeContext and dash-react as the source of color", () => {
+        expect(COLOR_RULE).toMatch(/ThemeContext/);
+        expect(COLOR_RULE).toMatch(/dash-react/);
+    });
+
+    test("explicitly allows theme-neutral utilities so the prompt isn't read as banning all Tailwind", () => {
+        expect(COLOR_RULE).toMatch(/(spacing|sizing|flex|grid)/i);
+    });
+});
+
+describe("PRIMITIVE_CONVENTIONS", () => {
+    test("covers every use case the audit found drifting (button / status / error / empty / loading / stat)", () => {
+        expect(PRIMITIVE_CONVENTIONS).toHaveProperty("button");
+        expect(PRIMITIVE_CONVENTIONS).toHaveProperty("statusOrBadge");
+        expect(PRIMITIVE_CONVENTIONS).toHaveProperty("errorRegion");
+        expect(PRIMITIVE_CONVENTIONS).toHaveProperty("emptyState");
+        expect(PRIMITIVE_CONVENTIONS).toHaveProperty("loadingState");
+        expect(PRIMITIVE_CONVENTIONS).toHaveProperty("statTile");
+    });
+
+    test("each use case lists at least one primitive + a defaultChoice + a rule string", () => {
+        for (const [name, body] of Object.entries(PRIMITIVE_CONVENTIONS)) {
+            expect(Array.isArray(body.primitives)).toBe(true);
+            expect(body.primitives.length).toBeGreaterThan(0);
+            expect(typeof body.defaultChoice).toBe("string");
+            expect(body.primitives).toContain(body.defaultChoice);
+            expect(typeof body.rule).toBe("string");
+            expect(body.rule.length).toBeGreaterThan(30);
+        }
+    });
+
+    test("button rule explicitly forbids raw <button> tags", () => {
+        expect(PRIMITIVE_CONVENTIONS.button.rule).toMatch(/raw.*<button/i);
+        expect(PRIMITIVE_CONVENTIONS.button.forbidden).toContain("<button");
+    });
+
+    test("statusOrBadge defaults to StatusBadge (the new primitive that closes the gap)", () => {
+        expect(PRIMITIVE_CONVENTIONS.statusOrBadge.defaultChoice).toBe(
+            "StatusBadge"
+        );
+    });
+
+    test("button defaults to Button2 (the chrome-default secondary)", () => {
+        expect(PRIMITIVE_CONVENTIONS.button.defaultChoice).toBe("Button2");
+    });
+});
+
+describe("COLOR_TAILWIND_REGEX", () => {
+    test.each([
+        "bg-red-500",
+        "text-emerald-400",
+        "border-amber-700",
+        "hover:bg-blue-600",
+        "hover:text-rose-400",
+        "bg-purple-600",
+        "text-gray-200",
+    ])("matches forbidden utility %s", (cls) => {
+        expect(cls).toMatch(COLOR_TAILWIND_REGEX);
+    });
+
+    test.each([
+        "bg-black",
+        "bg-white",
+        "text-white",
+        "bg-transparent",
+        "opacity-50",
+        "grid-cols-3",
+        "flex-col",
+        "p-4",
+        "px-3",
+        "gap-4",
+        "rounded-lg",
+        "transition-colors",
+        "animate-pulse",
+    ])("does NOT match theme-neutral utility %s", (cls) => {
+        expect(cls).not.toMatch(COLOR_TAILWIND_REGEX);
+    });
+});
+
+describe("EXEMPLAR_WIDGETS lint", () => {
+    test("EXEMPLAR_WIDGETS is an array (Phase 3 populates it)", () => {
+        expect(Array.isArray(EXEMPLAR_WIDGETS)).toBe(true);
+    });
+
+    test("every exemplar widget's file contains zero hardcoded color Tailwind utilities", () => {
+        // CI-blocking once Phase 3 populates EXEMPLAR_WIDGETS. Phase 2
+        // ships it empty so the test exists and is wired up — but
+        // doesn't break CI on day-1 (the 8 Phase B widgets all currently
+        // drift, fixing them in bulk is a separate cleanup pass).
+        const repoRoot = path.resolve(__dirname, "..", "..", "..");
+        for (const relPath of EXEMPLAR_WIDGETS) {
+            const full = path.join(repoRoot, relPath);
+            expect(fs.existsSync(full)).toBe(true);
+            const src = fs.readFileSync(full, "utf8");
+            // Strip block + line comments first — a comment that
+            // mentions `bg-purple-600` (e.g. "replaced raw bg-purple-600
+            // with ProviderButton") should not trip the lint.
+            const stripped = src
+                .replace(/\/\*[\s\S]*?\*\//g, "")
+                .replace(/\/\/[^\n]*/g, "");
+            // Iterate every className occurrence and check it against
+            // the regex. Done in JS rather than regex.test() over the
+            // whole file so the error message can point at the
+            // offending substring.
+            const matches = stripped.match(
+                new RegExp(COLOR_TAILWIND_REGEX, "g")
+            );
+            if (matches && matches.length > 0) {
+                throw new Error(
+                    `Exemplar widget ${relPath} contains hardcoded color ` +
+                        `Tailwind classes — these MUST come from a dash-react ` +
+                        `primitive that reads ThemeContext instead. Found: ` +
+                        `${matches.slice(0, 5).join(", ")}` +
+                        (matches.length > 5
+                            ? `, … (${matches.length} total)`
+                            : "")
+                );
+            }
+        }
+    });
+});
+
 describe("ACCEPTANCE_CHECKLIST", () => {
     test("has at least 10 concrete items — the user's bar is high", () => {
         expect(ACCEPTANCE_CHECKLIST.length).toBeGreaterThanOrEqual(10);
     });
 
+    test("Phase 2 grew the checklist to at least 16 items (covering color rule + primitive enforcement)", () => {
+        expect(ACCEPTANCE_CHECKLIST.length).toBeGreaterThanOrEqual(16);
+    });
+
+    test("mentions the no-hardcoded-color rule", () => {
+        const joined = ACCEPTANCE_CHECKLIST.join(" ");
+        expect(joined).toMatch(/Tailwind color/i);
+        expect(joined).toMatch(/ThemeContext/);
+    });
+
+    test("mentions the no-raw-<button> rule", () => {
+        const joined = ACCEPTANCE_CHECKLIST.join(" ");
+        expect(joined).toMatch(/Button.*Button2/);
+        expect(joined).toMatch(/raw.*<button|<button.*className/i);
+    });
+
+    test("mentions StatusBadge / Tag for status indicators", () => {
+        const joined = ACCEPTANCE_CHECKLIST.join(" ");
+        expect(joined).toMatch(/StatusBadge/);
+        expect(joined).toMatch(/Tag/);
+    });
+
+    test("mentions EmptyState / Skeleton / Alert for empty/loading/error", () => {
+        const joined = ACCEPTANCE_CHECKLIST.join(" ");
+        expect(joined).toMatch(/EmptyState/);
+        expect(joined).toMatch(/Skeleton/);
+        expect(joined).toMatch(/Alert/);
+    });
+});
+
+describe("ACCEPTANCE_CHECKLIST legacy items (re-pin from Phase A)", () => {
     test("each item is a complete sentence ending in a period", () => {
         for (const item of ACCEPTANCE_CHECKLIST) {
             expect(item).toMatch(/\.$/);

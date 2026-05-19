@@ -724,6 +724,39 @@ export function buildSystemPrompt({
                 `- ${s}: render a clear visible indication, NOT just console.error.`
         ),
         "",
+        // Primitive palette — the chrome's cohesion rule extended to
+        // widget interiors. The audit found 8/8 sample widgets break
+        // this from the inside out (hand-rolled `bg-purple-600` brand
+        // buttons, raw `<span className="bg-green-900/50">` status
+        // pills, italic-string empty states). The chrome itself never
+        // does any of that — it leans on dash-react primitives that
+        // read ThemeContext. We tell the model to do the same.
+        "PRIMITIVE PALETTE — which dash-react primitive each use case maps to.",
+        "Each entry is `use case → primitive (default | alternatives) — rule`.",
+        ...Object.entries(WIDGET_CONVENTIONS.primitives).map(
+            ([useCase, body]) => {
+                const alts = body.primitives.filter(
+                    (p) => p !== body.defaultChoice
+                );
+                const altsText = alts.length > 0 ? ` | ${alts.join(", ")}` : "";
+                return `- ${useCase} → ${body.defaultChoice}${altsText} — ${body.rule}`;
+            }
+        ),
+        "",
+        // Color rule — interpolated verbatim from widgetConventions so
+        // a future tweak there ripples through to every emitted prompt
+        // on the next call. The rule is intentionally specific about
+        // which Tailwind shape fragments are banned — the AI confuses
+        // "no color Tailwind" with "no Tailwind at all" if we don't
+        // call out the allowed neutrals.
+        "COLOR RULE — strictly enforced. Acceptance scorecard fails widgets that break this.",
+        WIDGET_CONVENTIONS.colorRule,
+        "- NEVER emit className strings containing bg-{color}-{shade}, text-{color}-{shade}, or border-{color}-{shade}.",
+        '- NEVER emit raw `<button className="...">` tags — use Button / Button2 / Button3.',
+        '- NEVER emit `<span className="bg-green-900/50 text-green-400">` style pills — use StatusBadge.',
+        '- NEVER emit `<div className="bg-red-900/30 ...">` error blocks — use Alert / Alert2.',
+        '- NEVER emit `<p className="text-gray-600 italic">No results</p>` — use EmptyState.',
+        "",
         // Few-shot examples — concrete trees derived from real
         // accepted widgets (see WIDGET_CONVENTIONS.referencedWidgets).
         // Stronger anchor than rules-only; the model sees three

@@ -164,6 +164,80 @@ publisher widget, the listener widget, and what data flows.
 
 ---
 
+## Primitive Palette — what dash-react gives you, when to reach for each
+
+The Dash chrome (sidebar, modals, settings, popovers) looks cohesive because
+every UI element comes from a `@trops/dash-react` primitive whose color is
+delivered via `ThemeContext`. Widgets must follow the same rule, or theme
+switches stop propagating and the widget visibly drifts from the chrome.
+
+This table is the lookup. **If a use case has a primitive listed, use it. Do
+not hand-roll the equivalent with raw Tailwind.**
+
+| Use case                                                | Primitive                                       | Notes                                                                         |
+| ------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------- |
+| Section title inside a widget                           | `SubHeading2`                                   | Never raw `Heading` — that's H1, only for full pages.                         |
+| Sub-section label                                       | `SubHeading3`                                   |                                                                               |
+| Big number for a stat widget                            | `Heading2` or `StatCard`                        | `StatCard` for label + value + change/trend in one.                           |
+| Body text                                               | `Paragraph` / `Paragraph2` / `Paragraph3`       |                                                                               |
+| Small inline label / meta text                          | `Caption` / `Caption2` / `Caption3`             | Replaces hand-rolled `<span className="text-gray-500">`.                      |
+| Action button (primary CTA)                             | `Button`                                        | Centered text, primary color.                                                 |
+| Action button (secondary, default)                      | `Button2`                                       | Chrome-default. Use this when in doubt.                                       |
+| Action button (tertiary, dismissive)                    | `Button3`                                       | Light/ghost styling.                                                          |
+| Status pill (open/closed/pending/success/error/warning) | `StatusBadge`                                   | `state` prop drives the color. `compact` mode for the connection-dot pattern. |
+| Categorical label                                       | `Tag` / `Tag2` / `Tag3`                         |                                                                               |
+| Error region                                            | `Alert` / `Alert2`                              | Themed banner with title + message + optional onClose.                        |
+| Empty list / no-results state                           | `EmptyState`                                    | `title` + `description` + optional `children` (e.g. a Button).                |
+| In-flight loading list                                  | `Skeleton.Text`                                 | `lines={N}` for repeated rows.                                                |
+| In-flight loading card                                  | `Skeleton.Card`                                 |                                                                               |
+| Single stat tile                                        | `StatCard`                                      | `label` + `value` + `helpText`.                                               |
+| Text input                                              | `InputText`                                     | `value` + `onChange` + `placeholder` + optional `label`.                      |
+| Search input                                            | `SearchInput`                                   |                                                                               |
+| Checkbox / switch / radio                               | `Checkbox` / `Switch` / `RadioGroup`            |                                                                               |
+| List with clickable rows                                | `Menu` + `MenuItem`                             | MenuItem takes `selected` + `onClick`.                                        |
+| Tabular data                                            | `Table` (with `data` + `columns`) or `DataList` |                                                                               |
+| Container with header/footer                            | `Panel` / `Panel2` / `Panel3`                   | Auto-sizes to fill height.                                                    |
+| Card surface                                            | `Card` / `Card2` / `Card3`                      |                                                                               |
+
+For the canonical _shape_ of each pattern, the codebase ships four exemplar
+widgets that pass the post-cohesion acceptance bar — read these before
+authoring a similar widget:
+
+-   `src/SampleWidgets/Slack/widgets/SlackListChannels.js` — list with status indicator + events
+-   `src/SampleWidgets/GitHub/widgets/GitHubPRList.js` — list with per-row state badges
+-   `src/SampleWidgets/Gmail/widgets/GmailUnreadCount.js` — single-stat tile
+-   `src/SampleWidgets/Algolia/widgets/AlgoliaRulesList.js` — search + paginated list
+
+---
+
+## Color Rule — non-negotiable, audit-enforced
+
+**No widget code may use Tailwind color utility classes
+(`bg-{color}-{shade}`, `text-{color}-{shade}`, `border-{color}-{shade}`,
+or any `hover:` variant of those).** All color must be delivered by a
+`@trops/dash-react` primitive that reads `ThemeContext`. Theme-neutral
+utilities (spacing, sizing, flex/grid, `opacity-N`, transitions,
+animations) remain allowed.
+
+The acceptance scorecard greps emitted widget code against this rule and
+flags violations. Common violations and their fixes:
+
+| Violation                                                                      | Fix                                                               |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| `<button className="bg-purple-600 hover:bg-purple-500 ...">Refresh</button>`   | `<Button2 title="Refresh" onClick={...} size="sm" />`             |
+| `<span className="bg-green-900/50 text-green-400 ...">open</span>`             | `<StatusBadge state="open" label="open" />`                       |
+| `<div className="bg-red-900/30 border-red-700 text-red-300 ...">{error}</div>` | `<Alert2 title="Failed to load" message={error} />`               |
+| `<p className="text-gray-600 italic">No results</p>`                           | `<EmptyState title="No results" description="..." />`             |
+| `<input className="bg-gray-800 border-gray-600 text-gray-200 ...">`            | `<InputText value={x} onChange={fn} placeholder="..." />`         |
+| `<div className="text-gray-500 font-mono">{status}</div>` (status dot pattern) | `<StatusBadge state={mapStatus(state)} label={status} compact />` |
+
+If you need a color the existing primitives don't offer, that's a
+dash-react gap — flag it in your chat response, don't paper over it with
+hardcoded Tailwind. The user can add the primitive to dash-react in a
+follow-up; mid-pour widgets stay clean.
+
+---
+
 ## Workflow — Building a Widget
 
 When the user asks to build a widget, follow these phases in order. Each phase has a
@@ -316,7 +390,7 @@ description="..." />` not `message=`.
 
 ```javascript
 import React from "react";
-import { Panel, Heading, SubHeading } from "@trops/dash-react";
+import { Panel, SubHeading2, Paragraph } from "@trops/dash-react";
 
 export default function MyWidget({
     title = "Hello",
@@ -324,12 +398,17 @@ export default function MyWidget({
 }) {
     return (
         <Panel>
-            <Heading title={title} />
-            <SubHeading title={subtitle} />
+            <SubHeading2 title={title} />
+            <Paragraph text={subtitle} />
         </Panel>
     );
 }
 ```
+
+> **Heading variant rule:** `Heading` is H1 — only for full pages, never
+> inside a widget cell. Use `SubHeading2` for the widget's title and
+> `SubHeading3` for sub-section labels. `Heading2` / `Heading3` are
+> allowed only for numeric display in stat widgets.
 
 > **Hooks come from `react`**, NEVER from `@trops/dash-react`:
 >
@@ -343,10 +422,11 @@ export default function MyWidget({
 import React, { useState, useEffect } from "react";
 import {
     Panel,
-    Heading,
+    SubHeading2,
     Menu,
     MenuItem,
-    ErrorMessage,
+    Alert2,
+    EmptyState,
     Skeleton,
 } from "@trops/dash-react";
 import { useMcpProvider } from "@trops/dash-core";
@@ -374,26 +454,29 @@ export default function SearchWidget({ query = "" }) {
         };
     }, [isConnected, tools, query, callTool]);
 
-    if (error)
-        return (
-            <Panel>
-                <ErrorMessage message={error.message || String(error)} />
-            </Panel>
-        );
-    if (results === null)
-        return (
-            <Panel>
-                <Skeleton />
-            </Panel>
-        );
     return (
         <Panel>
-            <Heading title="Search results" />
-            <Menu>
-                {results.map((item) => (
-                    <MenuItem key={item.id}>{item.title}</MenuItem>
-                ))}
-            </Menu>
+            <SubHeading2 title="Search results" />
+            {error && (
+                <Alert2
+                    title="Search failed"
+                    message={error.message || String(error)}
+                />
+            )}
+            {!error && results === null && <Skeleton.Text lines={4} />}
+            {!error && results && results.length === 0 && (
+                <EmptyState
+                    title="No results"
+                    description={`No matches for "${query}".`}
+                />
+            )}
+            {!error && results && results.length > 0 && (
+                <Menu>
+                    {results.map((item) => (
+                        <MenuItem key={item.id}>{item.title}</MenuItem>
+                    ))}
+                </Menu>
+            )}
         </Panel>
     );
 }
@@ -405,12 +488,12 @@ export default function SearchWidget({ query = "" }) {
 import React, { useState, useEffect } from "react";
 import {
     Panel,
-    Heading,
+    SubHeading2,
     Menu,
     MenuItem,
     EmptyState,
     Skeleton,
-    ErrorMessage,
+    Alert2,
 } from "@trops/dash-react";
 import { useWidgetProviders, useProviderClient } from "@trops/dash-core";
 
@@ -463,18 +546,21 @@ export default function AlgoliaIndexList({ title = "Algolia indices" }) {
     if (error)
         return (
             <Panel>
-                <ErrorMessage message={error.message || String(error)} />
+                <Alert2
+                    title="Failed to load indices"
+                    message={error.message || String(error)}
+                />
             </Panel>
         );
     if (indices === null)
         return (
             <Panel>
-                <Skeleton />
+                <Skeleton.Text lines={4} />
             </Panel>
         );
     return (
         <Panel>
-            <Heading title={title} />
+            <SubHeading2 title={title} />
             <Menu>
                 {indices.map((idx) => (
                     <MenuItem key={idx.name}>{idx.name}</MenuItem>
@@ -738,7 +824,7 @@ Widget code runs in the browser (renderer process). Rules:
     `Array.isArray(y)`, optional chaining). Errors like "Cannot read properties
     of undefined" on first render are NOT acceptable.
 -   **Never silently swallow errors.** A `catch` block MUST render the error
-    to the user via `<ErrorMessage message={err.message} />` — NOT just
+    to the user via `<Alert2 title="..." message={err.message} />` — NOT just
     `setData([])` followed by a blank state. An empty array as the _result of
     a caught exception_ is a silent failure.
 -   **Hooks first, conditional render after.** Call all hooks at the top of

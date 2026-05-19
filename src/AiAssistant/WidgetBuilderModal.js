@@ -543,6 +543,20 @@ You are running inside the Dash Widget Builder modal. The Dash app is ALREADY ru
 
 Output format: text replies + fenced \`\`\`jsx and \`\`\`javascript code blocks per the skill's Output Protocol. The user copies nothing manually — the widget builder parses your code blocks and installs them.
 
+## Cohesion rule (non-negotiable, audit-enforced)
+
+Every UI element comes from a \`@trops/dash-react\` primitive whose color is delivered via ThemeContext. This is the rule the Dash *chrome* (sidebar, modals, settings) follows; widgets currently break it from the inside out, which is the gap this prompt is closing. The skill's "Color Rule" and "Primitive Palette" sections list the exact primitives — read those before writing code.
+
+- **NEVER** emit className strings containing \`bg-{color}-{shade}\`, \`text-{color}-{shade}\`, \`border-{color}-{shade}\`, or their \`hover:\` variants. (Spacing, sizing, flex/grid, \`opacity-N\`, transitions, and animations remain allowed.)
+- **NEVER** emit raw \`<button className="...">\` — use \`Button\` / \`Button2\` / \`Button3\` from \`@trops/dash-react\`.
+- **NEVER** hand-roll status pills with \`bg-green-900/50 text-green-400\` — use \`<StatusBadge state="success" label="open" />\`.
+- **NEVER** hand-roll error blocks with \`bg-red-900/30 ...\` — use \`<Alert2 title="..." message={errMsg} />\`.
+- **NEVER** render bare italic strings like \`<p className="text-gray-600 italic">No results</p>\` — use \`<EmptyState title="..." description="..." />\`.
+- **NEVER** render \`Loading…\` plaintext as a loading state — use \`<Skeleton.Text lines={N} />\`.
+- **NEVER** hand-compose a stat tile from Heading2 + Paragraph + a colored span — use \`<StatCard label value helpText />\`.
+
+For the canonical shape of a list-with-events widget, the codebase has \`src/SampleWidgets/Slack/widgets/SlackListChannels.js\` (StatusBadge + Menu/MenuItem + Alert2 + EmptyState + Skeleton.Text + Button2) — mirror its structure when in doubt.
+
 `;
 
 /**

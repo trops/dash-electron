@@ -13,7 +13,12 @@
 import React from "react";
 import { render, fireEvent, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { QuickStartPane, treeToGrid } from "./QuickStartPane";
+import {
+    QuickStartPane,
+    treeToGrid,
+    buildSystemPrompt,
+} from "./QuickStartPane";
+import { WIDGET_CONVENTIONS } from "./widgetConventions";
 import {
     SAMPLE_LAYOUTS,
     INTENTS,
@@ -365,5 +370,59 @@ describe("treeToGrid", () => {
     test("returns null for unusable input", () => {
         expect(treeToGrid(null)).toBeNull();
         expect(treeToGrid({})).toBeNull();
+    });
+});
+
+describe("buildSystemPrompt — Phase 4 primitive + color guidance", () => {
+    test("prompt contains the PRIMITIVE PALETTE section", () => {
+        const prompt = buildSystemPrompt({});
+        expect(prompt).toMatch(/PRIMITIVE PALETTE/);
+    });
+
+    test("prompt names every primitive use-case from WIDGET_CONVENTIONS.primitives", () => {
+        const prompt = buildSystemPrompt({});
+        for (const useCase of Object.keys(WIDGET_CONVENTIONS.primitives)) {
+            expect(prompt).toContain(useCase);
+        }
+    });
+
+    test("prompt names every primitive default by component name", () => {
+        const prompt = buildSystemPrompt({});
+        // Defaults like Button2, StatusBadge, Alert2, EmptyState,
+        // Skeleton.Text, StatCard must all appear so the AI can quote
+        // them by name in the emitted tree.
+        for (const body of Object.values(WIDGET_CONVENTIONS.primitives)) {
+            expect(prompt).toContain(body.defaultChoice);
+        }
+    });
+
+    test("prompt contains the COLOR RULE section + the rule body verbatim", () => {
+        const prompt = buildSystemPrompt({});
+        expect(prompt).toMatch(/COLOR RULE/);
+        expect(prompt).toContain(WIDGET_CONVENTIONS.colorRule);
+    });
+
+    test("prompt explicitly forbids raw <button> tags and bg-{color}-{shade} classes", () => {
+        const prompt = buildSystemPrompt({});
+        expect(prompt).toMatch(/NEVER emit raw `<button/);
+        expect(prompt).toMatch(/bg-\{color\}/);
+    });
+
+    test("prompt explicitly names StatusBadge / Alert / EmptyState as the replacements for hand-rolled patterns", () => {
+        const prompt = buildSystemPrompt({});
+        expect(prompt).toMatch(/use StatusBadge/);
+        expect(prompt).toMatch(/use Alert/);
+        expect(prompt).toMatch(/use EmptyState/);
+    });
+
+    test("FEW-SHOT EXAMPLES section is still present after Phase 4 additions", () => {
+        // Regression check — the primitive + color sections were
+        // inserted BEFORE few-shot, so the few-shot block must still
+        // render below them.
+        const prompt = buildSystemPrompt({});
+        expect(prompt).toMatch(/FEW-SHOT EXAMPLES/);
+        for (const ex of WIDGET_CONVENTIONS.fewShotExamples) {
+            expect(prompt).toContain(ex.description);
+        }
     });
 });

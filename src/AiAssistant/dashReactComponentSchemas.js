@@ -177,6 +177,35 @@ export const DASH_REACT_COMPONENT_SCHEMAS = {
         },
         dataSlots: [],
     },
+    // StatusBadge (dash-react ≥1.0.46) — semantic state badge. The
+    // primitive widgets are supposed to reach for instead of hand-rolling
+    // `<span className="bg-green-900/50 text-green-400">…</span>` pills.
+    // `state` drives the color (open/closed/pending/success/error/warning/
+    // info/neutral); `label` is the visible text; `compact` switches to
+    // the dot-only connection-indicator shape every MCP widget reinvents.
+    StatusBadge: {
+        category: "display",
+        props: {
+            state: { type: "string", required: true },
+            label: { type: "string" },
+            compact: { type: "boolean" },
+        },
+        dataSlots: ["label"],
+    },
+    // StatCard (dash-react ≥0.5.0) — single-number tile. label/value
+    // are the headline pair; change + trend (up|down|neutral) drive an
+    // optional delta line below.
+    StatCard: {
+        category: "display",
+        props: {
+            label: { type: "string", required: true },
+            value: { type: "string", required: true },
+            change: { type: "string" },
+            trend: { type: "string" },
+            helpText: { type: "string" },
+        },
+        dataSlots: ["value", "change"],
+    },
     Tag2: {
         category: "display",
         props: {
