@@ -52,6 +52,7 @@ import { PreviewIframe } from "./PreviewIframe";
 import {
     AcceptanceScorecard,
     evaluateScorecard,
+    buildScorecardChatMessage,
 } from "./composer/AcceptanceScorecard";
 import {
     validateProviderApiUsage,
@@ -1359,6 +1360,32 @@ ${argsText}
 ${
     stackTrim ? `Stack (top 8 frames):\n\`\`\`\n${stackTrim}\n\`\`\`\n\n` : ""
 }Re-emit BOTH code blocks (component + config) with the bug fixed. Add defensive guards (typeof / Array.isArray / optional chaining) so the same input doesn't crash again. If a \`catch\` block was silently swallowing the error, render it via \`<ErrorMessage message={err.message} />\` instead. Do not just retry the same code path.`;
+        try {
+            window.dispatchEvent(
+                new CustomEvent("dash:chat-core-send", {
+                    detail: {
+                        persistKey: "dash-widget-builder",
+                        content,
+                    },
+                })
+            );
+        } catch {
+            /* ignore */
+        }
+    }, []);
+
+    // Closes the scorecard loop: when the user clicks "Ask AI" on a
+    // failing rule (or "Ask AI to fix all N"), push a structured
+    // user message into the chat via the same dash:chat-core-send
+    // event handleSendConsoleErrorToAI uses. We also flip to Build
+    // mode so the AI's response goes to the chat the user is
+    // actually looking at — the AI will re-emit BOTH code blocks
+    // which the Build flow parses into detectedCode.
+    const handleScorecardSendToAi = useCallback((rules) => {
+        const content = buildScorecardChatMessage(rules);
+        if (!content) return;
+        setChatMode("build");
+        setActiveTab("preview");
         try {
             window.dispatchEvent(
                 new CustomEvent("dash:chat-core-send", {
@@ -5389,6 +5416,7 @@ ${
                                     </div>
                                     <AcceptanceScorecard
                                         code={detectedCode.componentCode}
+                                        onSendToAi={handleScorecardSendToAi}
                                     />
                                 </div>
                             )}

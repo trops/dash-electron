@@ -232,6 +232,42 @@ export function evaluateScorecard(code) {
     });
 }
 
+/**
+ * Build the chat message that gets dispatched into ChatCore when the
+ * user clicks "Send to AI" on the scorecard. Exposed for tests so we
+ * can pin the exact wording without rendering the React tree.
+ *
+ * Single-rule and multi-rule cases produce different shapes — the
+ * single-rule message is conversational ("flags this rule"), the
+ * multi-rule message is a numbered list. Both end with an explicit
+ * "output BOTH code blocks" instruction so the modal's code parser
+ * has something to pick up.
+ */
+export function buildScorecardChatMessage(rules) {
+    if (!Array.isArray(rules) || rules.length === 0) return "";
+    const formatOffending = (matches, max) => {
+        if (!matches || matches.length === 0) return "";
+        const head = matches.slice(0, max).join(", ");
+        const more =
+            matches.length > max ? ` (+${matches.length - max} more)` : "";
+        return `${head}${more}`;
+    };
+    if (rules.length === 1) {
+        const r = rules[0];
+        const off = formatOffending(r.matches, 5);
+        const offendingLine = off ? `\n\nOffending substring(s): ${off}.` : "";
+        return `The acceptance scorecard flags this rule on the current widget code:\n\n"${r.item}"${offendingLine}\n\nPlease update the widget to fix this. Output BOTH the component (jsx) and config (.dash.js) code blocks with the fix.`;
+    }
+    const list = rules
+        .map((r, i) => {
+            const off = formatOffending(r.matches, 3);
+            const offendingSuffix = off ? ` (offending: ${off})` : "";
+            return `${i + 1}. ${r.item}${offendingSuffix}`;
+        })
+        .join("\n");
+    return `The acceptance scorecard flags ${rules.length} rules on the current widget code:\n\n${list}\n\nPlease update the widget to address all of them. Output BOTH the component (jsx) and config (.dash.js) code blocks with the fixes.`;
+}
+
 // Group rows by status for the rendered scorecard. Failed rules show
 // first (most actionable — these are the things the user wants to fix
 // or ask the AI to fix), then passed (confirmation), then n/a
@@ -243,7 +279,7 @@ function groupRowsByStatus(rows) {
     return { failed, passed, na };
 }
 
-function ScorecardRow({ row, expanded, onToggle }) {
+function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
     const expandable = row.pass === false && row.matches.length > 0;
     const isOpen = expanded === row.index;
     const marker = row.pass === true ? "✓" : row.pass === false ? "✗" : "·";
@@ -265,6 +301,12 @@ function ScorecardRow({ row, expanded, onToggle }) {
             : row.pass === true
             ? "text-gray-300"
             : "text-gray-400";
+    // Only failing rows get a "Send to AI" affordance — there's
+    // nothing to fix on a passing or n/a row. The button is rendered
+    // when the host wires an onSendToAi handler; without one, the
+    // scorecard stays read-only (e.g. when embedded somewhere that
+    // doesn't have a chat panel to push to).
+    const canSendToAi = row.pass === false && typeof onSendToAi === "function";
 
     return (
         <li
@@ -272,29 +314,44 @@ function ScorecardRow({ row, expanded, onToggle }) {
             data-pass={row.pass === null ? "na" : String(row.pass)}
             className={`flex flex-col rounded ${rowBg}`}
         >
-            <button
-                type="button"
-                onClick={() =>
-                    expandable ? onToggle(isOpen ? null : row.index) : undefined
-                }
-                disabled={!expandable}
-                className="flex items-start gap-3 px-2 py-1.5 text-left text-sm disabled:cursor-default w-full"
-            >
-                <span
-                    className={`font-mono w-4 shrink-0 text-base leading-tight ${markerTone}`}
-                    aria-hidden="true"
+            <div className="flex items-start gap-1">
+                <button
+                    type="button"
+                    onClick={() =>
+                        expandable
+                            ? onToggle(isOpen ? null : row.index)
+                            : undefined
+                    }
+                    disabled={!expandable}
+                    className="flex items-start gap-3 px-2 py-1.5 text-left text-sm disabled:cursor-default flex-1 min-w-0"
                 >
-                    {marker}
-                </span>
-                <span className={`flex-1 leading-snug ${textTone}`}>
-                    {row.item}
-                </span>
-                {expandable && (
-                    <span className="text-xs text-rose-300 shrink-0">
-                        {isOpen ? "Hide" : "Details"}
+                    <span
+                        className={`font-mono w-4 shrink-0 text-base leading-tight ${markerTone}`}
+                        aria-hidden="true"
+                    >
+                        {marker}
                     </span>
+                    <span className={`flex-1 leading-snug ${textTone}`}>
+                        {row.item}
+                    </span>
+                    {expandable && (
+                        <span className="text-xs text-rose-300 shrink-0">
+                            {isOpen ? "Hide" : "Details"}
+                        </span>
+                    )}
+                </button>
+                {canSendToAi && (
+                    <button
+                        type="button"
+                        data-testid={`acceptance-scorecard-row-${row.index}-send-to-ai`}
+                        onClick={() => onSendToAi([row])}
+                        className="shrink-0 my-1 mr-1.5 px-2 py-1 rounded text-xs font-medium bg-indigo-700 hover:bg-indigo-600 text-indigo-50 transition-colors"
+                        title="Ask the AI to fix this rule"
+                    >
+                        Ask AI
+                    </button>
                 )}
-            </button>
+            </div>
             {expandable && isOpen && (
                 <ul
                     className="ml-9 mb-1.5 mr-2 flex flex-col gap-0.5 font-mono text-xs text-rose-200"
@@ -314,7 +371,7 @@ function ScorecardRow({ row, expanded, onToggle }) {
     );
 }
 
-export function AcceptanceScorecard({ code }) {
+export function AcceptanceScorecard({ code, onSendToAi = null }) {
     const rows = useMemo(() => evaluateScorecard(code || ""), [code]);
     const [expanded, setExpanded] = useState(null);
 
@@ -330,6 +387,11 @@ export function AcceptanceScorecard({ code }) {
                 ? "Awaiting widget code"
                 : `All ${totalChecked} statically-checkable rules pass`
             : `${failCount} of ${totalChecked} rules failing — fix these or ask the AI to`;
+    // "Send all failing to AI" only makes sense when there's >1
+    // failure AND the host wired an onSendToAi handler. With a
+    // single failure the per-row button covers it without a
+    // confusing duplicate.
+    const canSendAll = failCount > 1 && typeof onSendToAi === "function";
 
     return (
         <div data-testid="acceptance-scorecard" className="flex flex-col gap-3">
@@ -340,9 +402,22 @@ export function AcceptanceScorecard({ code }) {
                 <span className={`text-base font-semibold ${headlineTone}`}>
                     {headline}
                 </span>
-                <span className="text-sm text-gray-400">
-                    {passCount} pass · {failCount} fail · {naCount} n/a
-                </span>
+                <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-400">
+                        {passCount} pass · {failCount} fail · {naCount} n/a
+                    </span>
+                    {canSendAll && (
+                        <button
+                            type="button"
+                            data-testid="acceptance-scorecard-send-all-to-ai"
+                            onClick={() => onSendToAi(failed)}
+                            className="px-3 py-1 rounded text-xs font-medium bg-indigo-700 hover:bg-indigo-600 text-indigo-50 transition-colors"
+                            title="Ask the AI to fix every failing rule in one chat message"
+                        >
+                            Ask AI to fix all {failCount}
+                        </button>
+                    )}
+                </div>
             </div>
             {failed.length > 0 && (
                 <section className="flex flex-col gap-1.5">
@@ -356,6 +431,7 @@ export function AcceptanceScorecard({ code }) {
                                 row={row}
                                 expanded={expanded}
                                 onToggle={setExpanded}
+                                onSendToAi={onSendToAi}
                             />
                         ))}
                     </ul>
