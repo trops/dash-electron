@@ -49,6 +49,7 @@ import {
     buildPreviewWidgetData,
 } from "./widgetPreviewData";
 import { PreviewIframe } from "./PreviewIframe";
+import { deriveWidgetOwnership } from "./widgetOwnership";
 import {
     AcceptanceScorecard,
     evaluateScorecard,
@@ -1692,25 +1693,18 @@ ${
         })();
     }, []);
 
-    // Derive ownership: @ai-built = always owner, else scope must match
-    // the signed-in registry username. Normalize both sides so a
-    // casing or stray "@" prefix on the username (e.g. the user
-    // pasted "@trops" or the registry returned "Trops") doesn't
-    // silently hide the Update toggle. Doesn't yet handle org
-    // membership ("you're a publisher in @trops/* but signed in
-    // under a personal username") — that needs a /me/organizations
-    // call against the registry; out of scope for this normalization.
-    const widgetScope =
-        effectiveEditContext?.originalPackage?.match(/^@([^/]+)\//)?.[1];
-    const normalizedScope =
-        typeof widgetScope === "string" ? widgetScope.toLowerCase() : null;
-    const normalizedUsername =
-        typeof registryUsername === "string"
-            ? registryUsername.toLowerCase().replace(/^@/, "")
-            : null;
-    const isOwner =
-        normalizedScope === "ai-built" ||
-        (!!normalizedUsername && normalizedScope === normalizedUsername);
+    // Ownership boundary — gates the Update Original toggle. The
+    // derivation lives in widgetOwnership.js so its security-relevant
+    // rules can be unit-tested directly instead of through the
+    // modal's render tree. See widgetOwnership.test.js for the
+    // negative-space coverage (substring matches, Unicode
+    // lookalikes, whitespace, null/empty input, etc.) that must
+    // stay green for this UI to remain safe.
+    const { widgetScope, isOwner } = deriveWidgetOwnership({
+        originalPackage: effectiveEditContext?.originalPackage,
+        originalComponentName: effectiveEditContext?.originalComponentName,
+        registryUsername,
+    });
 
     // Reset the chat mode toggle to "compose" each time the modal
     // reopens. Compose is the more reliable surface today (build
@@ -4955,16 +4949,16 @@ ${
                                                                 "ai-built" && (
                                                                 <div className="px-3 py-2 rounded-lg bg-amber-900/15 border border-amber-700/30">
                                                                     <p className="text-xs text-amber-200 leading-snug">
-                                                                        Signed in
-                                                                        as{" "}
+                                                                        Signed
+                                                                        in as{" "}
                                                                         <code className="bg-black/30 px-1 rounded font-mono">
                                                                             {
                                                                                 registryUsername
                                                                             }
                                                                         </code>{" "}
                                                                         — this
-                                                                        widget is
-                                                                        under
+                                                                        widget
+                                                                        is under
                                                                         scope{" "}
                                                                         <code className="bg-black/30 px-1 rounded font-mono">
                                                                             @
@@ -4980,10 +4974,12 @@ ${
                                                                         signed-in
                                                                         username
                                                                         matches
-                                                                        the scope.
+                                                                        the
+                                                                        scope.
                                                                         Otherwise
-                                                                        use Remix
-                                                                        to fork
+                                                                        use
+                                                                        Remix to
+                                                                        fork
                                                                         into{" "}
                                                                         <code className="bg-black/30 px-1 rounded font-mono">
                                                                             @ai-built/
