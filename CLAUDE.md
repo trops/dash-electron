@@ -220,6 +220,29 @@ npm run ci:release -- -m "Your commit message"
 
 Each flag is cumulative. `--release` runs all prior steps automatically.
 
+### ⚠️ After `ci:release` succeeds — HANDS OFF
+
+The npm publish is handled by the **GitHub Actions workflow** (`release-package.yml`)
+on push to master. Claude's job ends at `ci:release` completing locally.
+
+After `ci:release` reports success:
+
+-   ✅ Verify the publish landed with `npm view <package> version`. That's it.
+-   ❌ **Do NOT** `gh run rerun` a failed publish workflow. The workflow runs once on
+    push; re-running is the user's call, not Claude's.
+-   ❌ **Do NOT** attempt or suggest a manual `npm publish` from the local checkout.
+    Manual publishes are outside the protocol — they bypass the signed-provenance
+    flow and the org's secret management.
+-   ❌ **Do NOT** offer "debugging steps" like `NODE_AUTH_TOKEN=... npm publish`.
+    If the GitHub Action fails, surface the exact error and stop. The npm
+    registry / GitHub secrets are the user's domain, not Claude's.
+
+If the publish workflow fails, report:
+
+1. The workflow run URL (from `gh run list`)
+2. The exact error from `gh run view <id> --log-failed`
+3. Then stop. Wait for the user to fix the workflow / secret / npm state.
+
 ---
 
 ## Important Patterns
