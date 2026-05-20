@@ -81,15 +81,28 @@ function buildSearchAndList() {
 }
 
 function buildTwoColumnSplit() {
-    // Panel { [Card, Card] } — two side-by-side surfaces. No heading
-    // at this layer (each Card carries its own context once filled).
+    // Panel { SubHeading2, [Card, Card] } — two side-by-side surfaces
+    // under a shared title. The title used to be skipped at this layer
+    // (the rationale was "each Card carries its own context once
+    // filled"), but the scorecard's title rule fires before the user
+    // has wired the Cards to anything, so the starter now always ships
+    // with a title placeholder the user can rename.
     let g = makeEmptyGrid();
     g = setSeedTo(g, "Panel");
     const root = g.rootGridId;
     const panelGridId = g.cells[g.grids[root].rows[0].cells[0]].gridId;
-    const leftCellId = g.grids[panelGridId].rows[0].cells[0];
+    const titleCell = g.grids[panelGridId].rows[0].cells[0];
+    g = setCellComponent(g, titleCell, HEADING_CONVENTIONS.preferredTitle, {
+        title: "Section title",
+    });
+    // Add a row below the title for the two-column split.
+    g = appendChild(g, panelGridId, "Card");
+    // appendChild added a single Card row; locate its cell and split
+    // it horizontally to create the second Card.
+    const splitRow = g.grids[panelGridId].rows[1];
+    const leftCellId = splitRow.cells[0];
     g = splitCell(g, leftCellId);
-    const [leftId, rightId] = g.grids[panelGridId].rows[0].cells;
+    const [leftId, rightId] = g.grids[panelGridId].rows[1].cells;
     g = setCellComponent(g, leftId, "Card");
     g = setCellComponent(g, rightId, "Card");
     return g;

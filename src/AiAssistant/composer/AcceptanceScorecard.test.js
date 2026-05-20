@@ -11,13 +11,20 @@ import "@testing-library/jest-dom";
 import { AcceptanceScorecard, evaluateScorecard } from "./AcceptanceScorecard";
 
 // Strong "everything wrong" sample. Hits the color-Tailwind rule, the
-// raw-button rule, no SubHeading2, no EmptyState / Skeleton / Alert,
-// no provider hook.
+// raw-button rule, raw <Heading>, no EmptyState / Skeleton / Alert.
+// Imports useMcpProvider so the data-fetch-conditional checks (2/3/4/
+// 5/15) actually fire — a pure-UI bad widget would resolve those to
+// n/a, which would defeat the purpose of this fixture.
 const BAD_WIDGET_CODE = `
-import React from "react";
+import React, { useEffect } from "react";
 import { Panel, Heading } from "@trops/dash-react";
+import { useMcpProvider } from "@trops/dash-core";
 
 export default function BadWidget() {
+    const { callTool } = useMcpProvider("slack");
+    useEffect(() => {
+        callTool("slack_list_channels", {});
+    }, []);
     return (
         <Panel>
             <Heading title="Hi" />
@@ -98,8 +105,71 @@ describe("evaluateScorecard — bad widget code", () => {
         expect(byIndex[4].pass).toBe(false);
     });
 
-    test("flags item 5 (no provider hook used)", () => {
-        expect(byIndex[5].pass).toBe(false);
+    test("passes item 5 — the bad fixture DOES wire useMcpProvider, the rule fires because hasDataFetchSurface is true", () => {
+        // The bad widget legitimately has a provider hook (useMcpProvider
+        // is imported + called). That's NOT the violation; items 2/3/4/15
+        // are the real failures because the widget pulls data but
+        // shows no loading/empty/error state. This test pins the
+        // hasDataFetchSurface gate working as intended.
+        expect(byIndex[5].pass).toBe(true);
+    });
+});
+
+describe("evaluateScorecard — pure-UI widget (no data-fetch surface)", () => {
+    // A widget with no @trops/dash-core import, no window.mainApi
+    // call, no provider hook — e.g. a clock, calculator, or a
+    // freshly-emitted Submit Form starter that hasn't been wired yet.
+    // Items 2/3/4/5/15 should resolve to n/a (pass === null), not
+    // fail — the rubric items aren't applicable to widgets that
+    // don't move data.
+    const PURE_UI_CODE = `
+import React from "react";
+import { Panel, SubHeading2, InputText, Button2 } from "@trops/dash-react";
+
+export default function SubmitFormStarter() {
+    return (
+        <Panel>
+            <div className="flex flex-col gap-4 h-full overflow-y-auto">
+                <SubHeading2 title="Compose" />
+                <InputText label="Name" />
+                <InputText label="Notes" />
+                <Button2 title="Submit" />
+            </div>
+        </Panel>
+    );
+}
+`;
+    const result = evaluateScorecard(PURE_UI_CODE);
+    const byIndex = Object.fromEntries(result.map((r) => [r.index, r]));
+
+    test("item 2 (loading state) resolves to n/a", () => {
+        expect(byIndex[2].pass).toBeNull();
+    });
+
+    test("item 3 (empty state) resolves to n/a", () => {
+        expect(byIndex[3].pass).toBeNull();
+    });
+
+    test("item 4 (error state) resolves to n/a", () => {
+        expect(byIndex[4].pass).toBeNull();
+    });
+
+    test("item 5 (provider hook) resolves to n/a", () => {
+        expect(byIndex[5].pass).toBeNull();
+    });
+
+    test("item 15 (empty/loading/error primitives) resolves to n/a", () => {
+        expect(byIndex[15].pass).toBeNull();
+    });
+
+    test("non-conditional items still fire — item 0 (title) passes, item 12 (no color) passes", () => {
+        expect(byIndex[0].pass).toBe(true);
+        expect(byIndex[12].pass).toBe(true);
+    });
+
+    test("the whole pure-UI starter has zero failures", () => {
+        const failed = result.filter((r) => r.pass === false);
+        expect(failed.length).toBe(0);
     });
 });
 

@@ -31,11 +31,42 @@ import {
     COLOR_TAILWIND_REGEX,
 } from "./widgetConventions";
 
+/**
+ * A widget has a "data-fetch surface" when its source talks to a
+ * provider — directly via `@trops/dash-core` hooks, via the
+ * `window.mainApi` IPC bridge, or via the recognizable async-fetch
+ * patterns those hooks implement.
+ *
+ * Several scorecard items (loading state, empty state, error state,
+ * provider hook used, primitive-based feedback for those states)
+ * only make sense for widgets that actually move data. A pure-UI
+ * widget — a clock, a calculator, the bare Submit Form template
+ * before the user has wired the button to any IPC — should resolve
+ * those checks to "n/a" rather than failing. The user opening a
+ * Compose-mode starter and seeing 7 red ✗ marks on a widget they
+ * haven't even customized is the bug this gate fixes.
+ *
+ * When the user wires the template into a real widget
+ * (Button.onClick → window.mainApi.foo.bar), the emitted code grows
+ * a data-fetch surface and the checks fire as intended — at which
+ * point the rubric items become actionable instead of noisy.
+ */
+function hasDataFetchSurface(code) {
+    if (typeof code !== "string") return false;
+    return (
+        /@trops\/dash-core/.test(code) ||
+        /window\.mainApi\./.test(code) ||
+        /\buseMcpProvider\s*\(/.test(code) ||
+        /\buseWidgetProviders\s*\(/.test(code)
+    );
+}
+
 // Each entry maps an item index (0-based in ACCEPTANCE_CHECKLIST) to
-// a predicate that returns `{ pass: boolean, matches: string[] }`.
-// Items without a predicate render with a "not statically checkable"
-// indicator — they're still on the rubric, the scorecard just can't
-// verify them mechanically.
+// a predicate that returns `{ pass: boolean | null, matches: string[] }`.
+// `pass === null` renders as a "not statically checkable" indicator —
+// either the rubric item isn't expressible as a regex pass, or the
+// check is conditionally skipped (e.g. data-fetch items on a pure-UI
+// widget).
 const CHECKS = {
     // 0 — Title uses SubHeading2.
     0: (code) => {
@@ -57,8 +88,11 @@ const CHECKS = {
         const hasRootLayout = /flex flex-col[^"']*gap-\d/.test(code);
         return { pass: hasRootLayout, matches: [] };
     },
-    // 2 — Loading state.
+    // 2 — Loading state. Only required when the widget actually has
+    //     a data-fetch surface — otherwise n/a. See
+    //     hasDataFetchSurface() for the rationale.
     2: (code) => {
+        if (!hasDataFetchSurface(code)) return { pass: null, matches: [] };
         const usesSkeleton = /\bSkeleton(\.Text|\.Card)?\b/.test(code);
         const usesIsLoadingBranch = /\bloading\s*\?|\bisLoading\b/.test(code);
         return {
@@ -66,18 +100,30 @@ const CHECKS = {
             matches: [],
         };
     },
-    // 3 — Empty state.
-    3: (code) => ({
-        pass: /<EmptyState\b/.test(code),
-        matches: [],
-    }),
-    // 4 — Error state (visible, not just console).
-    4: (code) => ({
-        pass: /<Alert\b|<Alert2\b|<Alert3\b|<ErrorMessage\b/.test(code),
-        matches: [],
-    }),
-    // 5 — Provider hook (useMcpProvider OR useWidgetProviders).
+    // 3 — Empty state. Only required when the widget has data — a
+    //     widget that doesn't fetch a list can't have an empty list.
+    3: (code) => {
+        if (!hasDataFetchSurface(code)) return { pass: null, matches: [] };
+        return {
+            pass: /<EmptyState\b/.test(code),
+            matches: [],
+        };
+    },
+    // 4 — Error state (visible, not just console). Only required when
+    //     there's a provider call that could fail.
+    4: (code) => {
+        if (!hasDataFetchSurface(code)) return { pass: null, matches: [] };
+        return {
+            pass: /<Alert\b|<Alert2\b|<Alert3\b|<ErrorMessage\b/.test(code),
+            matches: [],
+        };
+    },
+    // 5 — Provider hook (useMcpProvider OR useWidgetProviders). Only
+    //     required for widgets that move data — a pure-UI clock or
+    //     a freshly-emitted starter template that hasn't been wired
+    //     to anything yet legitimately has no provider hook.
     5: (code) => {
+        if (!hasDataFetchSurface(code)) return { pass: null, matches: [] };
         const usesMcp = /\buseMcpProvider\s*\(/.test(code);
         const usesCredential = /\buseWidgetProviders\s*\(/.test(code);
         return {
@@ -149,8 +195,11 @@ const CHECKS = {
     },
     // 15 — Empty/loading/error use primitives, not plaintext.
     //      Combine the EmptyState/Skeleton/Alert presence into one
-    //      flag.
+    //      flag. Only required when the widget has a data-fetch
+    //      surface — otherwise there are no empty/loading/error
+    //      states to render. Pairs with items 2/3/4.
     15: (code) => {
+        if (!hasDataFetchSurface(code)) return { pass: null, matches: [] };
         const hasEmptyPrim = /<EmptyState\b/.test(code);
         const hasLoadingPrim = /\bSkeleton(\.Text|\.Card)?\b/.test(code);
         const hasErrorPrim = /<Alert\d?\b/.test(code);
