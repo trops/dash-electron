@@ -3439,16 +3439,40 @@ ${
             <div
                 className={`flex items-center justify-between px-4 py-3 border-b ${borderColor} ${bgDark} shrink-0`}
             >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                     <FontAwesomeIcon
                         icon="wand-magic-sparkles"
-                        className="h-4 w-4 text-indigo-400"
+                        className="h-4 w-4 text-indigo-400 shrink-0"
                     />
-                    <span className="text-base font-semibold text-gray-100">
+                    <span className="text-base font-semibold text-gray-100 shrink-0">
                         {isRemixMode
                             ? "Edit Widget with AI"
                             : "Build Widget with AI"}
                     </span>
+                    {/* Widget identity subtitle — shown only in edit
+                        mode so the user can see which widget they're
+                        editing without having to look at the footer's
+                        "Installs to …" line. originalComponentName
+                        carries the full scoped ID
+                        (e.g. "ai-built.composedwidget3.ComposedWidget3"),
+                        which is the canonical identifier the user
+                        recognizes from their dashboard layout. */}
+                    {isRemixMode &&
+                        effectiveEditContext?.originalComponentName && (
+                            <>
+                                <span className="text-gray-500 shrink-0">
+                                    —
+                                </span>
+                                <code
+                                    className="text-xs text-indigo-300 font-mono truncate"
+                                    title={
+                                        effectiveEditContext.originalComponentName
+                                    }
+                                >
+                                    {effectiveEditContext.originalComponentName}
+                                </code>
+                            </>
+                        )}
                 </div>
                 <button
                     onClick={() => setIsOpen(false)}
