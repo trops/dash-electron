@@ -234,38 +234,28 @@ export function evaluateScorecard(code) {
 
 /**
  * Build the chat message that gets dispatched into ChatCore when the
- * user clicks "Send to AI" on the scorecard. Exposed for tests so we
+ * user clicks "Ask AI" on a scorecard row. Exposed for tests so we
  * can pin the exact wording without rendering the React tree.
  *
- * Single-rule and multi-rule cases produce different shapes — the
- * single-rule message is conversational ("flags this rule"), the
- * multi-rule message is a numbered list. Both end with an explicit
- * "output BOTH code blocks" instruction so the modal's code parser
- * has something to pick up.
+ * Single-rule only by design — earlier iterations supported a batch
+ * "fix all failing rules" path, but that prompt biased the AI toward
+ * wholesale rewrites that risked introducing regressions on widgets
+ * with specific user implementation. The per-row flow makes the
+ * user's fix decision explicit and keeps each AI response surgical.
+ * If a future use case needs batching, group related rules into a
+ * single chat-side message rather than re-introducing the
+ * regenerate-everything prompt.
  */
-export function buildScorecardChatMessage(rules) {
-    if (!Array.isArray(rules) || rules.length === 0) return "";
-    const formatOffending = (matches, max) => {
-        if (!matches || matches.length === 0) return "";
-        const head = matches.slice(0, max).join(", ");
-        const more =
-            matches.length > max ? ` (+${matches.length - max} more)` : "";
-        return `${head}${more}`;
-    };
-    if (rules.length === 1) {
-        const r = rules[0];
-        const off = formatOffending(r.matches, 5);
-        const offendingLine = off ? `\n\nOffending substring(s): ${off}.` : "";
-        return `The acceptance scorecard flags this rule on the current widget code:\n\n"${r.item}"${offendingLine}\n\nPlease update the widget to fix this. Output BOTH the component (jsx) and config (.dash.js) code blocks with the fix.`;
-    }
-    const list = rules
-        .map((r, i) => {
-            const off = formatOffending(r.matches, 3);
-            const offendingSuffix = off ? ` (offending: ${off})` : "";
-            return `${i + 1}. ${r.item}${offendingSuffix}`;
-        })
-        .join("\n");
-    return `The acceptance scorecard flags ${rules.length} rules on the current widget code:\n\n${list}\n\nPlease update the widget to address all of them. Output BOTH the component (jsx) and config (.dash.js) code blocks with the fixes.`;
+export function buildScorecardChatMessage(rule) {
+    if (!rule || typeof rule.item !== "string") return "";
+    const matches = Array.isArray(rule.matches) ? rule.matches : [];
+    const head = matches.slice(0, 5).join(", ");
+    const more = matches.length > 5 ? ` (+${matches.length - 5} more)` : "";
+    const offending = head ? `${head}${more}` : "";
+    const offendingLine = offending
+        ? `\n\nOffending substring(s): ${offending}.`
+        : "";
+    return `The acceptance scorecard flags this rule on the current widget code:\n\n"${rule.item}"${offendingLine}\n\nPlease update the widget to fix this. Output BOTH the component (jsx) and config (.dash.js) code blocks with the fix.`;
 }
 
 // Group rows by status for the rendered scorecard. Failed rules show
@@ -344,7 +334,7 @@ function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
                     <button
                         type="button"
                         data-testid={`acceptance-scorecard-row-${row.index}-send-to-ai`}
-                        onClick={() => onSendToAi([row])}
+                        onClick={() => onSendToAi(row)}
                         className="shrink-0 my-1 mr-1.5 px-2 py-1 rounded text-xs font-medium bg-indigo-700 hover:bg-indigo-600 text-indigo-50 transition-colors"
                         title="Ask the AI to fix this rule"
                     >
@@ -387,11 +377,6 @@ export function AcceptanceScorecard({ code, onSendToAi = null }) {
                 ? "Awaiting widget code"
                 : `All ${totalChecked} statically-checkable rules pass`
             : `${failCount} of ${totalChecked} rules failing — fix these or ask the AI to`;
-    // "Send all failing to AI" only makes sense when there's >1
-    // failure AND the host wired an onSendToAi handler. With a
-    // single failure the per-row button covers it without a
-    // confusing duplicate.
-    const canSendAll = failCount > 1 && typeof onSendToAi === "function";
 
     return (
         <div data-testid="acceptance-scorecard" className="flex flex-col gap-3">
@@ -402,22 +387,9 @@ export function AcceptanceScorecard({ code, onSendToAi = null }) {
                 <span className={`text-base font-semibold ${headlineTone}`}>
                     {headline}
                 </span>
-                <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-400">
-                        {passCount} pass · {failCount} fail · {naCount} n/a
-                    </span>
-                    {canSendAll && (
-                        <button
-                            type="button"
-                            data-testid="acceptance-scorecard-send-all-to-ai"
-                            onClick={() => onSendToAi(failed)}
-                            className="px-3 py-1 rounded text-xs font-medium bg-indigo-700 hover:bg-indigo-600 text-indigo-50 transition-colors"
-                            title="Ask the AI to fix every failing rule in one chat message"
-                        >
-                            Ask AI to fix all {failCount}
-                        </button>
-                    )}
-                </div>
+                <span className="text-sm text-gray-400">
+                    {passCount} pass · {failCount} fail · {naCount} n/a
+                </span>
             </div>
             {failed.length > 0 && (
                 <section className="flex flex-col gap-1.5">
