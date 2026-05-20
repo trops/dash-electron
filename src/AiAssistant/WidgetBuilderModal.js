@@ -1692,12 +1692,25 @@ ${
         })();
     }, []);
 
-    // Derive ownership: @ai-built = always owner, else scope must match username
+    // Derive ownership: @ai-built = always owner, else scope must match
+    // the signed-in registry username. Normalize both sides so a
+    // casing or stray "@" prefix on the username (e.g. the user
+    // pasted "@trops" or the registry returned "Trops") doesn't
+    // silently hide the Update toggle. Doesn't yet handle org
+    // membership ("you're a publisher in @trops/* but signed in
+    // under a personal username") — that needs a /me/organizations
+    // call against the registry; out of scope for this normalization.
     const widgetScope =
         effectiveEditContext?.originalPackage?.match(/^@([^/]+)\//)?.[1];
+    const normalizedScope =
+        typeof widgetScope === "string" ? widgetScope.toLowerCase() : null;
+    const normalizedUsername =
+        typeof registryUsername === "string"
+            ? registryUsername.toLowerCase().replace(/^@/, "")
+            : null;
     const isOwner =
-        widgetScope === "ai-built" ||
-        (registryUsername && widgetScope === registryUsername);
+        normalizedScope === "ai-built" ||
+        (!!normalizedUsername && normalizedScope === normalizedUsername);
 
     // Reset the chat mode toggle to "compose" each time the modal
     // reopens. Compose is the more reliable surface today (build
@@ -4915,17 +4928,68 @@ ${
                                                                     </p>
                                                                     <button
                                                                         type="button"
-                                                                        onClick={async () => {
-                                                                            try {
-                                                                                await window.mainApi?.registryAuth?.initiateLogin();
-                                                                            } catch {
-                                                                                /* ignore */
-                                                                            }
-                                                                        }}
+                                                                        onClick={
+                                                                            handleSignInForPreview
+                                                                        }
                                                                         className="px-3 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 transition-colors"
                                                                     >
                                                                         Sign in
                                                                     </button>
+                                                                </div>
+                                                            )}
+                                                        {/* Signed-in-but-not-the-owner hint. Surfaces
+                                                            what's actually being compared so the user
+                                                            can see why the Update toggle stays hidden
+                                                            (mismatched username vs. scope) without us
+                                                            having to ship diagnostic logs. The org-
+                                                            membership case (publisher in @scope/* but
+                                                            signed in under a personal username) isn't
+                                                            handled by the scope === username check;
+                                                            this surfaces that gap so the user knows
+                                                            their options. */}
+                                                        {!isOwner &&
+                                                            registryChecked &&
+                                                            registryUsername &&
+                                                            widgetScope &&
+                                                            widgetScope !==
+                                                                "ai-built" && (
+                                                                <div className="px-3 py-2 rounded-lg bg-amber-900/15 border border-amber-700/30">
+                                                                    <p className="text-xs text-amber-200 leading-snug">
+                                                                        Signed in
+                                                                        as{" "}
+                                                                        <code className="bg-black/30 px-1 rounded font-mono">
+                                                                            {
+                                                                                registryUsername
+                                                                            }
+                                                                        </code>{" "}
+                                                                        — this
+                                                                        widget is
+                                                                        under
+                                                                        scope{" "}
+                                                                        <code className="bg-black/30 px-1 rounded font-mono">
+                                                                            @
+                                                                            {
+                                                                                widgetScope
+                                                                            }
+                                                                        </code>
+                                                                        .
+                                                                        Update-in-place
+                                                                        is only
+                                                                        enabled
+                                                                        when the
+                                                                        signed-in
+                                                                        username
+                                                                        matches
+                                                                        the scope.
+                                                                        Otherwise
+                                                                        use Remix
+                                                                        to fork
+                                                                        into{" "}
+                                                                        <code className="bg-black/30 px-1 rounded font-mono">
+                                                                            @ai-built/
+                                                                        </code>
+                                                                        .
+                                                                    </p>
                                                                 </div>
                                                             )}
                                                         {/* Update / Remix toggle — only when user is the owner */}
