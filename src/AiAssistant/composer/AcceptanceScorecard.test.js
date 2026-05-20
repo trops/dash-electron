@@ -8,7 +8,11 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { AcceptanceScorecard, evaluateScorecard } from "./AcceptanceScorecard";
+import {
+    AcceptanceScorecard,
+    evaluateScorecard,
+    buildScorecardChatMessage,
+} from "./AcceptanceScorecard";
 
 // Strong "everything wrong" sample. Hits the color-Tailwind rule, the
 // raw-button rule, raw <Heading>, no EmptyState / Skeleton / Alert.
@@ -267,5 +271,168 @@ describe("AcceptanceScorecard component", () => {
         expect(() =>
             render(<AcceptanceScorecard code={undefined} />)
         ).not.toThrow();
+    });
+});
+
+describe("buildScorecardChatMessage — pure formatter", () => {
+    test("empty input returns empty string", () => {
+        expect(buildScorecardChatMessage([])).toBe("");
+        expect(buildScorecardChatMessage(null)).toBe("");
+        expect(buildScorecardChatMessage(undefined)).toBe("");
+    });
+
+    test("single rule produces conversational message + 'output BOTH code blocks'", () => {
+        const msg = buildScorecardChatMessage([
+            { index: 0, item: "Title uses SubHeading2.", matches: [] },
+        ]);
+        expect(msg).toMatch(/flags this rule/);
+        expect(msg).toContain("Title uses SubHeading2.");
+        expect(msg).toMatch(/Output BOTH/);
+    });
+
+    test("single rule with matches surfaces the offending substrings", () => {
+        const msg = buildScorecardChatMessage([
+            {
+                index: 12,
+                item: "No hardcoded Tailwind color classes.",
+                matches: ["bg-purple-600", "text-gray-400"],
+            },
+        ]);
+        expect(msg).toMatch(/Offending substring/);
+        expect(msg).toContain("bg-purple-600");
+        expect(msg).toContain("text-gray-400");
+    });
+
+    test("multiple rules produces a numbered list", () => {
+        const msg = buildScorecardChatMessage([
+            { index: 0, item: "Use SubHeading2.", matches: [] },
+            { index: 4, item: "Error state rendered.", matches: [] },
+            { index: 13, item: "No raw button tags.", matches: ["<button"] },
+        ]);
+        expect(msg).toMatch(/flags 3 rules/);
+        expect(msg).toMatch(/1\. Use SubHeading2/);
+        expect(msg).toMatch(/2\. Error state rendered/);
+        expect(msg).toMatch(/3\. No raw button tags/);
+        expect(msg).toContain("<button");
+        expect(msg).toMatch(/Output BOTH/);
+    });
+
+    test("matches list is capped (head of 5 for single, head of 3 for multi)", () => {
+        const single = buildScorecardChatMessage([
+            {
+                index: 12,
+                item: "No hardcoded color.",
+                matches: ["a", "b", "c", "d", "e", "f", "g"],
+            },
+        ]);
+        // Single-rule cap = 5; the 6th and 7th render as "+N more".
+        expect(single).toContain("a, b, c, d, e");
+        expect(single).toMatch(/\+2 more/);
+
+        const multi = buildScorecardChatMessage([
+            { index: 0, item: "X", matches: [] },
+            { index: 1, item: "Y", matches: ["m1", "m2", "m3", "m4"] },
+        ]);
+        // Multi-rule cap = 3; m4 surfaces as "+1 more".
+        expect(multi).toContain("m1, m2, m3");
+        expect(multi).toMatch(/\+1 more/);
+    });
+});
+
+describe("AcceptanceScorecard — Ask AI integration", () => {
+    test("Ask AI button renders per failing row when onSendToAi is provided", () => {
+        const onSendToAi = jest.fn();
+        render(
+            <AcceptanceScorecard
+                code={BAD_WIDGET_CODE}
+                onSendToAi={onSendToAi}
+            />
+        );
+        // Item 0 (raw Heading) and 12 (color tailwind) both fail in
+        // the bad fixture — both should get a Send to AI button.
+        expect(
+            screen.getByTestId("acceptance-scorecard-row-0-send-to-ai")
+        ).toBeInTheDocument();
+        expect(
+            screen.getByTestId("acceptance-scorecard-row-12-send-to-ai")
+        ).toBeInTheDocument();
+    });
+
+    test("Ask AI button is NOT rendered on passing or n/a rows", () => {
+        const onSendToAi = jest.fn();
+        render(
+            <AcceptanceScorecard
+                code={GOOD_WIDGET_CODE}
+                onSendToAi={onSendToAi}
+            />
+        );
+        // Good widget has no fails — no Send buttons anywhere.
+        const sendButtons = document.querySelectorAll(
+            '[data-testid^="acceptance-scorecard-row-"][data-testid$="-send-to-ai"]'
+        );
+        expect(sendButtons.length).toBe(0);
+    });
+
+    test("Ask AI buttons absent when onSendToAi is not provided", () => {
+        render(<AcceptanceScorecard code={BAD_WIDGET_CODE} />);
+        // No host wiring → read-only scorecard, no buttons.
+        const sendButtons = document.querySelectorAll(
+            '[data-testid^="acceptance-scorecard-row-"][data-testid$="-send-to-ai"]'
+        );
+        expect(sendButtons.length).toBe(0);
+        // The "fix all" header button is also absent.
+        expect(
+            screen.queryByTestId("acceptance-scorecard-send-all-to-ai")
+        ).not.toBeInTheDocument();
+    });
+
+    test("clicking per-row Ask AI invokes onSendToAi with that single rule", () => {
+        const onSendToAi = jest.fn();
+        render(
+            <AcceptanceScorecard
+                code={BAD_WIDGET_CODE}
+                onSendToAi={onSendToAi}
+            />
+        );
+        fireEvent.click(
+            screen.getByTestId("acceptance-scorecard-row-12-send-to-ai")
+        );
+        expect(onSendToAi).toHaveBeenCalledTimes(1);
+        const [rules] = onSendToAi.mock.calls[0];
+        expect(Array.isArray(rules)).toBe(true);
+        expect(rules.length).toBe(1);
+        expect(rules[0].index).toBe(12);
+    });
+
+    test("'Ask AI to fix all N' button renders when there are >1 failing rules", () => {
+        const onSendToAi = jest.fn();
+        render(
+            <AcceptanceScorecard
+                code={BAD_WIDGET_CODE}
+                onSendToAi={onSendToAi}
+            />
+        );
+        const btn = screen.getByTestId("acceptance-scorecard-send-all-to-ai");
+        expect(btn).toBeInTheDocument();
+        // Label includes the count.
+        expect(btn.textContent).toMatch(/fix all \d+/i);
+    });
+
+    test("clicking 'fix all' invokes onSendToAi with every failing rule", () => {
+        const onSendToAi = jest.fn();
+        render(
+            <AcceptanceScorecard
+                code={BAD_WIDGET_CODE}
+                onSendToAi={onSendToAi}
+            />
+        );
+        fireEvent.click(
+            screen.getByTestId("acceptance-scorecard-send-all-to-ai")
+        );
+        expect(onSendToAi).toHaveBeenCalledTimes(1);
+        const [rules] = onSendToAi.mock.calls[0];
+        expect(rules.length).toBeGreaterThan(1);
+        // All sent rules must be failing rows.
+        expect(rules.every((r) => r.pass === false)).toBe(true);
     });
 });
