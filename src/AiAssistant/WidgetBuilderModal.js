@@ -1512,6 +1512,77 @@ ${
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [effectiveEditContext?.originalWidgetId]);
 
+    // Pre-fill the preview's test-input form from the dashboard
+    // widget's saved userPrefs whenever a new Edit-with-AI context
+    // opens. Without this the user re-types every field (path,
+    // query, refresh interval, etc.) they already configured on
+    // the live dashboard instance — the editContext carries those
+    // values through verbatim, so consuming them here is a pure
+    // ergonomic win. The compile-driven prune at the bottom of
+    // compilePreview keeps only keys the new userConfig schema
+    // still declares, so a stale prefs key from the original widget
+    // won't haunt the preview if the user's edit drops a field.
+    React.useEffect(() => {
+        if (
+            effectiveEditContext?.userPrefs &&
+            typeof effectiveEditContext.userPrefs === "object"
+        ) {
+            setPreviewTestInputs({ ...effectiveEditContext.userPrefs });
+        } else {
+            setPreviewTestInputs({});
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [effectiveEditContext?.originalWidgetId]);
+
+    // Augment the preview's provider selection with global-default
+    // fallbacks once the parsed config arrives. The dashboard
+    // widget instance's `selectedProviders` only carries per-
+    // instance overrides — when it's empty (or missing entries for
+    // some required types), the live runtime falls through to the
+    // global `isDefaultForType: true` provider for that type
+    // (see useMcpProvider.js resolution chain). The preview needs
+    // to mirror that fallback so the user sees the same provider
+    // their dashboard widget is actually using, not an empty
+    // dropdown with the misleading impression that nothing's wired.
+    React.useEffect(() => {
+        if (!effectiveEditContext?.originalWidgetId) return;
+        if (
+            !previewParsedConfig?.providers ||
+            !Array.isArray(previewParsedConfig.providers)
+        )
+            return;
+        const appProvs = previewAppCtx?.providers;
+        if (!appProvs || typeof appProvs !== "object") return;
+        const requiredTypes = previewParsedConfig.providers
+            .filter((p) => p && p.required !== false && p.type)
+            .map((p) => p.type);
+        if (requiredTypes.length === 0) return;
+        setPreviewProviderSelection((prev) => {
+            const next = { ...(prev || {}) };
+            let changed = false;
+            for (const type of requiredTypes) {
+                if (next[type]) continue;
+                // Walk appProviders for a default of this type.
+                for (const [name, data] of Object.entries(appProvs)) {
+                    if (
+                        data &&
+                        data.type === type &&
+                        data.isDefaultForType === true
+                    ) {
+                        next[type] = name;
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+            return changed ? next : prev;
+        });
+    }, [
+        effectiveEditContext?.originalWidgetId,
+        previewParsedConfig,
+        previewAppCtx,
+    ]);
+
     // Pre-populate the provider picker from edit-context when editing
     // an existing widget. If the existing config declares a provider
     // type that matches one of the user's installed providers, pick
@@ -2325,6 +2396,16 @@ ${
             // widget with unresolvable imports), fall back to Code tab.
             setActiveTab("preview");
             compilePreview(code).catch(() => {});
+
+            // Land the user in Build mode (chat-driven edit), not
+            // the default Compose mode. Edit-with-AI is about
+            // iterating on existing code via the AI chat — Compose's
+            // grid-based building would discard the loaded code and
+            // start fresh (ComposerPaneV2's empty-grid mount used to
+            // overwrite detectedCode here; even with that guarded,
+            // Compose isn't the right entry point for a widget the
+            // user already has).
+            setChatMode("build");
 
             // Pre-fill the category picker from the original config so the user
             // can install the remix without re-picking. Falls through to null
@@ -5410,6 +5491,14 @@ ${
                                     apiKey={apiKey}
                                     model={model}
                                     backend={preferredBackend}
+                                    // Edit-mode awareness so the pane's
+                                    // mount-time auto-name + empty-grid
+                                    // emit don't overwrite the loaded
+                                    // editContext.componentCode. See
+                                    // ComposerPaneV2's editContext prop
+                                    // docs for the failure mode this
+                                    // prevents.
+                                    editContext={effectiveEditContext}
                                     onEmit={(code) => {
                                         setDetectedCode({
                                             componentCode: code.componentCode,
