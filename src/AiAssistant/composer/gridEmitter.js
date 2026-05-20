@@ -308,9 +308,20 @@ function renderCellJsx(grid, cellIn, indent, slotVarBySlotKey) {
         // empty row keeps shape. `min-h-[40px]` is not in the prebuilt
         // safelist — using `min-h-8` (32px) which is — so the dashed
         // placeholder always renders visibly even before any wiring.
+        //
+        // Border uses `border-current opacity-20` rather than an
+        // explicit Tailwind color shade. Two reasons:
+        //   1. The cohesion rule (COLOR_TAILWIND_REGEX) forbids
+        //      `border-{color}-{shade}` in emitted widget code — the
+        //      empty-cell placeholder used to leak `border-gray-700/40`
+        //      which tripped the scorecard on every composer-emitted
+        //      widget that had unfilled cells.
+        //   2. `border-current` inherits the surrounding text color,
+        //      so the placeholder adapts to the theme automatically
+        //      (light/dark) without us picking a shade.
         return (
             `${pad}<div data-composer-node-id="${cell.id}" ` +
-            `className="flex-1 min-w-0 min-h-8 border border-dashed border-gray-700/40 rounded" />`
+            `className="flex-1 min-w-0 min-h-8 border border-dashed border-current opacity-20 rounded" />`
         );
     }
     const fills = cellFillsRow(grid, cell);
