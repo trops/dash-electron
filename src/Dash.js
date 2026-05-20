@@ -556,6 +556,12 @@ class App extends React.Component {
                 workspaceId,
                 widgetId,
             } = detail;
+            // Diagnostic: trace the source-load path for the
+            // "Edit with AI" flow. Logs go to DevTools (renderer
+            // process — console.* is NOT stripped here, unlike
+            // dash-core). To be removed once the source-load
+            // failure mode is identified and fixed.
+            console.log("[edit-with-ai] event detail:", detail);
 
             // Resolve the package name. Priority:
             //   1. _sourcePackage from ComponentManager config
@@ -611,13 +617,22 @@ class App extends React.Component {
             if (!packageName) {
                 packageName = `@ai-built/${widgetComponentName?.toLowerCase()}`;
             }
+            console.log("[edit-with-ai] resolved packageName:", packageName);
 
             let editContext = null;
             try {
+                console.log(
+                    "[edit-with-ai] calling readSources(",
+                    packageName,
+                    ",",
+                    widgetComponentName,
+                    ")"
+                );
                 const result = await window.mainApi.widgetBuilder.readSources(
                     packageName,
                     widgetComponentName
                 );
+                console.log("[edit-with-ai] readSources result:", result);
                 if (result?.success) {
                     editContext = {
                         componentCode: result.componentCode,
@@ -652,6 +667,7 @@ class App extends React.Component {
                 };
             }
 
+            console.log("[edit-with-ai] final editContext:", editContext);
             this.setState({
                 isWidgetBuilderOpen: true,
                 widgetBuilderCellContext: {
