@@ -197,26 +197,25 @@ function groupRowsByStatus(rows) {
 function ScorecardRow({ row, expanded, onToggle }) {
     const expandable = row.pass === false && row.matches.length > 0;
     const isOpen = expanded === row.index;
-    const marker =
-        row.pass === true ? "✓" : row.pass === false ? "✗" : "·";
+    const marker = row.pass === true ? "✓" : row.pass === false ? "✗" : "·";
     const markerTone =
         row.pass === true
             ? "text-emerald-400"
             : row.pass === false
-              ? "text-rose-400"
-              : "text-gray-500";
+            ? "text-rose-400"
+            : "text-gray-500";
     const rowBg =
         row.pass === false
             ? "bg-rose-950/30 border border-rose-900/40"
             : row.pass === true
-              ? ""
-              : "";
+            ? ""
+            : "";
     const textTone =
         row.pass === false
             ? "text-gray-100"
             : row.pass === true
-              ? "text-gray-300"
-              : "text-gray-400";
+            ? "text-gray-300"
+            : "text-gray-400";
 
     return (
         <li
@@ -275,8 +274,7 @@ export function AcceptanceScorecard({ code }) {
     const failCount = failed.length;
     const naCount = na.length;
     const totalChecked = passCount + failCount;
-    const headlineTone =
-        failCount === 0 ? "text-emerald-300" : "text-rose-300";
+    const headlineTone = failCount === 0 ? "text-emerald-300" : "text-rose-300";
     const headline =
         failCount === 0
             ? totalChecked === 0
@@ -285,10 +283,7 @@ export function AcceptanceScorecard({ code }) {
             : `${failCount} of ${totalChecked} rules failing — fix these or ask the AI to`;
 
     return (
-        <div
-            data-testid="acceptance-scorecard"
-            className="flex flex-col gap-3"
-        >
+        <div data-testid="acceptance-scorecard" className="flex flex-col gap-3">
             <div
                 className="flex items-center justify-between flex-wrap gap-2"
                 data-testid="acceptance-scorecard-summary"
