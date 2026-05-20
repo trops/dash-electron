@@ -252,3 +252,96 @@ describe("ComposerPaneV2 — Phase D providerChoice plumbing", () => {
         expect(root.hasAttribute("data-last-provider-choice")).toBe(true);
     });
 });
+
+describe("ComposerPaneV2 — edit-mode guard (don't overwrite editContext.componentCode)", () => {
+    // Regression bug: clicking "Edit with AI" on an installed
+    // widget opened the modal in Compose mode by default. The
+    // modal's own pre-load useEffect populated detectedCode with
+    // the loaded source, but ComposerPaneV2's mount-time emit then
+    // fired with an empty grid + bumped widget name (e.g.
+    // "ComposedWidget6"), overwriting detectedCode with the
+    // empty-grid placeholder code. The user saw a fresh
+    // placeholder where their actual widget code should have
+    // been. These tests pin the two guards that prevent that.
+
+    test("auto-name bump skipped when editContext.componentCode is set", async () => {
+        const getConfigs = jest
+            .fn()
+            .mockResolvedValue([{ componentName: "ComposedWidget" }]);
+        installMainApi(getConfigs);
+        render(
+            <ComposerPaneV2
+                editContext={{
+                    componentCode: "export default function Foo(){}",
+                    originalComponentName: "MyExistingWidget",
+                }}
+            />
+        );
+        const input = screen.getByTestId("composer-widget-name");
+        // Wait long enough that the effect would have run if it
+        // were going to. The default "ComposedWidget" stays put —
+        // it's not the existing widget's name, but that doesn't
+        // matter here: the point is the auto-bump didn't fire and
+        // rename to "ComposedWidget2", which would re-emit under a
+        // different name.
+        await new Promise((r) => setTimeout(r, 0));
+        expect(input.value).toBe("ComposedWidget");
+        // The bump effect should have early-returned before calling
+        // the IPC.
+        expect(getConfigs).not.toHaveBeenCalled();
+    });
+
+    test("auto-emit on mount skipped when editContext.componentCode is set AND grid is empty", async () => {
+        installMainApi(jest.fn().mockResolvedValue([]));
+        const onEmit = jest.fn();
+        render(
+            <ComposerPaneV2
+                editContext={{
+                    componentCode: "export default function Foo(){}",
+                }}
+                onEmit={onEmit}
+            />
+        );
+        // The default mount fires the sync effect once. Without the
+        // guard, onEmit would be called with the empty-grid
+        // placeholder code — which is exactly what was overwriting
+        // detectedCode. With the guard, onEmit is NOT called for
+        // the empty-grid mount.
+        await new Promise((r) => setTimeout(r, 0));
+        expect(onEmit).not.toHaveBeenCalled();
+    });
+
+    test("auto-emit DOES fire when no editContext (the original behavior is preserved)", async () => {
+        installMainApi(jest.fn().mockResolvedValue([]));
+        const onEmit = jest.fn();
+        render(<ComposerPaneV2 onEmit={onEmit} />);
+        // Fresh build session — the mount emit IS expected. Without
+        // it, the host's detectedCode wouldn't get the empty-grid
+        // placeholder for the Code/Configure tabs.
+        await waitFor(() => {
+            expect(onEmit).toHaveBeenCalled();
+        });
+    });
+
+    test("onChange still fires even when onEmit is suppressed (host needs grid state for draft persistence)", async () => {
+        installMainApi(jest.fn().mockResolvedValue([]));
+        const onChange = jest.fn();
+        const onEmit = jest.fn();
+        render(
+            <ComposerPaneV2
+                editContext={{
+                    componentCode: "export default function Foo(){}",
+                }}
+                onChange={onChange}
+                onEmit={onEmit}
+            />
+        );
+        // onChange fires regardless — it carries the grid object,
+        // which the host's draft autosave needs. Only the code
+        // emission is suppressed.
+        await waitFor(() => {
+            expect(onChange).toHaveBeenCalled();
+        });
+        expect(onEmit).not.toHaveBeenCalled();
+    });
+});

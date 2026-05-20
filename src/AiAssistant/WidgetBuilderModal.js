@@ -2326,6 +2326,16 @@ ${
             setActiveTab("preview");
             compilePreview(code).catch(() => {});
 
+            // Land the user in Build mode (chat-driven edit), not
+            // the default Compose mode. Edit-with-AI is about
+            // iterating on existing code via the AI chat — Compose's
+            // grid-based building would discard the loaded code and
+            // start fresh (ComposerPaneV2's empty-grid mount used to
+            // overwrite detectedCode here; even with that guarded,
+            // Compose isn't the right entry point for a widget the
+            // user already has).
+            setChatMode("build");
+
             // Pre-fill the category picker from the original config so the user
             // can install the remix without re-picking. Falls through to null
             // (forcing a pick) if the original widget had no category declared.
@@ -5410,6 +5420,14 @@ ${
                                     apiKey={apiKey}
                                     model={model}
                                     backend={preferredBackend}
+                                    // Edit-mode awareness so the pane's
+                                    // mount-time auto-name + empty-grid
+                                    // emit don't overwrite the loaded
+                                    // editContext.componentCode. See
+                                    // ComposerPaneV2's editContext prop
+                                    // docs for the failure mode this
+                                    // prevents.
+                                    editContext={effectiveEditContext}
                                     onEmit={(code) => {
                                         setDetectedCode({
                                             componentCode: code.componentCode,

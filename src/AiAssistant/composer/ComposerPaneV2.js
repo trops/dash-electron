@@ -84,6 +84,14 @@ export function ComposerPaneV2({
     apiKey = null,
     model = null,
     backend = "claude-code",
+    // Edit-mode awareness. When the modal opens with an existing
+    // widget's code loaded (Edit with AI), the compose pane must
+    // NOT auto-emit the empty-grid placeholder on mount — that
+    // would silently overwrite the loaded code in the host's
+    // detectedCode state. Similarly, the on-mount name-collision
+    // bump must be skipped: the edit session is for the existing
+    // widget's name, not a fresh "ComposedWidget{N}" choice.
+    editContext = null,
 }) {
     const [grid, setGridRaw] = useState(() => initialGrid || makeEmptyGrid());
     const [internalSelectedCellId, setInternalSelectedCellId] = useState(null);
@@ -143,14 +151,29 @@ export function ComposerPaneV2({
     // including the initial mount, so this single effect replaces
     // both the per-mutation onChange/onEmit calls AND the dedicated
     // "initial emit" effect.
+    //
+    // Edit-mode guard: when the host opened the modal with an
+    // existing widget's code loaded (editContext.componentCode), the
+    // first mount of this pane would otherwise emit the empty-grid
+    // placeholder — which the host's onEmit pipes into
+    // setDetectedCode, blowing away the loaded code. We skip the
+    // emit (NOT the onChange — the host still needs grid state for
+    // draft persistence) until the user actually composes
+    // something. Once the grid is non-empty (the user dropped a
+    // component or applied a starter), the normal emit fires and
+    // intentionally overwrites detectedCode — at that point the
+    // user is asking to replace the existing widget's code via the
+    // compose path.
+    const hasEditContextCode = !!editContext?.componentCode;
     useEffect(() => {
         if (typeof onChangeRef.current === "function") {
             onChangeRef.current(grid);
         }
         if (typeof onEmitRef.current === "function") {
+            if (hasEditContextCode && isGridEmpty(grid)) return;
             onEmitRef.current(emitGridWidgetCode(grid));
         }
-    }, [grid]);
+    }, [grid, hasEditContextCode]);
 
     // On first mount (no draft resume): ask the main process for
     // already-installed @ai-built/ widgets and bump the default
@@ -164,6 +187,13 @@ export function ComposerPaneV2({
     useEffect(() => {
         if (initialGrid) return; // resuming a draft — keep its name
         if (userRenamedRef.current) return; // user typed something
+        // Edit mode owns the widget name — bumping to
+        // "ComposedWidget{N}" here would relabel the file the user
+        // is editing and (worse) re-emit the placeholder code under
+        // the new name. The existing widget's name lives in the
+        // editContext / loaded source; this pane has no business
+        // renaming it.
+        if (editContext?.componentCode) return;
         const getConfigs = window.mainApi?.widgets?.getComponentConfigs;
         if (typeof getConfigs !== "function") return; // jsdom / tests
         let cancelled = false;
