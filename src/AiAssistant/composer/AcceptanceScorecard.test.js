@@ -275,67 +275,43 @@ describe("AcceptanceScorecard component", () => {
 });
 
 describe("buildScorecardChatMessage — pure formatter", () => {
-    test("empty input returns empty string", () => {
-        expect(buildScorecardChatMessage([])).toBe("");
+    test("empty / invalid input returns empty string", () => {
         expect(buildScorecardChatMessage(null)).toBe("");
         expect(buildScorecardChatMessage(undefined)).toBe("");
+        expect(buildScorecardChatMessage({})).toBe("");
+        expect(buildScorecardChatMessage({ matches: [] })).toBe("");
     });
 
     test("single rule produces conversational message + 'output BOTH code blocks'", () => {
-        const msg = buildScorecardChatMessage([
-            { index: 0, item: "Title uses SubHeading2.", matches: [] },
-        ]);
+        const msg = buildScorecardChatMessage({
+            index: 0,
+            item: "Title uses SubHeading2.",
+            matches: [],
+        });
         expect(msg).toMatch(/flags this rule/);
         expect(msg).toContain("Title uses SubHeading2.");
         expect(msg).toMatch(/Output BOTH/);
     });
 
-    test("single rule with matches surfaces the offending substrings", () => {
-        const msg = buildScorecardChatMessage([
-            {
-                index: 12,
-                item: "No hardcoded Tailwind color classes.",
-                matches: ["bg-purple-600", "text-gray-400"],
-            },
-        ]);
+    test("rule with matches surfaces the offending substrings", () => {
+        const msg = buildScorecardChatMessage({
+            index: 12,
+            item: "No hardcoded Tailwind color classes.",
+            matches: ["bg-purple-600", "text-gray-400"],
+        });
         expect(msg).toMatch(/Offending substring/);
         expect(msg).toContain("bg-purple-600");
         expect(msg).toContain("text-gray-400");
     });
 
-    test("multiple rules produces a numbered list", () => {
-        const msg = buildScorecardChatMessage([
-            { index: 0, item: "Use SubHeading2.", matches: [] },
-            { index: 4, item: "Error state rendered.", matches: [] },
-            { index: 13, item: "No raw button tags.", matches: ["<button"] },
-        ]);
-        expect(msg).toMatch(/flags 3 rules/);
-        expect(msg).toMatch(/1\. Use SubHeading2/);
-        expect(msg).toMatch(/2\. Error state rendered/);
-        expect(msg).toMatch(/3\. No raw button tags/);
-        expect(msg).toContain("<button");
-        expect(msg).toMatch(/Output BOTH/);
-    });
-
-    test("matches list is capped (head of 5 for single, head of 3 for multi)", () => {
-        const single = buildScorecardChatMessage([
-            {
-                index: 12,
-                item: "No hardcoded color.",
-                matches: ["a", "b", "c", "d", "e", "f", "g"],
-            },
-        ]);
-        // Single-rule cap = 5; the 6th and 7th render as "+N more".
-        expect(single).toContain("a, b, c, d, e");
-        expect(single).toMatch(/\+2 more/);
-
-        const multi = buildScorecardChatMessage([
-            { index: 0, item: "X", matches: [] },
-            { index: 1, item: "Y", matches: ["m1", "m2", "m3", "m4"] },
-        ]);
-        // Multi-rule cap = 3; m4 surfaces as "+1 more".
-        expect(multi).toContain("m1, m2, m3");
-        expect(multi).toMatch(/\+1 more/);
+    test("matches list is capped at 5 with '+N more' overflow", () => {
+        const msg = buildScorecardChatMessage({
+            index: 12,
+            item: "No hardcoded color.",
+            matches: ["a", "b", "c", "d", "e", "f", "g"],
+        });
+        expect(msg).toContain("a, b, c, d, e");
+        expect(msg).toMatch(/\+2 more/);
     });
 });
 
@@ -380,13 +356,28 @@ describe("AcceptanceScorecard — Ask AI integration", () => {
             '[data-testid^="acceptance-scorecard-row-"][data-testid$="-send-to-ai"]'
         );
         expect(sendButtons.length).toBe(0);
-        // The "fix all" header button is also absent.
+    });
+
+    test("no batch 'fix all' button exists — per-row is the only flow", () => {
+        // Regression pin: an earlier iteration shipped a batch button
+        // that asked the AI to fix every failing rule in one message.
+        // That prompt biased the AI toward wholesale rewrites that
+        // mangled user-specific implementation. The button was
+        // removed; per-row remains the only path so each fix is
+        // surgical and the user verifies one at a time.
+        const onSendToAi = jest.fn();
+        render(
+            <AcceptanceScorecard
+                code={BAD_WIDGET_CODE}
+                onSendToAi={onSendToAi}
+            />
+        );
         expect(
             screen.queryByTestId("acceptance-scorecard-send-all-to-ai")
         ).not.toBeInTheDocument();
     });
 
-    test("clicking per-row Ask AI invokes onSendToAi with that single rule", () => {
+    test("clicking per-row Ask AI invokes onSendToAi with the row object (NOT wrapped in an array)", () => {
         const onSendToAi = jest.fn();
         render(
             <AcceptanceScorecard
@@ -398,41 +389,12 @@ describe("AcceptanceScorecard — Ask AI integration", () => {
             screen.getByTestId("acceptance-scorecard-row-12-send-to-ai")
         );
         expect(onSendToAi).toHaveBeenCalledTimes(1);
-        const [rules] = onSendToAi.mock.calls[0];
-        expect(Array.isArray(rules)).toBe(true);
-        expect(rules.length).toBe(1);
-        expect(rules[0].index).toBe(12);
-    });
-
-    test("'Ask AI to fix all N' button renders when there are >1 failing rules", () => {
-        const onSendToAi = jest.fn();
-        render(
-            <AcceptanceScorecard
-                code={BAD_WIDGET_CODE}
-                onSendToAi={onSendToAi}
-            />
-        );
-        const btn = screen.getByTestId("acceptance-scorecard-send-all-to-ai");
-        expect(btn).toBeInTheDocument();
-        // Label includes the count.
-        expect(btn.textContent).toMatch(/fix all \d+/i);
-    });
-
-    test("clicking 'fix all' invokes onSendToAi with every failing rule", () => {
-        const onSendToAi = jest.fn();
-        render(
-            <AcceptanceScorecard
-                code={BAD_WIDGET_CODE}
-                onSendToAi={onSendToAi}
-            />
-        );
-        fireEvent.click(
-            screen.getByTestId("acceptance-scorecard-send-all-to-ai")
-        );
-        expect(onSendToAi).toHaveBeenCalledTimes(1);
-        const [rules] = onSendToAi.mock.calls[0];
-        expect(rules.length).toBeGreaterThan(1);
-        // All sent rules must be failing rows.
-        expect(rules.every((r) => r.pass === false)).toBe(true);
+        const [rule] = onSendToAi.mock.calls[0];
+        // The batch-removal refactor flattened the callback contract:
+        // onSendToAi receives a single rule object, not an array of
+        // one element. Pinning this so future per-row additions
+        // don't accidentally re-introduce the array wrapper.
+        expect(Array.isArray(rule)).toBe(false);
+        expect(rule.index).toBe(12);
     });
 });

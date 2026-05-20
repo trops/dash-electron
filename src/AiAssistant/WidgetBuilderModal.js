@@ -1375,14 +1375,18 @@ ${
     }, []);
 
     // Closes the scorecard loop: when the user clicks "Ask AI" on a
-    // failing rule (or "Ask AI to fix all N"), push a structured
-    // user message into the chat via the same dash:chat-core-send
-    // event handleSendConsoleErrorToAI uses. We also flip to Build
-    // mode so the AI's response goes to the chat the user is
-    // actually looking at — the AI will re-emit BOTH code blocks
-    // which the Build flow parses into detectedCode.
-    const handleScorecardSendToAi = useCallback((rules) => {
-        const content = buildScorecardChatMessage(rules);
+    // failing rule, push a structured user message into the chat
+    // via the same dash:chat-core-send event handleSendConsoleErrorToAI
+    // uses. We also flip to Build mode so the AI's response goes to
+    // the chat the user is actually looking at — the AI will re-emit
+    // BOTH code blocks which the Build flow parses into detectedCode.
+    //
+    // Single-rule by design: an earlier "fix all failing rules in
+    // one shot" button biased the AI toward wholesale rewrites that
+    // mangled user-specific implementation. The per-row flow keeps
+    // each fix surgical.
+    const handleScorecardSendToAi = useCallback((rule) => {
+        const content = buildScorecardChatMessage(rule);
         if (!content) return;
         setChatMode("build");
         setActiveTab("preview");
