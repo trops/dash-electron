@@ -4915,13 +4915,9 @@ ${
                                                                     </p>
                                                                     <button
                                                                         type="button"
-                                                                        onClick={async () => {
-                                                                            try {
-                                                                                await window.mainApi?.registryAuth?.initiateLogin();
-                                                                            } catch {
-                                                                                /* ignore */
-                                                                            }
-                                                                        }}
+                                                                        onClick={
+                                                                            handleSignInForPreview
+                                                                        }
                                                                         className="px-3 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 transition-colors"
                                                                     >
                                                                         Sign in
