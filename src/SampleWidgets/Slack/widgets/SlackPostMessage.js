@@ -24,7 +24,11 @@ function SlackPostMessageContent({ title, widgetId }) {
 
     useEffect(() => {
         listen(listeners, {
-            channelSelected: (payload) => {
+            // DashboardPublisher wraps the published value in
+            // { message, event, uuid } — unwrap before reading fields,
+            // otherwise payload.id / payload.name come back undefined.
+            channelSelected: (envelope) => {
+                const payload = envelope?.message || envelope;
                 setChannelId(payload.id);
                 setChannelName(payload.name);
             },

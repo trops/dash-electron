@@ -357,10 +357,15 @@ api.publishEvent("search-completed", { query: "test", results: 42 });
 
 ```javascript
 api.registerListeners(["search-completed", "item-selected"], {
-    "search-completed": (payload) => {
+    // The Dashboard publisher wraps every payload in
+    // { message, event, uuid }. Unwrap before reading fields —
+    // otherwise payload.query / payload.id come back undefined.
+    "search-completed": (envelope) => {
+        const payload = envelope?.message || envelope;
         console.log("Search:", payload.query);
     },
-    "item-selected": (payload) => {
+    "item-selected": (envelope) => {
+        const payload = envelope?.message || envelope;
         console.log("Selected:", payload.id);
     },
 });
@@ -392,7 +397,10 @@ const handleSelect = (channel) => {
 // In SlackMessages widget
 useEffect(() => {
     api.registerListeners(["slack-channel-selected"], {
-        "slack-channel-selected": (payload) => {
+        // `envelope` arrives as { message, event, uuid }, not the raw
+        // payload — unwrap before use. See DashboardPublisher.emit.
+        "slack-channel-selected": (envelope) => {
+            const payload = envelope?.message || envelope;
             setChannelId(payload.channelId);
             setChannelName(payload.channelName);
         },

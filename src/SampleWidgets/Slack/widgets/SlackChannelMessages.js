@@ -30,7 +30,12 @@ function SlackChannelMessagesContent({ title, widgetId }) {
     // current always points at the latest setters so the closure
     // doesn't go stale.
     const channelSelectedRef = useRef(null);
-    channelSelectedRef.current = (payload) => {
+    // DashboardPublisher wraps the published value in
+    // { message, event, uuid } — unwrap before reading fields,
+    // otherwise payload.id / payload.name come back undefined and
+    // the widget silently never loads.
+    channelSelectedRef.current = (envelope) => {
+        const payload = envelope?.message || envelope;
         setChannelId(payload.id);
         setChannelName(payload.name);
     };
