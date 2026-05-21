@@ -361,6 +361,13 @@ The dash-react library provides these categories:
 
 **Input**: `InputText`, `CodeEditor`, `CodeRenderer`
 
+**Text formatting**: `RichText` — renders provider-flavored formatted text.
+Use `<RichText format="slack" text={msg.text} />` for Slack messages so
+mrkdwn (`*bold*`, `_italic_`, `<@mentions>`), `:emoji:` shortcodes, and
+HTML entities (`&gt;` etc.) render the way Slack itself renders them.
+Also exports `slackEmojiForName(shortcode)` and
+`SLACK_QUICK_REACTION_SHORTCODES` for reaction-picker UIs.
+
 **Utility**: `ErrorBoundary`, `ErrorMessage`, `Text`, `Draggable`
 
 **All imported from `@trops/dash-react`** — never from `@dash/Common` or local paths.
@@ -370,6 +377,7 @@ When in doubt:
 -   **Data display** → `Panel` + `Heading` + `Text`
 -   **Lists** → `Menu` + `MenuItem` (for nav-like lists) or custom list in `Panel`
 -   **Actions** → `Button` or `ButtonIcon`
+-   **Slack message bodies / mrkdwn-formatted text** → `RichText` with `format="slack"`
 -   **Rich content** → `CodeEditor` / `CodeRenderer`
 -   **Overlays** → `Modal` or `SlidePanelOverlay`
 
