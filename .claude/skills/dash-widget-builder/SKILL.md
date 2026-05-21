@@ -714,6 +714,57 @@ The hook auto-scopes the event to `<component>[<id>].<eventName>` on the wire
 called at the top of the component above any conditional return (Rules of
 Hooks).
 
+### Listening
+
+The same hook returns `listen` + `listeners`. Register handlers in a
+`useEffect` keyed on those values. **CRITICAL**: the platform's
+`DashboardPublisher` wraps every published payload in an envelope of
+shape `{ message, event, uuid }` before delivering it to listeners.
+You MUST unwrap `envelope.message` before reading fields — otherwise
+every access (`payload.id`, `payload.channelName`, etc.) silently
+returns `undefined` and the widget never updates.
+
+```jsx
+import { useEffect, useRef } from "react";
+import { useWidgetEvents } from "@trops/dash-core";
+
+export default function MyDownstreamWidget() {
+    const { listen, listeners } = useWidgetEvents();
+    const itemSelectedRef = useRef(null);
+    // Mirror the latest setters into a ref so the listener closure
+    // doesn't go stale across re-renders.
+    itemSelectedRef.current = (envelope) => {
+        const payload = envelope?.message || envelope;
+        // Now safe: payload.id, payload.name, payload.* are real.
+        setSelectedId(payload.id);
+        setSelectedName(payload.name);
+    };
+
+    useEffect(() => {
+        listen(listeners, {
+            itemSelected: (payload) => itemSelectedRef.current(payload),
+        });
+    }, [listen, listeners]);
+
+    // ...
+}
+```
+
+The `|| envelope` fallback keeps the unwrap resilient if `DashboardPublisher`
+ever switches to passing the payload directly. **Never** read fields off
+the raw listener argument — even when one test seems to work, the next
+re-render with a real publisher path will return `undefined`.
+
+Also declare every event the widget consumes in the `.dash.js` config's
+`eventHandlers: [...]` array:
+
+```js
+eventHandlers: ["itemSelected", "channelSelected"],
+```
+
+The framework wires up `listeners` from this list — if the array is
+missing the event name, `listen()` will never fire its handler.
+
 ### Naming convention
 
 Plain **camelCase** verbs/states: `itemSelected`, `queryChanged`,
