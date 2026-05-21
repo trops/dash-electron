@@ -2931,43 +2931,55 @@ function createWindow() {
                     "utf8"
                 );
 
-                // Slice 7: also write/merge a package.json carrying
-                // the `dash.permissions.mcp` block since
-                // `parseManifestPermissions` reads from package.json
-                // shape (not dash.json). Preserves any existing
-                // package.json (e.g. AI produced one with `dependencies`)
-                // and overlays the dash block on top.
-                if (hasDeclaredPermissions) {
-                    const pkgJsonPath = path.join(buildDir, "package.json");
-                    let existingPkg = {};
-                    if (fs.existsSync(pkgJsonPath)) {
-                        try {
-                            existingPkg = JSON.parse(
-                                fs.readFileSync(pkgJsonPath, "utf8")
-                            );
-                        } catch (_) {
-                            existingPkg = {};
-                        }
+                // Always write a baseline `package.json` regardless of
+                // whether the AI's source uses MCP. Two downstream
+                // surfaces depend on this file existing:
+                //
+                //   - `widgetPermissions.getWidgetMcpPermissions` reads
+                //     it to answer "what does this widget declare?" —
+                //     without the file the function returns null and
+                //     the Permissions panel shows nothing for the
+                //     widget.
+                //   - `widgetPermissions.resolveWidgetPackagePath`
+                //     anchors widget identity to the on-disk package.
+                //     The path resolver still works without the file,
+                //     but downstream call sites lose the ability to
+                //     pin widget→package and fall through to weaker
+                //     back-compat heuristics.
+                //
+                // The per-component `dash.permissions.mcpByComponent`
+                // block is added AFTER this write by
+                // `installFromLocalPath` → `applyScanToPackageJson`,
+                // which re-scans the full widgets/ tree (the AI
+                // handler operates on a single widget at a time so
+                // it can't produce that block here).
+                const pkgJsonPath = path.join(buildDir, "package.json");
+                let existingPkg = {};
+                if (fs.existsSync(pkgJsonPath)) {
+                    try {
+                        existingPkg = JSON.parse(
+                            fs.readFileSync(pkgJsonPath, "utf8")
+                        );
+                    } catch (_) {
+                        existingPkg = {};
                     }
-                    const merged = {
-                        name: `@ai-built/${widgetName.toLowerCase()}`,
-                        version: "1.0.0",
-                        private: true,
-                        ...existingPkg,
-                        dash: {
-                            ...(existingPkg.dash || {}),
-                            permissions: {
-                                ...((existingPkg.dash || {}).permissions || {}),
-                                mcp: detectedMcpPermissions,
-                            },
-                        },
-                    };
-                    fs.writeFileSync(
-                        pkgJsonPath,
-                        JSON.stringify(merged, null, 2),
-                        "utf8"
-                    );
                 }
+                const {
+                    buildAiInstallPackageJson,
+                } = require("../scripts/buildAiInstallPackageJson");
+                const baselinePkg = buildAiInstallPackageJson({
+                    widgetName,
+                    description,
+                    existingPkg,
+                    mcpPermissions: hasDeclaredPermissions
+                        ? detectedMcpPermissions
+                        : null,
+                });
+                fs.writeFileSync(
+                    pkgJsonPath,
+                    JSON.stringify(baselinePkg, null, 2),
+                    "utf8"
+                );
 
                 // Compile via widgetCompiler (from dash-core).
                 // `dashCoreRegistry` was already required at the top of
