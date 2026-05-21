@@ -7,12 +7,12 @@
                 "type": "slack",
                 "providerClass": "mcp"
             },
-            "generatedAt": "2026-05-20T16:47:32.652Z",
-            "durationMs": 63860,
+            "generatedAt": "2026-05-21T16:05:01.134Z",
+            "durationMs": 99346,
             "exitCode": 0,
             "parseStatus": "both",
             "blockCount": 2,
-            "assistantTextLength": 7119,
+            "assistantTextLength": 7285,
             "files": [
                 "widgets/SlackChannelBrowser.js",
                 "widgets/SlackChannelBrowser.dash.js"

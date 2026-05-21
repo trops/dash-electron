@@ -1,13 +1,11 @@
 <!-- scenario: 01-slack-channels -->
 <!-- userPrompt: Build me a Slack channel browser. List channels, click to select, refresh button. -->
 <!-- exitCode: 0 -->
-<!-- durationMs: 63860 -->
+<!-- durationMs: 99346 -->
 
-I've got everything I need: Slack channel browser with click-to-select (publishes an event) and a refresh button. Single-purpose widget using the pre-selected `slack` provider with `mcp` class. Mirroring the structure of the canonical `SlackListChannels` exemplar.
+I'll build a Slack channel browser widget. It uses the `slack` MCP provider, calls `slack_list_channels`, renders selectable rows, and publishes a `channelSelected` event so a sibling widget (e.g., a message viewer) can react.
 
-Here are the files:
-
-**File: `widgets/SlackChannelBrowser.js`**
+**File: SlackChannelBrowser.js**
 
 ```jsx
 import React, { useState, useEffect, useCallback } from "react";
@@ -20,155 +18,152 @@ import {
     EmptyState,
     Skeleton,
     Button2,
-    StatusBadge,
+    Tag2,
     Caption,
 } from "@trops/dash-react";
 import { useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 
-export default function SlackChannelBrowser({ title = "Slack Channels" }) {
+// Slack MCP servers return tool output in a few different shapes.
+// Normalize them all into a plain array of channel objects.
+function parseChannels(res) {
+    if (!res) return [];
+    if (Array.isArray(res)) return res;
+    if (Array.isArray(res?.channels)) return res.channels;
+    if (Array.isArray(res?.content)) {
+        for (const part of res.content) {
+            if (part?.type === "text" && typeof part.text === "string") {
+                try {
+                    const parsed = JSON.parse(part.text);
+                    if (Array.isArray(parsed?.channels)) return parsed.channels;
+                    if (Array.isArray(parsed)) return parsed;
+                } catch {
+                    // not JSON — fall through
+                }
+            }
+        }
+    }
+    return [];
+}
+
+export default function SlackChannelBrowser({ title = "Slack channels" }) {
     const {
         callTool,
         tools,
         isConnected,
-        error: mcpError,
+        error: connError,
     } = useMcpProvider("slack");
     const { publishEvent } = useWidgetEvents();
 
     const [channels, setChannels] = useState(null);
-    const [loadError, setLoadError] = useState(null);
     const [selectedId, setSelectedId] = useState(null);
-    const [refreshKey, setRefreshKey] = useState(0);
-
-    const refresh = useCallback(() => {
-        setRefreshKey((k) => k + 1);
-    }, []);
+    const [loadError, setLoadError] = useState(null);
+    const [reloadCounter, setReloadCounter] = useState(0);
 
     useEffect(() => {
         if (!isConnected || !Array.isArray(tools) || tools.length === 0) return;
         let cancelled = false;
         setChannels(null);
         setLoadError(null);
-        callTool("slack_search_channels", { query: "" })
-            .then((response) => {
+        callTool("slack_list_channels", { limit: 200 })
+            .then((res) => {
                 if (cancelled) return;
-                // Defensive: tool responses vary in shape.
-                const raw =
-                    response?.channels ??
-                    response?.results ??
-                    response?.items ??
-                    response;
-                const list = Array.isArray(raw) ? raw : [];
-                setChannels(list);
+                setChannels(parseChannels(res));
             })
             .catch((err) => {
                 if (cancelled) return;
                 setLoadError(err);
+                setChannels([]);
             });
         return () => {
             cancelled = true;
         };
-    }, [isConnected, tools, refreshKey, callTool]);
+    }, [isConnected, tools, callTool, reloadCounter]);
+
+    const handleRefresh = useCallback(() => {
+        setReloadCounter((n) => n + 1);
+    }, []);
 
     const handleSelect = useCallback(
         (channel) => {
-            const id =
-                channel?.id || channel?.channel_id || channel?.name || null;
-            if (!id) return;
-            setSelectedId(id);
+            setSelectedId(channel.id);
             publishEvent("channelSelected", {
-                id,
-                name: typeof channel?.name === "string" ? channel.name : null,
-                isPrivate: Boolean(channel?.is_private),
+                id: channel.id,
+                name: channel.name,
+                isPrivate: channel.isPrivate,
             });
         },
         [publishEvent]
     );
 
-    const renderBody = () => {
-        if (mcpError) {
-            return (
-                <Alert2
-                    title="Slack connection error"
-                    message={mcpError.message || String(mcpError)}
-                />
-            );
-        }
-        if (loadError) {
-            return (
-                <Alert2
-                    title="Failed to load channels"
-                    message={loadError.message || String(loadError)}
-                />
-            );
-        }
-        if (!isConnected) {
-            return (
-                <EmptyState
-                    title="Slack not connected"
-                    description="Waiting for the Slack provider to connect."
-                />
-            );
-        }
-        if (channels === null) {
-            return <Skeleton.Text lines={6} />;
-        }
-        if (channels.length === 0) {
-            return (
-                <EmptyState
-                    title="No channels found"
-                    description="The Slack workspace returned no channels."
-                />
-            );
-        }
-        return (
-            <Menu>
-                {channels.map((channel) => {
-                    const id =
-                        channel?.id || channel?.channel_id || channel?.name;
-                    const name =
-                        typeof channel?.name === "string"
-                            ? channel.name
-                            : "(unnamed)";
-                    const isPrivate = Boolean(channel?.is_private);
-                    return (
-                        <MenuItem
-                            key={id}
-                            selected={selectedId === id}
-                            onClick={() => handleSelect(channel)}
-                        >
-                            <div className="flex items-center justify-between w-full gap-2">
-                                <Caption text={`#${name}`} />
-                                <StatusBadge
-                                    state={isPrivate ? "warning" : "success"}
-                                    label={isPrivate ? "private" : "public"}
-                                    compact
-                                />
-                            </div>
-                        </MenuItem>
-                    );
-                })}
-            </Menu>
-        );
-    };
+    const errMsg = connError
+        ? connError.message || String(connError)
+        : loadError
+        ? loadError.message || String(loadError)
+        : null;
+
+    const ready = isConnected && Array.isArray(tools) && tools.length > 0;
 
     return (
         <Panel>
-            <div className="flex items-center justify-between mb-3 gap-2">
+            <div className="flex items-center justify-between mb-3">
                 <SubHeading2 title={title} />
                 <Button2
                     title="Refresh"
-                    onClick={refresh}
+                    onClick={handleRefresh}
                     size="sm"
-                    disabled={!isConnected}
+                    disabled={!ready}
                 />
             </div>
-            {renderBody()}
+
+            {errMsg && (
+                <Alert2 title="Failed to load channels" message={errMsg} />
+            )}
+
+            {!errMsg && !ready && <Skeleton.Text lines={5} />}
+
+            {!errMsg && ready && channels === null && (
+                <Skeleton.Text lines={5} />
+            )}
+
+            {!errMsg && ready && channels && channels.length === 0 && (
+                <EmptyState
+                    title="No channels"
+                    description="No Slack channels were returned. Try refreshing, or check that the Slack provider has the conversations:read scope."
+                />
+            )}
+
+            {!errMsg && ready && channels && channels.length > 0 && (
+                <>
+                    <Caption text={`${channels.length} channels`} />
+                    <Menu>
+                        {channels.map((ch) => {
+                            const id = ch?.id || ch?.channel_id || ch?.name;
+                            const name = ch?.name || id || "unknown";
+                            const isPrivate = !!(ch?.is_private || ch?.private);
+                            return (
+                                <MenuItem
+                                    key={id}
+                                    selected={selectedId === id}
+                                    onClick={() =>
+                                        handleSelect({ id, name, isPrivate })
+                                    }
+                                >
+                                    <div className="flex items-center justify-between w-full gap-2">
+                                        <span>{`# ${name}`}</span>
+                                        {isPrivate && <Tag2 title="private" />}
+                                    </div>
+                                </MenuItem>
+                            );
+                        })}
+                    </Menu>
+                </>
+            )}
         </Panel>
     );
 }
 ```
 
-**File: `widgets/SlackChannelBrowser.dash.js`**
+**File: SlackChannelBrowser.dash.js**
 
 ```javascript
 import SlackChannelBrowser from "./SlackChannelBrowser";
@@ -181,7 +176,7 @@ export default {
     userConfig: {
         title: {
             type: "text",
-            defaultValue: "Slack Channels",
+            defaultValue: "Slack channels",
             displayName: "Title",
             instructions: "The title shown at the top of the widget.",
             required: false,
@@ -192,20 +187,17 @@ export default {
 };
 ```
 
-### What this widget does
+**What it does**
 
--   Lists every channel returned by Slack's `slack_search_channels` MCP tool on mount.
--   Each row shows the channel name with a `StatusBadge` indicating public/private.
--   Clicking a row highlights it (via `MenuItem`'s `selected` prop) and publishes `channelSelected`.
--   The header `Refresh` button re-runs the tool call.
--   Loading → `Skeleton.Text`; empty → `EmptyState`; error → `Alert2`; disconnected → `EmptyState`. No silent fallbacks.
+-   On mount (and after every Refresh click), calls the Slack MCP tool `slack_list_channels` with `limit: 200`. Result parsing is defensive — handles raw `{ channels: [...] }`, plain arrays, and the MCP `{ content: [{ type: "text", text: "..." }] }` wrapping.
+-   Renders rows in a `Menu` / `MenuItem`. Clicking a row sets `selected` on that row and fires the event.
+-   Loading → `Skeleton.Text`, errors → `Alert2`, empty list → `EmptyState`, refresh → `Button2` (disabled until the MCP connection is ready).
+-   Private channels get a `Tag2` chip; public channels show just `# name`.
 
-### Events emitted
+**Events emitted**
 
--   **`channelSelected`** — fires on row click. Payload: `{ id, name, isPrivate }`. Wire this to a Slack messages widget (or any other listener) via Settings → Configure → Event Handlers.
+-   `channelSelected` — fires when a channel row is clicked. Payload: `{ id, name, isPrivate }`. Wire a sibling widget (e.g., a Slack message-history widget) to it via Settings → Configure → Event Handlers to make it react to selection.
 
-### Install-time permissions
+**Permissions to expect at install time**
 
-This widget only calls `mcp.callTool(...)` against the Slack MCP server — no `window.mainApi.*` methods, so no per-method consent modal at install. The Slack provider itself must be configured (already is) for the widget to connect.
-
-Click **Install** below to register it; it'll appear in the widget picker immediately.
+-   None for `window.mainApi.*` — this is a pure MCP widget. The install modal will only confirm the Slack provider binding, not IPC method consent.
