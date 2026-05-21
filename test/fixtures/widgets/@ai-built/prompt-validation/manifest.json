@@ -1,0 +1,176 @@
+{
+    "runs": [
+        {
+            "id": "01-slack-channels",
+            "userPrompt": "Build me a Slack channel browser. List channels, click to select, refresh button.",
+            "selectedProvider": {
+                "type": "slack",
+                "providerClass": "mcp"
+            },
+            "generatedAt": "2026-05-20T16:47:32.652Z",
+            "durationMs": 63860,
+            "exitCode": 0,
+            "parseStatus": "both",
+            "blockCount": 2,
+            "assistantTextLength": 7119,
+            "files": [
+                "widgets/SlackChannelBrowser.js",
+                "widgets/SlackChannelBrowser.dash.js"
+            ]
+        },
+        {
+            "id": "02-github-prs",
+            "userPrompt": "I want to see open pull requests in trops/dash-electron with their state.",
+            "selectedProvider": {
+                "type": "github",
+                "providerClass": "mcp"
+            },
+            "generatedAt": "2026-05-20T16:49:19.386Z",
+            "durationMs": 106732,
+            "exitCode": 0,
+            "parseStatus": "both",
+            "blockCount": 3,
+            "assistantTextLength": 11653,
+            "files": [
+                "widgets/GitHubOpenPRs.js",
+                "widgets/GitHubOpenPRs.dash.js"
+            ]
+        },
+        {
+            "id": "03-gmail-unread-stat",
+            "userPrompt": "Show my unread email count as one big number, refresh every minute.",
+            "selectedProvider": {
+                "type": "gmail",
+                "providerClass": "mcp"
+            },
+            "generatedAt": "2026-05-20T16:50:46.785Z",
+            "durationMs": 87383,
+            "exitCode": 0,
+            "parseStatus": "both",
+            "blockCount": 2,
+            "assistantTextLength": 10093,
+            "files": [
+                "widgets/GmailUnreadCount.js",
+                "widgets/GmailUnreadCount.dash.js"
+            ]
+        },
+        {
+            "id": "04-notion-search",
+            "userPrompt": "Search Notion pages by title, show matching results.",
+            "selectedProvider": {
+                "type": "notion",
+                "providerClass": "mcp"
+            },
+            "generatedAt": "2026-05-20T16:52:16.891Z",
+            "durationMs": 90104,
+            "exitCode": 0,
+            "parseStatus": "both",
+            "blockCount": 2,
+            "assistantTextLength": 15932,
+            "files": [
+                "widgets/NotionSearchPages.js",
+                "widgets/NotionSearchPages.dash.js"
+            ]
+        },
+        {
+            "id": "05-gdrive-recent",
+            "userPrompt": "List my recently modified Google Drive files.",
+            "selectedProvider": {
+                "type": "google-drive",
+                "providerClass": "mcp"
+            },
+            "generatedAt": "2026-05-20T16:53:56.074Z",
+            "durationMs": 99182,
+            "exitCode": 0,
+            "parseStatus": "both",
+            "blockCount": 2,
+            "assistantTextLength": 10862,
+            "files": [
+                "widgets/GoogleDriveRecentFiles.js",
+                "widgets/GoogleDriveRecentFiles.dash.js"
+            ]
+        },
+        {
+            "id": "06-gcal-today",
+            "userPrompt": "Show my next 5 calendar events for today.",
+            "selectedProvider": {
+                "type": "google-calendar",
+                "providerClass": "mcp"
+            },
+            "generatedAt": "2026-05-20T16:56:10.671Z",
+            "durationMs": 134595,
+            "exitCode": 0,
+            "parseStatus": "both",
+            "blockCount": 2,
+            "assistantTextLength": 13225,
+            "files": [
+                "widgets/GoogleCalendarTodayEvents.js",
+                "widgets/GoogleCalendarTodayEvents.dash.js"
+            ]
+        },
+        {
+            "id": "07-algolia-rules",
+            "userPrompt": "List rules for an Algolia index with their on/off state, search to filter.",
+            "selectedProvider": {
+                "type": "algolia",
+                "providerClass": "credential"
+            },
+            "generatedAt": "2026-05-20T16:57:07.611Z",
+            "durationMs": 56937,
+            "exitCode": 0,
+            "parseStatus": "both",
+            "blockCount": 3,
+            "assistantTextLength": 11588,
+            "files": [
+                "widgets/AlgoliaRulesList.js",
+                "widgets/AlgoliaRulesList.dash.js"
+            ]
+        },
+        {
+            "id": "08-filesystem-dir",
+            "userPrompt": "Show files in a directory I configure, click to publish fileSelected.",
+            "selectedProvider": {
+                "type": "filesystem",
+                "providerClass": "mcp"
+            },
+            "generatedAt": "2026-05-20T16:58:11.540Z",
+            "durationMs": 63928,
+            "exitCode": 0,
+            "parseStatus": "both",
+            "blockCount": 2,
+            "assistantTextLength": 7207,
+            "files": [
+                "widgets/FilesystemFileList.js",
+                "widgets/FilesystemFileList.dash.js"
+            ]
+        },
+        {
+            "id": "09-counter-noprovider",
+            "userPrompt": "A counter with + and - buttons and a reset. No data source.",
+            "selectedProvider": {
+                "sentinel": "none"
+            },
+            "generatedAt": "2026-05-20T16:58:38.467Z",
+            "durationMs": 26926,
+            "exitCode": 0,
+            "parseStatus": "both",
+            "blockCount": 2,
+            "assistantTextLength": 3077,
+            "files": ["widgets/Counter.js", "widgets/Counter.dash.js"]
+        },
+        {
+            "id": "10-notepad-noprovider",
+            "userPrompt": "A notepad — text area that auto-saves to userPrefs.",
+            "selectedProvider": {
+                "sentinel": "none"
+            },
+            "generatedAt": "2026-05-20T16:59:27.809Z",
+            "durationMs": 49340,
+            "exitCode": 0,
+            "parseStatus": "both",
+            "blockCount": 2,
+            "assistantTextLength": 4054,
+            "files": ["widgets/Notepad.js", "widgets/Notepad.dash.js"]
+        }
+    ]
+}
