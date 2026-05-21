@@ -96,12 +96,13 @@ For each candidate MCP server, determine:
 Create a mapping table before writing code:
 
 ```
-MCP Server: @modelcontextprotocol/server-slack
-├── Tool: search_messages    → Widget: Search bar + message list
-├── Tool: send_message       → Widget: Compose panel
-├── Tool: list_channels      → Widget: Channel sidebar
-├── Resource: channel_history → Widget: Message timeline
-└── Credential: SLACK_TOKEN  → Provider: OAuth setup
+MCP Server: slack-mcp-server (korotovsky)
+├── Tool: conversations_search_messages → Widget: Search bar + message list
+├── Tool: conversations_add_message     → Widget: Compose panel
+├── Tool: channels_list                 → Widget: Channel sidebar
+├── Tool: conversations_history         → Widget: Message timeline
+└── Credentials: SLACK_MCP_XOXB_TOKEN / SLACK_MCP_XOXP_TOKEN /
+    (SLACK_MCP_XOXC_TOKEN + SLACK_MCP_XOXD_TOKEN)  — pick ONE mode
 ```
 
 ### Step 4: Document the provider requirements
@@ -381,15 +382,15 @@ When in doubt:
 > services are `credential`-class and what methods they expose. Always check
 > the registry first.
 
-| Service          | Typical class | Notes                                                                                                       |
-| ---------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
-| Algolia          | `credential`  | Direct IPC: `listIndices`, `search`, `getSettings`, `setSettings`, `searchRules`, `saveRule`, `deleteRule`. |
-| OpenAI / ChatGPT | `credential`  | Direct IPC for chat / embeddings.                                                                           |
-| Slack            | `mcp`         | `@modelcontextprotocol/server-slack` — `search_messages`, `send_message`, `list_channels`.                  |
-| Google Drive     | `mcp`         | `@modelcontextprotocol/server-google-drive` — `list_files`, `get_file`, `search_files`.                     |
-| GitHub           | `mcp`         | `@modelcontextprotocol/server-github` — `search_repos`, `get_file_contents`, `create_issue`.                |
-| Gmail            | `mcp`         | Community / Google Workspace MCP servers.                                                                   |
-| Contentful       | `mcp`         | Community servers — `get_entries`, `get_content_types`.                                                     |
+| Service          | Typical class | Notes                                                                                                                                     |
+| ---------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Algolia          | `credential`  | Direct IPC: `listIndices`, `search`, `getSettings`, `setSettings`, `searchRules`, `saveRule`, `deleteRule`.                               |
+| OpenAI / ChatGPT | `credential`  | Direct IPC for chat / embeddings.                                                                                                         |
+| Slack            | `mcp`         | `slack-mcp-server` (korotovsky) — `conversations_search_messages`, `conversations_add_message`, `channels_list`, `conversations_history`. |
+| Google Drive     | `mcp`         | `@modelcontextprotocol/server-google-drive` — `list_files`, `get_file`, `search_files`.                                                   |
+| GitHub           | `mcp`         | `@modelcontextprotocol/server-github` — `search_repos`, `get_file_contents`, `create_issue`.                                              |
+| Gmail            | `mcp`         | Community / Google Workspace MCP servers.                                                                                                 |
+| Contentful       | `mcp`         | Community servers — `get_entries`, `get_content_types`.                                                                                   |
 
 **Research is essential.** Don't assume these exact package names or tool
 names — always search npm and GitHub for the current, actively-maintained

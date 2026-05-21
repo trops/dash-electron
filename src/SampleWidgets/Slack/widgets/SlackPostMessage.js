@@ -36,7 +36,7 @@ function SlackPostMessageContent({ title, widgetId }) {
         setLoading(true);
         setResult(null);
         try {
-            const res = await callTool("slack_post_message", {
+            const res = await callTool("conversations_add_message", {
                 channel_id: channelId,
                 text: message.trim(),
             });

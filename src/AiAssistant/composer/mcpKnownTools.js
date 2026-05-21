@@ -163,34 +163,66 @@ export const MCP_KNOWN_TOOLS = {
     ],
     slack: [
         {
-            name: "slack_list_channels",
+            name: "channels_list",
             description: "List channels in the workspace.",
-            args: ["limit", "cursor"],
+            args: [
+                "channel_types",
+                "sort",
+                "limit",
+                "cursor",
+                "query",
+                "query_targets",
+            ],
         },
         {
-            name: "slack_post_message",
-            description: "Send a message to a channel.",
-            args: ["channel_id", "text"],
+            name: "channels_me",
+            description: "List channels the authenticated user is a member of.",
+            args: ["channel_types", "limit", "cursor"],
         },
         {
-            name: "slack_reply_to_thread",
-            description: "Reply to a thread by parent message ts.",
-            args: ["channel_id", "thread_ts", "text"],
+            name: "conversations_history",
+            description: "Read recent messages from a channel or DM.",
+            args: ["channel_id", "cursor", "limit"],
         },
         {
-            name: "slack_get_channel_history",
-            description: "Read recent messages from a channel.",
-            args: ["channel_id", "limit"],
-        },
-        {
-            name: "slack_get_thread_replies",
+            name: "conversations_replies",
             description: "Read the replies in a thread.",
-            args: ["channel_id", "thread_ts"],
+            args: ["channel_id", "thread_ts", "cursor", "limit"],
         },
         {
-            name: "slack_get_users",
-            description: "List users in the workspace.",
-            args: ["limit", "cursor"],
+            name: "conversations_add_message",
+            description:
+                "Send a message to a channel, DM, or thread. Pass thread_ts to reply in a thread.",
+            args: ["channel_id", "thread_ts", "text", "content_type", "blocks"],
+        },
+        {
+            name: "conversations_search_messages",
+            description:
+                "Search messages workspace-wide. Requires xoxp or browser-session auth (not bot tokens).",
+            args: [
+                "search_query",
+                "filter_in_channel",
+                "filter_users_from",
+                "filter_date_after",
+                "filter_date_before",
+                "cursor",
+                "limit",
+            ],
+        },
+        {
+            name: "users_search",
+            description: "Find users by name, email, or display name.",
+            args: ["query", "limit"],
+        },
+        {
+            name: "reactions_add",
+            description: "Add an emoji reaction to a message.",
+            args: ["channel_id", "timestamp", "emoji"],
+        },
+        {
+            name: "reactions_remove",
+            description: "Remove an emoji reaction from a message.",
+            args: ["channel_id", "timestamp", "emoji"],
         },
     ],
     notion: [
