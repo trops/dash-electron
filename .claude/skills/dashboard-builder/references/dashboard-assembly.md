@@ -72,20 +72,20 @@ Each result includes:
 
 Check `src/SampleWidgets/` for reference implementations:
 
-| Directory         | Widgets                                                                                                      | Provider                      |
-| ----------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------- |
-| `Slack/`          | SlackWidget, SlackChannelMessages, SlackListChannels, SlackPostMessage, SlackSearchMessages, SlackUserStatus | slack (MCP)                   |
-| `GitHub/`         | GitHubWidget, GitHubRepoList, GitHubPRList, GitHubIssueList, GitHubIssueDetail                               | github (MCP)                  |
-| `Gmail/`          | GmailWidget, GmailInbox, GmailCompose, GmailSearch, GmailMessageView                                         | gmail (MCP)                   |
-| `GoogleCalendar/` | GoogleCalendarWidget, GCalUpcoming, GCalEventDetail, GCalQuickCreate                                         | google-calendar (MCP)         |
-| `GoogleDrive/`    | GoogleDriveWidget, GDriveFileList, GDriveFileSearch, GDriveFilePreview                                       | google-drive (MCP)            |
-| `Algolia/`        | AlgoliaSearchWidget, AlgoliaAnalyticsWidget, + 12 more                                                       | algolia (credential)          |
-| `Notion/`         | NotionWidget                                                                                                 | notion (MCP)                  |
-| `Chat/`           | ChatAnthropicWidget, ChatClaudeCodeWidget                                                                    | anthropic/openai (credential) |
-| `Clock/`          | AnalogClockWidget, DigitalClockWidget, FlipClockWidget, MinimalTextClockWidget                               | none                          |
-| `DashSamples/`    | NotepadWidget, EventSenderWidget, EventReceiverWidget, ThemeViewerWidget, + more                             | none                          |
-| `Filesystem/`     | FilesystemWidget                                                                                             | filesystem (MCP)              |
-| `Gong/`           | GongWidget                                                                                                   | gong (credential)             |
+| Directory         | Widgets                                                                                     | Provider                      |
+| ----------------- | ------------------------------------------------------------------------------------------- | ----------------------------- |
+| `Slack/`          | SlackWidget, SlackChannelMessages, SlackListChannels, SlackPostMessage, SlackSearchMessages | slack (MCP)                   |
+| `GitHub/`         | GitHubWidget, GitHubRepoList, GitHubPRList, GitHubIssueList, GitHubIssueDetail              | github (MCP)                  |
+| `Gmail/`          | GmailWidget, GmailInbox, GmailCompose, GmailSearch, GmailMessageView                        | gmail (MCP)                   |
+| `GoogleCalendar/` | GoogleCalendarWidget, GCalUpcoming, GCalEventDetail, GCalQuickCreate                        | google-calendar (MCP)         |
+| `GoogleDrive/`    | GoogleDriveWidget, GDriveFileList, GDriveFileSearch, GDriveFilePreview                      | google-drive (MCP)            |
+| `Algolia/`        | AlgoliaSearchWidget, AlgoliaAnalyticsWidget, + 12 more                                      | algolia (credential)          |
+| `Notion/`         | NotionWidget                                                                                | notion (MCP)                  |
+| `Chat/`           | ChatAnthropicWidget, ChatClaudeCodeWidget                                                   | anthropic/openai (credential) |
+| `Clock/`          | AnalogClockWidget, DigitalClockWidget, FlipClockWidget, MinimalTextClockWidget              | none                          |
+| `DashSamples/`    | NotepadWidget, EventSenderWidget, EventReceiverWidget, ThemeViewerWidget, + more            | none                          |
+| `Filesystem/`     | FilesystemWidget                                                                            | filesystem (MCP)              |
+| `Gong/`           | GongWidget                                                                                  | gong (credential)             |
 
 ### Widget Grouping by Workspace
 
@@ -148,19 +148,19 @@ Widgets communicate through a publish/subscribe event system:
 
 ### Provider Types
 
-| Service         | Type              | Class        | Credentials                                    |
-| --------------- | ----------------- | ------------ | ---------------------------------------------- |
-| GitHub          | `github`          | `mcp`        | `{ token: "ghp_..." }`                         |
-| Slack           | `slack`           | `mcp`        | `{ botToken: "xoxb-...", teamId: "T..." }`     |
-| Algolia         | `algolia`         | `credential` | `{ appId: "...", apiKey: "..." }`              |
-| Notion          | `notion`          | `mcp`        | `{ apiKey: "ntn_..." }`                        |
-| OpenAI          | `openai`          | `credential` | `{ apiKey: "sk-..." }`                         |
-| Google Drive    | `google-drive`    | `mcp`        | `{ credentialsJson: "..." }`                   |
-| Gmail           | `gmail`           | `mcp`        | `{ credentialsJson: "..." }`                   |
-| Google Calendar | `google-calendar` | `mcp`        | `{ credentialsJson: "..." }`                   |
-| Brave Search    | `brave-search`    | `mcp`        | `{ apiKey: "..." }`                            |
-| Gong            | `gong`            | `credential` | `{ accessKey: "...", accessKeySecret: "..." }` |
-| Filesystem      | `filesystem`      | `mcp`        | `{ allowedDirectories: "/path/to/dir" }`       |
+| Service         | Type              | Class        | Credentials                                                          |
+| --------------- | ----------------- | ------------ | -------------------------------------------------------------------- |
+| GitHub          | `github`          | `mcp`        | `{ token: "ghp_..." }`                                               |
+| Slack           | `slack`           | `mcp`        | one of: `{ xoxbToken }`, `{ xoxpToken }`, `{ xoxcToken, xoxdToken }` |
+| Algolia         | `algolia`         | `credential` | `{ appId: "...", apiKey: "..." }`                                    |
+| Notion          | `notion`          | `mcp`        | `{ apiKey: "ntn_..." }`                                              |
+| OpenAI          | `openai`          | `credential` | `{ apiKey: "sk-..." }`                                               |
+| Google Drive    | `google-drive`    | `mcp`        | `{ credentialsJson: "..." }`                                         |
+| Gmail           | `gmail`           | `mcp`        | `{ credentialsJson: "..." }`                                         |
+| Google Calendar | `google-calendar` | `mcp`        | `{ credentialsJson: "..." }`                                         |
+| Brave Search    | `brave-search`    | `mcp`        | `{ apiKey: "..." }`                                                  |
+| Gong            | `gong`            | `credential` | `{ accessKey: "...", accessKeySecret: "..." }`                       |
+| Filesystem      | `filesystem`      | `mcp`        | `{ allowedDirectories: "/path/to/dir" }`                             |
 
 ### Adding via MCP
 

@@ -30,7 +30,7 @@ function SlackContent({ title }) {
         setLoading(true);
         setResult(null);
         try {
-            const res = await callTool("slack_list_channels", {});
+            const res = await callTool("channels_list", {});
             const { data, error: mcpError } = parseMcpResponse(res, {
                 arrayKeys: ["channels"],
                 textParser: parseSlackTextEntries,
@@ -60,7 +60,7 @@ function SlackContent({ title }) {
         setLoading(true);
         setResult(null);
         try {
-            const res = await callTool("slack_post_message", {
+            const res = await callTool("conversations_add_message", {
                 channel_id: selectedChannel,
                 text: message.trim(),
             });

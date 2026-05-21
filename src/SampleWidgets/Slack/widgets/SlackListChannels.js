@@ -51,7 +51,7 @@ function SlackListChannelsContent({ title, widgetId }) {
         setLoading(true);
         setFetchError(null);
         try {
-            const res = await callTool("slack_list_channels", {});
+            const res = await callTool("channels_list", {});
             const { data, error: mcpError } = parseMcpResponse(res, {
                 arrayKeys: ["channels"],
                 textParser: parseSlackTextEntries,

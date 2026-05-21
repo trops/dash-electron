@@ -46,7 +46,7 @@ function SlackChannelMessagesContent({ title, widgetId }) {
         setLoading(true);
         setResult(null);
         try {
-            const res = await callTool("slack_get_channel_history", {
+            const res = await callTool("conversations_history", {
                 channel_id: id,
             });
             const { data, error: mcpError } = parseMcpResponse(res, {

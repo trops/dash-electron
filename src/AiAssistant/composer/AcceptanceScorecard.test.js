@@ -27,7 +27,7 @@ import { useMcpProvider } from "@trops/dash-core";
 export default function BadWidget() {
     const { callTool } = useMcpProvider("slack");
     useEffect(() => {
-        callTool("slack_list_channels", {});
+        callTool("channels_list", {});
     }, []);
     return (
         <Panel>

@@ -27,8 +27,8 @@ function SlackSearchMessagesContent({ title, widgetId }) {
         setLoading(true);
         setResult(null);
         try {
-            const res = await callTool("slack_search_messages", {
-                query: query.trim(),
+            const res = await callTool("conversations_search_messages", {
+                search_query: query.trim(),
             });
             const { data, error: mcpError } = parseMcpResponse(res, {
                 arrayKeys: ["messages.matches", "matches", "messages"],
