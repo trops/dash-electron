@@ -8,7 +8,7 @@ export default {
     userConfig: {
         title: {
             type: "text",
-            defaultValue: "Slack Channels",
+            defaultValue: "Slack channels",
             displayName: "Title",
             instructions: "The title shown at the top of the widget.",
             required: false,

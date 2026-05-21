@@ -8,149 +8,195 @@ import {
     EmptyState,
     Skeleton,
     Button2,
-    StatusBadge,
+    Tag2,
     Caption,
 } from "@trops/dash-react";
 import { useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 
-export default function SlackChannelBrowser({ title = "Slack Channels" }) {
+// slack-mcp-server returns channels_list as CSV inside the MCP
+// text content. Parse it into channel objects. JSON branches kept
+// as fallbacks in case a different Slack MCP server is swapped in.
+function parseCsvLine(line) {
+    const out = [];
+    let cur = "";
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') {
+            if (inQ && line[i + 1] === '"') {
+                cur += '"';
+                i++;
+            } else {
+                inQ = !inQ;
+            }
+        } else if (c === "," && !inQ) {
+            out.push(cur);
+            cur = "";
+        } else {
+            cur += c;
+        }
+    }
+    out.push(cur);
+    return out;
+}
+
+function csvToObjects(text) {
+    const lines = text.split("\n").filter((l) => l.trim().length > 0);
+    if (lines.length < 2) return [];
+    const headers = parseCsvLine(lines[0]).map((h) => h.trim());
+    return lines.slice(1).map((line) => {
+        const cells = parseCsvLine(line);
+        const obj = {};
+        headers.forEach((h, i) => {
+            obj[h] = cells[i];
+        });
+        return obj;
+    });
+}
+
+function parseChannels(res) {
+    if (!res) return [];
+    if (Array.isArray(res)) return res;
+    if (Array.isArray(res?.channels)) return res.channels;
+    if (Array.isArray(res?.content)) {
+        for (const part of res.content) {
+            if (part?.type === "text" && typeof part.text === "string") {
+                const text = part.text.trim();
+                try {
+                    const parsed = JSON.parse(text);
+                    if (Array.isArray(parsed?.channels)) return parsed.channels;
+                    if (Array.isArray(parsed)) return parsed;
+                } catch {
+                    // not JSON — fall through to CSV
+                }
+                if (/^ID,Name(,|$)/i.test(text)) {
+                    return csvToObjects(text).map((row) => ({
+                        id: row.ID,
+                        name: row.Name?.replace(/^#/, ""),
+                        topic: row.Topic,
+                        purpose: row.Purpose,
+                        memberCount: Number(row.MemberCount) || 0,
+                    }));
+                }
+            }
+        }
+    }
+    return [];
+}
+
+export default function SlackChannelBrowser({ title = "Slack channels" }) {
     const {
         callTool,
         tools,
         isConnected,
-        error: mcpError,
+        error: connError,
     } = useMcpProvider("slack");
     const { publishEvent } = useWidgetEvents();
 
     const [channels, setChannels] = useState(null);
-    const [loadError, setLoadError] = useState(null);
     const [selectedId, setSelectedId] = useState(null);
-    const [refreshKey, setRefreshKey] = useState(0);
-
-    const refresh = useCallback(() => {
-        setRefreshKey((k) => k + 1);
-    }, []);
+    const [loadError, setLoadError] = useState(null);
+    const [reloadCounter, setReloadCounter] = useState(0);
 
     useEffect(() => {
         if (!isConnected || !Array.isArray(tools) || tools.length === 0) return;
         let cancelled = false;
         setChannels(null);
         setLoadError(null);
-        callTool("slack_search_channels", { query: "" })
-            .then((response) => {
+        callTool("channels_list", { limit: 200 })
+            .then((res) => {
                 if (cancelled) return;
-                // Defensive: tool responses vary in shape.
-                const raw =
-                    response?.channels ??
-                    response?.results ??
-                    response?.items ??
-                    response;
-                const list = Array.isArray(raw) ? raw : [];
-                setChannels(list);
+                setChannels(parseChannels(res));
             })
             .catch((err) => {
                 if (cancelled) return;
                 setLoadError(err);
+                setChannels([]);
             });
         return () => {
             cancelled = true;
         };
-    }, [isConnected, tools, refreshKey, callTool]);
+    }, [isConnected, tools, callTool, reloadCounter]);
+
+    const handleRefresh = useCallback(() => {
+        setReloadCounter((n) => n + 1);
+    }, []);
 
     const handleSelect = useCallback(
         (channel) => {
-            const id =
-                channel?.id || channel?.channel_id || channel?.name || null;
-            if (!id) return;
-            setSelectedId(id);
+            setSelectedId(channel.id);
             publishEvent("channelSelected", {
-                id,
-                name: typeof channel?.name === "string" ? channel.name : null,
-                isPrivate: Boolean(channel?.is_private),
+                id: channel.id,
+                name: channel.name,
+                isPrivate: channel.isPrivate,
             });
         },
         [publishEvent]
     );
 
-    const renderBody = () => {
-        if (mcpError) {
-            return (
-                <Alert2
-                    title="Slack connection error"
-                    message={mcpError.message || String(mcpError)}
-                />
-            );
-        }
-        if (loadError) {
-            return (
-                <Alert2
-                    title="Failed to load channels"
-                    message={loadError.message || String(loadError)}
-                />
-            );
-        }
-        if (!isConnected) {
-            return (
-                <EmptyState
-                    title="Slack not connected"
-                    description="Waiting for the Slack provider to connect."
-                />
-            );
-        }
-        if (channels === null) {
-            return <Skeleton.Text lines={6} />;
-        }
-        if (channels.length === 0) {
-            return (
-                <EmptyState
-                    title="No channels found"
-                    description="The Slack workspace returned no channels."
-                />
-            );
-        }
-        return (
-            <Menu>
-                {channels.map((channel) => {
-                    const id =
-                        channel?.id || channel?.channel_id || channel?.name;
-                    const name =
-                        typeof channel?.name === "string"
-                            ? channel.name
-                            : "(unnamed)";
-                    const isPrivate = Boolean(channel?.is_private);
-                    return (
-                        <MenuItem
-                            key={id}
-                            selected={selectedId === id}
-                            onClick={() => handleSelect(channel)}
-                        >
-                            <div className="flex items-center justify-between w-full gap-2">
-                                <Caption text={`#${name}`} />
-                                <StatusBadge
-                                    state={isPrivate ? "warning" : "success"}
-                                    label={isPrivate ? "private" : "public"}
-                                    compact
-                                />
-                            </div>
-                        </MenuItem>
-                    );
-                })}
-            </Menu>
-        );
-    };
+    const errMsg = connError
+        ? connError.message || String(connError)
+        : loadError
+        ? loadError.message || String(loadError)
+        : null;
+
+    const ready = isConnected && Array.isArray(tools) && tools.length > 0;
 
     return (
         <Panel>
-            <div className="flex items-center justify-between mb-3 gap-2">
+            <div className="flex items-center justify-between mb-3">
                 <SubHeading2 title={title} />
                 <Button2
                     title="Refresh"
-                    onClick={refresh}
+                    onClick={handleRefresh}
                     size="sm"
-                    disabled={!isConnected}
+                    disabled={!ready}
                 />
             </div>
-            {renderBody()}
+
+            {errMsg && (
+                <Alert2 title="Failed to load channels" message={errMsg} />
+            )}
+
+            {!errMsg && !ready && <Skeleton.Text lines={5} />}
+
+            {!errMsg && ready && channels === null && (
+                <Skeleton.Text lines={5} />
+            )}
+
+            {!errMsg && ready && channels && channels.length === 0 && (
+                <EmptyState
+                    title="No channels"
+                    description="No Slack channels were returned. Try refreshing, or check that the Slack provider has the conversations:read scope."
+                />
+            )}
+
+            {!errMsg && ready && channels && channels.length > 0 && (
+                <>
+                    <Caption text={`${channels.length} channels`} />
+                    <Menu>
+                        {channels.map((ch) => {
+                            const id = ch?.id || ch?.channel_id || ch?.name;
+                            const name = ch?.name || id || "unknown";
+                            const isPrivate = !!(ch?.is_private || ch?.private);
+                            return (
+                                <MenuItem
+                                    key={id}
+                                    selected={selectedId === id}
+                                    onClick={() =>
+                                        handleSelect({ id, name, isPrivate })
+                                    }
+                                >
+                                    <div className="flex items-center justify-between w-full gap-2">
+                                        <span>{`# ${name}`}</span>
+                                        {isPrivate && <Tag2 title="private" />}
+                                    </div>
+                                </MenuItem>
+                            );
+                        })}
+                    </Menu>
+                </>
+            )}
         </Panel>
     );
 }
