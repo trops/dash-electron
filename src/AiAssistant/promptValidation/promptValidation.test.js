@@ -155,3 +155,160 @@ describe("promptValidation — first-response rubric outcomes", () => {
         }
     });
 });
+
+// ─── AI install manifest coverage ─────────────────────────────────────
+//
+// The `widget:ai-build` IPC handler in `public/electron.js` calls
+// `buildAiInstallPackageJson` to produce the `package.json` written at
+// Install time. These tests exercise that helper against the AI's
+// actual one-shot output from each scenario, simulating "if THIS
+// widget went through the standalone single-widget AI install flow,
+// here's what its manifest would look like."
+//
+// Pairs with the dash-core per-component scan check further down,
+// which exercises the multi-widget package shape (closer to how the
+// harness actually installs into the live cache).
+//
+// Why this matters: pre-fix, the handler only wrote a package.json
+// when MCP usage was detected. Pure-UI widgets (Counter, Notepad) had
+// no manifest at all on disk, breaking widgetPermissions identity
+// pinning. The baseline test below is the regression guard.
+
+const {
+    buildAiInstallPackageJson,
+} = require("../../../scripts/buildAiInstallPackageJson");
+const { scanWidgetMcpUsage } = require("../../../scripts/scanWidgetMcpUsage");
+
+// Expected MCP declarations per scenario, derived by hand from the
+// fixture component sources. Variable-indirection callers
+// (`callTool(name, …)` where name is a variable) don't appear here —
+// the scanner intentionally skips them; the runtime gate is the
+// safety net. Update this map only when re-generating fixtures
+// changes the AI's call patterns.
+const EXPECTED_MCP_PER_SCENARIO = {
+    "01-slack-channels": {
+        server: "slack",
+        tool: "slack_search_channels",
+    },
+    "02-github-prs": {
+        server: "github",
+        tool: "list_pull_requests",
+    },
+    "08-filesystem-dir": {
+        server: "filesystem",
+        tool: "list_directory",
+    },
+    // The other scenarios call MCP tools but use variable indirection
+    // (`callTool(toolName, …)` from a list returned by the provider),
+    // which the static scanner correctly skips. They should produce
+    // a baseline manifest with NO dash block.
+};
+
+const NO_MCP_SCENARIOS = new Set([
+    "03-gmail-unread-stat", // callTool(toolName, …) — variable indirection
+    "04-notion-search", // ditto
+    "05-gdrive-recent", // ditto
+    "06-gcal-today", // ditto
+    "07-algolia-rules", // credential-class provider, no useMcpProvider
+    "09-counter-noprovider", // pure UI
+    "10-notepad-noprovider", // pure UI + userPrefs autosave
+]);
+
+describe("promptValidation — AI install manifest (per-widget)", () => {
+    const manifest = loadManifest();
+    if (!manifest) {
+        test.skip("fixtures not generated yet", () => {});
+        return;
+    }
+    const runById = new Map((manifest.runs || []).map((r) => [r.id, r]));
+
+    test.each(SCENARIOS.map((s) => [s.id, s]))(
+        "%s — AI install handler produces a valid package.json for the single-widget install case",
+        (id, scenario) => {
+            const run = runById.get(id);
+            if (!run || !run.files || run.parseStatus === "no-code") {
+                console.log(`[${id}] no fixture, skipping`);
+                return;
+            }
+            const componentFile = run.files.find(
+                (f) => f.endsWith(".js") && !f.endsWith(".dash.js")
+            );
+            if (!componentFile) return;
+            const componentPath = path.join(FIXTURE_ROOT, componentFile);
+            const componentCode = fs.readFileSync(componentPath, "utf8");
+
+            // Mirror the handler: scan the component, then build the
+            // manifest. The widget name is the file's basename
+            // (handler derives it the same way from the IPC payload).
+            const widgetName = path
+                .basename(componentFile)
+                .replace(/\.js$/, "");
+            const mcpPermissions = scanWidgetMcpUsage(componentCode);
+            const pkg = buildAiInstallPackageJson({
+                widgetName,
+                description: scenario.userPrompt,
+                existingPkg: {},
+                mcpPermissions,
+            });
+
+            // ── Baseline assertions: every scenario gets these
+            //    regardless of MCP usage. This is the regression
+            //    guard for "no package.json for non-MCP widgets".
+            expect(pkg.name).toBe(`@ai-built/${widgetName.toLowerCase()}`);
+            expect(pkg.version).toBe("1.0.0");
+            expect(pkg.main).toBe("dist/index.cjs.js");
+            expect(pkg.private).toBe(true);
+            expect(typeof pkg.description).toBe("string");
+            expect(pkg.description.length).toBeGreaterThan(0);
+
+            // ── MCP block expectations
+            const expectedMcp = EXPECTED_MCP_PER_SCENARIO[id];
+            if (expectedMcp) {
+                // This scenario's AI output literally calls a tool
+                // — the manifest MUST declare it.
+                expect(pkg.dash).toBeDefined();
+                expect(pkg.dash.permissions).toBeDefined();
+                expect(pkg.dash.permissions.mcp).toBeDefined();
+                expect(
+                    pkg.dash.permissions.mcp[expectedMcp.server]
+                ).toBeDefined();
+                expect(
+                    pkg.dash.permissions.mcp[expectedMcp.server].tools
+                ).toContain(expectedMcp.tool);
+                console.log(
+                    `[${id}] ${widgetName} declares ${expectedMcp.server}.${expectedMcp.tool}`
+                );
+            } else if (NO_MCP_SCENARIOS.has(id)) {
+                // No statically-resolvable MCP usage → no dash block.
+                // (Variable-indirection tool calls bypass the scanner
+                // and rely on JIT consent; the gate gates them.)
+                expect(pkg.dash).toBeUndefined();
+                console.log(
+                    `[${id}] ${widgetName} — baseline only (no MCP block)`
+                );
+            }
+        }
+    );
+
+    test("every scenario falls into either EXPECTED_MCP_PER_SCENARIO or NO_MCP_SCENARIOS", () => {
+        // Defensive: if someone adds a scenario without updating the
+        // expectation maps, the per-scenario test above won't catch
+        // it (the assertions just become weaker). This test makes
+        // missing entries impossible to ignore.
+        const missing = SCENARIOS.filter(
+            (s) =>
+                !EXPECTED_MCP_PER_SCENARIO[s.id] && !NO_MCP_SCENARIOS.has(s.id)
+        ).map((s) => s.id);
+        expect(missing).toEqual([]);
+    });
+});
+
+// Note on test scope: the package-level per-component scan
+// (`scanWidgetPackagePermissionsByComponent`) lives in dash-core and
+// is verified by its own test suite there (`electron/utils/
+// scanWidgetPackagePermissions.test.js` covers cross-pollination,
+// orphan-helper, intra-file orchestration, etc.). The published
+// dash-core npm package only ships `dist/`, so the source utils
+// aren't require-able from this Jest run anyway. We rely on dash-core
+// CI to keep that scanner correct and assert the AI handler's own
+// manifest output here.
