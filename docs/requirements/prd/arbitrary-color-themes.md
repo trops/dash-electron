@@ -698,21 +698,24 @@ Pixel output
 
 ---
 
-### Phase 2: Multi-Channel + cssVars + Accessibility (P1)
+### Phase 2: Multi-Channel + cssVars + Accessibility (P1) — SHIPPED 2026-05-22
 
 **Timeline:** ~3-5 days additional.
 
 **Deliverables:**
 
--   [ ] US-004: Custom secondary, tertiary, neutral colors.
--   [ ] US-007: `cssVars` accessor on theme context — promoted from P2 (required to fix SlackWidget inline-style theme bug; without it, custom-color themes don't reach inline-styled surfaces).
--   [ ] US-005: Accessibility contrast warning.
+-   [x] **US-004: Custom secondary, tertiary, neutral colors.** Wired in Phase 1 already since ThemeModel iterates `colorTypes.forEach` channel-agnostically. Verified by mixed-channel tests in `dash-core/src/Models/ThemeModel.test.js` ("non-hex channels in a mixed theme stay on the named path" + "mixed theme: cssValue per channel routes through its own path"). Any of `primary`, `secondary`, `tertiary`, `neutral` can independently take a named or hex value.
+-   [x] **US-007: `cssValue` accessor on theme context.** Shipped via three coordinated releases:
+    -   dash-react v1.0.53: `TAILWIND_PALETTE` snapshot + `hexForTailwindClass` helper (`src/Utils/tailwindPalette.js`).
+    -   dash-core v0.1.569: ThemeModel emits `theme.{dark,light}.cssValue[tokenName]` map per variant. Named channels resolve to hex literals from the palette; hex channels resolve to `var(--{type}-{shade})` references. Transparent tokens map to `"transparent"`.
+    -   dash-electron v0.0.766: SlackWidget refactored to read inline-style colors from `currentTheme.cssValue[...]` instead of hardcoded hex. Theme switches now propagate to its sidebar, channel header, composer, borders, text — including custom-hex themes.
+-   [ ] **US-005: Accessibility contrast warning.** Helper `contrastRatio(hexA, hexB)` already shipped in dash-react v1.0.52. The UI surface (inline warning next to the hex input) is **deferred to Phase 3** alongside the unified picker work — there's no picker UI to attach a warning to until Phase 3 lands.
 
 **Success Criteria:**
 
--   All P1 acceptance criteria met.
--   Contrast warnings render inline; no false positives on named-palette themes.
--   SlackWidget inline-style surfaces (date pills, hover toolbars, composer borders, etc.) update with the theme via `currentTheme.cssVars[...]`.
+-   All P1 acceptance criteria met for US-004 + US-007 ✓
+-   SlackWidget inline-style surfaces update with the theme via `currentTheme.cssValue[...]` ✓ (verified by recompile + theme-switch on the running pack)
+-   US-005 contrast helper exists; warning UI rolls in with Phase 3.
 
 **Dependencies:**
 
