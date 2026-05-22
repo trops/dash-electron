@@ -32,7 +32,18 @@ const path = require("path");
 const os = require("os");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
-const PRODUCT_NAME = "Dash";
+// Electron's default userData dir uses the app's `name` (from
+// package.json). In production builds, electron-builder sets the binary
+// name to "Dash" (matching `productName`), so the userData dir is
+// `Application Support/Dash/`. In `npm run dev` (or any unsigned dev
+// launch), the binary identifies itself as "Electron" and the dir is
+// `Application Support/Electron/` — DEV and PROD live side-by-side.
+//
+// Default targets prod; pass `--dev` (or `DASH_USER_DATA_NAME=Electron`)
+// to install into the dev dir for `npm run dev` smoke tests.
+const PRODUCT_NAME =
+    process.env.DASH_USER_DATA_NAME ||
+    (process.argv.includes("--dev") ? "Electron" : "Dash");
 const USER_DATA_DIR = path.join(
     os.homedir(),
     "Library",
