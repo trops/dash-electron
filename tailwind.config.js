@@ -1,6 +1,40 @@
 const path = require("path");
 const os = require("os");
 
+/**
+ * Build explicit safelist entries for arbitrary-value classes
+ * referencing CSS custom properties — e.g. `bg-[var(--primary-700)]`.
+ *
+ * Tailwind's pattern-based safelist only matches classes it already
+ * generated during the content scan. Arbitrary-value classes are
+ * never pre-generated, so a regex pattern matches nothing (Tailwind
+ * even warns about this — see arbitrary-color-themes PRD Phase 1).
+ * Listing each class explicitly is the supported way to keep them
+ * in the bundle.
+ *
+ * 4 channels × 11 shades × (3 props × 2 variants + 3 gradient stops) = 396 entries.
+ */
+function buildArbitraryColorClasses() {
+    const channels = ["primary", "secondary", "tertiary", "neutral"];
+    const shades = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
+    const props = ["bg", "text", "border"];
+    const gradientStops = ["from", "via", "to"];
+    const out = [];
+    for (const channel of channels) {
+        for (const shade of shades) {
+            const v = `var(--${channel}-${shade})`;
+            for (const prop of props) {
+                out.push(`${prop}-[${v}]`);
+                out.push(`hover:${prop}-[${v}]`);
+            }
+            for (const stop of gradientStops) {
+                out.push(`${stop}-[${v}]`);
+            }
+        }
+    }
+    return out;
+}
+
 // Include installed widget source for Tailwind class scanning at build time.
 // Skip in dev mode to prevent webpack file watcher from triggering rebuilds
 // when AI-generated widgets are installed at runtime.
@@ -69,37 +103,12 @@ module.exports = {
         // arbitrary-color-themes.md). ThemeModel emits these for hex
         // channels: `bg-[var(--primary-700)]`, etc. The CSS variable
         // is injected to :root by ThemePreviewProvider on theme
-        // activation. ~264 entries total (4 channels × 11 shades ×
-        // 3 properties × 2 variants) — bounded, doesn't scale with
-        // user color choice.
-        {
-            pattern:
-                /bg-\[var\(--(primary|secondary|tertiary|neutral)-(50|100|200|300|400|500|600|700|800|900|950)\)\]/,
-            variants: ["hover"],
-        },
-        {
-            pattern:
-                /text-\[var\(--(primary|secondary|tertiary|neutral)-(50|100|200|300|400|500|600|700|800|900|950)\)\]/,
-            variants: ["hover"],
-        },
-        {
-            pattern:
-                /border-\[var\(--(primary|secondary|tertiary|neutral)-(50|100|200|300|400|500|600|700|800|900|950)\)\]/,
-            variants: ["hover"],
-        },
-        // Gradient stops for custom-color themes
-        {
-            pattern:
-                /from-\[var\(--(primary|secondary|tertiary|neutral)-(50|100|200|300|400|500|600|700|800|900|950)\)\]/,
-        },
-        {
-            pattern:
-                /via-\[var\(--(primary|secondary|tertiary|neutral)-(50|100|200|300|400|500|600|700|800|900|950)\)\]/,
-        },
-        {
-            pattern:
-                /to-\[var\(--(primary|secondary|tertiary|neutral)-(50|100|200|300|400|500|600|700|800|900|950)\)\]/,
-        },
+        // activation. 396 entries total (see buildArbitraryColorClasses).
+        // Listed as explicit strings rather than regex patterns —
+        // Tailwind's pattern matching only retains classes Tailwind
+        // already generated from source, and these arbitrary-value
+        // classes are never in source so the pattern matches nothing.
+        ...buildArbitraryColorClasses(),
         // Named colors without shades
         "bg-black",
         "bg-white",
