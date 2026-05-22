@@ -65,6 +65,41 @@ module.exports = {
             pattern:
                 /to-(gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(50|100|200|300|400|500|600|700|800|900|950)/,
         },
+        // Arbitrary-value color tokens for custom-color themes (PRD:
+        // arbitrary-color-themes.md). ThemeModel emits these for hex
+        // channels: `bg-[var(--primary-700)]`, etc. The CSS variable
+        // is injected to :root by ThemePreviewProvider on theme
+        // activation. ~264 entries total (4 channels × 11 shades ×
+        // 3 properties × 2 variants) — bounded, doesn't scale with
+        // user color choice.
+        {
+            pattern:
+                /bg-\[var\(--(primary|secondary|tertiary|neutral)-(50|100|200|300|400|500|600|700|800|900|950)\)\]/,
+            variants: ["hover"],
+        },
+        {
+            pattern:
+                /text-\[var\(--(primary|secondary|tertiary|neutral)-(50|100|200|300|400|500|600|700|800|900|950)\)\]/,
+            variants: ["hover"],
+        },
+        {
+            pattern:
+                /border-\[var\(--(primary|secondary|tertiary|neutral)-(50|100|200|300|400|500|600|700|800|900|950)\)\]/,
+            variants: ["hover"],
+        },
+        // Gradient stops for custom-color themes
+        {
+            pattern:
+                /from-\[var\(--(primary|secondary|tertiary|neutral)-(50|100|200|300|400|500|600|700|800|900|950)\)\]/,
+        },
+        {
+            pattern:
+                /via-\[var\(--(primary|secondary|tertiary|neutral)-(50|100|200|300|400|500|600|700|800|900|950)\)\]/,
+        },
+        {
+            pattern:
+                /to-\[var\(--(primary|secondary|tertiary|neutral)-(50|100|200|300|400|500|600|700|800|900|950)\)\]/,
+        },
         // Named colors without shades
         "bg-black",
         "bg-white",
