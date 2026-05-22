@@ -723,23 +723,30 @@ Pixel output
 
 ---
 
-### Phase 3: Polish (P2)
+### Phase 3: Polish (P2) — IN PROGRESS
 
 **Timeline:** ~1 week.
 
 **Deliverables:**
 
--   [ ] US-006: Brand color presets (curated list).
--   [ ] Theme editor / create UX work (separate scope per session 2026-05-22 — picker that unifies named-color grid + hex input + presets into a coherent surface).
+-   [x] **US-001 (deferred from Phase 1): Hex input on theme picker.** Shipped via dash-core v0.1.570. New `CustomHexColorPane` component (validated hex input + live swatch + WCAG contrast warning) surfaces in both the wizard's `AvailableMainColorsPane` and the editor's `AvailableColorsGridPane`. Editor surface gates to MAIN-mode picks only (per-token sub overrides stay named for v1; sub-token hex needs ColorModel changes).
+-   [x] **US-005 (helper exists since Phase 1): Accessibility contrast warning.** Wired into `CustomHexColorPane` — shows inline warning when the picked hex's best contrast (vs. black or white) is below WCAG AA 4.5:1. Non-blocking; user can still apply.
+-   [x] **US-006: Brand color presets.** Shipped via dash-core v0.1.570. New `getBrandPresets()` in `themeGenerator.js` returns 8 curated hex palettes (Slack, Notion, GitHub, Stripe, Linear, Discord, Vercel, Figma) — each defines all four channels. Surfaced in the wizard's `PresetGallery` under a "Brand Presets" header alongside the existing named-color presets. `PresetSwatch` handles both named and hex preset rendering. `ThemePickerGridPane` updated to prefer `cssValue` for swatch backgrounds so brand themes render correctly in the picker grid (not just when active).
 
 **Success Criteria:**
 
--   Presets one-click apply.
--   Theme editor flow lets users discover and pick named or hex colors fluidly.
+-   [x] Presets one-click apply ✓
+-   [x] Theme editor lets users discover and pick named or hex colors fluidly ✓
+-   [ ] Theme picker grid renders all themes (named + brand) correctly — needs runtime verification on the user's installed Dash.
 
 **Dependencies:**
 
--   Requires Phase 1 + 2.
+-   Required Phase 1 + 2 ✓
+
+**Known Phase-3 polish deferrals:**
+
+-   Sub-token (per-component) hex overrides — needs `ColorModel` to handle hex `colorName` in a way that doesn't produce broken `bg-#xxx-shade` class strings. Out of scope for v1; named-color sub overrides stay.
+-   Per-variant (separate dark vs. light hex picker) — single hex applies to both variants per Phase 1 decision; per-variant deferrable.
 
 ---
 
