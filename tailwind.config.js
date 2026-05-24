@@ -32,6 +32,19 @@ function buildArbitraryColorClasses() {
             }
         }
     }
+    // Per-token hex overrides emitted by ThemeModel for the Studio's
+    // per-shade override editor. Pattern:
+    //   `bg-[var(--ovr-bg-{channel}-{level})]`, etc.
+    // 4 channels × 5 levels × 3 props = 60 entries.
+    const levels = ["very-light", "light", "medium", "dark", "very-dark"];
+    for (const channel of channels) {
+        for (const level of levels) {
+            for (const prop of props) {
+                const v = `var(--ovr-${prop}-${channel}-${level})`;
+                out.push(`${prop}-[${v}]`);
+            }
+        }
+    }
     return out;
 }
 
