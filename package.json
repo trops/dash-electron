@@ -1,7 +1,7 @@
 {
     "name": "@trops/dash-electron",
     "productName": "Dash",
-    "version": "0.0.773",
+    "version": "0.0.774",
     "description": "A Dashboard Generator",
     "author": "John P. Giatropoulos",
     "publishConfig": {
@@ -20,7 +20,7 @@
         "@heroicons/react": "^2.0.16",
         "@modelcontextprotocol/sdk": "^1.26.0",
         "@tailwindcss/forms": "^0.5.0",
-        "@trops/dash-core": "^0.1.575",
+        "@trops/dash-core": "^0.1.576",
         "@trops/dash-react": "^1.0.54",
         "@uiw/react-textarea-code-editor": "^2.1.1",
         "adm-zip": "^0.5.16",
