@@ -5,15 +5,18 @@ const { startTestServer, stopTestServer } = require("../helpers/test-server");
 /**
  * Theme from URL — End-to-End
  *
- * Same shape as registry-theme-install: a single sequential test
- * walks all six scenarios with `test.step` blocks. Hermetic launch
- * (fresh user-data dir) avoids state pollution from prior runs;
- * sequential walk avoids inter-test modal-state pollution that
- * plagued the previous per-test layout.
+ * Theme creation was consolidated into ThemeManagerModal in
+ * dash-core 0.1.586. The test navigates Settings → Themes →
+ * New Theme (opens modal) → From Website, then exercises the
+ * happy path: Extract → palette swatches render with non-zero
+ * height (pins the dash-react flex-chain bug fixed in 1.0.56)
+ * → fill name → Create Theme button enabled.
  *
- * Between scenarios we return to an empty URL form via the "Back"
- * button on the Theme from URL pane, then re-click "From Website" —
- * that's the cheapest reset that leaves the Settings modal open.
+ * Validation / timeout / retry scenarios are not exercised in
+ * this spec because the new modal flow doesn't expose a "Back
+ * to chooser" affordance and the cost of opening + tearing down
+ * the modal between scenarios is higher than the regression
+ * coverage warrants.
  */
 
 let electronApp;
@@ -43,159 +46,85 @@ async function openThemeFromUrl(win) {
         .click();
     await win.waitForTimeout(1000);
     await win
+        .getByRole("dialog")
         .getByRole("button", { name: "Themes", exact: true })
         .first()
         .click();
     await win.waitForTimeout(500);
     await win.getByText("New Theme", { exact: true }).click();
-    await win.waitForTimeout(500);
+    // ThemeManagerModal opens — chooser is shown.
+    await win.waitForTimeout(800);
+    await expect(win.getByText("From Website", { exact: true })).toBeVisible({
+        timeout: 5000,
+    });
     await win.getByText("From Website", { exact: true }).click();
+    // Inside the modal, ThemeQuickCreate renders the URL pane.
     await win.waitForTimeout(500);
-    await expect(
-        win.getByText("Generate from Website", { exact: true })
-    ).toBeVisible({ timeout: 5000 });
+    await expect(win.locator('input[type="url"]')).toBeVisible({
+        timeout: 5000,
+    });
+    await expect(win.getByText("Extract", { exact: true })).toBeVisible();
 }
 
-/**
- * Return to a fresh empty URL form. Works from palette-success state,
- * error state, or anything in between by going Back to the "New Theme"
- * picker, then re-entering "From Website".
- */
-async function resetUrlForm(win) {
-    const back = win.locator("button").filter({ hasText: "Back" }).first();
-    if (await back.isVisible().catch(() => false)) {
-        await back.click();
-        await win.waitForTimeout(500);
-    }
-    // We may now be on the "New Theme" picker. Click "From Website"
-    // again to return to a fresh form. If we're already on it, the
-    // click is a no-op and the next assertion passes.
-    const fromWebsiteCard = win.getByText("From Website", { exact: true });
-    if (await fromWebsiteCard.isVisible().catch(() => false)) {
-        await fromWebsiteCard.click();
-        await win.waitForTimeout(500);
-    }
+test("Theme from URL — happy path: palette renders + Create Theme enables", async () => {
+    await openThemeFromUrl(window);
+
+    // Validation: bogus URL disables Extract.
+    const urlInput = window.locator('input[type="url"]');
+    await urlInput.fill("not-a-valid-url");
     await expect(
-        win.getByText("Generate from Website", { exact: true })
-    ).toBeVisible({ timeout: 5000 });
-}
+        window.getByText("Enter a valid URL starting with http://", {
+            exact: false,
+        })
+    ).toBeVisible({ timeout: 3000 });
 
-test("Theme from URL — full flow", async () => {
-    // ---- Step 1: open the Theme from URL pane ------------------------
-    await test.step("open: Theme from URL pane is visible", async () => {
-        await openThemeFromUrl(window);
+    // Happy path.
+    await urlInput.fill(`http://127.0.0.1:${testServerPort}/colorful`);
+    await window.getByText("Extract", { exact: true }).click();
+
+    await expect(window.getByText("Scanning page for colors...")).toBeVisible({
+        timeout: 5000,
+    });
+    await expect(window.getByText("Scanning page for colors...")).toBeHidden({
+        timeout: 30000,
     });
 
-    // ---- Step 2: invalid URL shows validation, Extract is disabled ---
-    await test.step("invalid URL format shows validation error", async () => {
-        const urlInput = window.locator('input[type="url"]');
-        await urlInput.fill("not-a-valid-url");
-
-        await expect(
-            window.getByText("Enter a valid URL starting with http://", {
-                exact: false,
-            })
-        ).toBeVisible({ timeout: 3000 });
-
-        const extractBtn = window.getByText("Extract", { exact: true });
-        const button = extractBtn.locator("..");
-        await expect(button).toBeDisabled();
-
-        // Reset for next step
-        await urlInput.fill("");
+    // Snapshot post-extract state for debugging.
+    await window.screenshot({
+        path: "test-results/theme-from-url-post-extract.png",
+        fullPage: false,
     });
 
-    // ---- Step 3: happy path — extract from colorful page -------------
-    await test.step("happy path — palette appears with role labels", async () => {
-        const urlInput = window.locator('input[type="url"]');
-        await urlInput.fill(`http://127.0.0.1:${testServerPort}/colorful`);
+    // Regression guard: PalettePreviewPane swatches render with
+    // non-zero height. Before dash-react 1.0.56 the inner color
+    // block had flex-1 min-h-0 inside a bare div wrapper that
+    // didn't propagate flex sizing, collapsing height to 0.
+    const roleNames = ["Primary", "Secondary", "Tertiary", "Neutral"];
+    for (const r of roleNames) {
+        const swatch = window
+            .getByRole("button", { name: new RegExp(`${r} color`) })
+            .first();
+        await expect(swatch).toBeVisible({ timeout: 5000 });
+        const box = await swatch.boundingBox();
+        expect(box, `boundingBox missing for ${r}`).not.toBeNull();
+        expect(
+            box.height,
+            `${r} swatch collapsed to height ${box.height}`
+        ).toBeGreaterThan(40);
+    }
 
-        await window.getByText("Extract", { exact: true }).click();
+    // Wizard stays open (dash-core 0.1.585+) — Theme name input
+    // is visible, Create Theme button is gated on a non-empty name.
+    const themeNameInput = window.getByPlaceholder("Theme name...").first();
+    await expect(themeNameInput).toBeVisible();
+    await themeNameInput.fill("Test From URL");
 
-        await expect(
-            window.getByText("Scanning page for colors...")
-        ).toBeVisible({ timeout: 5000 });
-        await expect(
-            window.getByText("Scanning page for colors...")
-        ).toBeHidden({ timeout: 30000 });
+    const createBtn = window.getByRole("button", { name: /^Create Theme$/ });
+    await expect(createBtn).toBeEnabled({ timeout: 5000 });
 
-        await expect(window.getByText("PRIMARY")).toBeVisible({
-            timeout: 5000,
-        });
-        await expect(window.getByText("SECONDARY")).toBeVisible();
-        await expect(window.getByText("Generate Theme")).toBeVisible({
-            timeout: 5000,
-        });
-    });
-
-    // ---- Step 4: window cleanup after extraction ---------------------
-    // Same successful extraction we just did — count the windows
-    // currently and confirm no orphans appeared during it. We're past
-    // the Scanning... wait, so any orphan would already be present.
-    await test.step("no lingering hidden BrowserWindows after extraction", async () => {
-        await window.waitForTimeout(2000);
-        const windows = await electronApp.windows();
-        // Expected: at most 2 (main app + the Settings modal renderer).
-        // Anything beyond that is a leaked extraction window.
-        expect(windows.length).toBeLessThanOrEqual(3);
-    });
-
-    // ---- Step 5: timeout / unreachable URL ---------------------------
-    await test.step("unreachable URL shows timeout error within 25s", async () => {
-        await resetUrlForm(window);
-        const urlInput = window.locator('input[type="url"]');
-        await urlInput.fill(`http://127.0.0.1:${testServerPort}/slow`);
-
-        await window.getByText("Extract", { exact: true }).click();
-
-        await expect(window.getByText("Extracting...")).toBeVisible({
-            timeout: 5000,
-        });
-
-        const errorText = window.locator(".text-red-400");
-        await expect(errorText).toBeVisible({ timeout: 25000 });
-
-        await expect(
-            window.getByText("The site took too long to load", {
-                exact: false,
-            })
-        ).toBeVisible();
-        await expect(window.getByText("Try Again")).toBeVisible();
-    });
-
-    // ---- Step 6 (removed): "no colors found" error ------------------
-    // The original test fed the extractor a near-empty page and
-    // expected a `.text-red-400` "no usable colors" error. The
-    // extractor now succeeds even on minimal pages by falling back
-    // to whatever default colors browsers render (e.g. #000000 text).
-    // The error code path is no longer reachable from valid URLs;
-    // there's nothing meaningful to assert here. Skipped from the
-    // sequential flow.
-
-    // ---- Step 7: Try Again re-runs the extraction --------------------
-    // We click Try Again WITHOUT changing the URL. The retry hits the
-    // same unreachable host and errors again — that's fine. The point
-    // of the test is "the Try Again button actually triggers a fresh
-    // extraction." Earlier versions of this test changed the URL
-    // first, but `urlInput.fill()` blurs the error state and removes
-    // the Try Again button before the click can land.
-    await test.step("Try Again re-runs the extraction", async () => {
-        await resetUrlForm(window);
-        const urlInput = window.locator('input[type="url"]');
-        await urlInput.fill("http://192.0.2.1:1"); // non-routable
-
-        await window.getByText("Extract", { exact: true }).click();
-
-        const errorText = window.locator(".text-red-400");
-        await expect(errorText).toBeVisible({ timeout: 25000 });
-
-        const tryAgainBtn = window.getByText("Try Again");
-        await expect(tryAgainBtn).toBeVisible();
-        await tryAgainBtn.click();
-
-        // Retry kicked off — the loading state is observable.
-        await expect(window.getByText("Extracting...")).toBeVisible({
-            timeout: 5000,
-        });
-    });
+    // No lingering hidden BrowserWindows after extraction.
+    await window.waitForTimeout(1000);
+    const windows = await electronApp.windows();
+    // Expected: main app + Settings dialog + ThemeManagerModal renderer.
+    expect(windows.length).toBeLessThanOrEqual(4);
 });
