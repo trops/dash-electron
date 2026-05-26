@@ -25,6 +25,12 @@ export const BRIDGE_MESSAGE_TYPES = Object.freeze({
     SET_PROPS: "bridge:set-props",
     SET_THEME: "bridge:set-theme",
     SET_PROVIDERS: "bridge:set-providers",
+    // Phase 5C (P1 #12+#13): host pushes the widget's declared-providers
+    // allowlist into the iframe so the iframe-side mainApi proxy can
+    // block undeclared credentialed-namespace access. Null = no
+    // enforcement (builder mode where the user is authoring a brand-new
+    // widget). String[] = enforce.
+    SET_MAINAPI_SCOPE: "bridge:set-mainapi-scope",
     UNMOUNT: "bridge:unmount",
     PROVIDER_RESPONSE: "bridge:provider-response",
 

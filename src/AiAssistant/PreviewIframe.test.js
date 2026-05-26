@@ -506,6 +506,106 @@ describe("PreviewIframe — context proxy (slice 17c.3)", () => {
         const last = providerMsgs[providerMsgs.length - 1];
         expect(last.payload.appContext).toBeNull();
     });
+
+    // ── Phase 5C: declaredProviders scoping ──────────────────────────
+    test("filters appContext.providers when declaredProviders is set", () => {
+        const ctx = {
+            providers: {
+                algolia: { type: "algolia", apiKey: "secret-A" },
+                slack: { type: "slack", token: "secret-S" },
+                github: { type: "github", token: "secret-G" },
+            },
+        };
+        const { container, rerender } = render(<PreviewIframe />);
+        getPostedMessages(container);
+        dispatchReady();
+
+        rerender(
+            <PreviewIframe appContext={ctx} declaredProviders={["algolia"]} />
+        );
+
+        const last = getPostedMessages(container)
+            .filter((m) => m && m.type === "bridge:set-providers")
+            .pop();
+        expect(last.payload.appContext.providers).toEqual({
+            algolia: { type: "algolia", apiKey: "secret-A" },
+        });
+    });
+
+    test("passes appContext.providers through unfiltered when declaredProviders is null", () => {
+        // Builder-mode regression: omitting / nulling declaredProviders
+        // preserves the existing "full access" UX.
+        const ctx = {
+            providers: {
+                algolia: { type: "algolia", apiKey: "secret-A" },
+                slack: { type: "slack", token: "secret-S" },
+            },
+        };
+        const { container, rerender } = render(<PreviewIframe />);
+        getPostedMessages(container);
+        dispatchReady();
+
+        rerender(<PreviewIframe appContext={ctx} />);
+
+        const last = getPostedMessages(container)
+            .filter((m) => m && m.type === "bridge:set-providers")
+            .pop();
+        expect(last.payload.appContext.providers).toEqual(ctx.providers);
+    });
+
+    test("posts bridge:set-mainapi-scope with declaredProviders snapshot", () => {
+        const { container, rerender } = render(<PreviewIframe />);
+        getPostedMessages(container);
+        dispatchReady();
+
+        rerender(<PreviewIframe declaredProviders={["algolia"]} />);
+
+        const last = getPostedMessages(container)
+            .filter((m) => m && m.type === "bridge:set-mainapi-scope")
+            .pop();
+        expect(last).toBeTruthy();
+        expect(last.payload.declaredProviders).toEqual(["algolia"]);
+    });
+
+    test("posts bridge:set-mainapi-scope with null when declaredProviders is null", () => {
+        const { container, rerender } = render(<PreviewIframe />);
+        getPostedMessages(container);
+        dispatchReady();
+
+        rerender(<PreviewIframe declaredProviders={null} />);
+
+        const last = getPostedMessages(container)
+            .filter((m) => m && m.type === "bridge:set-mainapi-scope")
+            .pop();
+        expect(last).toBeTruthy();
+        expect(last.payload.declaredProviders).toBeNull();
+    });
+
+    test("matches providers by KEY when no `type` field is present", () => {
+        // Some appContext.providers shapes use the type name as the
+        // top-level key with the value carrying credentials but no
+        // explicit `type` field. The filter must accept either form.
+        const ctx = {
+            providers: {
+                algolia: { apiKey: "secret-A" },
+                slack: { token: "secret-S" },
+            },
+        };
+        const { container, rerender } = render(<PreviewIframe />);
+        getPostedMessages(container);
+        dispatchReady();
+
+        rerender(
+            <PreviewIframe appContext={ctx} declaredProviders={["algolia"]} />
+        );
+
+        const last = getPostedMessages(container)
+            .filter((m) => m && m.type === "bridge:set-providers")
+            .pop();
+        expect(Object.keys(last.payload.appContext.providers)).toEqual([
+            "algolia",
+        ]);
+    });
 });
 
 describe("PreviewIframe — render stats (slice 17c.5)", () => {
