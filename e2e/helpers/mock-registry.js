@@ -460,6 +460,14 @@ function createMockRegistryServer() {
         }
 
         // Download: GET /api/packages/:scope/:name/download?version=
+        //
+        // Phase 5D (P1 #24): default behavior remains "raw zip bytes"
+        // (back-compat with the install-from-registry spec which
+        // expects bytes). Tests that want the production-shaped JSON
+        // wrapper response set ?wrapped=1 and receive the signed
+        // manifest body — the same shape the live registry returns
+        // when called via the install flow. `manifest_signature` is
+        // produced by signMockManifestBody using the mock root key.
         const downloadMatch = url.match(
             /^\/api\/packages\/(?:%40|@)([^/]+)\/([^/?]+)\/download(?:\?(.*))?$/
         );
@@ -468,9 +476,54 @@ function createMockRegistryServer() {
             const name = decodeURIComponent(downloadMatch[2]);
             const query = new URLSearchParams(downloadMatch[3] || "");
             const requestedVersion = query.get("version");
+            const wrapped = query.get("wrapped") === "1";
             const entry = packages.get(pkgKey(scope, name));
             if (!entry) return send(res, 404, { error: "Package not found" });
             const version = requestedVersion || entry.latest;
+            const zipBuffer = entry.versions.get(version);
+            if (!zipBuffer)
+                return send(res, 404, { error: "Version not found" });
+            if (!wrapped) {
+                return send(res, 200, zipBuffer, "application/zip");
+            }
+            const body = {
+                downloadUrl: `http://127.0.0.1:${serverPort}/_mock/zips/${encodeURIComponent(
+                    scope
+                )}/${encodeURIComponent(name)}/${encodeURIComponent(
+                    version
+                )}.zip`,
+                version,
+                packageId: `${scope}/${name}`,
+                // Phase 1 signing fields stay null in the mock unless
+                // a test populates them — verifyDownloadedPackage's
+                // unsigned-package path handles that.
+                zipSignature: null,
+                publisherCert: null,
+                publisherKeyId: null,
+                publisherFingerprint: null,
+            };
+            const manifest_signature = await signMockManifestBody(body);
+            return send(res, 200, {
+                ...body,
+                manifest_signature,
+                manifest_signature_keyid: "v1",
+            });
+        }
+
+        // Phase 5D: ZIP storage endpoint that the /download wrapper's
+        // downloadUrl points at when wrapped=1. Same payload as the
+        // unwrapped /download — just exposed at a stable URL so the
+        // install flow can fetch the bytes after verifying the
+        // wrapper signature.
+        const storageMatch = url.match(
+            /^\/_mock\/zips\/([^/]+)\/([^/]+)\/([^.]+)\.zip$/
+        );
+        if (method === "GET" && storageMatch) {
+            const scope = decodeURIComponent(storageMatch[1]);
+            const name = decodeURIComponent(storageMatch[2]);
+            const version = decodeURIComponent(storageMatch[3]);
+            const entry = packages.get(pkgKey(scope, name));
+            if (!entry) return send(res, 404, { error: "Package not found" });
             const zipBuffer = entry.versions.get(version);
             if (!zipBuffer)
                 return send(res, 404, { error: "Version not found" });
@@ -708,6 +761,23 @@ function getMockRootPublicKey() {
     return mockRootPub;
 }
 
+function getMockRootPrivateKey() {
+    return mockRootPriv;
+}
+
+// Phase 5D: sign a /download response body with the mock root key.
+// Mirrors dash-registry/src/lib/crypto.ts#signManifestBody — strips
+// signature fields before canonicalizing so server + client see the
+// same byte sequence.
+async function signMockManifestBody(body) {
+    const stripped = { ...body };
+    delete stripped.manifest_signature;
+    delete stripped.manifest_signature_keyid;
+    const message = new TextEncoder().encode(canonicalJson(stripped));
+    const sigBytes = await ed.signAsync(message, base64ToBytes(mockRootPriv));
+    return bytesToBase64(sigBytes);
+}
+
 async function issueCert({ publisherId, publicKey }) {
     const body = {
         v: 1,
@@ -759,4 +829,6 @@ module.exports = {
     THEMES: STOCK_THEMES, // kept for back-compat with existing spec
     // Phase 1B-1+ signing helpers
     getMockRootPublicKey, // → set DASH_REGISTRY_ROOT_PUBLIC_KEY before launchApp
+    getMockRootPrivateKey, // → used by Phase 5D tests to tamper with mock signatures
+    signMockManifestBody, // → re-sign a body after tampering for negative-case tests
 };
