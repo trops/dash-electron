@@ -99,7 +99,9 @@ test("seeded widget packages appear in Settings → Widgets → Discover", async
             .first()
             .click();
         await window.waitForTimeout(500);
-        await window.getByText("Install Widgets", { exact: true }).click();
+        // Audit #19: header button renamed "Install Widgets" → "New
+        // Widget" with a 4-card chooser (Builder/Search/Zip/Folder).
+        await window.getByText("New Widget", { exact: true }).click();
         await window.waitForTimeout(500);
         await window.getByText("Search for Widgets", { exact: true }).click();
         await window.waitForTimeout(1500);
