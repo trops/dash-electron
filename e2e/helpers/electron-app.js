@@ -26,7 +26,7 @@ const ROOT = path.resolve(__dirname, "../..");
  * }}
  */
 async function launchApp(options = {}) {
-    const { env = {}, hermetic = false } = options;
+    const { env = {}, hermetic = false, seedUserData = null } = options;
     const args = [path.join(ROOT, "public/electron.js")];
 
     let tempUserData = null;
@@ -36,6 +36,16 @@ async function launchApp(options = {}) {
         );
         // Chromium / Electron CLI flag — overrides app.getPath('userData').
         args.push(`--user-data-dir=${tempUserData}`);
+
+        // Seed-hook: lets specs write fixture files into the temp user-data
+        // dir BEFORE the Electron process boots. Required by upgrade-style
+        // tests (e.g. settings-migration-on-upgrade) that need a pre-existing
+        // file the main process will read on its first load. The callback
+        // receives the absolute tempUserData path; any sync I/O is fine here
+        // since launch hasn't started yet.
+        if (typeof seedUserData === "function") {
+            await seedUserData(tempUserData);
+        }
     }
 
     const electronApp = await electron.launch({
