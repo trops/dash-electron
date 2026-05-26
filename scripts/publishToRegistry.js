@@ -31,6 +31,7 @@ const {
     publishToApi,
     deleteFromApi,
 } = require("./lib/registryAuth");
+const { scanBundle } = require("./lib/bundleSecurityLint.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -350,6 +351,23 @@ function buildWidget(widgetDirName) {
                         "  These will fail at runtime if not available in the host app.\n"
                     );
                 }
+            }
+
+            // Phase 5A (P1 #23): warn-only security lint on the bundle.
+            // Surfaces eval, Function-constructor, dangerous-module
+            // requires, process.exit, and large base64 literals. Never
+            // blocks the publish; flip-to-block lands in a follow-up.
+            const findings = scanBundle(bundleContent);
+            if (findings.length > 0) {
+                console.warn(
+                    `\n  Security lint findings in ${cjsFile} (warn-only):`
+                );
+                findings.forEach((f) =>
+                    console.warn(`    - ${f.description}: ${f.sample}`)
+                );
+                console.warn(
+                    "  Warnings only — publish will proceed. Block-mode lands in a later release.\n"
+                );
             }
         }
     }

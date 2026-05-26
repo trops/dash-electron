@@ -168,6 +168,10 @@ const isDev = process.defaultApp || process.env.NODE_ENV === "development";
 const pe = require("pluggable-electron/main");
 const logger = require("./logger");
 const algoliaOps = require("./algoliaOps.cjs");
+const {
+    validate: validateIpc,
+    SCHEMAS: IPC_SCHEMAS,
+} = require("./lib/ipcValidators.cjs");
 
 const { updateElectronApp } = require("update-electron-app");
 
@@ -789,109 +793,165 @@ function createWindow() {
         // --- Algolia (template-specific) ---
         // All handlers accept { providerHash, dashboardAppId, providerName }
         // and resolve credentials on the main process side.
+        //
+        // Phase 5A (P1 #14): payload shape validation at the handler edge.
+        // `validated(channel, handler)` rejects malformed input before the
+        // body runs so a compromised renderer can't smuggle `dir:
+        // "/etc/passwd"` or `indexName: "../.."` through to the Algolia
+        // client. Schemas are defined in public/lib/ipcValidators.cjs.
+        const validated = (channel, handler) => {
+            return async (e, payload) => {
+                const schema = IPC_SCHEMAS[channel];
+                if (!schema) {
+                    throw new Error(
+                        `[ipc:${channel}] no validation schema registered`
+                    );
+                }
+                const r = validateIpc(schema, payload, channel);
+                if (!r.ok) throw new Error(r.error);
+                return handler(e, r.value);
+            };
+        };
         logger.loggedHandle(
             ALGOLIA_LIST_INDICES,
             responseCache.cachedHandler(
                 "algolia-list-indices",
-                async (e, { providerHash, dashboardAppId, providerName }) => {
-                    try {
-                        const client = await clientCache.getClient(
-                            providerHash,
-                            dashboardAppId,
-                            providerName
-                        );
-                        const { items } = await client.listIndices();
-                        const filtered = items.filter(
-                            (item) => item.name.substring(0, 7) !== "sitehub"
-                        );
-                        const senderWin = getSenderWindow(e);
-                        senderWin?.webContents?.send(
-                            "algolia-list-indices-complete",
-                            filtered
-                        );
-                        return filtered;
-                    } catch (err) {
-                        const senderWin = getSenderWindow(e);
-                        senderWin?.webContents?.send(
-                            "algolia-list-indices-error",
-                            { error: err.message }
-                        );
-                        throw err;
+                validated(
+                    "algolia-list-indices",
+                    async (
+                        e,
+                        { providerHash, dashboardAppId, providerName }
+                    ) => {
+                        try {
+                            const client = await clientCache.getClient(
+                                providerHash,
+                                dashboardAppId,
+                                providerName
+                            );
+                            const { items } = await client.listIndices();
+                            const filtered = items.filter(
+                                (item) =>
+                                    item.name.substring(0, 7) !== "sitehub"
+                            );
+                            const senderWin = getSenderWindow(e);
+                            senderWin?.webContents?.send(
+                                "algolia-list-indices-complete",
+                                filtered
+                            );
+                            return filtered;
+                        } catch (err) {
+                            const senderWin = getSenderWindow(e);
+                            senderWin?.webContents?.send(
+                                "algolia-list-indices-error",
+                                { error: err.message }
+                            );
+                            throw err;
+                        }
                     }
-                }
+                )
             )
         );
         logger.loggedHandle(
             ALGOLIA_PARTIAL_UPDATE_OBJECTS,
-            async (
-                e,
-                {
-                    dashboardAppId,
-                    providerName,
-                    indexName,
-                    dir,
-                    createIfNotExists,
+            validated(
+                "algolia-partial-update-objects",
+                async (
+                    e,
+                    {
+                        dashboardAppId,
+                        providerName,
+                        indexName,
+                        dir,
+                        createIfNotExists,
+                    }
+                ) => {
+                    const result = getProvider(
+                        null,
+                        dashboardAppId,
+                        providerName
+                    );
+                    if (result.error) throw new Error(result.message);
+                    const { appId, apiKey, key } = result.provider.credentials;
+                    partialUpdateObjectsFromDirectory(
+                        getSenderWindow(e),
+                        appId,
+                        apiKey || key,
+                        indexName,
+                        dir,
+                        createIfNotExists
+                    );
                 }
-            ) => {
-                const result = getProvider(null, dashboardAppId, providerName);
-                if (result.error) throw new Error(result.message);
-                const { appId, apiKey, key } = result.provider.credentials;
-                partialUpdateObjectsFromDirectory(
-                    getSenderWindow(e),
-                    appId,
-                    apiKey || key,
-                    indexName,
-                    dir,
-                    createIfNotExists
-                );
-            }
+            )
         );
-        logger.loggedHandle(ALGOLIA_CREATE_BATCH, (e, message) => {
-            const { filepath, batchFilepath, batchSize } = message;
-            createBatchesFromFile(
-                getSenderWindow(e),
-                filepath,
-                batchFilepath,
-                batchSize
-            );
-        });
+        logger.loggedHandle(
+            ALGOLIA_CREATE_BATCH,
+            validated("algolia-create-batch", (e, message) => {
+                const { filepath, batchFilepath, batchSize } = message;
+                createBatchesFromFile(
+                    getSenderWindow(e),
+                    filepath,
+                    batchFilepath,
+                    batchSize
+                );
+            })
+        );
         logger.loggedHandle(
             ALGOLIA_BROWSE_OBJECTS,
-            async (
-                e,
-                { dashboardAppId, providerName, indexName, toFilename, query }
-            ) => {
-                const result = getProvider(null, dashboardAppId, providerName);
-                if (result.error) throw new Error(result.message);
-                const { appId, apiKey, key } = result.provider.credentials;
-                browseObjectsToFile(
-                    getSenderWindow(e),
-                    appId,
-                    apiKey || key,
-                    indexName,
-                    toFilename,
-                    query
-                );
-            }
+            validated(
+                "algolia-browse-objects",
+                async (
+                    e,
+                    {
+                        dashboardAppId,
+                        providerName,
+                        indexName,
+                        toFilename,
+                        query,
+                    }
+                ) => {
+                    const result = getProvider(
+                        null,
+                        dashboardAppId,
+                        providerName
+                    );
+                    if (result.error) throw new Error(result.message);
+                    const { appId, apiKey, key } = result.provider.credentials;
+                    browseObjectsToFile(
+                        getSenderWindow(e),
+                        appId,
+                        apiKey || key,
+                        indexName,
+                        toFilename,
+                        query
+                    );
+                }
+            )
         );
         logger.loggedHandle(
             ALGOLIA_SEARCH,
-            async (
-                e,
-                { dashboardAppId, providerName, indexName, query, options }
-            ) => {
-                const result = getProvider(null, dashboardAppId, providerName);
-                if (result.error) throw new Error(result.message);
-                const { appId, apiKey, key } = result.provider.credentials;
-                return searchIndex(
-                    getSenderWindow(e),
-                    appId,
-                    apiKey || key,
-                    indexName,
-                    query,
-                    options
-                );
-            }
+            validated(
+                "algolia-search",
+                async (
+                    e,
+                    { dashboardAppId, providerName, indexName, query, options }
+                ) => {
+                    const result = getProvider(
+                        null,
+                        dashboardAppId,
+                        providerName
+                    );
+                    if (result.error) throw new Error(result.message);
+                    const { appId, apiKey, key } = result.provider.credentials;
+                    return searchIndex(
+                        getSenderWindow(e),
+                        appId,
+                        apiKey || key,
+                        indexName,
+                        query,
+                        options
+                    );
+                }
+            )
         );
 
         // --- Algolia Settings (use clientCache for cached client) ---
@@ -899,44 +959,57 @@ function createWindow() {
             "algolia-get-settings",
             responseCache.cachedHandler(
                 "algolia-get-settings",
+                validated(
+                    "algolia-get-settings",
+                    async (
+                        e,
+                        {
+                            providerHash,
+                            dashboardAppId,
+                            providerName,
+                            indexName,
+                        }
+                    ) => {
+                        const client = await clientCache.getClient(
+                            providerHash,
+                            dashboardAppId,
+                            providerName
+                        );
+                        return await algoliaOps.getSettings(client, {
+                            indexName,
+                        });
+                    }
+                )
+            )
+        );
+
+        logger.loggedHandle(
+            "algolia-set-settings",
+            validated(
+                "algolia-set-settings",
                 async (
                     e,
-                    { providerHash, dashboardAppId, providerName, indexName }
+                    {
+                        providerHash,
+                        dashboardAppId,
+                        providerName,
+                        indexName,
+                        settings,
+                    }
                 ) => {
                     const client = await clientCache.getClient(
                         providerHash,
                         dashboardAppId,
                         providerName
                     );
-                    return await algoliaOps.getSettings(client, { indexName });
+                    const result = await algoliaOps.setSettings(client, {
+                        indexName,
+                        settings,
+                    });
+                    responseCache.invalidatePrefix("algolia-get-settings:");
+                    return result;
                 }
             )
-        );
-
-        logger.loggedHandle(
-            "algolia-set-settings",
-            async (
-                e,
-                {
-                    providerHash,
-                    dashboardAppId,
-                    providerName,
-                    indexName,
-                    settings,
-                }
-            ) => {
-                const client = await clientCache.getClient(
-                    providerHash,
-                    dashboardAppId,
-                    providerName
-                );
-                const result = await algoliaOps.setSettings(client, {
-                    indexName,
-                    settings,
-                });
-                responseCache.invalidatePrefix("algolia-get-settings:");
-                return result;
-            }
         );
 
         // --- Algolia Query Rules CRUD (slice 17d.6) ---
@@ -949,6 +1022,40 @@ function createWindow() {
             "algolia-search-rules",
             responseCache.cachedHandler(
                 "algolia-search-rules",
+                validated(
+                    "algolia-search-rules",
+                    async (
+                        e,
+                        {
+                            providerHash,
+                            dashboardAppId,
+                            providerName,
+                            indexName,
+                            query,
+                            hitsPerPage,
+                            page,
+                        }
+                    ) => {
+                        const client = await clientCache.getClient(
+                            providerHash,
+                            dashboardAppId,
+                            providerName
+                        );
+                        return await algoliaOps.searchRules(client, {
+                            indexName,
+                            query,
+                            hitsPerPage,
+                            page,
+                        });
+                    }
+                )
+            )
+        );
+
+        logger.loggedHandle(
+            "algolia-save-rule",
+            validated(
+                "algolia-save-rule",
                 async (
                     e,
                     {
@@ -956,9 +1063,7 @@ function createWindow() {
                         dashboardAppId,
                         providerName,
                         indexName,
-                        query,
-                        hitsPerPage,
-                        page,
+                        rule,
                     }
                 ) => {
                     const client = await clientCache.getClient(
@@ -966,126 +1071,116 @@ function createWindow() {
                         dashboardAppId,
                         providerName
                     );
-                    return await algoliaOps.searchRules(client, {
+                    const result = await algoliaOps.saveRule(client, {
                         indexName,
-                        query,
-                        hitsPerPage,
-                        page,
+                        rule,
                     });
+                    responseCache.invalidatePrefix("algolia-search-rules:");
+                    return result;
                 }
             )
         );
 
         logger.loggedHandle(
-            "algolia-save-rule",
-            async (
-                e,
-                { providerHash, dashboardAppId, providerName, indexName, rule }
-            ) => {
-                const client = await clientCache.getClient(
-                    providerHash,
-                    dashboardAppId,
-                    providerName
-                );
-                const result = await algoliaOps.saveRule(client, {
-                    indexName,
-                    rule,
-                });
-                responseCache.invalidatePrefix("algolia-search-rules:");
-                return result;
-            }
-        );
-
-        logger.loggedHandle(
             "algolia-delete-rule",
-            async (
-                e,
-                {
-                    providerHash,
-                    dashboardAppId,
-                    providerName,
-                    indexName,
-                    objectID,
+            validated(
+                "algolia-delete-rule",
+                async (
+                    e,
+                    {
+                        providerHash,
+                        dashboardAppId,
+                        providerName,
+                        indexName,
+                        objectID,
+                    }
+                ) => {
+                    const client = await clientCache.getClient(
+                        providerHash,
+                        dashboardAppId,
+                        providerName
+                    );
+                    const result = await algoliaOps.deleteRule(client, {
+                        indexName,
+                        objectID,
+                    });
+                    responseCache.invalidatePrefix("algolia-search-rules:");
+                    return result;
                 }
-            ) => {
-                const client = await clientCache.getClient(
-                    providerHash,
-                    dashboardAppId,
-                    providerName
-                );
-                const result = await algoliaOps.deleteRule(client, {
-                    indexName,
-                    objectID,
-                });
-                responseCache.invalidatePrefix("algolia-search-rules:");
-                return result;
-            }
+            )
         );
 
         logger.loggedHandle(
             ALGOLIA_ANALYTICS_FOR_QUERY,
             responseCache.cachedHandler(
                 "algolia-analytics",
-                async (
-                    e,
-                    { dashboardAppId, providerName, indexName, query }
-                ) => {
-                    try {
-                        const result = getProvider(
-                            null,
-                            dashboardAppId,
-                            providerName
-                        );
-                        if (result.error) throw new Error(result.message);
-                        const { appId, apiKey, key } =
-                            result.provider.credentials;
-                        const resolvedApiKey = apiKey || key;
-                        const endpoint =
-                            typeof query === "string" ? query : query.endpoint;
-                        const { endpoint: _, ...params } =
-                            typeof query === "object" ? query : {};
+                validated(
+                    "algolia-analytics",
+                    async (
+                        e,
+                        { dashboardAppId, providerName, indexName, query }
+                    ) => {
+                        try {
+                            const result = getProvider(
+                                null,
+                                dashboardAppId,
+                                providerName
+                            );
+                            if (result.error) throw new Error(result.message);
+                            const { appId, apiKey, key } =
+                                result.provider.credentials;
+                            const resolvedApiKey = apiKey || key;
+                            const endpoint =
+                                typeof query === "string"
+                                    ? query
+                                    : query.endpoint;
+                            const { endpoint: _, ...params } =
+                                typeof query === "object" ? query : {};
 
-                        console.log(
-                            `[Algolia Analytics] ${endpoint} for index "${indexName}"`
-                        );
+                            console.log(
+                                `[Algolia Analytics] ${endpoint} for index "${indexName}"`
+                            );
 
-                        const url = new URL(
-                            `https://analytics.algolia.com/2/${endpoint}`
-                        );
-                        url.searchParams.set("index", indexName);
-                        Object.entries(params).forEach(([key, value]) => {
-                            if (value != null)
-                                url.searchParams.set(key, String(value));
-                        });
+                            const url = new URL(
+                                `https://analytics.algolia.com/2/${endpoint}`
+                            );
+                            url.searchParams.set("index", indexName);
+                            Object.entries(params).forEach(([key, value]) => {
+                                if (value != null)
+                                    url.searchParams.set(key, String(value));
+                            });
 
-                        const resp = await fetch(url.toString(), {
-                            headers: {
-                                "X-Algolia-Application-Id": appId,
-                                "X-Algolia-API-Key": resolvedApiKey,
-                            },
-                        });
-                        if (!resp.ok) {
-                            const text = await resp.text();
+                            const resp = await fetch(url.toString(), {
+                                headers: {
+                                    "X-Algolia-Application-Id": appId,
+                                    "X-Algolia-API-Key": resolvedApiKey,
+                                },
+                            });
+                            if (!resp.ok) {
+                                const text = await resp.text();
+                                console.error(
+                                    `[Algolia Analytics] ${resp.status}: ${text}`
+                                );
+                                return {
+                                    error: true,
+                                    status: resp.status,
+                                    message: text,
+                                };
+                            }
+                            return await resp.json();
+                        } catch (err) {
                             console.error(
-                                `[Algolia Analytics] ${resp.status}: ${text}`
+                                `[Algolia Analytics] Error: ${
+                                    err.message || err
+                                }`
                             );
                             return {
                                 error: true,
-                                status: resp.status,
-                                message: text,
+                                message: err.message || String(err),
                             };
                         }
-                        return await resp.json();
-                    } catch (err) {
-                        console.error(
-                            `[Algolia Analytics] Error: ${err.message || err}`
-                        );
-                        return {
-                            error: true,
-                            message: err.message || String(err),
-                        };
                     }
-                }
+                )
             )
         );
 
