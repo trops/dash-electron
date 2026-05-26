@@ -486,6 +486,9 @@ const {
     getOrCreateLocalKey,
     describeLocalKey,
     revokeLocalKey,
+    // Onboarding (Phase 3A)
+    getOnboardingStatus,
+    markOnboardingCompleted,
     // Session
     getRecentDashboards,
     addRecentDashboard,
@@ -638,6 +641,8 @@ const {
     PUBLISHER_KEY_GET_OR_CREATE,
     PUBLISHER_KEY_DESCRIBE,
     PUBLISHER_KEY_REVOKE,
+    ONBOARDING_GET_STATUS,
+    ONBOARDING_MARK_COMPLETED,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_REMOVE_RECENT,
@@ -1898,6 +1903,12 @@ function createWindow() {
         );
         logger.loggedHandle(PUBLISHER_KEY_DESCRIBE, () => describeLocalKey());
         logger.loggedHandle(PUBLISHER_KEY_REVOKE, () => revokeLocalKey());
+
+        // --- Onboarding (Phase 3A) ---
+        logger.loggedHandle(ONBOARDING_GET_STATUS, () => getOnboardingStatus());
+        logger.loggedHandle(ONBOARDING_MARK_COMPLETED, (e, message) =>
+            markOnboardingCompleted(message || {})
+        );
 
         // --- Session ---
         logger.loggedHandle(SESSION_GET_RECENTS, () => getRecentDashboards());
