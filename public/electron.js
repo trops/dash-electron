@@ -16,6 +16,63 @@ process.stderr?.on?.("error", (err) => {
     throw err;
 });
 
+// Main-process crash safety net. Installed BEFORE any other top-level
+// imports so it catches require()-time crashes too.
+//
+// Without this Electron's default behavior on an uncaught exception is to
+// log to stderr and either keep running with corrupted state or quit
+// silently — either way the user sees a black window with no actionable
+// feedback. We:
+//   1. Write a structured record to the same JSONL log used everywhere
+//      else (lazy require so a bug in logger.js itself doesn't black-hole
+//      the report).
+//   2. Show a dialog.showErrorBox so the user knows something went wrong
+//      and which version + log file to share with support. Suppressed
+//      under DASH_E2E so test runs don't block on a modal.
+//   3. Do NOT call app.quit() — Electron's default is to keep running,
+//      and recoverable IPC failures are far more common than fatal ones.
+//
+// Pinned by Phase 2 of the MVP launch audit (P1 #8).
+function reportMainProcessCrash(kind, err) {
+    const safeMessage =
+        (err && (err.stack || err.message || String(err))) || "(no detail)";
+    // Try the structured logger first; fall back to console.error.
+    try {
+        const logger = require("./logger");
+        if (logger && typeof logger.error === "function") {
+            logger.error(`[main:${kind}]`, safeMessage);
+        } else {
+            console.error(`[main:${kind}]`, safeMessage);
+        }
+    } catch {
+        console.error(`[main:${kind}]`, safeMessage);
+    }
+    // Dialog is best-effort: it requires the `app` ready state on some
+    // platforms. Skipped under E2E so tests aren't blocked by a modal.
+    if (process.env.DASH_E2E === "1") return;
+    try {
+        const { dialog: _dialog, app: _app } = require("electron");
+        const version = (_app && _app.getVersion && _app.getVersion()) || "?";
+        _dialog.showErrorBox(
+            "Dash hit an unexpected error",
+            `Version ${version}\n\n` +
+                `${kind}: ${safeMessage}\n\n` +
+                `Dash will keep running. If this repeats, please share the ` +
+                `daily log file from your user data directory.`
+        );
+    } catch {
+        // Dialog isn't available yet (early startup) — the log entry is
+        // the durable record either way.
+    }
+}
+
+process.on("uncaughtException", (err) => {
+    reportMainProcessCrash("uncaughtException", err);
+});
+process.on("unhandledRejection", (reason) => {
+    reportMainProcessCrash("unhandledRejection", reason);
+});
+
 // Load .env before any dash-core imports so controllers can read env vars
 try {
     require("dotenv").config({
