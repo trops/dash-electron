@@ -697,6 +697,12 @@ const { setupJitConsentHandlers } =
 
 let windows = new Set();
 let mainWindow = null;
+
+// Phase 2B unsaved-changes guard: set to true once the user has
+// explicitly chosen to discard their in-flight dashboard edits in the
+// "Unsaved changes" dialog. The close/quit handlers re-fire after
+// `mainWindow.destroy()` / `app.quit()`; this flag breaks the recursion.
+let forceQuitConfirmed = false;
 let popoutWindows = new Map(); // workspaceId string → BrowserWindow
 let widgetPopoutWindows = new Map(); // "workspaceId:widgetId" → BrowserWindow
 let debugWindow = null; // Debug Console BrowserWindow
@@ -3118,6 +3124,45 @@ function createWindow() {
     windows.add(mainWindow);
     logger.logLifecycle("window-created");
 
+    // Phase 2B unsaved-changes guard for window close. The renderer
+    // mirrors the dashboard's dirty state to globalThis.__dashboardIsDirty
+    // (see dash-core/.../DashboardStage.js). On close, we read it via
+    // executeJavaScript, and if dirty we preventDefault, show a native
+    // dialog, and only destroy the window when the user picks Discard.
+    // E2E runs bypass to avoid blocking on a modal dialog.
+    mainWindow.on("close", async (e) => {
+        if (forceQuitConfirmed) return; // user already discarded
+        if (process.env.DASH_E2E === "1") return; // tests bypass
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        let dirty = false;
+        try {
+            dirty = await mainWindow.webContents.executeJavaScript(
+                "Boolean(globalThis.__dashboardIsDirty)",
+                true
+            );
+        } catch (err) {
+            // executeJavaScript can throw if the renderer is mid-teardown.
+            // Better to let the user close in that case than to block.
+            logger.warn("[unsaved-guard] close-check failed", err.message);
+            return;
+        }
+        if (!dirty) return;
+        e.preventDefault();
+        const choice = dialog.showMessageBoxSync(mainWindow, {
+            type: "warning",
+            buttons: ["Discard changes and close", "Keep editing"],
+            defaultId: 1,
+            cancelId: 1,
+            title: "Unsaved changes",
+            message: "You have unsaved dashboard edits.",
+            detail: "Closing the window now will discard them.",
+        });
+        if (choice === 0) {
+            forceQuitConfirmed = true;
+            mainWindow.destroy();
+        }
+    });
+
     mainWindow.on("closed", () => {
         windows.delete(mainWindow);
         mainWindow = null;
@@ -3327,6 +3372,42 @@ app.whenReady().then(() => {
     const { powerMonitor } = require("electron");
     powerMonitor.on("suspend", () => schedulerController.handleSuspend());
     powerMonitor.on("resume", () => schedulerController.handleResume());
+});
+
+// Phase 2B unsaved-changes guard for app quit (Cmd+Q / File → Quit /
+// dock context-menu quit). Same shape as the window `close` handler
+// above. The renderer-side dirty flag is read via executeJavaScript;
+// E2E runs bypass; once the user discards, `forceQuitConfirmed` short-
+// circuits subsequent fires triggered by app.quit()/before-quit cycling.
+app.on("before-quit", async (e) => {
+    if (forceQuitConfirmed) return;
+    if (process.env.DASH_E2E === "1") return;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    let dirty = false;
+    try {
+        dirty = await mainWindow.webContents.executeJavaScript(
+            "Boolean(globalThis.__dashboardIsDirty)",
+            true
+        );
+    } catch (err) {
+        logger.warn("[unsaved-guard] quit-check failed", err.message);
+        return;
+    }
+    if (!dirty) return;
+    e.preventDefault();
+    const choice = dialog.showMessageBoxSync(mainWindow, {
+        type: "warning",
+        buttons: ["Discard changes and quit", "Keep editing"],
+        defaultId: 1,
+        cancelId: 1,
+        title: "Unsaved changes",
+        message: "You have unsaved dashboard edits.",
+        detail: "Quitting now will discard them.",
+    });
+    if (choice === 0) {
+        forceQuitConfirmed = true;
+        app.quit();
+    }
 });
 
 app.on("window-all-closed", () => {
