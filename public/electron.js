@@ -425,6 +425,10 @@ const {
     deleteRegistryPackage,
     clearRegistryToken,
     publishToRegistry,
+    // Publisher signing key
+    getOrCreateLocalKey,
+    describeLocalKey,
+    revokeLocalKey,
     // Session
     getRecentDashboards,
     addRecentDashboard,
@@ -574,6 +578,9 @@ const {
     REGISTRY_AUTH_GET_PACKAGES,
     REGISTRY_AUTH_UPDATE_PACKAGE,
     REGISTRY_AUTH_DELETE_PACKAGE,
+    PUBLISHER_KEY_GET_OR_CREATE,
+    PUBLISHER_KEY_DESCRIBE,
+    PUBLISHER_KEY_REVOKE,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_REMOVE_RECENT,
@@ -1821,6 +1828,13 @@ function createWindow() {
         logger.loggedHandle(REGISTRY_AUTH_DELETE_PACKAGE, (e, message) =>
             deleteRegistryPackage(message.scope, message.name)
         );
+
+        // --- Publisher Signing Key ---
+        logger.loggedHandle(PUBLISHER_KEY_GET_OR_CREATE, () =>
+            getOrCreateLocalKey()
+        );
+        logger.loggedHandle(PUBLISHER_KEY_DESCRIBE, () => describeLocalKey());
+        logger.loggedHandle(PUBLISHER_KEY_REVOKE, () => revokeLocalKey());
 
         // --- Session ---
         logger.loggedHandle(SESSION_GET_RECENTS, () => getRecentDashboards());
