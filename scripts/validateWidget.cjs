@@ -19,9 +19,9 @@
 
 const fs = require("fs");
 const path = require("path");
-const vm = require("vm");
 const os = require("os");
 const { scanBundle } = require("./lib/bundleSecurityLint.cjs");
+const acorn = require("acorn");
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -274,7 +274,12 @@ function validateManifestSchema(manifest) {
 
 /**
  * Parse a .dash.js config file and return its exported object.
- * Uses regex + vm.runInContext — no Electron dependency.
+ *
+ * Phase 5B (P1 #10): AST-allowlist walker, mirrors the
+ * dash-core/electron/utils/dashConfigParser.js implementation. Both
+ * implementations need to stay in sync — the publisher's pre-publish
+ * validate (this file) and the installer's post-install parse must
+ * accept the same configs and reject the same patterns.
  *
  * @param {string} configPath - Absolute path to a .dash.js file
  * @returns {{ config: Object|null, error: string|null }}
@@ -282,34 +287,128 @@ function validateManifestSchema(manifest) {
 function parseDashConfig(configPath) {
     try {
         const source = fs.readFileSync(configPath, "utf8");
-        const exportMatch = source.match(
-            /export\s+default\s+({[\s\S]*});?\s*$/
-        );
-
-        if (!exportMatch) {
+        const exportedObjectStr = extractDefaultExportLiteral(source);
+        if (!exportedObjectStr) {
             return {
                 config: null,
                 error: "Could not find `export default {...}` in config file",
             };
         }
 
-        const exportedObjectStr = exportMatch[1];
-        const context = vm.createContext({ module: { exports: {} } });
+        // Sanitize component identifier refs to strings before the AST
+        // walk so they round-trip cleanly (matches dash-core's parser).
+        const sanitized = exportedObjectStr.replace(
+            /component\s*:\s*([A-Z][a-zA-Z0-9_$]*)/g,
+            'component: "$1"'
+        );
 
+        let ast;
         try {
-            vm.runInContext(`module.exports = ${exportedObjectStr}`, context);
-        } catch (vmErr) {
-            // Most common cause: config references a component import that
-            // can't be resolved outside the bundled runtime.
+            ast = acorn.parseExpressionAt(`(${sanitized})`, 0, {
+                ecmaVersion: "latest",
+                sourceType: "script",
+            });
+        } catch (parseErr) {
             return {
                 config: null,
-                error: `vm eval error: ${vmErr.message} (likely a component import reference — structure may still be valid)`,
+                error: `parse error: ${parseErr.message}`,
             };
         }
 
-        return { config: context.module.exports, error: null };
+        try {
+            const config = walkConfigAst(ast);
+            if (config === null || typeof config !== "object") {
+                return {
+                    config: null,
+                    error: "config literal must evaluate to an object",
+                };
+            }
+            return { config, error: null };
+        } catch (walkErr) {
+            return { config: null, error: walkErr.message };
+        }
     } catch (err) {
         return { config: null, error: err.message };
+    }
+}
+
+function extractDefaultExportLiteral(source) {
+    const direct = source.match(/export\s+default\s+({[\s\S]*});?\s*$/);
+    if (direct) return direct[1];
+    const named = source.match(
+        /export\s+default\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*;?\s*$/
+    );
+    if (named) {
+        const varName = named[1];
+        const decl = source.match(
+            new RegExp(
+                `(?:const|let|var)\\s+${varName}\\s*=\\s*({[\\s\\S]*?});\\s*(?:export\\s+default)`
+            )
+        );
+        if (decl) return decl[1];
+    }
+    return null;
+}
+
+const ALLOWED_GLOBALS = new Set(["undefined", "Infinity", "NaN"]);
+
+function walkConfigAst(node) {
+    switch (node.type) {
+        case "ObjectExpression": {
+            const out = {};
+            for (const prop of node.properties) {
+                if (prop.type !== "Property") {
+                    throw new Error(
+                        `unsupported object-property type: ${prop.type}`
+                    );
+                }
+                if (prop.computed) {
+                    throw new Error("computed object keys are not allowed");
+                }
+                let key;
+                if (prop.key.type === "Identifier") {
+                    key = prop.key.name;
+                } else if (
+                    prop.key.type === "Literal" &&
+                    (typeof prop.key.value === "string" ||
+                        typeof prop.key.value === "number")
+                ) {
+                    key = String(prop.key.value);
+                } else {
+                    throw new Error(`unsupported object key: ${prop.key.type}`);
+                }
+                out[key] = walkConfigAst(prop.value);
+            }
+            return out;
+        }
+        case "ArrayExpression":
+            return node.elements.map((el) =>
+                el === null ? null : walkConfigAst(el)
+            );
+        case "Literal":
+            return node.value;
+        case "TemplateLiteral":
+            if (node.expressions.length > 0) {
+                throw new Error(
+                    "template literals with substitutions are not allowed"
+                );
+            }
+            return node.quasis.map((q) => q.value.cooked).join("");
+        case "UnaryExpression":
+            if (node.argument.type === "Literal") {
+                if (node.operator === "-") return -node.argument.value;
+                if (node.operator === "+") return +node.argument.value;
+            }
+            throw new Error(`unsupported unary operator: ${node.operator}`);
+        case "Identifier":
+            if (ALLOWED_GLOBALS.has(node.name)) {
+                if (node.name === "undefined") return undefined;
+                if (node.name === "Infinity") return Infinity;
+                if (node.name === "NaN") return NaN;
+            }
+            return null;
+        default:
+            throw new Error(`unsupported node type: ${node.type}`);
     }
 }
 
