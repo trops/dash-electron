@@ -1,10 +1,22 @@
 /**
  * Forge Configuration
  *
- * Code signing (osxSign) and notarization (osxNotarize) are conditional:
- * - Set REACT_APP_APPLE_CERT_ID in .env to enable signing
+ * Code signing is conditional on env vars — when absent, builds
+ * remain unsigned (local dev path).
+ *
+ * macOS:
+ * - Set REACT_APP_APPLE_CERT_ID to enable osxSign
  * - Set REACT_APP_APPLE_ID, REACT_APP_APPLE_PASSWORD, REACT_APP_APPLE_TEAM_ID to enable notarization
- * - When credentials are absent, builds remain unsigned (local dev)
+ *
+ * Windows (Phase 4B):
+ * - Set WINDOWS_CERTIFICATE_PATH to a .pfx file path to enable
+ *   maker-squirrel signing
+ * - Set WINDOWS_CERTIFICATE_PASSWORD to the PFX password
+ * - In CI, the "Install Windows certificate" step in
+ *   .github/workflows/release-app.yml decodes the
+ *   WINDOWS_CERTIFICATE_BASE64 secret into a temp .pfx file and
+ *   exports WINDOWS_CERTIFICATE_PATH + WINDOWS_CERTIFICATE_PASSWORD
+ *   to the build environment.
  */
 const packageJson = require("./package.json");
 require("dotenv").config();
@@ -53,6 +65,25 @@ module.exports = {
                 iconUrl:
                     "https://raw.githubusercontent.com/trops/dash-electron/master/assets/icons/icon.ico",
                 setupIcon: "./assets/icons/icon.ico",
+                // Windows code-signing (Phase 4B). Active iff the
+                // workflow's "Install Windows certificate" step has
+                // decoded the WINDOWS_CERTIFICATE_BASE64 secret to a
+                // temp .pfx and exported the path + password. Local
+                // builds without these env vars produce an unsigned
+                // installer — same as the pre-Phase-4B behavior.
+                //
+                // If WINDOWS_CERTIFICATE_BASE64 is set in secrets but
+                // the decode step fails (truncated, wrong format),
+                // the CI step errors loudly — silently shipping
+                // unsigned when signing was expected is the worse
+                // failure mode.
+                ...(process.env.WINDOWS_CERTIFICATE_PATH
+                    ? {
+                          certificateFile: process.env.WINDOWS_CERTIFICATE_PATH,
+                          certificatePassword:
+                              process.env.WINDOWS_CERTIFICATE_PASSWORD,
+                      }
+                    : {}),
             },
         },
         {

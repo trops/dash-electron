@@ -215,6 +215,42 @@ jobs:
               shell: pwsh
               run: Copy-Item .env.default .env
 
+            # Windows code-signing (Phase 4B). No-op when the
+            # WINDOWS_CERTIFICATE_BASE64 secret is unset — builds
+            # land unsigned, same as before this step existed.
+            # When the secret IS set, we decode it into a temp .pfx
+            # file and export the path to subsequent steps;
+            # forge.config.js picks the env vars up and threads them
+            # into maker-squirrel.
+            #
+            # All sensitive values flow through `env:` (NEVER inline
+            # in run: scripts) so no untrusted input is ever
+            # interpolated into the shell command.
+            #
+            # To activate signing:
+            #   1. Procure a Windows code-signing cert (PFX, password-
+            #      protected). OV minimum; EV avoids SmartScreen
+            #      warnings on first-run installs.
+            #   2. base64-encode the .pfx (`base64 -i cert.pfx`).
+            #   3. Add two repo secrets:
+            #        WINDOWS_CERTIFICATE_BASE64    (the base64 blob)
+            #        WINDOWS_CERTIFICATE_PASSWORD  (the PFX password)
+            #   4. Re-run the release workflow.
+            - name: Install Windows certificate
+              shell: pwsh
+              env:
+                  WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+              run: |
+                  if (-not $env:WINDOWS_CERTIFICATE_BASE64) {
+                      Write-Host "WINDOWS_CERTIFICATE_BASE64 secret not set; skipping cert install (build will be unsigned)."
+                      exit 0
+                  }
+                  $certPath = Join-Path $env:RUNNER_TEMP "codesigning.pfx"
+                  $bytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64)
+                  [IO.File]::WriteAllBytes($certPath, $bytes)
+                  "WINDOWS_CERTIFICATE_PATH=$certPath" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+                  Write-Host "Cert decoded to $certPath; signing enabled."
+
             - name: Build Tailwind CSS
               run: npm run build:css
 
@@ -225,6 +261,9 @@ jobs:
               run: npx electron-forge make --arch=x64
               env:
                   NODE_ENV: production
+                  # When unset, forge.config.js falls back to unsigned.
+                  WINDOWS_CERTIFICATE_PATH: ${{ env.WINDOWS_CERTIFICATE_PATH }}
+                  WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
 
             - name: Upload to GitHub Release
               if: env.RELEASE_TAG != ''
