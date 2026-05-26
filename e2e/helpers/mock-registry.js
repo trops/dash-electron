@@ -1,5 +1,11 @@
 const http = require("http");
 const AdmZip = require("adm-zip");
+const crypto = require("crypto");
+const ed = require("@noble/ed25519");
+const { sha256, sha512 } = require("@noble/hashes/sha2.js");
+
+// @noble/ed25519 v3 requires SHA-512 to be wired explicitly.
+ed.hashes.sha512 = sha512;
 
 /**
  * Mock registry server for E2E tests.
@@ -494,6 +500,115 @@ function createMockRegistryServer() {
             return res.end();
         }
 
+        // Publisher key: POST /api/publishers/keys/issue-cert
+        // Body: { publicKey, machineLabel }. Cert is signed with the
+        // mock root keypair generated at startMockRegistry() time;
+        // tests inject the public half via DASH_REGISTRY_ROOT_PUBLIC_KEY
+        // so dash-core's verifier accepts.
+        if (
+            method === "POST" &&
+            /^\/api\/publishers\/keys\/issue-cert\/?$/.test(url)
+        ) {
+            const body = await readBody(req);
+            let payload;
+            try {
+                payload = JSON.parse(body.toString("utf-8"));
+            } catch {
+                return send(res, 400, { error: "Invalid JSON" });
+            }
+            const publicKey = payload?.publicKey;
+            if (typeof publicKey !== "string" || publicKey.length === 0) {
+                return send(res, 400, { error: "publicKey required" });
+            }
+            const fingerprint = fingerprintOf(publicKey);
+            if (fingerprintIndex.has(fingerprint)) {
+                return send(res, 409, {
+                    error: "This key is already registered for your account",
+                    keyId: fingerprintIndex.get(fingerprint),
+                });
+            }
+            const keyId = `mock-key-${crypto.randomUUID()}`;
+            const publisherId = authProfile.id || "mock-user-id";
+            const cert = await issueCert({ publisherId, publicKey });
+            const createdAt = new Date().toISOString();
+            issuedKeys.set(keyId, {
+                publisherId,
+                publicKey,
+                fingerprint,
+                createdAt,
+                revokedAt: null,
+            });
+            fingerprintIndex.set(fingerprint, keyId);
+            return send(res, 201, {
+                keyId,
+                fingerprint,
+                cert,
+                createdAt,
+            });
+        }
+
+        // Publisher key: GET /api/publishers/keys/revocation-status
+        const revStatusMatch =
+            /^\/api\/publishers\/keys\/revocation-status(?:\?(.*))?$/.exec(url);
+        if (method === "GET" && revStatusMatch) {
+            const query = new URLSearchParams(revStatusMatch[1] || "");
+            const fingerprint = query.get("fingerprint");
+            if (!fingerprint || !/^[0-9a-f]{64}$/.test(fingerprint)) {
+                return send(res, 400, {
+                    error: "fingerprint query parameter required",
+                });
+            }
+            const keyId = fingerprintIndex.get(fingerprint);
+            if (!keyId) {
+                return send(res, 200, {
+                    fingerprint,
+                    known: false,
+                    revoked: false,
+                    revokedAt: null,
+                });
+            }
+            const row = issuedKeys.get(keyId);
+            return send(res, 200, {
+                fingerprint,
+                known: true,
+                revoked: Boolean(row?.revokedAt),
+                revokedAt: row?.revokedAt || null,
+            });
+        }
+
+        // Publisher key: POST /api/publishers/keys/revoke
+        if (
+            method === "POST" &&
+            /^\/api\/publishers\/keys\/revoke\/?$/.test(url)
+        ) {
+            const body = await readBody(req);
+            let payload;
+            try {
+                payload = JSON.parse(body.toString("utf-8"));
+            } catch {
+                return send(res, 400, { error: "Invalid JSON" });
+            }
+            const keyId = payload?.keyId;
+            if (typeof keyId !== "string") {
+                return send(res, 400, { error: "keyId required" });
+            }
+            const row = issuedKeys.get(keyId);
+            if (!row) return send(res, 404, { error: "Key not found" });
+            if (row.revokedAt) {
+                return send(res, 200, {
+                    keyId,
+                    revokedAt: row.revokedAt,
+                    alreadyRevoked: true,
+                });
+            }
+            row.revokedAt = new Date().toISOString();
+            return send(res, 200, {
+                keyId,
+                revokedAt: row.revokedAt,
+                alreadyRevoked: false,
+            });
+        }
+
         // Publish: POST /api/publish
         if (method === "POST" && /^\/api\/publish\/?$/.test(url)) {
             const body = await readBody(req);
@@ -537,11 +652,82 @@ let serverPort = null;
  * @param {boolean} [opts.seedThemes=true]
  * @returns {Promise<number>} bound port
  */
+// --- Publisher signing key state (Phase 1B-1 onwards) ---
+//
+// The mock registry impersonates the real cert-issuance + revocation
+// endpoints so the in-app publish flow can exercise the keygen
+// disclosure end-to-end without touching the live registry. A fresh
+// Ed25519 root keypair is generated on each `startMockRegistry()`
+// call; the spec injects the public half into Electron via
+// `DASH_REGISTRY_ROOT_PUBLIC_KEY` so the verifier in dash-core
+// accepts the certs we issue here.
+let mockRootPriv = null; // base64
+let mockRootPub = null; // base64
+const issuedKeys = new Map(); // keyId → { publisherId, publicKey, fingerprint, revokedAt }
+const fingerprintIndex = new Map(); // fingerprint → keyId
+
+function bytesToBase64(bytes) {
+    return Buffer.from(bytes).toString("base64");
+}
+function base64ToBytes(b64) {
+    return new Uint8Array(Buffer.from(b64, "base64"));
+}
+function bytesToHex(bytes) {
+    return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+}
+function canonicalJson(value) {
+    if (value === null || typeof value !== "object")
+        return JSON.stringify(value);
+    if (Array.isArray(value))
+        return "[" + value.map(canonicalJson).join(",") + "]";
+    const keys = Object.keys(value).sort();
+    return (
+        "{" +
+        keys
+            .map((k) => JSON.stringify(k) + ":" + canonicalJson(value[k]))
+            .join(",") +
+        "}"
+    );
+}
+function fingerprintOf(pubKeyBase64) {
+    return bytesToHex(sha256(base64ToBytes(pubKeyBase64)));
+}
+
+async function rotateMockRoot() {
+    const priv = ed.utils.randomSecretKey();
+    const pub = await ed.getPublicKeyAsync(priv);
+    mockRootPriv = bytesToBase64(priv);
+    mockRootPub = bytesToBase64(pub);
+    issuedKeys.clear();
+    fingerprintIndex.clear();
+}
+
+function getMockRootPublicKey() {
+    return mockRootPub;
+}
+
+async function issueCert({ publisherId, publicKey }) {
+    const body = {
+        v: 1,
+        publisher_id: publisherId,
+        public_key: publicKey,
+        fingerprint: fingerprintOf(publicKey),
+        issued_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),
+    };
+    const message = new TextEncoder().encode(canonicalJson(body));
+    const sigBytes = await ed.signAsync(message, base64ToBytes(mockRootPriv));
+    return { body, sig: bytesToBase64(sigBytes) };
+}
+
 async function startMockRegistry(opts = {}) {
     const { port = 0, seedThemes = true } = opts;
     clearPackages();
     clearHistory();
     if (seedThemes) seedStockThemes();
+    await rotateMockRoot();
     serverInstance = createMockRegistryServer();
     return new Promise((resolve) => {
         serverInstance.listen(port, "127.0.0.1", () => {
@@ -571,4 +757,6 @@ module.exports = {
     clearHistory,
     setAuthProfile,
     THEMES: STOCK_THEMES, // kept for back-compat with existing spec
+    // Phase 1B-1+ signing helpers
+    getMockRootPublicKey, // → set DASH_REGISTRY_ROOT_PUBLIC_KEY before launchApp
 };
