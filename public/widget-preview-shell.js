@@ -161,6 +161,18 @@
     var currentTheme = null;
     var currentAppCtx = null;
     var currentWidgetData = null;
+    // Phase 5C (P1 #12+#13). When `currentDeclaredProviders` is an
+    // array, the mainApi proxy blocks credentialed-namespace access
+    // for any provider NOT in the list. `null` = no enforcement
+    // (default — preserves the widget-builder authoring UX where
+    // the user iterates on a brand-new widget with no manifest).
+    var currentDeclaredProviders = null;
+    // Namespaces on window.mainApi that correspond 1:1 to a provider
+    // TYPE. When the type isn't in `currentDeclaredProviders`, calls
+    // into the namespace throw a structured "deferred until install"
+    // error. Other namespaces (notifications, scheduler, session,
+    // widgets, …) are not provider-bound and pass through.
+    var CREDENTIALED_NAMESPACES = ["algolia", "mcp"];
     // No-op dashboard pub/sub — widgets that call useWidgetEvents
     // expect dashboard.pub to exist with `pub` + `registerListeners`.
     // The preview can't actually broadcast events to other widgets
@@ -433,6 +445,18 @@
             reRenderCurrent();
             return;
         }
+        if (type === "bridge:set-mainapi-scope") {
+            // Phase 5C: host pushes the widget's declaredProviders.
+            // Re-install the proxy so subsequent reads of
+            // window.mainApi.<provider>.* observe the new gate.
+            // Widgets that captured a reference earlier still call
+            // through the proxy because we replace
+            // window.mainApi itself (not a deeper field).
+            var scope = (payload && payload.declaredProviders) || null;
+            currentDeclaredProviders = Array.isArray(scope) ? scope : null;
+            reinstallMainApiProxy();
+            return;
+        }
         if (type === "bridge:set-widget-context") {
             // widgetData is the shape `useWidgetProviders` reads —
             // see dash-core/src/hooks/useWidgetProviders.js. Built on
@@ -598,16 +622,106 @@
     // install-time modal (17d.2) is the trust boundary, and
     // preview iterations need to actually call the API to verify
     // the widget works.
+    //
+    // Phase 5C (P1 #13): when `currentDeclaredProviders` is a list,
+    // the proxy blocks `window.mainApi.<credentialedNamespace>.*` for
+    // any namespace whose type isn't in the list. Default null
+    // preserves builder UX — full passthrough.
+    function buildBlockedNamespaceStub(namespaceName) {
+        // Each property access returns a function that throws with a
+        // structured "preview-gate" message. We can't enumerate the
+        // method names from outside the host context, so we use a
+        // Proxy that synthesizes a throwing function on every read.
+        return new Proxy(
+            {},
+            {
+                get: function (_target, methodName) {
+                    return function () {
+                        throw new Error(
+                            "[preview-gate] provider '" +
+                                namespaceName +
+                                "' not declared in manifest — call to '" +
+                                String(methodName) +
+                                "' deferred until install"
+                        );
+                    };
+                },
+            }
+        );
+    }
+
+    function shouldBlockNamespace(namespaceName) {
+        if (!Array.isArray(currentDeclaredProviders)) return false;
+        if (CREDENTIALED_NAMESPACES.indexOf(namespaceName) === -1) return false;
+        return currentDeclaredProviders.indexOf(namespaceName) === -1;
+    }
+
+    function wrapHostMainApi(hostMainApi) {
+        // Target is a fresh empty object — NOT the real mainApi —
+        // so the Proxy invariant check (which forbids a get handler
+        // from returning anything other than the actual value of a
+        // non-writable + non-configurable property on the target)
+        // doesn't apply. `contextBridge.exposeInMainWorld` freezes
+        // every preload-exposed namespace with non-configurable
+        // properties, so proxying the real surface directly would
+        // throw on every blocked namespace.
+        //
+        // Unblocked reads are forwarded via Reflect.get against the
+        // real mainApi — that returns the original bound functions
+        // and namespace objects unchanged.
+        var target = Object.create(null);
+        return new Proxy(target, {
+            get: function (_t, prop) {
+                if (typeof prop !== "string") {
+                    return Reflect.get(hostMainApi, prop);
+                }
+                if (shouldBlockNamespace(prop)) {
+                    return buildBlockedNamespaceStub(prop);
+                }
+                return Reflect.get(hostMainApi, prop);
+            },
+            has: function (_t, prop) {
+                return Reflect.has(hostMainApi, prop);
+            },
+            ownKeys: function () {
+                return Reflect.ownKeys(hostMainApi);
+            },
+            getOwnPropertyDescriptor: function (_t, prop) {
+                var desc = Reflect.getOwnPropertyDescriptor(hostMainApi, prop);
+                if (!desc) return undefined;
+                // The Proxy invariant for ownKeys requires that any
+                // configurable=false key returned here also exists on
+                // the target. Mark every forwarded descriptor as
+                // configurable so the invariant holds against our
+                // empty target.
+                return { ...desc, configurable: true };
+            },
+        });
+    }
+
+    // Re-installs the proxy reading the current scope. Called both
+    // by the initial expose path AND on every bridge:set-mainapi-scope
+    // so a late-arriving scope still takes effect.
+    function reinstallMainApiProxy() {
+        try {
+            var hostMainApi = window.parent && window.parent.mainApi;
+            if (!hostMainApi) return;
+            window.mainApi = wrapHostMainApi(hostMainApi);
+        } catch (err) {
+            // Cross-origin or window.parent unavailable. Leave
+            // window.mainApi alone.
+        }
+    }
+
     function exposeHostMainApi() {
         try {
             var hostMainApi = window.parent && window.parent.mainApi;
             if (!hostMainApi) return;
-            // Direct reference — same-origin iframe can use the
-            // host's mainApi object as-is. Methods bound to the
-            // host's preload context still resolve correctly when
-            // called from iframe code because preload functions
-            // close over their own state.
-            window.mainApi = hostMainApi;
+            // Always go through the proxy. When
+            // currentDeclaredProviders is null (default), the proxy
+            // is effectively passthrough — Reflect.get returns the
+            // original property and bound methods resolve correctly.
+            window.mainApi = wrapHostMainApi(hostMainApi);
         } catch (err) {
             // Cross-origin or window.parent unavailable. Leave
             // window.mainApi undefined; widgets that need it will

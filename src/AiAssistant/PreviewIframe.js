@@ -72,6 +72,27 @@ function toCloneable(value) {
     }
 }
 
+// Phase 5C #12: strip a providers map down to ONLY the entries whose
+// `type` field (or whose key, if no `type` present) appears in the
+// allowlist. The host shape varies across consumers — some pass
+// `{ algolia: {type:"algolia", ...} }`, others `{ algolia: {...} }`
+// — so we accept either as the matching key.
+function filterProviders(providersMap, allowed) {
+    if (!providersMap || typeof providersMap !== "object") return providersMap;
+    const allowedSet = new Set(allowed);
+    const out = {};
+    for (const [key, value] of Object.entries(providersMap)) {
+        const type =
+            value && typeof value === "object" && typeof value.type === "string"
+                ? value.type
+                : key;
+        if (allowedSet.has(type) || allowedSet.has(key)) {
+            out[key] = value;
+        }
+    }
+    return out;
+}
+
 export function PreviewIframe({
     bundleSource,
     componentName,
@@ -88,6 +109,17 @@ export function PreviewIframe({
     themeContext,
     appContext,
     widgetData,
+    // Phase 5C (P1 #12+#13). When non-null, scopes the iframe's
+    // provider + mainApi surface to ONLY the listed provider types.
+    // - bridge:set-providers strips appContext.providers to those keys.
+    // - bridge:set-mainapi-scope tells the shell to wrap
+    //   window.mainApi in a Proxy that blocks `mainApi.<provider>.*`
+    //   calls for any provider type NOT in the allowlist.
+    // Default null = no enforcement (preserves the widget-builder
+    // authoring UX where the user iterates on a brand-new widget that
+    // has no manifest yet). Opt-in by passing the widget's manifest
+    // declaredProviders here.
+    declaredProviders = null,
     onReady,
     onMounted,
     onError,
@@ -256,10 +288,37 @@ export function PreviewIframe({
     useEffect(() => {
         if (status !== "mounted" && status !== "ready") return;
         if (!bridgeRef.current) return;
+        const cloneable = toCloneable(appContext) || null;
+        // Phase 5C #12: when declaredProviders is non-null, strip
+        // appContext.providers to ONLY the declared set. Host-side
+        // filtering is the trust boundary — the iframe never sees
+        // tokens for undeclared providers.
+        const scoped =
+            Array.isArray(declaredProviders) && cloneable && cloneable.providers
+                ? {
+                      ...cloneable,
+                      providers: filterProviders(
+                          cloneable.providers,
+                          declaredProviders
+                      ),
+                  }
+                : cloneable;
         bridgeRef.current.send("bridge:set-providers", {
-            appContext: toCloneable(appContext) || null,
+            appContext: scoped,
         });
-    }, [appContext, status]);
+    }, [appContext, declaredProviders, status]);
+
+    // Phase 5C #13: push the mainApi scope to the iframe so the
+    // shell's Proxy can block undeclared credentialed namespaces.
+    useEffect(() => {
+        if (status !== "mounted" && status !== "ready") return;
+        if (!bridgeRef.current) return;
+        bridgeRef.current.send("bridge:set-mainapi-scope", {
+            declaredProviders: Array.isArray(declaredProviders)
+                ? declaredProviders.slice()
+                : null,
+        });
+    }, [declaredProviders, status]);
 
     useEffect(() => {
         if (status !== "mounted" && status !== "ready") return;
