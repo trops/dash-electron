@@ -9,6 +9,7 @@ const {
     getPublishHistory,
     clearHistory,
     setAuthProfile,
+    getMockRootPublicKey,
 } = require("../helpers/mock-registry");
 const {
     seedAuthToken,
@@ -137,6 +138,13 @@ test.beforeAll(async () => {
     ({ electronApp, window, tempUserData } = await launchApp({
         env: {
             DASH_REGISTRY_API_URL: `http://127.0.0.1:${mockRegistryPort}`,
+            // Phase 1B-1+: dash-core's publish path signs every ZIP
+            // and verifies the cert against the bundled root public
+            // key. The mock registry issues certs signed by its own
+            // ephemeral root keypair (rotated per startMockRegistry
+            // call); injecting its public half here is the test
+            // override seam in dash-core's registryRootPublicKey.js.
+            DASH_REGISTRY_ROOT_PUBLIC_KEY: getMockRootPublicKey(),
         },
         hermetic: true,
     }));
