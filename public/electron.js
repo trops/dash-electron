@@ -489,6 +489,8 @@ const {
     // Onboarding (Phase 3A)
     getOnboardingStatus,
     markOnboardingCompleted,
+    // Export Everything (Phase 4A)
+    exportEverythingForApplication,
     // Session
     getRecentDashboards,
     addRecentDashboard,
@@ -643,6 +645,7 @@ const {
     PUBLISHER_KEY_REVOKE,
     ONBOARDING_GET_STATUS,
     ONBOARDING_MARK_COMPLETED,
+    EXPORT_EVERYTHING,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_REMOVE_RECENT,
@@ -1908,6 +1911,15 @@ function createWindow() {
         logger.loggedHandle(ONBOARDING_GET_STATUS, () => getOnboardingStatus());
         logger.loggedHandle(ONBOARDING_MARK_COMPLETED, (e, message) =>
             markOnboardingCompleted(message || {})
+        );
+
+        // --- Export Everything (Phase 4A) ---
+        logger.loggedHandle(EXPORT_EVERYTHING, (e, message) =>
+            exportEverythingForApplication(
+                getSenderWindow(e),
+                message?.appId,
+                message?.options || {}
+            )
         );
 
         // --- Session ---

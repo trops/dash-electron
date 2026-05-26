@@ -127,15 +127,34 @@ test("Settings → Widgets shows Update badge when registry has a newer version"
         ).toBeVisible({ timeout: 10000 });
     });
 
-    await test.step("each widget row has an Update badge", async () => {
-        // The badge text is literally "Update" — a button or span
-        // adjacent to each widget row whose package has an update.
-        // There may be multiple matches (one per row); each must be
-        // visible.
-        const badges = window
-            .getByRole("dialog")
-            .getByText("Update", { exact: true });
-        // 3 packages → 3 badges.
-        await expect(badges).toHaveCount(3, { timeout: 5000 });
+    await test.step("each widget row has its OWN Update badge (row-scoped)", async () => {
+        // Phase 4A hardening: pre-Phase-4A this step only asserted "3
+        // elements with text 'Update' exist in the dialog" — a badge
+        // floating in a footer somewhere would have passed. We now
+        // require the badge to be a descendant of the row it belongs
+        // to, keyed by the widget's actual name.
+        //
+        // The data-testids are added by dash-core's WidgetsSection.js:
+        //   <span data-testid="widget-row-{widget.name}">
+        //     <span data-testid="widget-update-badge-{widget.name}">…</span>
+        //
+        // If a future refactor moves the badge OUT of the row, this
+        // test fails loudly — exactly what we want.
+        // Widget names in `installedWidgets` are the package kebab-case
+        // names (`current-weather`), not the leaf component PascalCase
+        // (`CurrentWeather`) — verified via the page snapshot which
+        // shows the rendered rows with `name: "current-weather"`.
+        const widgetNames = [
+            "current-weather",
+            "weather-alerts",
+            "weekly-forecast",
+        ];
+        for (const name of widgetNames) {
+            const row = window.getByTestId(`widget-row-${name}`);
+            await expect(row).toBeVisible({ timeout: 5000 });
+            const badge = row.getByTestId(`widget-update-badge-${name}`);
+            await expect(badge).toBeVisible({ timeout: 5000 });
+            await expect(badge).toHaveText("Update");
+        }
     });
 });
