@@ -156,15 +156,20 @@ test("getComponentConfigs loads a widget whose config references three import sh
         expect(entry.config.type).toBe("widget");
         expect(entry.config.userConfig?.title?.displayName).toBe("Title");
 
-        // Imported values are stubbed to undefined — the loader's
-        // contract is "preserve everything except the imports".
+        // Imported values are stubbed to "nullish" — the loader's
+        // contract is "preserve everything except the imports". The
+        // legacy vm.runInContext path returned `undefined`; the
+        // Phase 5B AST allowlist parser returns `null` (JSON-
+        // friendlier). Downstream code uses `.filter(Boolean)` which
+        // filters both, so the change is observationally equivalent
+        // and either representation satisfies the contract.
         // `providers: [algoliaProvider, slackProvider, utils]` parses,
-        // and all three elements are undefined (named, default, and
+        // and all three elements are nullish (named, default, and
         // namespace imports were each stubbed).
         expect(Array.isArray(entry.config.providers)).toBe(true);
         expect(entry.config.providers.length).toBe(3);
         for (const p of entry.config.providers) {
-            expect(p).toBeUndefined();
+            expect(p == null).toBe(true);
         }
     });
 });
