@@ -21,6 +21,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 const os = require("os");
+const { scanBundle } = require("./lib/bundleSecurityLint.cjs");
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -485,6 +486,27 @@ async function validateFull(manifest) {
         } else {
             const baseName = dashFile.replace(".dash.js", "");
             discoveredNames.push(baseName);
+        }
+    }
+
+    // Phase 5A (P1 #23): warn-only security lint on the built bundle.
+    // Mirrors the publish-time scan in publishToRegistry.js so a
+    // publisher who runs `validate` first sees the same warnings they
+    // would see at publish.
+    const distDir = path.join(widgetRoot, "dist");
+    if (fs.existsSync(distDir)) {
+        const cjsFiles = fs
+            .readdirSync(distDir)
+            .filter((f) => f.endsWith(".cjs.js") || f.endsWith(".js"));
+        for (const cjsFile of cjsFiles) {
+            const bundlePath = path.join(distDir, cjsFile);
+            const content = fs.readFileSync(bundlePath, "utf8");
+            const findings = scanBundle(content);
+            for (const f of findings) {
+                warnings.push(
+                    `Security lint (${cjsFile}): ${f.description} — ${f.sample}`
+                );
+            }
         }
     }
 

@@ -80,6 +80,11 @@ step "Auditing IPC surface (regression gate)"
 node --test scripts/audit-ipc-surface.test.js
 node scripts/audit-ipc-surface.js --check
 
+# Phase 5A regression pins — IPC payload validation + warn-only bundle lint
+step "Running Phase 5A unit tests (IPC validators + bundle lint)"
+node --test scripts/ipcValidators.test.js
+node --test scripts/bundleSecurityLint.test.js
+
 # 2. Update @trops dependencies to latest published versions
 step "Updating @trops dependencies"
 CORE_LATEST="$(npm view @trops/dash-core version)"
