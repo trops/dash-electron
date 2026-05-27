@@ -898,18 +898,25 @@ export const WidgetBuilderModal = ({
     // ThemeContext and AppContext are empty here. We bridge them via
     // window broadcasts from inside the tree:
     //   - previewThemeCtx → dashboard theme for the widget PREVIEW
+    //                       (falls back to app-level theme when no
+    //                       workspace is open — e.g. modal launched
+    //                       from Settings → Widgets)
     //   - previewAppCtx   → providers/settings for MCP provider access
     //   - currentTheme    → null (modal chrome uses fixed dark colors)
     const localThemeCtx = useContext(ThemeContext);
-    const [previewTheme, setPreviewTheme] = useState(
-        () => window.__dashThemeContext || null
-    );
+    const readBroadcastTheme = () =>
+        (typeof window !== "undefined" &&
+            (window.__dashThemeContext || window.__dashAppThemeContext)) ||
+        null;
+    const [previewTheme, setPreviewTheme] = useState(readBroadcastTheme);
     const [previewApp, setPreviewApp] = useState(
         () => window.__dashAppContext || null
     );
     useEffect(() => {
-        const themeHandler = () =>
-            setPreviewTheme({ ...window.__dashThemeContext });
+        const themeHandler = () => {
+            const next = readBroadcastTheme();
+            if (next) setPreviewTheme({ ...next });
+        };
         const appHandler = () => setPreviewApp({ ...window.__dashAppContext });
         window.addEventListener("dash:theme-changed", themeHandler);
         window.addEventListener("dash:app-context-changed", appHandler);
