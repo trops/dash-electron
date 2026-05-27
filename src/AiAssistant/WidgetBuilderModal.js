@@ -5042,11 +5042,13 @@ ${
                                                 <span className="font-mono text-gray-300">
                                                     {installStatus.widgetName}
                                                 </span>{" "}
-                                                {!isRemixMode
+                                                {isRemixMode
+                                                    ? editMode === "update"
+                                                        ? "has been updated in place."
+                                                        : "has been swapped into your dashboard."
+                                                    : cellContext
                                                     ? "is now in the widget selector."
-                                                    : editMode === "update"
-                                                    ? "has been updated in place."
-                                                    : "has been swapped into your dashboard."}
+                                                    : "now appears in your Widgets list."}
                                             </p>
                                         </div>
                                         <div className="flex gap-3">
