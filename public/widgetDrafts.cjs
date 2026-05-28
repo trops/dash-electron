@@ -242,6 +242,34 @@ function materializePackageDir(draftId, widgetName, files) {
             fs.writeFileSync(abs, f.content, "utf8");
         }
     }
+    // Stamp `dash.draft: true` into the package.json so consumers
+    // (useInstalledWidgets, widget pickers, Settings → Widgets)
+    // can distinguish in-progress drafts from formally-installed
+    // packages without relying on a `-draft-` dir-name pattern.
+    // The flag is stripped by promoteDraftPackage when the draft
+    // is installed.
+    try {
+        const pkgPath = path.join(packageDir, "package.json");
+        let pkg = {};
+        if (fs.existsSync(pkgPath)) {
+            try {
+                pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+            } catch (_) {
+                pkg = {};
+            }
+        }
+        if (!pkg.dash || typeof pkg.dash !== "object") pkg.dash = {};
+        pkg.dash.draft = true;
+        fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), "utf8");
+    } catch (err) {
+        // Best-effort — if we can't stamp the flag, the dir-name
+        // backstop still classifies the widget as a draft. Log and
+        // continue so save doesn't fail on a metadata write error.
+        console.warn(
+            "[widgetDrafts] Failed to stamp dash.draft flag:",
+            err && err.message ? err.message : err
+        );
+    }
     return packageDir;
 }
 
@@ -316,6 +344,30 @@ function promoteDraftPackage(packageDir, widgetName) {
     }
     fs.mkdirSync(path.dirname(installedDir), { recursive: true });
     fs.renameSync(packageDir, installedDir);
+
+    // Strip the draft flag from the promoted package.json so the
+    // formally-installed widget no longer classifies as a draft.
+    // Mirrors materializePackageDir's stamp on the way in.
+    try {
+        const pkgPath = path.join(installedDir, "package.json");
+        if (fs.existsSync(pkgPath)) {
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+            if (pkg && pkg.dash && typeof pkg.dash === "object") {
+                delete pkg.dash.draft;
+                if (Object.keys(pkg.dash).length === 0) delete pkg.dash;
+                fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), "utf8");
+            }
+        }
+    } catch (err) {
+        // Best-effort. The dir-name no longer contains `-draft-`
+        // so the widget classifies as installed regardless of the
+        // stale flag.
+        console.warn(
+            "[widgetDrafts] Failed to strip dash.draft flag on promote:",
+            err && err.message ? err.message : err
+        );
+    }
+
     return installedDir;
 }
 

@@ -510,23 +510,37 @@ class App extends React.Component {
 
         // Listen for widget builder open event (with optional cell context)
         window.addEventListener("dash:open-widget-builder", (e) => {
+            const detail = e.detail || {};
+            // Resume mode: Settings → Widgets dispatches with
+            // `resumeDraftId` when the user clicks Resume on a
+            // Draft-chipped widget. The modal reads it on mount and
+            // seeds composer tree + chat + code from drafts.get(id).
+            const resumeDraftId =
+                detail && typeof detail.resumeDraftId === "string"
+                    ? detail.resumeDraftId
+                    : null;
             // Clear stale chat BEFORE mounting the modal so ChatCore
-            // loads an empty conversation on its first render.
-            try {
-                localStorage.setItem(
-                    "dash-widget-builder",
-                    JSON.stringify({ messages: [] })
-                );
-            } catch (_) {
-                /* ignore */
+            // loads an empty conversation on its first render — UNLESS
+            // we're resuming a draft, in which case the modal will
+            // overwrite the chat from the draft's saved chatHistory.
+            if (!resumeDraftId) {
+                try {
+                    localStorage.setItem(
+                        "dash-widget-builder",
+                        JSON.stringify({ messages: [] })
+                    );
+                } catch (_) {
+                    /* ignore */
+                }
             }
             if (window.mainApi?.llm?.endCliSession) {
                 window.mainApi.llm.endCliSession("dash-widget-builder");
             }
             this.setState({
                 isWidgetBuilderOpen: true,
-                widgetBuilderCellContext: e.detail || null,
+                widgetBuilderCellContext: resumeDraftId ? null : detail,
                 widgetBuilderEditContext: null,
+                widgetBuilderResumeDraftId: resumeDraftId,
             });
         });
 
@@ -944,6 +958,8 @@ class App extends React.Component {
                                                         null,
                                                     widgetBuilderCellContext:
                                                         null,
+                                                    widgetBuilderResumeDraftId:
+                                                        null,
                                                     installedWidgetInfo: null,
                                                 });
 
@@ -1079,6 +1095,11 @@ class App extends React.Component {
                                         editContext={
                                             this.state
                                                 .widgetBuilderEditContext ||
+                                            null
+                                        }
+                                        resumeDraftId={
+                                            this.state
+                                                .widgetBuilderResumeDraftId ||
                                             null
                                         }
                                     />

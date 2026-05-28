@@ -893,6 +893,12 @@ export const WidgetBuilderModal = ({
     onInstalled,
     cellContext,
     editContext,
+    // When non-null, the modal seeds itself from the saved draft
+    // (composer tree + chat history + detected code) on mount.
+    // Fired by Settings → Widgets when the user clicks Resume on a
+    // Draft-chipped widget. Cleared on close so subsequent opens
+    // start from a clean slate.
+    resumeDraftId = null,
 }) => {
     // The modal renders outside DashboardStage's context tree, so
     // ThemeContext and AppContext are empty here. We bridge them via
@@ -2667,6 +2673,72 @@ ${
             clearConsoleEvents,
         ]
     );
+
+    // Resume an in-progress draft. Triggered by the `resumeDraftId`
+    // prop (Settings → Widgets → Draft chip → Resume button). Mirrors
+    // the WidgetDraftsList onResume callback verbatim — fetches the
+    // full draft via drafts.get, restores chat history into ChatCore's
+    // localStorage key, sets detectedCode, recompiles the preview,
+    // restores provider gate state and composer tree, flips view to
+    // builder. Wrapped in useCallback so the useEffect below can fire
+    // it without re-running every render.
+    const resumeFromDraft = useCallback(
+        async (id) => {
+            if (!id) return;
+            let full = null;
+            try {
+                full = await window.mainApi?.drafts?.get?.(id);
+            } catch (err) {
+                console.warn("[WidgetBuilder] resume fetch failed:", err);
+            }
+            if (!full) return;
+            resumedDraftRef.current = full;
+            draftSessionIdRef.current = full.id;
+            try {
+                localStorage.setItem(
+                    "dash-widget-builder",
+                    JSON.stringify({
+                        messages: Array.isArray(full.chatHistory)
+                            ? full.chatHistory
+                            : [],
+                    })
+                );
+            } catch {
+                /* ignore */
+            }
+            const restoredCode = {
+                componentCode: full.componentCode || null,
+                configCode: full.configCode || null,
+                files: Array.isArray(full.files) ? full.files : [],
+            };
+            setDetectedCode(restoredCode);
+            if (restoredCode.componentCode) {
+                compilePreview(restoredCode).catch(() => {});
+            }
+            if (full.pickedProvider !== undefined) {
+                setSelectedProviderForBuild(full.pickedProvider);
+            }
+            if (full.composerTree) {
+                setComposerInitialTree(full.composerTree);
+                setComposerTree(full.composerTree);
+                setComposerSessionKey((k) => k + 1);
+            }
+            if (full.chatMode) setChatMode(full.chatMode);
+            setInstallStatus(null);
+            setViewMode("builder");
+        },
+        [compilePreview]
+    );
+
+    // When the modal opens with a `resumeDraftId` set, seed state
+    // from that draft on the next tick so all setters fire after
+    // the modal's other open-time useEffects have stabilized.
+    useEffect(() => {
+        if (!isOpen) return;
+        if (!resumeDraftId) return;
+        resumeFromDraft(resumeDraftId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, resumeDraftId]);
 
     // Fetch a registry widget's source (no install), hand it to the existing
     // compilePreview pipeline, and switch to the Preview tab.
