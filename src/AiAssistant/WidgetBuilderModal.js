@@ -5441,9 +5441,16 @@ ${
                             )}
                     </div>
 
-                    {/* Right: Chat (1/3) */}
+                    {/* Right: Chat (1/3). `overflow-hidden` is
+                        load-bearing: ComposerPaneV2 → QuickStartPane
+                        renders a grid of intent cards whose intrinsic
+                        min-content can exceed this panel's 1/3 share
+                        on narrow viewports. Without the clip the grid
+                        spills past the modal's right edge and the
+                        second column ("View", "Custom") disappears
+                        off-screen. */}
                     <div
-                        className={`flex flex-col flex-1 min-w-0 border-l ${borderColor}`}
+                        className={`flex flex-col flex-1 min-w-0 overflow-hidden border-l ${borderColor}`}
                     >
                         {/* Build / Compose are the two CREATE paths,
                             grouped in a segmented control. Discover is
