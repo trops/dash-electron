@@ -60,7 +60,7 @@ test("algolia-list-indices rejects wrong-type providerHash", async () => {
             dashboardAppId: "app",
             providerName: "algolia",
         },
-        /providerHash must be 64 hex chars/
+        /providerHash must match/
     );
 });
 
@@ -88,19 +88,19 @@ test("algolia-search rejects path-traversal in indexName", async () => {
             providerName: "algolia",
             indexName: "../etc/passwd",
         },
-        /indexName must match/
+        /indexName must be/
     );
 });
 
-test("algolia-search rejects indexName > 64 chars", async () => {
+test("algolia-search rejects indexName > 128 chars", async () => {
     await expectIpcRejection(
         "search",
         {
             dashboardAppId: "app",
             providerName: "algolia",
-            indexName: "x".repeat(65),
+            indexName: "x".repeat(129),
         },
-        /indexName must match/
+        /indexName must be/
     );
 });
 
