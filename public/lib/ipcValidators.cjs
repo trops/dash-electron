@@ -13,8 +13,20 @@
 const path = require("path");
 const fs = require("fs");
 
-const INDEX_NAME_RE = /^[A-Za-z0-9._-]{1,64}$/;
-const HEX_64_RE = /^[a-f0-9]{64}$/i;
+// Algolia allows index names up to 128 chars with most printable characters
+// (spaces, parens, unicode all valid per their API). The original `[A-Za-z0-9._-]`
+// regex was over-tight and rejected legitimate user index names. Validation
+// here is defense-in-depth at the IPC edge — the actual API call is made by
+// the algoliasearch client which URL-encodes safely.
+// eslint-disable-next-line no-control-regex
+const INDEX_NAME_RE = /^[^\x00-\x1f\x7f/\\]{1,128}$/;
+// providerHash is the renderer-side cache key for main-process clientCache
+// (see dash-core/electron/utils/clientCache.js). It is not security-sensitive
+// — credentials are resolved from dashboardAppId + providerName against the
+// encrypted store, never from this value. Validation only pins shape so a
+// compromised renderer can't smuggle a giant string or non-string at the IPC
+// edge.
+const PROVIDER_HASH_RE = /^[A-Za-z0-9._-]{1,128}$/;
 
 function check(type, value) {
     const optional = type.endsWith("?");
@@ -45,12 +57,15 @@ function check(type, value) {
             if (typeof value !== "string" || !INDEX_NAME_RE.test(value))
                 return {
                     ok: false,
-                    reason: "must match [A-Za-z0-9._-]{1,64}",
+                    reason: "must be 1-128 chars, no control chars, no slashes",
                 };
             return { ok: true };
         case "providerHash":
-            if (typeof value !== "string" || !HEX_64_RE.test(value))
-                return { ok: false, reason: "must be 64 hex chars (SHA-256)" };
+            if (typeof value !== "string" || !PROVIDER_HASH_RE.test(value))
+                return {
+                    ok: false,
+                    reason: "must match [A-Za-z0-9._-]{1,128}",
+                };
             return { ok: true };
         case "absPath":
             if (typeof value !== "string")

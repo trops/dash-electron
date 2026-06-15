@@ -68,26 +68,47 @@ test("validate: well-formed payload returns value", () => {
     assert.deepStrictEqual(r.value, payload);
 });
 
-test("validate: indexName rejects path-traversal", () => {
-    const r = validate(
-        SCHEMAS["algolia-search"],
-        {
-            dashboardAppId: "app-1",
-            providerName: "algolia",
-            indexName: "../etc/passwd",
-        },
-        "ipc"
-    );
-    assert.strictEqual(r.ok, false);
-    assert.match(r.error, /indexName must match/);
+test("validate: indexName rejects path-traversal (slash) and backslash", () => {
+    for (const bad of ["../etc/passwd", "a/b", "a\\b"]) {
+        const r = validate(
+            SCHEMAS["algolia-search"],
+            {
+                dashboardAppId: "app-1",
+                providerName: "algolia",
+                indexName: bad,
+            },
+            "ipc"
+        );
+        assert.strictEqual(r.ok, false, `should reject ${JSON.stringify(bad)}`);
+        assert.match(r.error, /indexName must be/);
+    }
 });
 
-test("validate: indexName accepts legitimate Algolia names", () => {
+test("validate: indexName rejects control chars + null bytes", () => {
+    for (const bad of ["a\x00b", "a\x1fb", "a\x7fb"]) {
+        const r = validate(
+            SCHEMAS["algolia-search"],
+            {
+                dashboardAppId: "a",
+                providerName: "p",
+                indexName: bad,
+            },
+            "ipc"
+        );
+        assert.strictEqual(r.ok, false, `should reject ${JSON.stringify(bad)}`);
+    }
+});
+
+test("validate: indexName accepts legitimate Algolia names (spaces, parens, unicode)", () => {
     for (const name of [
         "products",
         "products_dev",
         "products.v2",
         "products-v2",
+        "Product Index Skechers ES",
+        "index (staging)",
+        "índice_español",
+        "x".repeat(128),
     ]) {
         const r = validate(
             SCHEMAS["algolia-search"],
@@ -102,23 +123,33 @@ test("validate: indexName accepts legitimate Algolia names", () => {
     }
 });
 
-test("validate: indexName rejects >64 chars", () => {
+test("validate: indexName rejects >128 chars", () => {
     const r = validate(
         SCHEMAS["algolia-search"],
         {
             dashboardAppId: "a",
             providerName: "p",
-            indexName: "x".repeat(65),
+            indexName: "x".repeat(129),
         },
         "ipc"
     );
     assert.strictEqual(r.ok, false);
 });
 
-test("check: providerHash requires 64 hex chars", () => {
-    assert.strictEqual(check("providerHash", "abc123").ok, false);
-    assert.strictEqual(check("providerHash", "g".repeat(64)).ok, false);
+test("check: providerHash accepts cache-key shape, rejects non-string + oversize + bad chars", () => {
+    // djb2-base36 cache key (the renderer's actual format) — short, alphanumeric
+    assert.strictEqual(check("providerHash", "1cylnp6").ok, true);
+    // legacy SHA-256 hex still accepted under the broader shape
     assert.strictEqual(check("providerHash", "a".repeat(64)).ok, true);
+    // non-string rejected
+    assert.strictEqual(check("providerHash", 123).ok, false);
+    // empty rejected
+    assert.strictEqual(check("providerHash", "").ok, false);
+    // oversize rejected (>128 chars)
+    assert.strictEqual(check("providerHash", "a".repeat(129)).ok, false);
+    // disallowed chars rejected
+    assert.strictEqual(check("providerHash", "has space").ok, false);
+    assert.strictEqual(check("providerHash", "has/slash").ok, false);
 });
 
 test("check: absPath rejects null bytes", () => {
