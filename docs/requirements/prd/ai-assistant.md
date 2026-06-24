@@ -134,6 +134,7 @@ Widget creation remains developer-only. The MCP server's power is underutilized 
 -   [ ] AC3: API keys are stored encrypted using the existing provider system (`safeStorage`)
 -   [ ] AC4: If user already has an Anthropic provider (from Chat widget), assistant reuses it automatically
 -   [ ] AC5: Settings > AI Assistant shows: preferred backend, API key (if Anthropic), model selector
+-   [ ] AC6: The model selector is populated dynamically (live Anthropic Models API fetch with a curated fallback), has a Refresh action, and auto-migrates a retired saved model to a current replacement with a one-time notice. Default model: `claude-opus-4-8`. Implemented 2026-06-24 (dash-core `electron/llm/modelProviders.js` provider registry + `LLM_LIST_MODELS` IPC; renderer `src/utils/modelMigration.js`).
 
 **Technical Notes:**
 Reuse `llmController` + `cliController` from `dash-core/electron/controller/`. Store preference in `settings.json`. Reuse `providerController` for API key encryption.
@@ -428,7 +429,7 @@ The `tailwind.config.js` content array conditionally excludes the widget cache p
 
 ## Out of Scope
 
--   **Multi-LLM support** — OpenAI, Google, local models. Deferred to v2.
+-   **Multi-LLM support** — OpenAI, Google, local models. Deferred to v2. _Groundwork laid 2026-06-24:_ model discovery is now provider-pluggable via a registry (`dash-core/electron/llm/modelProviders.js`) keyed by vendor — each provider supplies its own `listModels`, curated fallback, retired-id map, and default. Only `anthropic` is implemented; adding OpenAI/Google later is a new registry entry (the `openai` SDK already ships in dash-electron) with no change to the `LLM_LIST_MODELS` IPC or the Settings UI.
 -   **Interpreted hot-reload** — All builds go through esbuild. No eval-based rendering.
 -   **Autonomous agent** — Assistant responds to requests, doesn't proactively modify dashboards.
 -   **Widget marketplace curation** — No quality review for published AI-built widgets beyond `validateWidget.cjs`.

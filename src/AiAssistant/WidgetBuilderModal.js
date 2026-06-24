@@ -1549,7 +1549,7 @@ ${
     const providers = appContext?.providers || {};
     const aiSettings = settings.aiAssistant || {};
     const preferredBackend = aiSettings.preferredBackend || "claude-code";
-    const model = aiSettings.model || "claude-sonnet-4-20250514";
+    const model = aiSettings.model || "claude-opus-4-8";
 
     const anthropicEntry = Object.entries(providers).find(
         ([, p]) =>

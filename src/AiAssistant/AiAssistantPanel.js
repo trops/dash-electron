@@ -195,7 +195,7 @@ export const AiAssistantPanel = () => {
 
     // Resolve backend and API key from settings
     const preferredBackend = aiSettings.preferredBackend || "claude-code";
-    const model = aiSettings.model || "claude-sonnet-4-20250514";
+    const model = aiSettings.model || "claude-opus-4-8";
     const isCliBackend = preferredBackend === "claude-code";
 
     // Find Anthropic provider for API key

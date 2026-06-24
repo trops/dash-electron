@@ -85,7 +85,7 @@ export function ComposerPane({
     providers = {},
     initialTree = null,
     apiKey = null,
-    model = "claude-sonnet-4-20250514",
+    model = "claude-opus-4-8",
     backend = "claude-code",
     // Lifted selection so the host (modal) can drive selection
     // from the preview iframe's click-to-pick. Optional — when not

@@ -31,16 +31,13 @@ const widgetDefinition = {
         },
         model: {
             type: "select",
-            defaultValue: "claude-sonnet-4-20250514",
+            defaultValue: "claude-opus-4-8",
             displayName: "Model",
             required: false,
             options: [
-                { label: "Claude Sonnet 4", value: "claude-sonnet-4-20250514" },
-                { label: "Claude Opus 4", value: "claude-opus-4-20250514" },
-                {
-                    label: "Claude Haiku 3.5",
-                    value: "claude-haiku-4-5-20251001",
-                },
+                { label: "Claude Opus 4.8", value: "claude-opus-4-8" },
+                { label: "Claude Sonnet 4.6", value: "claude-sonnet-4-6" },
+                { label: "Claude Haiku 4.5", value: "claude-haiku-4-5" },
             ],
         },
         systemPrompt: {

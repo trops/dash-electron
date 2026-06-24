@@ -26,7 +26,7 @@ let nextRequestSeq = 1;
  * Send one message and resolve with the full assistant text.
  *
  * `params`:
- *   - model:        string (e.g., "claude-sonnet-4-20250514")
+ *   - model:        string (e.g., "claude-opus-4-8")
  *   - apiKey:       string | null
  *   - systemPrompt: string
  *   - userMessage:  string
