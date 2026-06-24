@@ -617,6 +617,7 @@ const {
     LLM_CLEAR_CLI_SESSION,
     LLM_CLI_SESSION_STATUS,
     LLM_CLI_END_SESSION,
+    LLM_LIST_MODELS,
     MENU_ITEMS_LIST,
     MENU_ITEMS_SAVE,
     DASHBOARD_CONFIG_EXPORT,
@@ -1800,6 +1801,13 @@ function createWindow() {
         );
         logger.loggedHandle(LLM_CLI_END_SESSION, (e, msg) =>
             cliController.endSession(msg.widgetUuid)
+        );
+        logger.loggedHandle(LLM_LIST_MODELS, (e, msg) =>
+            llmController.listModels(
+                getSenderWindow(e),
+                msg.providerId,
+                msg.apiKey
+            )
         );
 
         // --- Registry ---
