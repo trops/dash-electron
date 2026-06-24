@@ -588,6 +588,7 @@ const {
     MCP_GET_CATALOG,
     MCP_GET_KNOWN_EXTERNAL,
     MCP_RUN_AUTH,
+    MCP_AUTHORIZE,
     REGISTRY_FETCH_INDEX,
     REGISTRY_SEARCH,
     REGISTRY_GET_PACKAGE,
@@ -1655,7 +1656,8 @@ function createWindow() {
                 message.mcpConfig,
                 message.credentials,
                 message.workspaceId,
-                message.pathScope
+                message.pathScope,
+                message.appId
             )
         );
         logger.loggedHandle(MCP_STOP_SERVER, (e, message) =>
@@ -1718,6 +1720,15 @@ function createWindow() {
                 message.mcpConfig,
                 message.credentials,
                 message.authCommand
+            )
+        );
+        logger.loggedHandle(MCP_AUTHORIZE, (e, message) =>
+            mcpController.authorizeServer(
+                getSenderWindow(e),
+                message.serverName,
+                message.mcpConfig,
+                message.credentials,
+                message.appId
             )
         );
 
