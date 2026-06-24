@@ -41,8 +41,33 @@ export function McpReauthBanner({
         const dashApi = app?.dashApi;
         if (!dashApi || !provider) return;
 
+        const isOAuth =
+            provider.mcpConfig?.auth === "oauth" || !!provider.mcpConfig?.oauth;
+
         setReauthing(true);
         try {
+            if (isOAuth) {
+                // SDK-native OAuth 2.0: open the browser, exchange tokens, and
+                // persist them synchronously before resolving (no flush delay).
+                await new Promise((resolve, reject) => {
+                    dashApi.mcpAuthorize(
+                        provider.name,
+                        provider.mcpConfig,
+                        provider.credentials,
+                        (event, res) => resolve(res),
+                        (event, err) => reject(err),
+                        app?.appId
+                    );
+                });
+
+                await disconnect();
+                setNeedsReauth(false);
+                onReauthComplete?.();
+                await connect();
+                return;
+            }
+
+            // Legacy catalog subprocess auth (bundled Google servers).
             const result = await new Promise((resolve, reject) => {
                 dashApi.mcpGetCatalog(
                     (event, res) => resolve(res),
