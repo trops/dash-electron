@@ -1545,8 +1545,15 @@ ${
     const [signInFlow, setSignInFlow] = useState(null);
     const signInPollRef = useRef(null);
 
-    const settings = appContext?.settings || {};
-    const providers = appContext?.providers || {};
+    // The modal renders OUTSIDE the AppWrapper tree, so the in-tree
+    // `appContext` is empty — the real providers/settings arrive via the
+    // window bridge (previewAppCtx = window.__dashAppContext). Read from the
+    // bridge first so the composer's provider picker sees the user's
+    // configured providers (incl. custom MCP) and the builder honors the
+    // selected model/backend. Fall back to appContext when the bridge is
+    // absent (e.g. tests).
+    const settings = previewAppCtx?.settings || appContext?.settings || {};
+    const providers = previewAppCtx?.providers || appContext?.providers || {};
     const aiSettings = settings.aiAssistant || {};
     const preferredBackend = aiSettings.preferredBackend || "claude-code";
     const model = aiSettings.model || "claude-opus-4-8";
