@@ -345,3 +345,65 @@ describe("ComposerPaneV2 — edit-mode guard (don't overwrite editContext.compon
         expect(onEmit).not.toHaveBeenCalled();
     });
 });
+
+describe("ComposerPaneV2 — explicit name confirm (no per-keystroke churn)", () => {
+    test("typing the name does NOT emit; Save commits once", async () => {
+        installMainApi(jest.fn().mockResolvedValue([]));
+        const onEmit = jest.fn();
+        render(<ComposerPaneV2 onEmit={onEmit} />);
+        const input = screen.getByTestId("composer-widget-name");
+        await waitFor(() => expect(input.value).toBe("ComposedWidget"));
+        const afterMount = onEmit.mock.calls.length;
+
+        // Typing only updates the local input — no emit (so no draft save
+        // / folder write per keystroke).
+        fireEvent.change(input, { target: { value: "MyCoolWidget" } });
+        fireEvent.change(input, { target: { value: "MyCoolWidgetX" } });
+        expect(onEmit.mock.calls.length).toBe(afterMount);
+
+        // Clicking Save commits the name → exactly one more emit.
+        fireEvent.click(screen.getByTestId("composer-widget-name-save"));
+        await waitFor(() =>
+            expect(onEmit.mock.calls.length).toBe(afterMount + 1)
+        );
+        expect(input.value).toBe("MyCoolWidgetX");
+    });
+
+    test("Save blocks a name already taken by another widget", async () => {
+        installMainApi(
+            jest.fn().mockResolvedValue([{ componentName: "Taken" }])
+        );
+        const onEmit = jest.fn();
+        render(<ComposerPaneV2 onEmit={onEmit} />);
+        const input = screen.getByTestId("composer-widget-name");
+        await waitFor(() => expect(input.value).toBe("ComposedWidget"));
+        const afterMount = onEmit.mock.calls.length;
+
+        fireEvent.change(input, { target: { value: "Taken" } });
+        fireEvent.click(screen.getByTestId("composer-widget-name-save"));
+
+        // Error shown, name NOT committed (no extra emit).
+        await waitFor(() =>
+            expect(
+                screen.getByTestId("composer-widget-name-error")
+            ).toBeInTheDocument()
+        );
+        expect(onEmit.mock.calls.length).toBe(afterMount);
+    });
+
+    test("edit mode locks the name — read-only, no Save button", async () => {
+        installMainApi(jest.fn().mockResolvedValue([]));
+        render(
+            <ComposerPaneV2
+                editContext={{
+                    componentCode: "export default function Foo(){}",
+                }}
+            />
+        );
+        const input = screen.getByTestId("composer-widget-name");
+        expect(input).toBeDisabled();
+        expect(
+            screen.queryByTestId("composer-widget-name-save")
+        ).not.toBeInTheDocument();
+    });
+});

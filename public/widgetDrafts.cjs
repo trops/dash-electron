@@ -192,22 +192,33 @@ function getWidgetsCacheDir() {
 }
 
 /**
- * Build the canonical draft package directory for a widget. We
- * deliberately suffix with `-draft-<short-id>` so two concurrent
- * drafts of the same widget name (e.g. user closed one mid-build,
- * started another) don't collide on disk and clobber each other. On
- * install (`promoteDraftPackage`), the suffix is stripped.
+ * Build the canonical draft package directory for a widget. Keyed SOLELY
+ * by the draft id (`@ai-built/draft-<short-id>`), NOT the widget name.
+ *
+ * The name is deliberately excluded: the name can change while the user is
+ * still composing (and edit mode renames are disallowed), and a name-keyed
+ * directory meant every rename materialized a NEW folder and orphaned the
+ * old one — typing a name produced one junk folder per keystroke. A stable
+ * id-keyed directory makes re-materialization idempotent: the same draft
+ * always overwrites the same folder regardless of its current name. The
+ * human name lives in widget-drafts.json + the package's config; on install
+ * `promoteDraftPackage(packageDir, widgetName)` renames the dir to the name.
+ * (`useInstalledWidgets` already strips a leading `draft-` to recover the id.)
+ *
+ * @param {string} draftId stable draft id
+ * @param {string} [_widgetName] unused — kept for call-site compatibility
  */
-function getDraftPackageDir(draftId, widgetName) {
-    const base = (widgetName || "untitled").toLowerCase();
-    const shortId = String(draftId || "")
-        .replace(/^draft-/, "")
-        .slice(0, 8);
-    return path.join(
-        getWidgetsCacheDir(),
-        "@ai-built",
-        `${base}-draft-${shortId}`
-    );
+function getDraftPackageDir(draftId, _widgetName) {
+    // Use the FULL draft id — it is already unique per draft
+    // (`draft-<timestamp>-<rand>`) and stable for the session. Do NOT
+    // truncate: the timestamp prefix alone is shared across drafts created
+    // close together (same leading digits), so a truncated id would make two
+    // unrelated drafts collide on one folder and overwrite each other.
+    const safeId =
+        String(draftId || "untitled")
+            .replace(/^draft-/, "")
+            .replace(/[^A-Za-z0-9_-]/g, "") || "untitled";
+    return path.join(getWidgetsCacheDir(), "@ai-built", `draft-${safeId}`);
 }
 
 /**

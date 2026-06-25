@@ -109,6 +109,15 @@ export function ComposerPaneV2({
     // with an existing @ai-built/composedwidget on install and
     // silently overwrite that widget's code.
     const userRenamedRef = useRef(false);
+    // Explicit, confirmed widget-name editing. The input binds to this
+    // LOCAL state — typing does NOT call setGrid, so it never re-emits,
+    // re-saves the draft, or materializes a folder per keystroke. The user
+    // commits the name with the Save (checkmark) button (or Enter), which is
+    // the only thing that writes it into grid.widgetName. Edit mode locks the
+    // name entirely (renaming an installed widget changes its identity).
+    const [pendingName, setPendingName] = useState(grid.widgetName || "");
+    const [nameError, setNameError] = useState(null);
+    const [nameSaved, setNameSaved] = useState(false);
     // When set, the pane swaps to the full-pane PaletteView, and
     // picking a component fills this cell. Separate from selection
     // so the inspector state stays untouched while the user picks.
@@ -134,6 +143,63 @@ export function ComposerPaneV2({
     const setGrid = useCallback((next) => {
         setGridRaw(next);
     }, []);
+
+    // Keep the name input in sync when the committed name changes from
+    // OUTSIDE the input — draft resume (initialGrid) or the on-mount
+    // collision bump. User typing flows the other way (pendingName only).
+    useEffect(() => {
+        setPendingName(grid.widgetName || "");
+    }, [grid.widgetName]);
+
+    // Commit the typed name into grid.widgetName (the single point that
+    // triggers a re-emit + draft save for the name). Validates + checks the
+    // name isn't already taken by an installed widget or another draft —
+    // reusing the same source as the on-mount auto-bump below.
+    const commitName = useCallback(async () => {
+        const sanitized = pendingName.replace(/[^A-Za-z0-9_]/g, "");
+        if (!sanitized) {
+            setNameError("Enter a name (letters, numbers, underscore).");
+            return;
+        }
+        if (sanitized === grid.widgetName) {
+            setNameError(null);
+            setNameSaved(true);
+            return;
+        }
+        try {
+            const getConfigs = window.mainApi?.widgets?.getComponentConfigs;
+            if (typeof getConfigs === "function") {
+                const configs = (await getConfigs()) || [];
+                const taken = new Set();
+                for (const c of configs) {
+                    if (c?.componentName)
+                        taken.add(String(c.componentName).toLowerCase());
+                    if (c?.widgetPackage) {
+                        const pkg = String(c.widgetPackage).toLowerCase();
+                        taken.add(
+                            pkg.startsWith("@ai-built/")
+                                ? pkg.slice("@ai-built/".length)
+                                : pkg
+                        );
+                    }
+                }
+                if (taken.has(sanitized.toLowerCase())) {
+                    setNameError(
+                        `A widget named "${sanitized}" already exists. Choose another name.`
+                    );
+                    return;
+                }
+            }
+        } catch {
+            // Collision lookup failed — allow the save. The install
+            // pipeline still errors visibly on a real collision.
+        }
+        setNameError(null);
+        userRenamedRef.current = true;
+        setPendingName(sanitized);
+        setGrid((g) => ({ ...g, widgetName: sanitized }));
+        setNameSaved(true);
+    }, [pendingName, grid.widgetName, setGrid]);
 
     // Keep callbacks in refs so the sync effect only re-runs when
     // `grid` actually changes — without this, every parent re-render
@@ -463,28 +529,82 @@ export function ComposerPaneV2({
                     >
                         Widget name
                     </label>
-                    <input
-                        id="composer-widget-name-v2"
-                        type="text"
-                        value={grid.widgetName}
-                        onChange={(e) => {
-                            // Mark before sanitize/setGrid so the on-mount
-                            // collision-bump effect (which is async) won't
-                            // overwrite the user's typed name if it lands
-                            // between this keystroke and the next render.
-                            userRenamedRef.current = true;
-                            const sanitized = e.target.value.replace(
-                                /[^A-Za-z0-9_]/g,
-                                ""
-                            );
-                            setGrid((g) => ({
-                                ...g,
-                                widgetName: sanitized || "ComposedWidget",
-                            }));
-                        }}
-                        className="w-full px-2 py-1 text-sm bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
-                        data-testid="composer-widget-name"
-                    />
+                    {hasEditContextCode ? (
+                        // Edit mode: the name is the installed widget's
+                        // identity and must not change. Show it read-only.
+                        <input
+                            id="composer-widget-name-v2"
+                            type="text"
+                            value={grid.widgetName}
+                            readOnly
+                            disabled
+                            title="The name can't be changed while editing an existing widget."
+                            className="w-full px-2 py-1 text-sm bg-gray-800/60 border border-gray-700 rounded text-gray-400 cursor-not-allowed"
+                            data-testid="composer-widget-name"
+                        />
+                    ) : (
+                        // Create mode: type freely, commit with the
+                        // checkmark (or Enter). Typing alone does NOT emit
+                        // or save — no per-keystroke folder churn.
+                        <>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    id="composer-widget-name-v2"
+                                    type="text"
+                                    value={pendingName}
+                                    onChange={(e) => {
+                                        userRenamedRef.current = true;
+                                        setNameSaved(false);
+                                        setNameError(null);
+                                        setPendingName(
+                                            e.target.value.replace(
+                                                /[^A-Za-z0-9_]/g,
+                                                ""
+                                            )
+                                        );
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            commitName();
+                                        }
+                                    }}
+                                    placeholder="MyWidget"
+                                    className="flex-1 px-2 py-1 text-sm bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                                    data-testid="composer-widget-name"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={commitName}
+                                    disabled={
+                                        !pendingName.trim() ||
+                                        pendingName.trim() === grid.widgetName
+                                    }
+                                    title="Save name"
+                                    aria-label="Save name"
+                                    className="shrink-0 px-2.5 py-1 text-sm rounded bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 text-white"
+                                    data-testid="composer-widget-name-save"
+                                >
+                                    <span aria-hidden="true">✓</span>
+                                </button>
+                            </div>
+                            {nameError && (
+                                <p
+                                    className="text-xs text-red-400 mt-1"
+                                    data-testid="composer-widget-name-error"
+                                >
+                                    {nameError}
+                                </p>
+                            )}
+                            {nameSaved &&
+                                !nameError &&
+                                pendingName.trim() === grid.widgetName && (
+                                    <p className="text-xs text-emerald-400 mt-1">
+                                        Saved
+                                    </p>
+                                )}
+                        </>
+                    )}
                 </div>
                 {/* Four view modes share the pane below the name input:
                   - palette     (user clicked + Add on an empty cell)

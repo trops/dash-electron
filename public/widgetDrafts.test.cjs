@@ -216,10 +216,23 @@ test("listDrafts sorts by updatedAt descending (newest first)", async () => {
     });
 });
 
-test("getDraftPackageDir builds <name>-draft-<short-id> under @ai-built/", async () => {
+test("getDraftPackageDir is keyed by the full draft id — stable across names, unique across drafts", async () => {
     await withTmpFile(() => {
-        const dir = getDraftPackageDir("draft-abc12345xyz", "MyWidget");
-        assert.match(dir, /@ai-built\/mywidget-draft-abc12345$/);
+        const dir = getDraftPackageDir("draft-17823905-ab3k9z", "MyWidget");
+        // Folder is `draft-<full-id>` — the name is NOT in the path.
+        assert.match(dir, /@ai-built\/draft-17823905-ab3k9z$/);
+        assert.ok(!dir.toLowerCase().includes("mywidget"));
+        // Same draft id + a different name → SAME folder. This is the fix
+        // for per-keystroke / per-rename folder proliferation.
+        assert.equal(
+            dir,
+            getDraftPackageDir("draft-17823905-ab3k9z", "RenamedWidget")
+        );
+        // Two DIFFERENT drafts that share a timestamp prefix must NOT
+        // collide — regression guard for the truncated-id bug that made
+        // unrelated drafts overwrite one folder.
+        const sibling = getDraftPackageDir("draft-17823905-zz9q1p", "MyWidget");
+        assert.notEqual(dir, sibling);
     });
 });
 
