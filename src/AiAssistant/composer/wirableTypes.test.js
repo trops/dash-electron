@@ -131,4 +131,63 @@ describe("useWirableTypes", () => {
         expect(final.status).toBe("error");
         expect(final.error).toMatch(/MCP catalog bridge unavailable/);
     });
+
+    test("surfaces a configured custom MCP provider not in the catalog", async () => {
+        setMcpBridge(
+            jest.fn().mockResolvedValue({
+                catalog: { servers: [{ id: "gmail", name: "Gmail" }] },
+            })
+        );
+        const states = [];
+        await act(async () => {
+            render(
+                <Probe
+                    providers={{
+                        Granola: {
+                            type: "custom",
+                            providerClass: "mcp",
+                            mcpConfig: { url: "https://mcp.granola.ai" },
+                        },
+                    }}
+                    onState={(s) => states.push(s)}
+                />
+            );
+        });
+        const final = states[states.length - 1];
+        const entry = final.types.find((t) => t.name === "Granola");
+        expect(entry).toBeTruthy();
+        expect(entry.kind).toBe("mcp");
+        expect(entry.id).toBe("custom"); // emitted providerType (real type)
+        expect(entry.instanceName).toBe("Granola"); // binds this exact instance
+        expect(entry.hasConfiguredInstance).toBe(true);
+    });
+
+    test("multiple custom MCP providers (same type) show as distinct rows; non-MCP custom skipped", async () => {
+        setMcpBridge(jest.fn().mockResolvedValue({ catalog: { servers: [] } }));
+        const states = [];
+        await act(async () => {
+            render(
+                <Probe
+                    providers={{
+                        Granola: { type: "custom", providerClass: "mcp" },
+                        InternalTool: { type: "custom", providerClass: "mcp" },
+                        // Non-MCP custom must NOT be surfaced (no wireable methods).
+                        SomeKey: {
+                            type: "custom",
+                            providerClass: "credential",
+                        },
+                    }}
+                    onState={(s) => states.push(s)}
+                />
+            );
+        });
+        const final = states[states.length - 1];
+        const names = final.types
+            .filter((t) => t.instanceName)
+            .map((t) => t.name);
+        expect(names).toContain("Granola");
+        expect(names).toContain("InternalTool");
+        // The credential-class custom is not wireable here.
+        expect(final.types.some((t) => t.name === "SomeKey")).toBe(false);
+    });
 });

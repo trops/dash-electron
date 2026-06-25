@@ -88,9 +88,21 @@ export function useWirableTypes(providers = {}) {
 
         const finalize = (mcpTypes, error) => {
             if (cancelled) return;
-            const combined = [...credentialTypes, ...mcpTypes].sort((a, b) =>
-                a.name.localeCompare(b.name)
+            // Surface the user's CONFIGURED custom MCP providers (ones whose
+            // type isn't in the bundled catalog) so they can be wired too.
+            // Without this, a custom provider created in Settings → Providers
+            // never appears in the picker. Enumerated per-instance (by name)
+            // since custom providers commonly share type "custom".
+            const knownMcpIds = new Set(mcpTypes.map((t) => t.id));
+            const customMcpTypes = enumerateConfiguredCustomMcp(
+                providers,
+                knownMcpIds
             );
+            const combined = [
+                ...credentialTypes,
+                ...mcpTypes,
+                ...customMcpTypes,
+            ].sort((a, b) => a.name.localeCompare(b.name));
             setState({
                 status: error ? "error" : "ok",
                 types: combined,
@@ -132,6 +144,41 @@ function enumerateCredentialTypes(providers) {
                 CREDENTIAL_DEFAULT_DESCRIPTION,
             hasConfiguredInstance: instances.length > 0,
             configuredInstances: instances,
+        });
+    }
+    return out;
+}
+
+/**
+ * Enumerate the user's configured MCP provider INSTANCES whose `type` is not
+ * a known catalog id (i.e. custom MCP servers added in Settings → Providers).
+ * One entry per instance — keyed/displayed by the provider's friendly name —
+ * so multiple custom servers (which commonly all carry `type: "custom"`) show
+ * as distinct rows. Each entry carries `instanceName` so the picker binds the
+ * wire to that specific instance and introspects its live tools.
+ *
+ * @param {object} providers app.providers map (name → provider)
+ * @param {Set<string>} knownMcpIds catalog mcp type ids already enumerated
+ */
+function enumerateConfiguredCustomMcp(providers, knownMcpIds) {
+    const out = [];
+    if (!providers || typeof providers !== "object") return out;
+    for (const [instanceName, p] of Object.entries(providers)) {
+        if (!p || p.providerClass !== "mcp" || !p.type) continue;
+        // Skip providers already represented by a catalog type entry.
+        if (knownMcpIds && knownMcpIds.has(p.type)) continue;
+        out.push({
+            id: p.type, // real type ("custom") — emitted as providerType
+            name: instanceName, // friendly, distinguishes multiple customs
+            kind: "mcp",
+            description:
+                p.mcpConfig && p.mcpConfig.url
+                    ? `Custom MCP — ${p.mcpConfig.url}`
+                    : "Custom MCP provider configured in Settings → Providers.",
+            hasConfiguredInstance: true,
+            configuredInstances: [instanceName],
+            instanceName, // the specific instance to bind + introspect
+            custom: true,
         });
     }
     return out;

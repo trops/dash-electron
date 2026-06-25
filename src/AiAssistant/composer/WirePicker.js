@@ -98,10 +98,11 @@ export function WirePicker({
     // user rebind). If none, leave `provider` null — the install
     // flow surfaces a "configure a {type} provider" prompt.
     const autoInstance =
-        Array.isArray(pickedType.configuredInstances) &&
+        pickedType.instanceName ||
+        (Array.isArray(pickedType.configuredInstances) &&
         pickedType.configuredInstances.length > 0
             ? pickedType.configuredInstances[0]
-            : null;
+            : null);
 
     return (
         <MethodStep
@@ -199,11 +200,13 @@ function ProviderTypeStep({
                 <div className="flex flex-col">
                     {wirable.types.map((t) => (
                         <button
-                            key={`${t.kind}:${t.id}`}
+                            key={`${t.kind}:${t.id}:${t.instanceName || ""}`}
                             type="button"
                             onClick={() => onPick(t)}
                             className="text-left text-sm px-2 py-1.5 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200"
-                            data-testid={`composer-wire-provider-${propName}-${t.id}`}
+                            data-testid={`composer-wire-provider-${propName}-${
+                                t.instanceName || t.id
+                            }`}
                         >
                             <div className="flex items-center justify-between gap-2">
                                 <span className="truncate">{t.name}</span>
@@ -331,13 +334,17 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
     // tool they know exists by name (the install flow will refuse
     // the install if the tool turns out not to be real).
     const configuredInstance = useMemo(() => {
+        // Custom providers carry the picked instance explicitly so tool
+        // discovery targets the exact server the user chose (multiple
+        // customs commonly share type "custom").
+        if (type.instanceName) return type.instanceName;
         for (const [name, p] of Object.entries(providers || {})) {
             if (p?.type === type.id && p?.providerClass === "mcp") {
                 return p.serverName || name;
             }
         }
         return null;
-    }, [providers, type.id]);
+    }, [providers, type.id, type.instanceName]);
     const knownTools = useMemo(() => getKnownToolsForType(type.id), [type.id]);
     const { status, tools, error } = useMcpTools(configuredInstance, null);
     const [freeText, setFreeText] = useState("");
