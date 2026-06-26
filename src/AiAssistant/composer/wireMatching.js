@@ -53,6 +53,15 @@ export function scoreMethodForSlot(slotType, returnType) {
     if (slotIsArray) {
         if (returnIsArray) return 2;
         if (returnIsArrayWrapped) return 1;
+        // A GENERIC object return ("Object") is a loose match for an Array
+        // slot: the emitter adapts it into `{ key, value }` rows
+        // (Object.entries), which a DataList/Table renders naturally. This
+        // surfaces read-style methods like Algolia getSettings /
+        // getAnalyticsForQuery for a settings-display widget. We deliberately
+        // do NOT match structured ack shapes like `{taskID,objectID}`
+        // (saveRule/deleteRule) — those are mutation results, not data
+        // sources, and would just be noise in the picker.
+        if (returnType === "Object") return 1;
         return 0;
     }
 

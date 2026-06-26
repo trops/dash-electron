@@ -37,8 +37,15 @@ describe("scoreMethodForSlot", () => {
         ).toBe(1);
     });
 
-    test("Array slot rejects non-Array, non-Array-wrapped returns", () => {
-        expect(scoreMethodForSlot("Array<Object>", "Object")).toBe(0);
+    test("Array slot scores a generic Object return as 1 (loose) — emitter adapts via Object.entries", () => {
+        // getSettings/getAnalyticsForQuery (return "Object") become key/value
+        // rows in a DataList/Table, so they're a loose match for an array slot.
+        expect(scoreMethodForSlot("Array<Object>", "Object")).toBe(1);
+    });
+
+    test("Array slot rejects structured-ack objects, scalars, and non-Array returns", () => {
+        // Structured mutation acks like {taskID,objectID} are NOT data
+        // sources — they stay filtered (only generic "Object" is adapted).
         expect(scoreMethodForSlot("Array<Object>", "{taskID,objectID}")).toBe(
             0
         );
@@ -79,11 +86,17 @@ describe("scoreMethodList", () => {
             Object.entries(fakeRegistry),
             "Array<Object>"
         );
-        // setSettings excluded (void), getSettings excluded (Object).
-        // listIndices (strong) before search (loose).
-        expect(ranked.map((r) => r.name)).toEqual(["listIndices", "search"]);
+        // setSettings excluded (void). listIndices (strong, Array) first;
+        // then the loose matches alphabetized: getSettings (Object → adapted
+        // to key/value rows) before search ({hits:Array}).
+        expect(ranked.map((r) => r.name)).toEqual([
+            "listIndices",
+            "getSettings",
+            "search",
+        ]);
         expect(ranked[0].score).toBe(2);
         expect(ranked[1].score).toBe(1);
+        expect(ranked[2].score).toBe(1);
     });
 
     test("includes Object-returning methods for Object slots", () => {

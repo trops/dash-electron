@@ -126,13 +126,34 @@ import { useState } from "react";
 import { Widget, Panel, Heading, Menu, MenuItem } from "@trops/dash-react";
 import { useMcpProvider } from "@trops/dash-core";
 
+// MCP tool results come back wrapped in a content-block envelope:
+//   { content: [{ type: "text", text: "<JSON string>" }] }
+// You MUST extract content[].text and JSON.parse it — the parsed object is
+// NOT on the raw return (e.g. \`response.results\` / \`response.settings\` are
+// undefined). This is true for EVERY MCP tool (search, getSettings, etc.).
+// Always include this helper in widgets that call mcp.callTool():
+function parseMcpJson(res) {
+    if (typeof res === "string") {
+        try { return JSON.parse(res); } catch { return res; }
+    }
+    if (res?.content && Array.isArray(res.content)) {
+        const text = res.content
+            .filter((b) => b.type === "text")
+            .map((b) => b.text)
+            .join("\\n");
+        try { return JSON.parse(text); } catch { return text; }
+    }
+    return res;
+}
+
 export const SearchWidget = ({ api, ...props }) => {
     const mcp = useMcpProvider("algolia");
     const [results, setResults] = useState([]);
 
     const handleSearch = async (query) => {
-        const response = await mcp.callTool("search", { query });
-        setResults(response.results);
+        const res = await mcp.callTool("search", { query });
+        const parsed = parseMcpJson(res); // unwrap content[].text + JSON.parse
+        setResults(parsed.hits ?? parsed.results ?? []);
     };
 
     return (

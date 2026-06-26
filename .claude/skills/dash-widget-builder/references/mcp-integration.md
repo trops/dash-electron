@@ -150,22 +150,73 @@ export const MyWidget = ({ api, ...props }) => {
 
     // Call a tool
     const handleSearch = async (query) => {
-        const result = await mcp.callTool("search", {
+        const res = await mcp.callTool("search", {
             index: "products",
             query: query,
         });
-        // result contains the MCP tool response
+        const data = parseMcpJson(res); // see "MCP tool-result envelope" below
     };
 
     // Get a resource
     const loadData = async () => {
         const resource = await mcp.getResource("index://products");
-        // resource contains the MCP resource data
+        const data = parseMcpJson(resource);
     };
 
     // ...render UI with results
 };
 ```
+
+### ⚠️ The MCP tool-result envelope — you MUST unwrap it
+
+`mcp.callTool(...)` does **not** resolve to the tool's data directly. Every MCP
+tool returns a **content-block envelope**:
+
+```javascript
+{
+    content: [{ type: "text", text: "<JSON string>" }];
+}
+```
+
+So `result.results`, `result.settings`, `result.hits`, etc. are **`undefined`**.
+You must extract `content[].text` and `JSON.parse` it. This applies to **every**
+tool equally — `search`, `getSettings`, `listIndices`, all of them. `getSettings`
+is no different from `search`; both return the content-block envelope.
+
+Include this helper in any widget that calls `mcp.callTool()` (per the
+self-contained rule, copy it into the package's own `utils/mcpUtils.js`):
+
+```javascript
+export function parseMcpJson(res) {
+    if (typeof res === "string") {
+        try {
+            return JSON.parse(res);
+        } catch {
+            return res;
+        }
+    }
+    if (res?.content && Array.isArray(res.content)) {
+        const text = res.content
+            .filter((b) => b.type === "text")
+            .map((b) => b.text)
+            .join("\n");
+        try {
+            return JSON.parse(text);
+        } catch {
+            return text;
+        }
+    }
+    return res;
+}
+```
+
+Do NOT read fields off the raw `callTool` return — always `parseMcpJson(res)`
+first, then read the parsed object.
+
+> Note: the bundled Algolia sample widgets use a dedicated credential-class
+> path (`window.mainApi.algolia.*`) that returns parsed objects, so they don't
+> show this unwrap. On the raw MCP path (`useMcpProvider().callTool`) the
+> envelope is always present.
 
 The hook handles:
 

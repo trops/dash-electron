@@ -3149,6 +3149,36 @@ ${
             //   "remix"  → use the user-chosen remix name (new package)
             let installName = widgetName;
             let installComponentCode = detectedCode.componentCode;
+
+            // Safety net: in edit mode, never let the generic compose default
+            // ("ComposedWidget") overwrite the widget's real name. If the
+            // emitted code fell back to the default but we're editing a named
+            // widget, restore the original name (and rename the export to
+            // match). This guards the "edited widget reinstalled as
+            // ComposedWidget" regression even if an upstream emit slipped the
+            // default through.
+            const editOrigName = (
+                editContext?.originalComponentName || ""
+            ).includes(".")
+                ? editContext.originalComponentName.split(".").pop()
+                : editContext?.originalComponentName || "";
+            if (
+                !(isRemixMode && editMode === "remix") &&
+                editOrigName &&
+                editOrigName !== "ComposedWidget" &&
+                (!widgetName || widgetName === "ComposedWidget")
+            ) {
+                installComponentCode = installComponentCode.replace(
+                    new RegExp(
+                        `(export\\s+default\\s+function\\s+)${
+                            widgetName || "ComposedWidget"
+                        }\\b`
+                    ),
+                    `$1${editOrigName}`
+                );
+                installName = editOrigName;
+            }
+
             if (
                 isRemixMode &&
                 editMode === "remix" &&
@@ -3367,6 +3397,7 @@ ${
             onInstalled,
             cellContext,
             effectiveEditContext,
+            editContext,
             isRemixMode,
             editMode,
             remixName,
@@ -4686,7 +4717,27 @@ ${
                                                         props={{
                                                             title: displayName,
                                                             ...previewWidgetDefaults,
-                                                            ...previewTestInputs,
+                                                            // Only let NON-empty
+                                                            // test inputs override
+                                                            // the userConfig
+                                                            // defaults — a blank
+                                                            // ("") test value must
+                                                            // not clobber a real
+                                                            // default at preview.
+                                                            ...Object.fromEntries(
+                                                                Object.entries(
+                                                                    previewTestInputs ||
+                                                                        {}
+                                                                ).filter(
+                                                                    ([, v]) =>
+                                                                        v !==
+                                                                            "" &&
+                                                                        v !==
+                                                                            undefined &&
+                                                                        v !==
+                                                                            null
+                                                                )
+                                                            ),
                                                             ...(effectiveEditContext?.userPrefs ||
                                                                 {}),
                                                         }}
@@ -5755,7 +5806,7 @@ ${
                                                 }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
                                                     effectiveEditContext.configCode ||
                                                     ""
-                                                }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
+                                                }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above. CRITICAL: PRESERVE every existing \`userConfig\` field EXACTLY as written — including its \`defaultValue\`, \`displayName\`, \`instructions\`, and \`required\` — unless the user explicitly asks to change that specific field. Never drop or blank out a \`userConfig\` \`defaultValue\` the user authored.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
                                             }
                                             // Hand-off path: user
                                             // composed a widget in
@@ -5778,7 +5829,7 @@ ${
                                                 }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
                                                     detectedCode.configCode ||
                                                     ""
-                                                }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above. Do NOT throw away what they composed unless they explicitly ask you to start over.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences acknowledging what they've built so far and asking what they'd like to change. No lists, no bullet points, under 30 words.`;
+                                                }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above. CRITICAL: PRESERVE every existing \`userConfig\` field EXACTLY as written — including its \`defaultValue\`, \`displayName\`, \`instructions\`, and \`required\` — unless the user explicitly asks to change that specific field. Never drop or blank out a \`userConfig\` \`defaultValue\` the user authored. Do NOT throw away what they composed unless they explicitly ask you to start over.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences acknowledging what they've built so far and asking what they'd like to change. No lists, no bullet points, under 30 words.`;
                                             }
                                             return base;
                                         })()}

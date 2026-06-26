@@ -590,6 +590,11 @@ export default {
             required: true,
         },
     },
+    // ⚠️ When EDITING an existing widget: preserve every userConfig field
+    // exactly as written — including its `defaultValue`, `displayName`,
+    // `instructions`, and `required` — unless the user explicitly asks to
+    // change that field. Never drop a `defaultValue` the user authored; doing
+    // so silently resets their configured default to empty.
     providers: [
         {
             type: "my-service",

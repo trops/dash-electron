@@ -345,8 +345,30 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
         }
         return null;
     }, [providers, type.id, type.instanceName]);
+    // The provider OBJECT (with mcpConfig + credentials) for the chosen
+    // instance. Passed to useMcpTools so it can start the server on demand —
+    // the widget builder has no workspace, so the provider's MCP server isn't
+    // running until we connect it here.
+    const configuredProvider = useMemo(() => {
+        if (!configuredInstance) return null;
+        for (const [name, p] of Object.entries(providers || {})) {
+            if (
+                p?.providerClass === "mcp" &&
+                (p.serverName || name) === configuredInstance
+            ) {
+                return p;
+            }
+        }
+        return null;
+    }, [providers, configuredInstance]);
     const knownTools = useMemo(() => getKnownToolsForType(type.id), [type.id]);
-    const { status, tools, error } = useMcpTools(configuredInstance, null);
+    const [reloadToken, setReloadToken] = useState(0);
+    const { status, tools, error } = useMcpTools(
+        configuredInstance,
+        null,
+        configuredProvider,
+        reloadToken
+    );
     const [freeText, setFreeText] = useState("");
 
     return (
@@ -421,12 +443,77 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
             )}
             {configuredInstance && status === "loading" && (
                 <div className="text-sm text-gray-500 px-2 py-1">
-                    Loading tools from {configuredInstance}…
+                    Connecting to {configuredInstance}…
                 </div>
             )}
             {configuredInstance && status === "error" && (
-                <div className="text-sm text-red-400 px-2 py-1">
-                    {error || "Failed to load tools"}
+                <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 px-2 py-1">
+                        <span className="text-xs text-amber-400">
+                            Couldn't reach {configuredInstance}
+                            {knownTools ? " — showing approximate tools." : "."}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setReloadToken((n) => n + 1)}
+                            className="text-xs px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-100 shrink-0"
+                            data-testid={`composer-wire-retry-${propName}`}
+                        >
+                            Retry
+                        </button>
+                    </div>
+                    {error && (
+                        <div className="text-xs text-gray-500 px-2">
+                            {error}
+                        </div>
+                    )}
+                    {knownTools && (
+                        <div
+                            className="flex flex-col"
+                            data-testid={`composer-wire-known-tools-${propName}`}
+                        >
+                            {knownTools.map((tool) => (
+                                <button
+                                    key={tool.name}
+                                    type="button"
+                                    onClick={() => onPick(tool.name)}
+                                    className="text-left text-sm px-2 py-1.5 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200"
+                                    data-testid={`composer-wire-method-${propName}-${tool.name}`}
+                                    title={tool.description || ""}
+                                >
+                                    <span className="font-mono">
+                                        {tool.name}
+                                    </span>
+                                    {tool.description && (
+                                        <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                                            {tool.description}
+                                        </div>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    <div className="flex gap-1 px-2 pb-1">
+                        <input
+                            type="text"
+                            value={freeText}
+                            onChange={(e) => setFreeText(e.target.value)}
+                            placeholder="or type a tool name"
+                            className="flex-1 px-1.5 py-0.5 text-sm font-mono bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                            data-testid={`composer-wire-tool-input-${propName}`}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (freeText.trim()) onPick(freeText.trim());
+                            }}
+                            disabled={!freeText.trim()}
+                            className="px-2 py-0.5 text-sm rounded bg-indigo-700 hover:bg-indigo-600 disabled:bg-gray-700 disabled:text-gray-500 text-white"
+                            data-testid={`composer-wire-tool-confirm-${propName}`}
+                        >
+                            Wire
+                        </button>
+                    </div>
                 </div>
             )}
             {configuredInstance && status === "ok" && tools.length === 0 && (

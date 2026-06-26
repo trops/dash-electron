@@ -144,6 +144,14 @@ export function PreviewIframe({
     const iframeRef = useRef(null);
     const bridgeRef = useRef(null);
     const readyRef = useRef(false);
+    // Latest props, mirrored into a ref so bridge:load-bundle can seed the
+    // widget's FIRST render with them (incl. userConfig defaultValues). Without
+    // this, the widget mounts with {} and only receives props after mount —
+    // so a widget that reads config at render shows empty on first paint, which
+    // is what made the AI bolt an input box into the widget. Updated in render
+    // (cheap, no effect needed) so it's always current at load-bundle time.
+    const propsRef = useRef(props);
+    propsRef.current = props;
     const [status, setStatus] = useState("loading");
 
     // Memoize the modules map so we don't re-write window.__hostModules
@@ -257,6 +265,9 @@ export function PreviewIframe({
         bridgeRef.current?.send("bridge:load-bundle", {
             bundleSource,
             componentName,
+            // Seed the first render with the current props (userConfig
+            // defaults + test inputs) so the widget never mounts prop-less.
+            initialProps: propsRef.current || {},
         });
         // We deliberately re-run this effect when the iframe goes
         // from not-ready to ready (status flip from "loading" →
