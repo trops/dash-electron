@@ -193,7 +193,7 @@ export function renderNodeJsx(
             return (
                 `${pad}<div data-composer-node-id="${node.id}"${rootStyle}>\n` +
                 `${pad}    <DataList${fillAttr}>\n` +
-                `${pad}        {(Array.isArray(${itemsVar}) ? ${itemsVar} : []).map((__it, __i) => (\n` +
+                `${pad}        {${rowsExpr(itemsVar)}.map((__it, __i) => (\n` +
                 `${pad}            <DataList.Item key={__i} label={${fieldExpr(
                     "label"
                 )}} value={${fieldExpr("value")}} />\n` +
@@ -245,7 +245,7 @@ export function renderNodeJsx(
             return (
                 `${pad}<div data-composer-node-id="${node.id}"${rootStyle}>\n` +
                 `${pad}    <${node.type}${fillAttr}>\n` +
-                `${pad}        {(Array.isArray(${itemsVar}) ? ${itemsVar} : []).map((__it, __i) => (\n` +
+                `${pad}        {${rowsExpr(itemsVar)}.map((__it, __i) => (\n` +
                 `${pad}            <${menuItemType} key={__i}${onClickAttr}>{${fieldExpr(
                     "label"
                 )}}</${menuItemType}>\n` +
@@ -399,7 +399,7 @@ function adaptSlotForProp(propType, slotVar, wire) {
         return defaultFieldExpr(targetField);
     };
     const props = targetFields.map((f) => `${f}: ${buildExpr(f)}`).join(", ");
-    return `(Array.isArray(${slotVar}) ? ${slotVar} : []).map((__it) => ({ ${props} }))`;
+    return `${rowsExpr(slotVar)}.map((__it) => ({ ${props} }))`;
 }
 
 /**
@@ -425,6 +425,28 @@ export function parseShapeFields(propType) {
  * an unknown target field just renders as an empty string instead
  * of fishing through every property on the source object.
  */
+/**
+ * Emit an expression that coerces a wired data source into an array of rows.
+ *
+ * - Already an array → used as-is.
+ * - A plain object → `Object.entries` into `{ key, value }` rows. An object's
+ *   key/value pairs are a natural fit for a DataList/Table (e.g. Algolia
+ *   `getSettings` returns a settings object). Nested array/object values are
+ *   JSON-stringified so they render as readable text instead of "[object
+ *   Object]". `defaultFieldExpr` already maps label→key and value→value.
+ * - Anything else → empty list.
+ *
+ * This is what lets an Object-returning provider method wire into a
+ * list/table slot (the wire scorer marks it a loose match).
+ */
+function rowsExpr(varName) {
+    return (
+        `(Array.isArray(${varName}) ? ${varName} : (${varName} && typeof ${varName} === 'object' ` +
+        `? Object.entries(${varName}).map(([key, value]) => ({ key, value: value && typeof value === 'object' ? JSON.stringify(value) : value })) ` +
+        `: []))`
+    );
+}
+
 function defaultFieldExpr(targetField) {
     const chains = {
         label:

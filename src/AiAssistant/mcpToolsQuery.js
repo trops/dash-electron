@@ -16,9 +16,28 @@
  * imperative and declarative call paths.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const EMPTY_TOOLS = Object.freeze([]);
+
+// One listTools attempt against an already-running server, normalized.
+async function listOnce(api, serverName, workspaceId) {
+    const result = await api.listTools(serverName, workspaceId);
+    if (result && result.error) {
+        return {
+            status: "error",
+            tools: EMPTY_TOOLS,
+            error:
+                typeof result.message === "string"
+                    ? result.message
+                    : String(result.error),
+        };
+    }
+    const tools = Array.isArray(result && result.tools)
+        ? result.tools
+        : EMPTY_TOOLS;
+    return { status: "ok", tools, error: null };
+}
 
 /**
  * Imperative call. Returns one of:
@@ -28,8 +47,22 @@ const EMPTY_TOOLS = Object.freeze([]);
  * Never throws — the composer would otherwise need a try/catch
  * around every picker open. `tools` is always an array, so callers
  * can `.map()` unconditionally.
+ *
+ * `provider` (optional) — the configured provider object
+ * (`{ mcpConfig, credentials, ... }`). `listTools` only reads from a
+ * RUNNING server, but the widget builder has no workspace so the
+ * provider's server usually isn't started yet (that normally happens
+ * when a dashboard loads). When the first list fails and a provider
+ * with `mcpConfig` is supplied, we start the server on demand (the
+ * same `startServer` call `useMcpProvider` makes — idempotent and
+ * deduped main-side) and retry. This is what lets a brand-new widget
+ * wire to a provider's tools without an open dashboard.
  */
-export async function fetchMcpTools(serverName, workspaceId = null) {
+export async function fetchMcpTools(
+    serverName,
+    workspaceId = null,
+    provider = null
+) {
     if (typeof serverName !== "string" || serverName.length === 0) {
         return {
             status: "error",
@@ -47,21 +80,35 @@ export async function fetchMcpTools(serverName, workspaceId = null) {
         };
     }
     try {
-        const result = await api.listTools(serverName, workspaceId);
-        if (result && result.error) {
-            return {
-                status: "error",
-                tools: EMPTY_TOOLS,
-                error:
-                    typeof result.message === "string"
-                        ? result.message
-                        : String(result.error),
-            };
+        let res = await listOnce(api, serverName, workspaceId);
+        if (
+            res.status === "error" &&
+            provider &&
+            provider.mcpConfig &&
+            typeof api.startServer === "function"
+        ) {
+            try {
+                const startRes = await api.startServer(
+                    serverName,
+                    provider.mcpConfig,
+                    provider.credentials || {},
+                    workspaceId
+                );
+                if (!startRes || !startRes.error) {
+                    res = await listOnce(api, serverName, workspaceId);
+                } else if (typeof startRes.message === "string") {
+                    res = {
+                        status: "error",
+                        tools: EMPTY_TOOLS,
+                        error: startRes.message,
+                    };
+                }
+            } catch {
+                // Keep the original list error — surfacing the start
+                // failure separately would be more confusing than helpful.
+            }
         }
-        const tools = Array.isArray(result && result.tools)
-            ? result.tools
-            : EMPTY_TOOLS;
-        return { status: "ok", tools, error: null };
+        return res;
     } catch (err) {
         return {
             status: "error",
@@ -85,7 +132,18 @@ export async function fetchMcpTools(serverName, workspaceId = null) {
  * abortable through the IPC bridge, so a stale response from a
  * previous serverName is dropped rather than aborted.
  */
-export function useMcpTools(serverName, workspaceId = null) {
+export function useMcpTools(
+    serverName,
+    workspaceId = null,
+    provider = null,
+    reloadToken = 0
+) {
+    // Provider object can be a fresh reference each render (it arrives via the
+    // __dashAppContext bridge). Read it through a ref so the effect re-runs
+    // only when serverName/workspaceId change, not on every parent render.
+    const providerRef = useRef(provider);
+    providerRef.current = provider;
+
     const [state, setState] = useState({
         status: "idle",
         tools: EMPTY_TOOLS,
@@ -99,13 +157,15 @@ export function useMcpTools(serverName, workspaceId = null) {
         }
         let cancelled = false;
         setState({ status: "loading", tools: EMPTY_TOOLS, error: null });
-        fetchMcpTools(serverName, workspaceId).then((result) => {
-            if (!cancelled) setState(result);
-        });
+        fetchMcpTools(serverName, workspaceId, providerRef.current).then(
+            (result) => {
+                if (!cancelled) setState(result);
+            }
+        );
         return () => {
             cancelled = true;
         };
-    }, [serverName, workspaceId]);
+    }, [serverName, workspaceId, reloadToken]);
 
     return state;
 }

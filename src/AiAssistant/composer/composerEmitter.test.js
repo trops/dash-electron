@@ -716,9 +716,12 @@ describe("emitWidgetCode — hook scaffolding for configured wires (C4)", () => 
         expect(useCallbackCount).toBe(1);
         // DataList is rendered as an iteration of DataList.Item
         // children; the bound slot var is the source array.
+        // The bound slot var is the source; rowsExpr keeps arrays as-is and
+        // adapts a plain object into key/value rows.
         expect(componentCode).toMatch(
-            /Array\.isArray\(onClickResult\)\s*\?\s*onClickResult\s*:\s*\[\]/
+            /Array\.isArray\(onClickResult\)\s*\?\s*onClickResult\s*:/
         );
+        expect(componentCode).toContain("Object.entries(onClickResult)");
         expect(componentCode).toContain("<DataList.Item");
     });
 
@@ -742,8 +745,9 @@ describe("emitWidgetCode — hook scaffolding for configured wires (C4)", () => 
         expect(componentCode).toContain('mcp_filesystem.callTool("read_file"');
         expect(componentCode).toContain('path: "/tmp/x.json"');
         expect(componentCode).toMatch(
-            /Array\.isArray\(items\)\s*\?\s*items\s*:\s*\[\]/
+            /Array\.isArray\(items\)\s*\?\s*items\s*:/
         );
+        expect(componentCode).toContain("Object.entries(items)");
         expect(componentCode).toContain("<DataList.Item");
     });
 });

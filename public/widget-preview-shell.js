@@ -304,6 +304,13 @@
         var componentName = payload && payload.componentName;
         var hostModules = window.__hostModules || {};
 
+        // Seed props from the load-bundle payload so the widget's FIRST render
+        // already has its userConfig defaults / test inputs, instead of
+        // mounting with {} and only getting props on a later set-props message.
+        if (payload && payload.initialProps) {
+            currentProps = payload.initialProps;
+        }
+
         if (!bundleSource || typeof bundleSource !== "string") {
             postErrorToHost(
                 "load-bundle",

@@ -93,7 +93,19 @@ export function ComposerPaneV2({
     // widget's name, not a fresh "ComposedWidget{N}" choice.
     editContext = null,
 }) {
-    const [grid, setGridRaw] = useState(() => initialGrid || makeEmptyGrid());
+    const [grid, setGridRaw] = useState(() => {
+        if (initialGrid) return initialGrid;
+        // In edit mode, seed the grid's name from the existing widget so an
+        // empty compose grid does NOT fall back to "ComposedWidget" — that
+        // default would overwrite the user's real widget name the moment any
+        // grid emit fires (the cause of installs reverting to "ComposedWidget"
+        // after Edit-with-AI). Strip any scope prefix ("trops.algolia.Foo").
+        const origName = editContext?.originalComponentName || "";
+        const bareName = origName.includes(".")
+            ? origName.split(".").pop()
+            : origName;
+        return makeEmptyGrid(bareName || undefined);
+    });
     const [internalSelectedCellId, setInternalSelectedCellId] = useState(null);
     // Phase D — captured from QuickStartPane.onApplyGrid's second arg
     // when the user picked a provider in the wizard. Surfaced to
