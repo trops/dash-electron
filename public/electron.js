@@ -693,6 +693,10 @@ const {
     BOTS_STOP,
     BOTS_APPROVE,
     BOTS_LIST_APPROVALS,
+    BOTS_GET_BUDGETS,
+    BOTS_SET_BUDGET,
+    BOTS_GET_SPEND,
+    BOTS_RESUME_BUDGET,
 } = coreEvents;
 
 // Widget System
@@ -2201,6 +2205,16 @@ function createWindow() {
         );
         logger.loggedHandle(BOTS_LIST_APPROVALS, () =>
             botController.listApprovals()
+        );
+        logger.loggedHandle(BOTS_GET_BUDGETS, () => botController.getBudgets());
+        logger.loggedHandle(BOTS_SET_BUDGET, (e, { scope, id, monthlyUsd }) =>
+            botController.setBudget(scope, id, monthlyUsd)
+        );
+        logger.loggedHandle(BOTS_GET_SPEND, (e, { month }) =>
+            botController.getSpend(month)
+        );
+        logger.loggedHandle(BOTS_RESUME_BUDGET, (e, { botId }) =>
+            botController.resumeBudget(botId)
         );
 
         // --- Widget Event IPC Bridge ---
