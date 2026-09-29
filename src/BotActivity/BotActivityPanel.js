@@ -9,7 +9,12 @@ import { reduceFeed } from "./runFeed";
  * window.mainApi.bots (list/run/stop/approve/listApprovals + onStream /
  * onApprovalPending). Self-contained collapse/expand; no external navbar state.
  */
-export const BotActivityPanel = () => {
+export const BotActivityPanel = ({
+    collapsed: collapsedProp,
+    onCollapsedChange,
+    docked = false,
+    onApprovalsCount,
+} = {}) => {
     const { currentTheme } = useContext(ThemeContext);
     const bgDark = currentTheme?.["bg-primary-dark"] || "bg-gray-900";
     const borderColor =
@@ -17,7 +22,15 @@ export const BotActivityPanel = () => {
 
     const bots = window.mainApi && window.mainApi.bots;
 
-    const [collapsed, setCollapsed] = useState(true);
+    // Collapsed state is controllable (by AssistantDock) but falls back to
+    // internal state so the panel still works standalone.
+    const [collapsedInternal, setCollapsedInternal] = useState(true);
+    const collapsed =
+        collapsedProp !== undefined ? collapsedProp : collapsedInternal;
+    const setCollapsed = (next) => {
+        if (onCollapsedChange) onCollapsedChange(next);
+        else setCollapsedInternal(next);
+    };
     const [botList, setBotList] = useState([]);
     const [selectedBotId, setSelectedBotId] = useState("");
     const [prompt, setPrompt] = useState("");
@@ -52,6 +65,16 @@ export const BotActivityPanel = () => {
             refreshApprovals();
         }
     }, [collapsed, refreshBots, refreshApprovals]);
+
+    // Keep the approvals badge accurate even while docked/collapsed: load once
+    // on mount and report the count up to the dock rail.
+    useEffect(() => {
+        refreshApprovals();
+    }, [refreshApprovals]);
+
+    useEffect(() => {
+        if (onApprovalsCount) onApprovalsCount(approvals.length);
+    }, [approvals, onApprovalsCount]);
 
     // Subscribe to streamed run events + pending approvals for the lifetime of
     // the panel (so the badge stays live even while collapsed).
@@ -98,6 +121,8 @@ export const BotActivityPanel = () => {
     };
 
     if (collapsed) {
+        // When docked, AssistantDock renders the shared rail + toggle button.
+        if (docked) return null;
         return (
             <div
                 className={`flex flex-col items-center w-10 border-l ${borderColor} ${bgDark} shrink-0 h-screen`}
