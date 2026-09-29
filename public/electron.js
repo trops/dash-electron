@@ -2278,6 +2278,22 @@ function createWindow() {
                     win.webContents.send("widget-event:broadcast", message);
                 }
             }
+            // Event-bus bridge (P1-2b, FR-009): hand the event to the Bot
+            // Factory so bots subscribed to this eventType run automatically.
+            // Guarded — a bridge failure must never disrupt widget pub/sub.
+            if (message && message.eventType) {
+                try {
+                    botController.handleEvent({
+                        eventType: message.eventType,
+                        content: message.content,
+                    });
+                } catch (err) {
+                    console.error(
+                        "[electron] botController.handleEvent failed:",
+                        err && err.message
+                    );
+                }
+            }
         });
         ipcMain.handle("widget-event:get-last-events", () => {
             const out = {};
