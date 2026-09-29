@@ -130,8 +130,20 @@ const McpStatusChip = () => {
     );
 };
 
-export const AiAssistantPanel = () => {
-    const [collapsed, setCollapsed] = useState(true);
+export const AiAssistantPanel = ({
+    collapsed: collapsedProp,
+    onCollapsedChange,
+    docked = false,
+} = {}) => {
+    // Collapsed state is controllable (by AssistantDock) but falls back to
+    // internal state so the panel still works standalone.
+    const [collapsedInternal, setCollapsedInternal] = useState(true);
+    const collapsed =
+        collapsedProp !== undefined ? collapsedProp : collapsedInternal;
+    const setCollapsed = (next) => {
+        if (onCollapsedChange) onCollapsedChange(next);
+        else setCollapsedInternal(next);
+    };
     const [width, setWidth] = useState(384);
     const isDragging = React.useRef(false);
     const appContext = useContext(AppContext);
@@ -241,6 +253,8 @@ export const AiAssistantPanel = () => {
     );
 
     if (collapsed) {
+        // When docked, AssistantDock renders the shared rail + toggle button.
+        if (docked) return null;
         return (
             <div
                 className={`flex flex-col items-center w-10 border-l ${borderColor} ${bgDark} shrink-0 h-screen`}

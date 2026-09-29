@@ -20,9 +20,8 @@ import {
 // Debug Console (standalone window)
 import { DebugConsole } from "./DebugConsole";
 
-// AI Assistant panel (app shell)
-import { AiAssistantPanel } from "./AiAssistant/AiAssistantPanel";
-import { BotActivityPanel } from "./BotActivity/BotActivityPanel";
+// AI Assistant + Bot Activity slide-over panels, hosted in a shared rail.
+import { AssistantDock } from "./AssistantDock/AssistantDock";
 import { WidgetBuilderModal } from "./AiAssistant/WidgetBuilderModal";
 import { InstallExternalMcpModal } from "./AiAssistant/InstallExternalMcpModal";
 import { WidgetMcpConsentModal } from "./AiAssistant/WidgetMcpConsentModal";
@@ -908,12 +907,7 @@ class App extends React.Component {
                                     credentials={{ appId }}
                                     height="h-full"
                                     grow={true}
-                                    renderAiAssistant={
-                                        <>
-                                            <BotActivityPanel />
-                                            <AiAssistantPanel />
-                                        </>
-                                    }
+                                    renderAiAssistant={<AssistantDock />}
                                 />
                                 {/* Always-mounted: handles
                                     install_known_mcp_server confirm

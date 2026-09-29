@@ -4,8 +4,8 @@ const { launchApp, closeApp } = require("../helpers/electron-app");
 /**
  * Bot Activity — panel mounts cleanly (Slice 7-Activity)
  *
- * Smoke-test for the Bot Activity slide-over: the collapsed "Open Bot
- * Activity" rail button opens the panel, the run control + empty feed
+ * Smoke-test for the Bot Activity slide-over: the shared AssistantDock's
+ * "Bot Activity" rail button opens the panel, the run control + empty feed
  * render, and it collapses again. Doesn't exercise a live bot run
  * (needs a configured Anthropic provider); the IPC round-trip and the
  * feed reducer are covered separately (runFeed.test.js + the Slice-4b
@@ -27,9 +27,9 @@ test.afterAll(async () => {
 });
 
 test("Bot Activity panel opens, structure renders, closes cleanly", async () => {
-    await test.step("panel opens via the collapsed rail button", async () => {
+    await test.step("panel opens via the dock's Bot Activity button", async () => {
         await window
-            .getByRole("button", { name: "Open Bot Activity", exact: true })
+            .getByRole("button", { name: "Bot Activity", exact: true })
             .click();
         await window.waitForTimeout(1000);
         await expect(window.getByText("BOT ACTIVITY").first()).toBeVisible({
@@ -53,7 +53,7 @@ test("Bot Activity panel opens, structure renders, closes cleanly", async () => 
         await window.waitForTimeout(500);
         await expect(
             window.getByRole("button", {
-                name: "Open Bot Activity",
+                name: "Bot Activity",
                 exact: true,
             })
         ).toBeVisible({ timeout: 5000 });
