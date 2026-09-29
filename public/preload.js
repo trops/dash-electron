@@ -1,8 +1,10 @@
 const { contextBridge, ipcRenderer } = require("electron");
-const { defaultMainApi } = require("@trops/dash-core/electron");
+const { defaultMainApi, botApi } = require("@trops/dash-core/electron");
 
 const extendedApi = {
     ...defaultMainApi,
+    // Bot Factory renderer bridge (mirrors defaultMainApi.llm / .scheduler).
+    bots: botApi,
     popout: {
         open: (workspaceId) =>
             ipcRenderer.invoke("popout-open", { workspaceId }),
