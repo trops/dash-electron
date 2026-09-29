@@ -697,7 +697,18 @@ const {
     BOTS_SET_BUDGET,
     BOTS_GET_SPEND,
     BOTS_RESUME_BUDGET,
+    BOTS_LIST_RUNNING,
+    BOTS_PAUSE_ALL,
+    BOTS_RESUME_ALL,
+    BOTS_PAUSE_BOT,
+    BOTS_RESUME_BOT,
+    BOTS_GET_PAUSE_STATE,
 } = coreEvents;
+
+// Bot Factory background mode (Slice 6b): system tray, powerSaveBlocker, and
+// login-item management so scheduled bots keep running with the window closed.
+const { createBotTray, updateBotTray, destroyBotTray } = require("./botTray");
+const { botsWantBackground } = require("./botBackground");
 
 // Widget System
 const { setupWidgetRegistryHandlers } = widgetRegistry;
@@ -2188,12 +2199,16 @@ function createWindow() {
         logger.loggedHandle(BOTS_GET, (e, { botId }) =>
             botController.get(botId)
         );
-        logger.loggedHandle(BOTS_SAVE, (e, { definition }) =>
-            botController.save(definition)
-        );
-        logger.loggedHandle(BOTS_DELETE, (e, { botId }) =>
-            botController.delete(botId)
-        );
+        logger.loggedHandle(BOTS_SAVE, (e, { definition }) => {
+            const saved = botController.save(definition);
+            syncBackgroundMode();
+            return saved;
+        });
+        logger.loggedHandle(BOTS_DELETE, (e, { botId }) => {
+            const result = botController.delete(botId);
+            syncBackgroundMode();
+            return result;
+        });
         logger.loggedHandle(BOTS_RUN, (e, { botId, prompt }) =>
             botController.run(botId, prompt)
         );
@@ -2215,6 +2230,34 @@ function createWindow() {
         );
         logger.loggedHandle(BOTS_RESUME_BUDGET, (e, { botId }) =>
             botController.resumeBudget(botId)
+        );
+
+        // --- Bot Factory background / pause controls (Slice 6b) ---
+        logger.loggedHandle(BOTS_LIST_RUNNING, () =>
+            botController.listRunning()
+        );
+        logger.loggedHandle(BOTS_PAUSE_ALL, () => {
+            const state = botController.pauseAll();
+            updateBotTray();
+            return state;
+        });
+        logger.loggedHandle(BOTS_RESUME_ALL, () => {
+            const state = botController.resumeAll();
+            updateBotTray();
+            return state;
+        });
+        logger.loggedHandle(BOTS_PAUSE_BOT, (e, { botId }) => {
+            const state = botController.pauseBot(botId);
+            updateBotTray();
+            return state;
+        });
+        logger.loggedHandle(BOTS_RESUME_BOT, (e, { botId }) => {
+            const state = botController.resumeBot(botId);
+            updateBotTray();
+            return state;
+        });
+        logger.loggedHandle(BOTS_GET_PAUSE_STATE, () =>
+            botController.getPauseState()
         );
 
         // --- Widget Event IPC Bridge ---
@@ -3559,6 +3602,23 @@ app.whenReady().then(() => {
         appId: process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron",
     });
 
+    // --- Bot Factory background mode: tray + login item (Slice 6b) ---
+    // Skipped under E2E so Playwright drives a normal quit-on-close window.
+    if (process.env.DASH_E2E !== "1") {
+        createBotTray({
+            botController,
+            notificationController,
+            getMainWindow: () => mainWindow,
+            openDash: () => showMainWindow(),
+            onQuit: () => {
+                forceQuitConfirmed = true;
+                destroyBotTray();
+                app.quit();
+            },
+        });
+        syncLoginItem();
+    }
+
     // --- MCP Dash Server auto-start ---
     mcpDashServerController.autoStart(mainWindow).catch((err) => {
         console.error("[electron] MCP Dash Server auto-start failed:", err);
@@ -3571,6 +3631,52 @@ app.whenReady().then(() => {
         botController.handleResume();
     });
 });
+
+// --- Bot Factory background-mode helpers (Slice 6b) ---
+
+/** Show + focus the main window, recreating it if it was closed. */
+function showMainWindow() {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+    } else {
+        createWindow();
+    }
+}
+
+/**
+ * Keep the OS login item in sync with background need (US-018): auto-launch so
+ * scheduled bots survive reboot, and drop the login item when no scheduled bot
+ * remains. macOS + Windows only; skipped under E2E.
+ */
+function syncLoginItem() {
+    if (process.env.DASH_E2E === "1") return;
+    if (process.platform !== "darwin" && process.platform !== "win32") return;
+    let want = false;
+    try {
+        want = botsWantBackground(botController.list());
+    } catch (_e) {
+        want = false;
+    }
+    try {
+        // Only touch the login item on an actual transition — a redundant call
+        // (e.g. false→false on every launch with no scheduled bots) still hits
+        // the OS and, on unsigned/dev builds, logs a native "Operation not
+        // permitted" error.
+        if (app.getLoginItemSettings().openAtLogin === want) return;
+        app.setLoginItemSettings({ openAtLogin: want, openAsHidden: true });
+    } catch (err) {
+        logger.warn("[botTray] setLoginItemSettings failed", err.message);
+    }
+}
+
+/** Refresh the tray menu + login item after the bot set changes. */
+function syncBackgroundMode() {
+    if (process.env.DASH_E2E === "1") return;
+    updateBotTray();
+    syncLoginItem();
+}
 
 // Phase 2B unsaved-changes guard for app quit (Cmd+Q / File → Quit /
 // dock context-menu quit). Same shape as the window `close` handler
@@ -3610,6 +3716,25 @@ app.on("before-quit", async (e) => {
 
 app.on("window-all-closed", () => {
     logger.logLifecycle("window-all-closed");
+
+    // Bot Factory background mode (Slice 6b, US-018 / FR-016): if any bot has a
+    // schedule, keep Dash resident in the tray with its bot scheduler + MCP
+    // servers warm — skip the teardown/quit below — so scheduled runs still
+    // fire and can use their tools while no window is open. A tray "Quit" sets
+    // forceQuitConfirmed, so it always falls through to a real quit.
+    let background = false;
+    if (process.env.DASH_E2E !== "1" && !forceQuitConfirmed) {
+        try {
+            background = botsWantBackground(botController.list());
+        } catch (_e) {
+            background = false;
+        }
+    }
+    if (background) {
+        updateBotTray();
+        return;
+    }
+
     schedulerController.stop();
     mcpController.stopAllServers().catch((err) => {
         console.error("[electron] Error stopping MCP servers:", err);
