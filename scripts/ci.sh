@@ -85,6 +85,10 @@ step "Running Phase 5A unit tests (IPC validators + bundle lint)"
 node --test scripts/ipcValidators.test.js
 node --test scripts/bundleSecurityLint.test.js
 
+# Bot Factory background-mode helpers (Slice 6b): pure tray/login-item logic
+step "Running Bot Factory background-mode tests (Slice 6b)"
+node --test public/botBackground.test.js
+
 # 2. Update @trops dependencies to latest published versions
 step "Updating @trops dependencies"
 CORE_LATEST="$(npm view @trops/dash-core version)"
