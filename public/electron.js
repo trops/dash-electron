@@ -536,6 +536,9 @@ const {
     themeFromUrlErrors,
     // MCP Dash Server (hosted server for external LLM clients)
     mcpDashServerController,
+    // Bot Factory
+    botController,
+    providerController,
     // Utils
     clientCache,
     responseCache,
@@ -682,6 +685,14 @@ const {
     MCP_DASH_SERVER_STOP,
     MCP_DASH_SERVER_STATUS,
     MCP_DASH_SERVER_GET_TOKEN,
+    BOTS_LIST,
+    BOTS_GET,
+    BOTS_SAVE,
+    BOTS_DELETE,
+    BOTS_RUN,
+    BOTS_STOP,
+    BOTS_APPROVE,
+    BOTS_LIST_APPROVALS,
 } = coreEvents;
 
 // Widget System
@@ -2168,6 +2179,30 @@ function createWindow() {
             schedulerController.getPendingResults(widgetId)
         );
 
+        // --- Bot Factory ---
+        logger.loggedHandle(BOTS_LIST, () => botController.list());
+        logger.loggedHandle(BOTS_GET, (e, { botId }) =>
+            botController.get(botId)
+        );
+        logger.loggedHandle(BOTS_SAVE, (e, { definition }) =>
+            botController.save(definition)
+        );
+        logger.loggedHandle(BOTS_DELETE, (e, { botId }) =>
+            botController.delete(botId)
+        );
+        logger.loggedHandle(BOTS_RUN, (e, { botId, prompt }) =>
+            botController.run(botId, prompt)
+        );
+        logger.loggedHandle(BOTS_STOP, (e, { botId }) =>
+            botController.stop(botId)
+        );
+        logger.loggedHandle(BOTS_APPROVE, (e, { approvalId, decision }) =>
+            botController.approve(approvalId, decision)
+        );
+        logger.loggedHandle(BOTS_LIST_APPROVALS, () =>
+            botController.listApprovals()
+        );
+
         // --- Widget Event IPC Bridge ---
         // Broadcasts widget pub/sub events to all windows except the sender.
         // Also caches the most recent payload for each eventType so that
@@ -3501,6 +3536,15 @@ app.whenReady().then(() => {
     });
     schedulerController.start();
 
+    // --- Bot Factory lifecycle ---
+    botController.init({
+        getWindows: () => BrowserWindow.getAllWindows(),
+        getMainWindow: () => mainWindow,
+        mcpController,
+        providerController,
+        appId: process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron",
+    });
+
     // --- MCP Dash Server auto-start ---
     mcpDashServerController.autoStart(mainWindow).catch((err) => {
         console.error("[electron] MCP Dash Server auto-start failed:", err);
@@ -3508,7 +3552,10 @@ app.whenReady().then(() => {
 
     const { powerMonitor } = require("electron");
     powerMonitor.on("suspend", () => schedulerController.handleSuspend());
-    powerMonitor.on("resume", () => schedulerController.handleResume());
+    powerMonitor.on("resume", () => {
+        schedulerController.handleResume();
+        botController.handleResume();
+    });
 });
 
 // Phase 2B unsaved-changes guard for app quit (Cmd+Q / File → Quit /
