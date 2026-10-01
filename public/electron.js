@@ -2316,6 +2316,9 @@ function createWindow() {
                     botController.handleEvent({
                         eventType: message.eventType,
                         content: message.content,
+                        // Publishing dashboard — copies of a dashboard reuse
+                        // widget ids, so subscriptions match on it too.
+                        workspaceId: message.workspaceId,
                     });
                 } catch (err) {
                     console.error(
