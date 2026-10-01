@@ -1,3 +1,11 @@
+/* Aurora design system — SOURCE OF TRUTH lives in dash-react. We import its
+   built designSystem.css (tokens + gated .dr-* component treatment) so the app
+   renders in the same language as Storybook. Then design.css adds the
+   app-specific canvas (body mesh + font). Both before Tailwind so the CLI
+   inlines them into public/tailwind.css. */
+@import "@trops/dash-react/dist/designSystem.css";
+@import "./design.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

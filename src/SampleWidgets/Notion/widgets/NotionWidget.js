@@ -7,7 +7,13 @@
  * @package Notion
  */
 import { useState } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import {
+    Button,
+    Button3,
+    Panel,
+    SubHeading2,
+    SubHeading3,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { parseMcpResponse, parseNotionTextEntries } from "../utils/mcpUtils";
 
@@ -124,13 +130,13 @@ function NotionContent({ title }) {
                         placeholder="Search Notion..."
                         className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-orange-500"
                     />
-                    <button
+                    <Button
+                        size="sm"
                         onClick={handleSearch}
                         disabled={!isConnected || loading}
-                        className="px-3 py-1 text-xs rounded bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                     >
                         Search
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -173,15 +179,15 @@ function NotionContent({ title }) {
                                     : "Page"
                             }
                         />
-                        <button
+                        <Button3
+                            size="sm"
                             onClick={() => {
                                 setPageContent(null);
                                 setSelectedPage(null);
                             }}
-                            className="text-xs text-gray-500 hover:text-gray-300"
                         >
                             Back
-                        </button>
+                        </Button3>
                     </div>
                     <div className="p-2 bg-white/5 rounded text-xs text-gray-300 overflow-auto max-h-64 whitespace-pre-wrap">
                         {typeof pageContent === "string"

@@ -7,7 +7,7 @@
  * @package DashSamples
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Panel, SubHeading2, Button3, SectionLabel } from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 
 function ReaderContent({ title }) {
@@ -73,16 +73,11 @@ function ReaderContent({ title }) {
             </div>
 
             <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500 font-medium uppercase tracking-wide">
-                    Notes ({notes.length})
-                </span>
+                <SectionLabel as="span">Notes ({notes.length})</SectionLabel>
                 {notes.length > 0 && (
-                    <button
-                        onClick={handleClear}
-                        className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs transition-colors"
-                    >
+                    <Button3 onClick={handleClear} size="sm">
                         Clear
-                    </button>
+                    </Button3>
                 )}
             </div>
 

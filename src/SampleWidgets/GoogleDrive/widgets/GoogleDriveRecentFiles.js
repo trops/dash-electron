@@ -20,7 +20,12 @@
  * @package Google Drive
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, FontAwesomeIcon } from "@trops/dash-react";
+import {
+    Button2,
+    Panel,
+    SubHeading2,
+    FontAwesomeIcon,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import {
     extractMcpText,
@@ -293,14 +298,14 @@ function GoogleDriveRecentFilesContent({
                         ? `top ${files.length} of recent`
                         : "no files yet"}
                 </span>
-                <button
+                <Button2
                     type="button"
+                    size="sm"
                     onClick={() => fetchFiles()}
                     disabled={!isConnected || loading}
-                    className="px-3 py-1 rounded bg-yellow-600 hover:bg-yellow-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                 >
                     {loading ? "Loading…" : "Refresh"}
-                </button>
+                </Button2>
             </div>
         </div>
     );

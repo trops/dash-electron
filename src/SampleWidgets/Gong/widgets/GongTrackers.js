@@ -6,7 +6,7 @@
  * @package Gong
  */
 import { useState, useCallback } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { Button, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
@@ -64,13 +64,14 @@ function GongTrackersContent({ title }) {
                 </div>
             )}
 
-            <button
+            <Button
+                size="sm"
                 onClick={handleLoadTrackers}
                 disabled={!isConnected || loading}
-                className="self-start px-3 py-1 text-xs rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white"
+                className="self-start"
             >
                 {loading ? "Loading..." : "Load Trackers"}
-            </button>
+            </Button>
 
             {trackers.length > 0 && (
                 <div className="space-y-2">

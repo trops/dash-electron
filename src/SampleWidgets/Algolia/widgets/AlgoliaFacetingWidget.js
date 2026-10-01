@@ -8,7 +8,7 @@
  * @package Algolia
  */
 import { useState, useEffect } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Panel, SubHeading2, Button, Button2 } from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -218,21 +218,18 @@ function AlgoliaFacetingContent({ title }) {
                                 </option>
                             ))}
                         </select>
-                        <button
-                            onClick={addFacet}
-                            className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-200"
-                        >
+                        <Button2 onClick={addFacet} size="sm">
                             Add
-                        </button>
+                        </Button2>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button
+                        <Button
                             onClick={handleSave}
                             disabled={saving || !dirty}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-xs text-white transition-colors"
+                            size="sm"
                         >
                             {saving ? "Saving..." : "Save"}
-                        </button>
+                        </Button>
                         {saveSuccess && (
                             <span className="text-xs text-green-400">
                                 Saved!

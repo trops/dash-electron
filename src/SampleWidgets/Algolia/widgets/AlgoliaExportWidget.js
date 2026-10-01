@@ -9,7 +9,7 @@
  * @package Algolia
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { Panel, SubHeading2, SubHeading3, Button } from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -225,13 +225,14 @@ function AlgoliaExportContent({ title }) {
             </div>
 
             {/* Export Button */}
-            <button
+            <Button
                 onClick={chooseFileAndExport}
                 disabled={!selectedIndex || exporting}
-                className="w-full px-3 py-2 text-xs rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
+                size="sm"
+                block
             >
                 {exporting ? "Exporting..." : "Choose Folder & Export"}
-            </button>
+            </Button>
 
             {error && (
                 <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">

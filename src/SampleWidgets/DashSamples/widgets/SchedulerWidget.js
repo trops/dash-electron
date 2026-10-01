@@ -8,7 +8,12 @@
  * @package DashSamples
  */
 import { useState, useCallback } from "react";
-import { Panel, SubHeading2, FontAwesomeIcon } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    FontAwesomeIcon,
+    SectionLabel,
+} from "@trops/dash-react";
 import { Widget, useScheduler } from "@trops/dash-core";
 
 function SchedulerContent({ title }) {
@@ -43,9 +48,7 @@ function SchedulerContent({ title }) {
 
             {/* Task States */}
             <div>
-                <div className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">
-                    Task States
-                </div>
+                <SectionLabel className="mb-1">Task States</SectionLabel>
                 <div className="space-y-1">
                     {tasks.length === 0 ? (
                         <div className="text-xs text-gray-600 italic">
@@ -92,9 +95,7 @@ function SchedulerContent({ title }) {
 
             {/* Declared Scheduled Tasks */}
             <div>
-                <div className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">
-                    Declared Tasks
-                </div>
+                <SectionLabel className="mb-1">Declared Tasks</SectionLabel>
                 <div className="flex flex-wrap gap-1">
                     <span className="text-xs font-mono bg-gray-800/50 rounded px-2 py-1 text-indigo-400">
                         refreshData (fired: {refreshCount})
@@ -107,9 +108,7 @@ function SchedulerContent({ title }) {
 
             {/* Event Log */}
             <div className="flex-1 min-h-0">
-                <div className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">
-                    Event Log
-                </div>
+                <SectionLabel className="mb-1">Event Log</SectionLabel>
                 <div className="overflow-y-auto max-h-48 space-y-1">
                     {eventLog.length === 0 ? (
                         <div className="text-xs text-gray-600 italic">

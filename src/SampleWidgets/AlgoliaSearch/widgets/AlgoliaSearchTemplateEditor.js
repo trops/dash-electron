@@ -8,7 +8,7 @@
  * @package Algolia Search
  */
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Panel, SubHeading2, CodeEditorVS } from "@trops/dash-react";
+import { Panel, SubHeading2, CodeEditorVS, Button } from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 
 /* ─── Transform preview runner ──────────────────────────────────── */
@@ -358,12 +358,9 @@ function TemplateEditorContent({ defaultTemplate, api, uuid }) {
                 />
             )}
             <div className="flex items-center justify-end pt-2">
-                <button
-                    onClick={handleApply}
-                    className="px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors"
-                >
+                <Button size="sm" onClick={handleApply}>
                     Apply Template
-                </button>
+                </Button>
             </div>
         </div>
     );

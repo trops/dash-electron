@@ -1,0 +1,907 @@
+/* ============================================================================
+   Dash — Design System  ·  "Aurora" (glassy + smooth) × Signal typography
+   The single source of truth. shell + gallery consume this file; it ports
+   into dash-react (component styles + Storybook) and the chrome.
+
+   Identity: near-black + gradient-mesh atmosphere · translucent glass cards ·
+   violet→cyan accent · large soft radius · Hanken Grotesk body + JetBrains Mono
+   micro-labels/data. Tokens first, then primitives, then composites.
+   Fonts (load in each page):
+   Hanken+Grotesk:wght@400;500;600;700 & JetBrains+Mono:wght@400;500;600
+   ============================================================================ */
+
+:root {
+    /* Surfaces */
+    --bg: #0a0b10;
+    --raised: rgba(23, 25, 34, 0.55); /* glass cards / panels */
+    --raised-2: rgba(0, 0, 0, 0.25); /* inputs / wells */
+    --solid: #16181d; /* opaque fallback where blur can't be used */
+    --hairline: rgba(255, 255, 255, 0.08);
+    --hairline-strong: rgba(255, 255, 255, 0.14);
+
+    /* Text */
+    --text: #f0f1f5;
+    --text-2: #a4a9b8;
+    --text-3: #676d7e;
+
+    /* Accent — a theme sets ONLY these two (maps to primary + secondary in the
+     theme editor). Everything glossy below derives from them via color-mix, so
+     any user theme inherits the Aurora treatment automatically. */
+    --accent: #8f82f9; /* primary */
+    --accent-2: #45c8e0; /* secondary */
+    --accent-hover: color-mix(in srgb, var(--accent) 86%, white);
+    --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+    --accent-grad: linear-gradient(
+        135deg,
+        var(--accent),
+        color-mix(in srgb, var(--accent) 80%, black)
+    );
+    --brand-grad: linear-gradient(140deg, var(--accent), var(--accent-2));
+    --accent-glow: 0 4px 18px color-mix(in srgb, var(--accent) 35%, transparent);
+
+    /* Semantic */
+    --green: #52d59a;
+    --green-soft: rgba(82, 213, 154, 0.15);
+    --amber: #e6b25a;
+    --amber-soft: rgba(230, 178, 90, 0.15);
+    --red: #f47076;
+    --red-soft: rgba(244, 112, 118, 0.15);
+
+    /* Shape / depth */
+    --r-sm: 9px;
+    --r-md: 12px;
+    --r-lg: 18px;
+    --r-pill: 999px;
+    --shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+    --shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.45);
+    --card-shadow: 0 10px 34px rgba(0, 0, 0, 0.32);
+    --blur: blur(20px) saturate(1.3);
+
+    /* Type */
+    --font: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    /* Atmosphere — tight gradient-mesh from the two accents (subtle, cornered) */
+    --mesh: radial-gradient(
+            520px 380px at 2% -12%,
+            color-mix(in srgb, var(--accent) 18%, transparent),
+            transparent 62%
+        ),
+        radial-gradient(
+            560px 400px at 98% 4%,
+            color-mix(in srgb, var(--accent-2) 13%, transparent),
+            transparent 60%
+        ),
+        radial-gradient(
+            600px 520px at 60% 115%,
+            color-mix(in srgb, var(--accent) 9%, transparent),
+            transparent 60%
+        );
+}
+
+/* ---- LIGHT MODE — same treatment, inverted surfaces/text ------------------ */
+/* Only surfaces/text/depth flip; the accent tokens (color-mix) work in both. */
+[data-mode="light"] {
+    --bg: #f6f7fb;
+    --raised: rgba(255, 255, 255, 0.7);
+    --raised-2: rgba(16, 18, 24, 0.04);
+    --solid: #ffffff;
+    --hairline: rgba(16, 18, 24, 0.09);
+    --hairline-strong: rgba(16, 18, 24, 0.16);
+    --text: #1a1d23;
+    --text-2: #5b616e;
+    --text-3: #8a909c;
+    --shadow: 0 6px 20px rgba(16, 18, 24, 0.08);
+    --shadow-lg: 0 16px 44px rgba(16, 18, 24, 0.16);
+    --card-shadow: 0 8px 26px rgba(16, 18, 24, 0.08);
+    --mesh: radial-gradient(
+            900px 600px at 12% -8%,
+            color-mix(in srgb, var(--accent) 14%, transparent),
+            transparent 55%
+        ),
+        radial-gradient(
+            800px 520px at 92% 6%,
+            color-mix(in srgb, var(--accent-2) 11%, transparent),
+            transparent 52%
+        ),
+        radial-gradient(
+            760px 700px at 60% 112%,
+            color-mix(in srgb, var(--accent) 8%, transparent),
+            transparent 55%
+        );
+}
+[data-mode="light"] .avatar {
+    background: linear-gradient(135deg, #e7e9f0, #d6d9e4);
+}
+
+/* ---- BASE ------------------------------------------------------------------ */
+* {
+    box-sizing: border-box;
+}
+html,
+body {
+    margin: 0;
+    height: 100%;
+}
+body {
+    font-family: var(--font);
+    background: var(--mesh), var(--bg);
+    background-attachment: fixed;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* ---- TYPOGRAPHY ------------------------------------------------------------ */
+.h1 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+.h2 {
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+.h3 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+.body {
+    font-size: 14px;
+    font-weight: 400;
+}
+.small {
+    font-size: 13px;
+}
+/* the signature: mono micro-label (from Signal) */
+.caption,
+.ml {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+.muted {
+    color: var(--text-2);
+}
+.dim {
+    color: var(--text-3);
+}
+.mono {
+    font-family: var(--mono);
+    font-size: 12.5px;
+}
+.num {
+    font-family: var(--mono);
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+/* ---- BUTTONS --------------------------------------------------------------- */
+.btn {
+    font: inherit;
+    font-weight: 600;
+    font-size: 13px;
+    border: 1px solid transparent;
+    border-radius: var(--r-sm);
+    padding: 9px 15px;
+    cursor: pointer;
+    transition: filter 0.14s, background 0.14s, border-color 0.14s,
+        opacity 0.14s;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.btn-sm {
+    padding: 7px 12px;
+    font-size: 12.5px;
+}
+.btn-primary {
+    background: var(--accent-grad);
+    color: #fff;
+    box-shadow: var(--accent-glow);
+}
+.btn-primary:hover:not(:disabled) {
+    filter: brightness(1.08);
+}
+.btn-secondary {
+    background: var(--raised);
+    color: var(--text);
+    border-color: var(--hairline);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
+}
+.btn-secondary:hover:not(:disabled) {
+    border-color: var(--hairline-strong);
+}
+.btn-ghost {
+    background: transparent;
+    color: var(--text-2);
+}
+.btn-ghost:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+}
+.btn-danger {
+    background: var(--red-soft);
+    color: var(--red);
+}
+.btn-danger:hover:not(:disabled) {
+    background: rgba(244, 112, 118, 0.24);
+}
+.btn-icon {
+    padding: 8px;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--text-2);
+    border: 1px solid transparent;
+    cursor: pointer;
+    display: inline-grid;
+    place-items: center;
+}
+.btn-icon:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
+}
+
+/* ---- INPUTS ---------------------------------------------------------------- */
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.field > label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+}
+.field .help {
+    font-size: 12px;
+    color: var(--text-3);
+}
+.input,
+.textarea,
+.select {
+    background: var(--raised-2);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-sm);
+    padding: 10px 13px;
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    width: 100%;
+    transition: border-color 0.14s, box-shadow 0.14s;
+}
+.textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+.select {
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%),
+        linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+    background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+}
+.input::placeholder,
+.textarea::placeholder {
+    color: var(--text-3);
+}
+.input:focus,
+.textarea:focus,
+.select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ---- SWITCH ---------------------------------------------------------------- */
+.switch {
+    --w: 38px;
+    --h: 22px;
+    width: var(--w);
+    height: var(--h);
+    border-radius: var(--r-pill);
+    background: var(--raised-2);
+    border: 1px solid var(--hairline);
+    position: relative;
+    cursor: pointer;
+    transition: 0.15s;
+    flex: none;
+}
+.switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: calc(var(--h) - 6px);
+    height: calc(var(--h) - 6px);
+    border-radius: 50%;
+    background: var(--text-2);
+    transition: 0.15s;
+}
+.switch.on {
+    background: var(--accent-grad);
+    border-color: transparent;
+    box-shadow: var(--accent-glow);
+}
+.switch.on::after {
+    transform: translateX(calc(var(--w) - var(--h)));
+    background: #fff;
+}
+
+/* ---- CHECKBOX -------------------------------------------------------------- */
+.check {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    cursor: pointer;
+    font-size: 13px;
+}
+.check .box {
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+    border: 1px solid var(--hairline-strong);
+    background: var(--raised-2);
+    display: grid;
+    place-items: center;
+    flex: none;
+}
+.check.on .box {
+    background: var(--accent-grad);
+    border-color: transparent;
+}
+.check.on .box::after {
+    content: "✓";
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+/* ---- TAGS / CHIPS ---------------------------------------------------------- */
+.tag,
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: var(--r-pill);
+    padding: 3px 10px;
+}
+.tag {
+    color: var(--text-2);
+    background: var(--raised);
+    border: 1px solid var(--hairline);
+}
+.chip-accent {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+.chip-success {
+    background: var(--green-soft);
+    color: var(--green);
+}
+.chip-warn {
+    background: var(--amber-soft);
+    color: var(--amber);
+}
+.chip-danger {
+    background: var(--red-soft);
+    color: var(--red);
+}
+.chip-neutral {
+    background: var(--raised-2);
+    color: var(--text-2);
+}
+.dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* ---- CARD (glass) ---------------------------------------------------------- */
+.card {
+    background: var(--raised);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: var(--card-shadow);
+}
+.card:hover {
+    border-color: var(--hairline-strong);
+}
+/* Tinted surfaces — for emphasis/meaning (a "colored" Panel). SUBTLE tint on
+   the dark surface, never a saturated fill. Adapts to the theme's colors. */
+.card-accent {
+    background: color-mix(in srgb, var(--accent) 15%, var(--solid));
+    border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.card-success {
+    background: color-mix(in srgb, var(--green) 13%, var(--solid));
+    border-color: color-mix(in srgb, var(--green) 28%, transparent);
+}
+.card-warn {
+    background: color-mix(in srgb, var(--amber) 13%, var(--solid));
+    border-color: color-mix(in srgb, var(--amber) 28%, transparent);
+}
+.card-danger {
+    background: color-mix(in srgb, var(--red) 13%, var(--solid));
+    border-color: color-mix(in srgb, var(--red) 28%, transparent);
+}
+/* Brand-accent card — the SANCTIONED way a widget carries a provider's
+   identity (Slack, Drive, Gmail…). Set --brand to any hex; the frame derives a
+   subtle tint + border + soft glow + a top hairline, all from that one color.
+   Recognizable at a glance, never a saturated fill. Works in light + dark. */
+.card-brand {
+    --brand: var(--accent);
+    background: color-mix(in srgb, var(--brand) 9%, var(--solid));
+    border-color: color-mix(in srgb, var(--brand) 26%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--brand) 35%, transparent),
+        0 2px 10px color-mix(in srgb, var(--brand) 9%, transparent),
+        var(--card-shadow);
+}
+.card-brand:hover {
+    border-color: color-mix(in srgb, var(--brand) 42%, transparent);
+}
+/* Brand icon chip — the provider's mark, tinted from --brand. */
+.brand-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--brand);
+    background: color-mix(in srgb, var(--brand) 20%, transparent);
+    border: 1px solid color-mix(in srgb, var(--brand) 38%, transparent);
+    flex: none;
+}
+.card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.card-title {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+.card-sub {
+    font-size: 12px;
+    color: var(--text-3);
+}
+.divider {
+    height: 1px;
+    background: var(--hairline);
+    border: 0;
+    margin: 2px 0;
+}
+.kv {
+    display: flex;
+    justify-content: space-between;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--hairline);
+    font-size: 13px;
+}
+.kv:last-child {
+    border-bottom: 0;
+}
+.kv .k {
+    color: var(--text-2);
+}
+.stat {
+    font-family: var(--mono);
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+.empty {
+    display: grid;
+    place-items: center;
+    color: var(--text-3);
+    font-size: 13px;
+    text-align: center;
+    gap: 8px;
+}
+
+/* ---- TABS ------------------------------------------------------------------ */
+.tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--hairline);
+}
+.tab {
+    padding: 11px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+.tab:hover {
+    color: var(--text-2);
+}
+.tab.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+}
+
+/* ---- MODAL / GLASS --------------------------------------------------------- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: grid;
+    place-items: center;
+}
+.modal {
+    background: var(--solid);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-lg);
+    width: 440px;
+    max-width: 90vw;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.glass {
+    background: var(--raised);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow);
+}
+
+/* ---- APP SHELL LAYOUT ------------------------------------------------------ */
+.app {
+    display: grid;
+    grid-template-columns: 236px 1fr;
+    height: 100vh;
+}
+.sidebar {
+    padding: 16px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+}
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 8px 10px 16px;
+}
+.brand .logo {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    background: var(--brand-grad);
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 15px;
+    color: #fff;
+    box-shadow: var(--accent-glow);
+}
+.brand .name {
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: -0.02em;
+}
+.nav-label {
+    padding: 14px 12px 6px;
+}
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 9px 12px;
+    border-radius: 11px;
+    color: var(--text-2);
+    cursor: pointer;
+    font-weight: 500;
+    transition: 0.15s;
+}
+.nav-item svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    opacity: 0.8;
+    flex: none;
+}
+.nav-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+}
+.nav-item.active {
+    color: #fff;
+    background: linear-gradient(
+        100deg,
+        var(--accent-soft),
+        color-mix(in srgb, var(--accent-2) 9%, transparent)
+    );
+    box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.nav-item.active svg {
+    stroke: var(--accent);
+    opacity: 1;
+}
+.sidebar .spacer {
+    flex: 1;
+}
+.user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    margin-top: 4px;
+    border-radius: 11px;
+    cursor: pointer;
+}
+.user:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+.avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3a3f4d, #2a2e39);
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    color: var(--text-2);
+    flex: none;
+}
+.main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 28px;
+    border-bottom: 1px solid var(--hairline);
+}
+.header .crumbs {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.header .title {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+.header .actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.stage {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 28px;
+}
+.stage-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    align-content: start;
+}
+
+/* ============================================================================
+   COMPOSITES — patterns built from the primitives above.
+   ============================================================================ */
+
+/* ---- Composer : input with an integrated toolbar footer ------------------- */
+.composer {
+    background: var(--raised);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    padding: 14px 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: var(--card-shadow);
+    transition: border-color 0.14s;
+}
+.composer:focus-within {
+    border-color: var(--accent);
+}
+.composer-input {
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 15px;
+    resize: none;
+    outline: none;
+    width: 100%;
+    min-height: 46px;
+}
+.composer-input::placeholder {
+    color: var(--text-3);
+}
+.composer-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.composer-bar .grow {
+    flex: 1;
+}
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 11px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    color: var(--text-2);
+    background: transparent;
+    border: 1px solid transparent;
+}
+.pill:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
+}
+.pill svg {
+    width: 15px;
+    height: 15px;
+    stroke: currentColor;
+}
+.pill-accent {
+    color: var(--accent);
+    background: var(--accent-soft);
+}
+.pill-accent:hover {
+    color: var(--accent);
+    background: rgba(143, 130, 249, 0.24);
+}
+.send-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--accent-grad);
+    color: #fff;
+    border: 0;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    flex: none;
+    box-shadow: var(--accent-glow);
+}
+.send-btn:hover {
+    filter: brightness(1.08);
+}
+
+/* ---- Menu / popover -------------------------------------------------------- */
+.menu {
+    background: var(--solid);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-lg);
+    padding: 8px;
+    min-width: 300px;
+}
+.menu-label {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    padding: 9px 10px 6px;
+}
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 9px 10px;
+    border-radius: var(--r-sm);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+.menu-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+.menu-item svg {
+    width: 17px;
+    height: 17px;
+    stroke: currentColor;
+    opacity: 0.7;
+    flex: none;
+}
+.select-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 4px 6px 10px;
+}
+.select-card {
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-md);
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 9px;
+    cursor: pointer;
+    color: var(--text-2);
+    font-size: 13px;
+    font-weight: 500;
+    transition: 0.14s;
+}
+.select-card:hover {
+    border-color: var(--hairline-strong);
+}
+.select-card.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text);
+}
+.select-card svg {
+    width: 28px;
+    height: 28px;
+    stroke: currentColor;
+    opacity: 0.85;
+}
+.select-card.active svg {
+    stroke: var(--accent);
+    opacity: 1;
+}
+
+/* ---- Utilities used by mocks ---------------------------------------------- */
+.row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}

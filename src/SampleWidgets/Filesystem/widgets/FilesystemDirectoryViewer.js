@@ -23,7 +23,12 @@
  * @package Filesystem
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, FontAwesomeIcon } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    FontAwesomeIcon,
+    Button2,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { extractMcpText, isMcpError } from "../utils/mcpUtils";
 
@@ -397,8 +402,9 @@ function FilesystemDirectoryViewerContent({ title, rootPath, maxDepth }) {
                                   Object.keys(childrenByPath).length
                               } folder(s) loaded`}
                     </span>
-                    <button
+                    <Button2
                         type="button"
+                        size="sm"
                         onClick={() => {
                             // Drop the entire cache + re-fetch root.
                             // Folders the user had expanded will need
@@ -409,10 +415,9 @@ function FilesystemDirectoryViewerContent({ title, rootPath, maxDepth }) {
                             fetchDir(rootPath);
                         }}
                         disabled={loadingPaths.size > 0}
-                        className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                     >
                         {loadingPaths.size > 0 ? "Loading…" : "Refresh"}
-                    </button>
+                    </Button2>
                 </div>
             )}
         </div>

@@ -8,7 +8,7 @@
  * @package Algolia Search
  */
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Panel, SubHeading3 } from "@trops/dash-react";
+import { Panel, SubHeading3, Button2 } from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 import {
     useSearchBox,
@@ -280,13 +280,13 @@ function PaginationBar({ padding }) {
 
     return (
         <div className="flex items-center justify-center gap-1 pt-2">
-            <button
+            <Button2
+                size="sm"
                 onClick={() => refine(currentRefinement - 1)}
                 disabled={currentRefinement === 0}
-                className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-colors"
             >
                 Prev
-            </button>
+            </Button2>
             {pages.map((page) => (
                 <button
                     key={page}
@@ -300,13 +300,13 @@ function PaginationBar({ padding }) {
                     {page + 1}
                 </button>
             ))}
-            <button
+            <Button2
+                size="sm"
                 onClick={() => refine(currentRefinement + 1)}
                 disabled={currentRefinement >= nbPages - 1}
-                className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-colors"
             >
                 Next
-            </button>
+            </Button2>
         </div>
     );
 }

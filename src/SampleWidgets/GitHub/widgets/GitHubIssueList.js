@@ -7,7 +7,7 @@
  * @package GitHub
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { Button2, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
@@ -146,13 +146,13 @@ function GitHubIssueListContent({ title }) {
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
                         <SubHeading3 title={`Issues: ${repo}`} />
-                        <button
+                        <Button2
+                            size="sm"
                             onClick={() => fetchIssues(repo)}
                             disabled={!isConnected || loading}
-                            className="px-2 py-0.5 text-xs rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white"
                         >
                             {loading ? "..." : "Refresh"}
-                        </button>
+                        </Button2>
                     </div>
                     <div className="max-h-64 overflow-y-auto space-y-1">
                         {issues.length === 0 && !loading ? (

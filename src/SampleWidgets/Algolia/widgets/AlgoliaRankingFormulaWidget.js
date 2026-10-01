@@ -8,7 +8,7 @@
  * @package Algolia
  */
 import { useState, useEffect, useRef } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Panel, SubHeading2, Button, Button3 } from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -187,20 +187,20 @@ function AlgoliaRankingFormulaContent({ title }) {
                         ))}
                     </div>
                     <div className="flex items-center gap-2">
-                        <button
+                        <Button
                             onClick={handleSave}
                             disabled={saving || !dirty}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-xs text-white transition-colors"
+                            size="sm"
                         >
                             {saving ? "Saving..." : "Save"}
-                        </button>
-                        <button
+                        </Button>
+                        <Button3
                             onClick={resetToDefault}
                             disabled={isDefault}
-                            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 rounded text-xs text-gray-200 transition-colors"
+                            size="sm"
                         >
                             Reset to Default
-                        </button>
+                        </Button3>
                         {saveSuccess && (
                             <span className="text-xs text-green-400">
                                 Saved!

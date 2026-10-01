@@ -7,7 +7,13 @@
  * @package Filesystem
  */
 import { useState, useEffect, useCallback } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    Button,
+    Button3,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { extractMcpText, isMcpError } from "../utils/mcpUtils";
 
@@ -249,13 +255,13 @@ function FilesystemContent({ title }) {
                             placeholder="Search by filename pattern..."
                             className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500"
                         />
-                        <button
+                        <Button
                             onClick={handleSearch}
                             disabled={!isConnected || loading}
-                            className="px-3 py-1 text-xs rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
+                            size="sm"
                         >
                             Search
-                        </button>
+                        </Button>
                     </div>
                 </div>
             )}
@@ -330,12 +336,12 @@ function FilesystemContent({ title }) {
                         <SubHeading3
                             title={`Results (${searchResults.length})`}
                         />
-                        <button
+                        <Button3
                             onClick={() => setSearchResults(null)}
-                            className="text-xs text-gray-500 hover:text-gray-300"
+                            size="sm"
                         >
                             Clear
-                        </button>
+                        </Button3>
                     </div>
                     <div className="space-y-1 overflow-y-auto max-h-48">
                         {searchResults.map((result, i) => (
@@ -367,15 +373,15 @@ function FilesystemContent({ title }) {
                         <SubHeading3
                             title={viewingFile?.split("/").pop() || "File"}
                         />
-                        <button
+                        <Button3
                             onClick={() => {
                                 setFileContent(null);
                                 setViewingFile(null);
                             }}
-                            className="text-xs text-gray-500 hover:text-gray-300"
+                            size="sm"
                         >
                             Back
-                        </button>
+                        </Button3>
                     </div>
                     <pre className="p-2 bg-black/30 border border-gray-700 rounded text-xs text-gray-300 overflow-auto max-h-64 whitespace-pre-wrap font-mono">
                         {fileContent}

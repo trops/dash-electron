@@ -7,7 +7,7 @@
  * @package Google Calendar
  */
 import { useState } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Button, Panel, SubHeading2 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
 import { McpReauthBanner } from "../components/McpReauthBanner";
@@ -178,13 +178,14 @@ function GCalQuickCreateContent({ title }) {
                     placeholder="Location (optional)"
                     className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
                 />
-                <button
+                <Button
                     type="submit"
+                    size="sm"
+                    block
                     disabled={loading || !isConnected || !eventTitle.trim()}
-                    className="w-full px-3 py-1.5 text-xs rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                 >
                     {loading ? "Creating..." : "Create Event"}
-                </button>
+                </Button>
 
                 {result === "success" && (
                     <div className="p-2 bg-green-900/30 border border-green-700 rounded text-green-300 text-xs">

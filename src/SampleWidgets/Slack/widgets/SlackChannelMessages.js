@@ -8,7 +8,7 @@
  * @package Slack
  */
 import { useState, useEffect, useRef } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { Button2, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
@@ -145,13 +145,13 @@ function SlackChannelMessagesContent({ title, widgetId }) {
                                 : "No channel selected"
                         }
                     />
-                    <button
+                    <Button2
+                        size="sm"
                         onClick={() => fetchMessages(channelId)}
                         disabled={!isConnected || loading || !channelId}
-                        className="px-3 py-1 text-xs rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                     >
                         {loading ? "Loading..." : "Refresh"}
-                    </button>
+                    </Button2>
                 </div>
             </div>
 

@@ -7,7 +7,7 @@
  * @package Gong
  */
 import { useState, useCallback } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Button, Panel, SubHeading2 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
@@ -104,13 +104,13 @@ function GongUserListContent({ title }) {
                     placeholder="Filter users..."
                     className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500"
                 />
-                <button
+                <Button
+                    size="sm"
                     onClick={handleLoadUsers}
                     disabled={!isConnected || loading}
-                    className="px-3 py-1 text-xs rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                 >
                     {loading ? "Loading..." : "Load Users"}
-                </button>
+                </Button>
             </div>
 
             {filtered.length > 0 && (

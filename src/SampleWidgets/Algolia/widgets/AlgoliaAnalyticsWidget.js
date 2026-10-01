@@ -8,7 +8,7 @@
  * @package Algolia
  */
 import { useState, useEffect, useContext, useCallback } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Panel, SubHeading2, Button2 } from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -329,13 +329,13 @@ function AlgoliaAnalyticsContent({ id, title, defaultIndex, defaultDays = 7 }) {
                         onChange={(e) => setEndDate(e.target.value)}
                         className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-indigo-500"
                     />
-                    <button
+                    <Button2
                         onClick={() => fetchAnalytics(true)}
                         disabled={loading || !selectedIndex}
-                        className="px-2 py-0.5 text-xs rounded bg-indigo-700 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-white"
+                        size="sm"
                     >
                         {loading ? "..." : "Refresh"}
-                    </button>
+                    </Button2>
                 </div>
             </div>
 

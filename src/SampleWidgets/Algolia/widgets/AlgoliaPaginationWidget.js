@@ -7,7 +7,7 @@
  * @package Algolia
  */
 import { useState, useEffect } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Panel, SubHeading2, Button } from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -164,13 +164,13 @@ function AlgoliaPaginationContent({ title }) {
                         />
                     </div>
                     <div className="flex items-center gap-2">
-                        <button
+                        <Button
                             onClick={handleSave}
                             disabled={saving || !dirty}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded text-xs text-white transition-colors"
+                            size="sm"
                         >
                             {saving ? "Saving..." : "Save"}
-                        </button>
+                        </Button>
                         {saveSuccess && (
                             <span className="text-xs text-green-400">
                                 Saved!

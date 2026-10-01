@@ -7,7 +7,13 @@
  * @package Google Calendar
  */
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import {
+    Button2,
+    Panel,
+    SegmentedControl,
+    SubHeading2,
+    SubHeading3,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { EventList } from "./components/EventList";
 import { CreateEventForm } from "./components/CreateEventForm";
@@ -246,28 +252,25 @@ function GoogleCalendarContent({ title, defaultView }) {
             )}
 
             {/* View Toggle */}
-            <div className="flex gap-1">
-                {viewButtons.map((btn) => (
-                    <button
-                        key={btn.key}
-                        onClick={() => handleViewChange(btn.key)}
-                        className={`px-3 py-1 text-xs rounded transition-colors ${
-                            view === btn.key
-                                ? "bg-blue-600 text-white"
-                                : "bg-white/5 text-gray-400 hover:bg-white/10"
-                        }`}
-                    >
-                        {btn.label}
-                    </button>
-                ))}
+            <div className="flex items-center gap-1">
+                <SegmentedControl
+                    ariaLabel="Calendar view"
+                    options={viewButtons.map((btn) => ({
+                        value: btn.key,
+                        label: btn.label,
+                    }))}
+                    value={view}
+                    onChange={handleViewChange}
+                />
                 {view !== "create" && (
-                    <button
+                    <Button2
+                        size="sm"
                         onClick={() => loadEvents(view)}
                         disabled={!isConnected || loading}
-                        className="ml-auto px-2 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white"
+                        className="ml-auto"
                     >
                         {loading ? "Loading..." : "Refresh"}
-                    </button>
+                    </Button2>
                 )}
             </div>
 

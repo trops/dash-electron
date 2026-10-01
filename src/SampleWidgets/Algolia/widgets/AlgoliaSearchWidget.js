@@ -7,7 +7,13 @@
  * @package Algolia
  */
 import { useState, useEffect, useContext, useCallback } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    Button,
+    Button2,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, DashboardContext } from "@trops/dash-core";
 
 import { extractMcpText, parseMcpJson } from "../utils/mcpUtils";
@@ -210,13 +216,13 @@ function AlgoliaSearchContent({
                         disabled={!selectedIndex || !isConnected}
                         className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
                     />
-                    <button
+                    <Button
                         onClick={() => handleSearch(0)}
                         disabled={!isConnected || loading || !selectedIndex}
-                        className="px-3 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
+                        size="sm"
                     >
                         {loading ? "..." : "Search"}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -361,23 +367,23 @@ function AlgoliaSearchContent({
                     {/* Pagination */}
                     {nbPages > 1 && (
                         <div className="flex items-center justify-center gap-2 pt-1">
-                            <button
+                            <Button2
                                 onClick={() => handleSearch(currentPage - 1)}
                                 disabled={currentPage === 0 || loading}
-                                className="px-2 py-0.5 text-xs rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-30 text-white"
+                                size="sm"
                             >
                                 Prev
-                            </button>
+                            </Button2>
                             <span className="text-xs text-gray-500">
                                 {currentPage + 1} / {nbPages}
                             </span>
-                            <button
+                            <Button2
                                 onClick={() => handleSearch(currentPage + 1)}
                                 disabled={currentPage >= nbPages - 1 || loading}
-                                className="px-2 py-0.5 text-xs rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-30 text-white"
+                                size="sm"
                             >
                                 Next
-                            </button>
+                            </Button2>
                         </div>
                     )}
                 </div>

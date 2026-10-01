@@ -190,9 +190,16 @@ When a task touches dash-core or dash-react AND dash-electron:
 -   **Never use `git add .` or `git add -A`.** Stage only the files changed in Phase 2.
 -   **When in doubt, ask.** Do not infer requirements. Do not improvise solutions.
 -   **If a command fails, stop.** Report the exact error output. Do not attempt workarounds.
--   **Never run `npm run build:css` manually.** Tailwind CSS is only rebuilt by `ci.sh`
-    when `src/index.css` or `tailwind.config.js` has changed. Do not add `build:css`
-    to any validate, dev, or pre-commit sequence.
+-   **CSS is built on demand, not watched.** `npm run dev` no longer runs a Tailwind
+    watcher — it uses the already-built `public/tailwind.css`. The generated CSS only
+    changes when you touch the **safelist**, the **design tokens** (`src/design.css` /
+    `src/index.css`), `tailwind.config.js`, or introduce a **brand-new utility class**.
+    In those cases only, run `npm run css` once to rebuild (the broad safelist already
+    pre-generates every color/shade/layout combo, so genuinely-new classes are rare).
+    For a session where you're actively churning classes, `npm run dev:css` runs dev
+    with an unminified watcher. `ci.sh` still rebuilds the CSS when `src/index.css` or
+    `tailwind.config.js` has changed, so releases always ship a fresh, minified bundle.
+    Do not add a CSS watcher back into the default `dev` or any pre-commit sequence.
 
 ---
 

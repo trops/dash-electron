@@ -1,5 +1,5 @@
-import React, { useContext, useEffect, useState, useCallback } from "react";
-import { ThemeContext, EmptyState, FontAwesomeIcon } from "@trops/dash-react";
+import React, { useEffect, useState, useCallback } from "react";
+import { EmptyState, FontAwesomeIcon } from "@trops/dash-react";
 import { reduceFeed } from "./runFeed";
 
 /**
@@ -15,10 +15,8 @@ export const BotActivityPanel = ({
     docked = false,
     onApprovalsCount,
 } = {}) => {
-    const { currentTheme } = useContext(ThemeContext);
-    const bgDark = currentTheme?.["bg-primary-dark"] || "bg-gray-900";
-    const borderColor =
-        currentTheme?.["border-primary-dark"] || "border-gray-700";
+    const bgDark = "chrome-glass";
+    const borderColor = "border-neutral-800";
 
     const bots = window.mainApi && window.mainApi.bots;
 

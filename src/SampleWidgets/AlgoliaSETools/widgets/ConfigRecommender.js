@@ -8,7 +8,7 @@
  * @package AlgoliaSETools
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Panel, SubHeading2, Button } from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -158,13 +158,13 @@ function ConfigRecommenderContent({ title, sampleSize = "100" }) {
                             </option>
                         ))}
                     </select>
-                    <button
+                    <Button
+                        size="sm"
                         onClick={handleAnalyze}
                         disabled={!selectedIndex || analyzing}
-                        className="px-3 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                     >
                         {analyzing ? "Analyzing..." : "Get Recommendations"}
-                    </button>
+                    </Button>
                 </div>
             )}
 
