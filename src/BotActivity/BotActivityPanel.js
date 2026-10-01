@@ -309,6 +309,9 @@ const FeedItem = ({ item, borderColor }) => {
     if (item.type === "error") {
         return <div className="text-sm text-red-400">{item.message}</div>;
     }
+    if (item.type === "warning") {
+        return <div className="text-xs text-amber-400">{item.message}</div>;
+    }
     if (item.type === "skipped") {
         return (
             <div className="text-xs text-gray-500">Skipped: {item.reason}</div>
