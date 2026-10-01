@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Dash — Component Gallery (dark)</title>
+        <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        />
+        <link rel="stylesheet" href="design.css" />
+        <style>
+            .page {
+                max-width: 960px;
+                margin: 0 auto;
+                padding: 32px 28px 80px;
+            }
+            .top {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 6px;
+            }
+            .sub {
+                color: var(--text-2);
+                margin: 4px 0 28px;
+            }
+            section {
+                padding: 22px 0;
+                border-top: 1px solid var(--hairline);
+            }
+            section > .caption {
+                margin-bottom: 16px;
+            }
+            .grid-2 {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
+            }
+            .grid-3 {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 16px;
+            }
+            .swatches {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                gap: 10px;
+            }
+            .sw {
+                border: 1px solid var(--hairline);
+                border-radius: var(--r-md);
+                overflow: hidden;
+            }
+            .sw-color {
+                display: block;
+                width: 100%;
+                height: 48px;
+            }
+            .sw .lbl {
+                padding: 7px 9px;
+                font-size: 11px;
+                color: var(--text-3);
+            }
+            .type-row {
+                display: flex;
+                align-items: baseline;
+                gap: 16px;
+                padding: 8px 0;
+            }
+            .type-row .t {
+                width: 90px;
+                color: var(--text-3);
+                font-size: 11px;
+                flex: none;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="page">
+            <div class="top">
+                <div class="h1">Component Gallery</div>
+                <a
+                    href="dark-shell.html"
+                    class="btn btn-secondary btn-sm"
+                    style="text-decoration: none"
+                    >← Shell</a
+                >
+            </div>
+            <p class="sub">
+                Dark, Kimi-like. Every primitive, every state — the source of
+                the design that ports into dash-react + Storybook. Styles live
+                in
+                <span class="mono">design.css</span>.
+            </p>
+
+            <section>
+                <div class="caption">
+                    Composites — patterns built from the primitives
+                </div>
+                <div class="grid-2" style="align-items: start">
+                    <!-- Composer: input + integrated toolbar footer -->
+                    <div class="col" style="gap: 8px">
+                        <div class="dim small">
+                            Composer <span class="mono">.composer</span>
+                        </div>
+                        <div class="composer">
+                            <textarea
+                                class="composer-input"
+                                placeholder="Ask a bot, or describe a task…"
+                            ></textarea>
+                            <div class="composer-bar">
+                                <button class="btn-icon" aria-label="attach">
+                                    <svg
+                                        width="17"
+                                        height="17"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="1.8"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path d="M12 5v14M5 12h14" />
+                                    </svg>
+                                </button>
+                                <button class="pill pill-accent">
+                                    <svg
+                                        fill="none"
+                                        stroke-width="1.8"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <rect
+                                            x="3"
+                                            y="4"
+                                            width="18"
+                                            height="16"
+                                            rx="2"
+                                        />
+                                        <path d="M3 9h18" />
+                                    </svg>
+                                    Build
+                                </button>
+                                <button class="pill">
+                                    <svg
+                                        fill="none"
+                                        stroke-width="1.8"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <rect
+                                            x="3"
+                                            y="3"
+                                            width="7"
+                                            height="7"
+                                            rx="1.5"
+                                        />
+                                        <rect
+                                            x="14"
+                                            y="3"
+                                            width="7"
+                                            height="7"
+                                            rx="1.5"
+                                        />
+                                        <rect
+                                            x="3"
+                                            y="14"
+                                            width="7"
+                                            height="7"
+                                            rx="1.5"
+                                        />
+                                        <rect
+                                            x="14"
+                                            y="14"
+                                            width="7"
+                                            height="7"
+                                            rx="1.5"
+                                        />
+                                    </svg>
+                                    Choose type
+                                </button>
+                                <span class="grow"></span>
+                                <span class="dim small">Opus 4.8 · High</span>
+                                <button class="send-btn" aria-label="send">
+                                    <svg
+                                        width="16"
+                                        height="16"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path d="M12 19V5M5 12l7-7 7 7" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="dim" style="font-size: 12px">
+                            Compose of Textarea + ButtonIcon + Pill +
+                            SendButton. Likely a new dash-react
+                            <span class="mono">Composer</span>.
+                        </div>
+                    </div>
+
+                    <!-- Rich popover: Choose type (platform cards + typed list) -->
+                    <div class="col" style="gap: 8px">
+                        <div class="dim small">
+                            Popover / Menu <span class="mono">.menu</span>
+                        </div>
+                        <div class="menu" style="min-width: 0">
+                            <div class="menu-label">Platform</div>
+                            <div class="select-cards">
+                                <div class="select-card active">
+                                    <svg
+                                        fill="none"
+                                        stroke-width="1.6"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <rect
+                                            x="2"
+                                            y="4"
+                                            width="20"
+                                            height="13"
+                                            rx="2"
+                                        />
+                                        <path d="M8 21h8M12 17v4" />
+                                    </svg>
+                                    Desktop
+                                </div>
+                                <div class="select-card">
+                                    <svg
+                                        fill="none"
+                                        stroke-width="1.6"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <rect
+                                            x="7"
+                                            y="2"
+                                            width="10"
+                                            height="20"
+                                            rx="2.5"
+                                        />
+                                        <path d="M11 18h2" />
+                                    </svg>
+                                    Mobile
+                                </div>
+                            </div>
+                            <div class="menu-label">Type</div>
+                            <div class="menu-item">
+                                <svg
+                                    fill="none"
+                                    stroke-width="1.7"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <rect
+                                        x="3"
+                                        y="4"
+                                        width="18"
+                                        height="16"
+                                        rx="2"
+                                    />
+                                    <path d="M3 9h18" /></svg
+                                >Landing page
+                            </div>
+                            <div class="menu-item">
+                                <svg
+                                    fill="none"
+                                    stroke-width="1.7"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <circle cx="12" cy="12" r="9" />
+                                    <path
+                                        d="M3 12h18M12 3a15 15 0 010 18M12 3a15 15 0 000 18"
+                                    /></svg
+                                >Web app
+                            </div>
+                            <div class="menu-item">
+                                <svg
+                                    fill="none"
+                                    stroke-width="1.7"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <rect
+                                        x="2"
+                                        y="7"
+                                        width="20"
+                                        height="10"
+                                        rx="5"
+                                    />
+                                    <path d="M7 12h2M8 11v2M16 12h.01" /></svg
+                                >Game
+                            </div>
+                            <div class="menu-item">
+                                <svg
+                                    fill="none"
+                                    stroke-width="1.7"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        d="M3 3v18h18M7 15l4-5 3 3 5-7"
+                                    /></svg
+                                >Dashboard
+                            </div>
+                        </div>
+                        <div class="dim" style="font-size: 12px">
+                            Compose of Menu + SelectCard + MenuItem. Maps to
+                            dash-react <span class="mono">Menu</span>/<span
+                                class="mono"
+                                >DropdownPanel</span
+                            >
+                            + a new <span class="mono">SelectCard</span>.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <div class="caption">Color</div>
+                <div class="swatches">
+                    <div class="sw">
+                        <div
+                            class="sw-color"
+                            style="background: var(--canvas)"
+                        ></div>
+                        <div class="lbl">canvas</div>
+                    </div>
+                    <div class="sw">
+                        <div
+                            class="sw-color"
+                            style="background: var(--raised)"
+                        ></div>
+                        <div class="lbl">raised</div>
+                    </div>
+                    <div class="sw">
+                        <div
+                            class="sw-color"
+                            style="background: var(--raised-2)"
+                        ></div>
+                        <div class="lbl">raised-2</div>
+                    </div>
+                    <div class="sw">
+                        <div
+                            class="sw-color"
+                            style="background: var(--accent)"
+                        ></div>
+                        <div class="lbl">accent</div>
+                    </div>
+                    <div class="sw">
+                        <div
+                            class="sw-color"
+                            style="background: var(--text)"
+                        ></div>
+                        <div class="lbl">text</div>
+                    </div>
+                    <div class="sw">
+                        <div
+                            class="sw-color"
+                            style="background: var(--text-2)"
+                        ></div>
+                        <div class="lbl">text-2</div>
+                    </div>
+                    <div class="sw">
+                        <div
+                            class="sw-color"
+                            style="background: var(--green)"
+                        ></div>
+                        <div class="lbl">green</div>
+                    </div>
+                    <div class="sw">
+                        <div
+                            class="sw-color"
+                            style="background: var(--amber)"
+                        ></div>
+                        <div class="lbl">amber</div>
+                    </div>
+                    <div class="sw">
+                        <div
+                            class="sw-color"
+                            style="background: var(--red)"
+                        ></div>
+                        <div class="lbl">red</div>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <div class="caption">Typography</div>
+                <div class="type-row">
+                    <span class="t">h1 · 24/650</span
+                    ><span class="h1">Delegate the busywork</span>
+                </div>
+                <div class="type-row">
+                    <span class="t">h2 · 19/600</span
+                    ><span class="h2">Bot Activity</span>
+                </div>
+                <div class="type-row">
+                    <span class="t">h3 · 15/600</span
+                    ><span class="h3">Run on events</span>
+                </div>
+                <div class="type-row">
+                    <span class="t">body · 14/400</span
+                    ><span class="body muted"
+                        >The AI that runs this bot. Claude Code (CLI) uses your
+                        login — no API key.</span
+                    >
+                </div>
+                <div class="type-row">
+                    <span class="t">small · 13</span
+                    ><span class="small dim"
+                        >Tools route through the approval policy.</span
+                    >
+                </div>
+                <div class="type-row">
+                    <span class="t">caption</span
+                    ><span class="caption" style="margin: 0"
+                        >Recently seen</span
+                    >
+                </div>
+                <div class="type-row">
+                    <span class="t">mono</span
+                    ><span class="mono">0 7 * * 1-5</span>
+                </div>
+            </section>
+
+            <section>
+                <div class="caption">Buttons</div>
+                <div class="wrap" style="margin-bottom: 12px">
+                    <button class="btn btn-primary">Primary</button>
+                    <button class="btn btn-secondary">Secondary</button>
+                    <button class="btn btn-ghost">Ghost</button>
+                    <button class="btn btn-danger">Delete</button>
+                    <button class="btn btn-primary" disabled>Disabled</button>
+                </div>
+                <div class="wrap">
+                    <button class="btn btn-primary btn-sm">Small</button>
+                    <button class="btn btn-secondary btn-sm">Small</button>
+                    <button class="btn-icon" aria-label="edit">
+                        <svg
+                            width="17"
+                            height="17"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.7"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"
+                            />
+                        </svg>
+                    </button>
+                    <button class="btn-icon" aria-label="more">
+                        <svg
+                            width="17"
+                            height="17"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            viewBox="0 0 24 24"
+                        >
+                            <circle cx="12" cy="5" r="1" />
+                            <circle cx="12" cy="12" r="1" />
+                            <circle cx="12" cy="19" r="1" />
+                        </svg>
+                    </button>
+                </div>
+            </section>
+
+            <section>
+                <div class="caption">Inputs</div>
+                <div class="grid-2">
+                    <div class="field">
+                        <label>Name</label>
+                        <input class="input" placeholder="e.g. PR Digest" />
+                        <span class="help"
+                            >Body-14, hairline border, accent focus ring.</span
+                        >
+                    </div>
+                    <div class="field">
+                        <label>Provider</label>
+                        <select class="select">
+                            <option>Anthropic</option>
+                            <option>Claude Code (CLI)</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Focused</label>
+                        <input
+                            class="input"
+                            value="focused"
+                            style="
+                                border-color: var(--accent);
+                                box-shadow: 0 0 0 3px var(--accent-soft);
+                            "
+                        />
+                    </div>
+                    <div class="field">
+                        <label>Disabled</label>
+                        <input class="input" value="disabled" disabled />
+                    </div>
+                    <div class="field" style="grid-column: 1/-1">
+                        <label>Instructions</label>
+                        <textarea
+                            class="textarea"
+                            placeholder="What should this bot do?"
+                        ></textarea>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <div class="caption">Controls</div>
+                <div class="wrap" style="gap: 24px">
+                    <div class="row">
+                        <span class="switch on"></span
+                        ><span class="small">On</span>
+                    </div>
+                    <div class="row">
+                        <span class="switch"></span
+                        ><span class="small">Off</span>
+                    </div>
+                    <span class="check on"
+                        ><span class="box"></span>Checked</span
+                    >
+                    <span class="check"
+                        ><span class="box"></span>Unchecked</span
+                    >
+                </div>
+            </section>
+
+            <section>
+                <div class="caption">Tags · Chips · Badges</div>
+                <div class="wrap">
+                    <span class="tag">◍ test</span>
+                    <span class="tag">🎨 Refresh</span>
+                    <span class="chip chip-accent">● pr.opened</span>
+                    <span class="chip chip-success">connected</span>
+                    <span class="chip chip-warn">2 pending</span>
+                    <span class="chip chip-danger">error</span>
+                    <span class="chip chip-neutral">idle</span>
+                </div>
+            </section>
+
+            <section>
+                <div class="caption">Tabs</div>
+                <div class="tabs">
+                    <div class="tab active">Page 1</div>
+                    <div class="tab">Google</div>
+                    <div class="tab">Slack</div>
+                    <div class="tab" style="color: var(--text-3)">
+                        + Add Page
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <div class="caption">Cards</div>
+                <div class="grid-3">
+                    <div class="card">
+                        <div class="row">
+                            <div class="avatar">M</div>
+                            <div>
+                                <div class="card-title">Memo</div>
+                                <div class="card-sub">
+                                    Anthropic · scheduled
+                                </div>
+                            </div>
+                        </div>
+                        <p class="muted small" style="margin: 0">
+                            Remembers facts across runs.
+                        </p>
+                    </div>
+                    <div class="card">
+                        <div class="card-head">
+                            <div class="card-title">This week</div>
+                            <span class="chip chip-success">▲ 12%</span>
+                        </div>
+                        <div class="stat">1,284</div>
+                        <div class="card-sub">Runs completed</div>
+                    </div>
+                    <div class="card">
+                        <div class="kv">
+                            <span class="k">Do not disturb</span
+                            ><span class="switch"></span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">Run in background</span
+                            ><span class="switch on"></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <div class="caption">
+                    Surfaces &amp; tints — a "colored" Panel done tastefully
+                </div>
+                <div class="dim" style="font-size: 12.5px; margin-bottom: 14px">
+                    Default surfaces stay neutral; a Panel that needs color gets
+                    a SUBTLE tint (not a saturated fill). All tints derive from
+                    the theme — switch themes below and watch the accent tint
+                    follow.
+                </div>
+                <div class="grid-3">
+                    <div class="card">
+                        <div class="card-title">Neutral</div>
+                        <div class="muted small">
+                            Default surface. The norm.
+                        </div>
+                    </div>
+                    <div class="card card-accent">
+                        <div class="card-title">Accent tint</div>
+                        <div class="muted small">Emphasis / selected.</div>
+                    </div>
+                    <div class="card card-danger">
+                        <div class="card-title">Danger tint</div>
+                        <div class="muted small">
+                            A "red Panel" — subtle, not a red wall.
+                        </div>
+                    </div>
+                    <div class="card card-success">
+                        <div class="card-title">Success</div>
+                        <div class="muted small">Connected / healthy.</div>
+                    </div>
+                    <div class="card card-warn">
+                        <div class="card-title">Warning</div>
+                        <div class="muted small">Needs attention.</div>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <div class="caption">
+                    Provider brand accents — a widget can wear its service's
+                    colors
+                </div>
+                <div class="dim" style="font-size: 12.5px; margin-bottom: 14px">
+                    The <b>sanctioned</b> way to color a widget for a provider.
+                    A widget declares one brand hex (<span class="mono"
+                        >--brand</span
+                    >); the frame derives a tint + border + soft glow + a brand
+                    icon chip from it. Slack reads as Slack, Drive as Drive —
+                    recognizable at a glance, never a saturated wall. Works in
+                    light + dark. Set on the dash-react
+                    <span class="mono">Panel</span> via a
+                    <span class="mono">brand</span> prop.
+                </div>
+                <div class="grid-3">
+                    <div class="card card-brand" style="--brand: #611f69">
+                        <div class="card-head">
+                            <div class="row" style="gap: 10px">
+                                <div class="brand-icon">#</div>
+                                <div>
+                                    <div class="card-title">Slack</div>
+                                    <div class="card-sub">
+                                        connected · 12 tools
+                                    </div>
+                                </div>
+                            </div>
+                            <span
+                                class="dot"
+                                style="background: var(--green)"
+                            ></span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">#general</span
+                            ><span class="muted">8 new</span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">Mentions</span
+                            ><span class="muted">3</span>
+                        </div>
+                    </div>
+                    <div class="card card-brand" style="--brand: #1a73e8">
+                        <div class="card-head">
+                            <div class="row" style="gap: 10px">
+                                <div class="brand-icon">▲</div>
+                                <div>
+                                    <div class="card-title">Google Drive</div>
+                                    <div class="card-sub">connected</div>
+                                </div>
+                            </div>
+                            <span
+                                class="dot"
+                                style="background: var(--green)"
+                            ></span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">Recent</span
+                            ><span class="muted">Q3 Plan.doc</span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">Shared</span
+                            ><span class="muted">4</span>
+                        </div>
+                    </div>
+                    <div class="card card-brand" style="--brand: #ea4335">
+                        <div class="card-head">
+                            <div class="row" style="gap: 10px">
+                                <div class="brand-icon">✉</div>
+                                <div>
+                                    <div class="card-title">Gmail</div>
+                                    <div class="card-sub">17 tools</div>
+                                </div>
+                            </div>
+                            <span
+                                class="dot"
+                                style="background: var(--green)"
+                            ></span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">is:unread</span
+                            ><span class="muted">24</span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">Today</span
+                            ><span class="muted">6</span>
+                        </div>
+                    </div>
+                    <div class="card card-brand" style="--brand: #5865f2">
+                        <div class="card-head">
+                            <div class="row" style="gap: 10px">
+                                <div class="brand-icon">◈</div>
+                                <div>
+                                    <div class="card-title">Discord</div>
+                                    <div class="card-sub">2 servers</div>
+                                </div>
+                            </div>
+                            <span
+                                class="dot"
+                                style="background: var(--green)"
+                            ></span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">Unread</span
+                            ><span class="muted">11</span>
+                        </div>
+                    </div>
+                    <div class="card card-brand" style="--brand: #5e6ad2">
+                        <div class="card-head">
+                            <div class="row" style="gap: 10px">
+                                <div class="brand-icon">L</div>
+                                <div>
+                                    <div class="card-title">Linear</div>
+                                    <div class="card-sub">DASH board</div>
+                                </div>
+                            </div>
+                            <span class="chip chip-accent">3 in review</span>
+                        </div>
+                        <div class="kv">
+                            <span class="k">Assigned</span
+                            ><span class="muted">5</span>
+                        </div>
+                    </div>
+                    <div class="card card-brand" style="--brand: #f5a623">
+                        <div class="card-head">
+                            <div class="row" style="gap: 10px">
+                                <div class="brand-icon">◑</div>
+                                <div>
+                                    <div class="card-title">Custom widget</div>
+                                    <div class="card-sub">any hex works</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="muted small">
+                            Pick any brand color; the treatment adapts.
+                        </div>
+                    </div>
+                </div>
+                <div class="dim" style="font-size: 12.5px; margin: 18px 0 10px">
+                    vs. a widget that <b>hardcodes</b> a saturated fill —
+                    allowed, but it opts out of the theme and looks wonky (won't
+                    follow light mode or theme switches). Their widget, their
+                    choice:
+                </div>
+                <div class="grid-3">
+                    <div
+                        class="card"
+                        style="background: #7f1d1d; border-color: #b91c1c"
+                    >
+                        <div class="card-title" style="color: #fde68a">
+                            Hardcoded Panel
+                        </div>
+                        <div class="small" style="color: #fecaca">
+                            bg-red-900 baked in — ignores theme, breaks in light
+                            mode. Not endorsed, not blocked.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <div class="caption">
+                    Glass — floating surfaces only (menu / palette / dock)
+                </div>
+                <div
+                    style="
+                        position: relative;
+                        border-radius: var(--r-lg);
+                        overflow: hidden;
+                        padding: 26px;
+                        background: radial-gradient(
+                                500px 240px at 20% 20%,
+                                var(--accent) 0%,
+                                transparent 60%
+                            ),
+                            radial-gradient(
+                                420px 220px at 90% 90%,
+                                #22b8cf 0%,
+                                transparent 55%
+                            ),
+                            var(--raised-2);
+                    "
+                >
+                    <div
+                        class="glass"
+                        style="max-width: 360px; padding: 14px 16px"
+                    >
+                        <div class="row" style="justify-content: space-between">
+                            <div class="row">
+                                <div
+                                    class="avatar"
+                                    style="width: 26px; height: 26px"
+                                >
+                                    🤖
+                                </div>
+                                <b>Bot Activity</b>
+                            </div>
+                            <span class="chip chip-danger">1 pending</span>
+                        </div>
+                        <hr class="divider" />
+                        <p class="muted small" style="margin: 0">
+                            <b style="color: var(--text)">Coder</b> wants to run
+                            <b style="color: var(--text)">Write</b> → hello.txt
+                        </p>
+                        <div class="wrap" style="margin-top: 10px">
+                            <button class="btn btn-primary btn-sm">
+                                Approve</button
+                            ><button class="btn btn-ghost btn-sm">Deny</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <div class="caption">Modal</div>
+                <div
+                    style="
+                        position: relative;
+                        height: 240px;
+                        border-radius: var(--r-lg);
+                        background: var(--raised-2);
+                        border: 1px solid var(--hairline);
+                        display: grid;
+                        place-items: center;
+                    "
+                >
+                    <div
+                        class="modal"
+                        style="position: static; box-shadow: var(--shadow-lg)"
+                    >
+                        <div class="h3">Delete bot?</div>
+                        <p class="muted small" style="margin: 0">
+                            This removes “Coder” and its run history. This can’t
+                            be undone.
+                        </p>
+                        <div
+                            class="wrap"
+                            style="justify-content: flex-end; margin-top: 4px"
+                        >
+                            <button class="btn btn-ghost btn-sm">Cancel</button
+                            ><button class="btn btn-danger btn-sm">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div
+            class="glass"
+            style="
+                position: fixed;
+                bottom: 16px;
+                left: 50%;
+                transform: translateX(-50%);
+                display: flex;
+                gap: 9px;
+                align-items: center;
+                padding: 9px 14px;
+                z-index: 50;
+                border-radius: 999px;
+            "
+        >
+            <span class="caption" style="letter-spacing: 0.14em">Theme</span>
+            <button
+                title="Aurora"
+                onclick="setAccent('#8f82f9','#45c8e0')"
+                style="
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 50%;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    cursor: pointer;
+                    background: linear-gradient(135deg, #8f82f9, #45c8e0);
+                "
+            ></button>
+            <button
+                title="Emerald"
+                onclick="setAccent('#34d399','#22d3ee')"
+                style="
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 50%;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    cursor: pointer;
+                    background: linear-gradient(135deg, #34d399, #22d3ee);
+                "
+            ></button>
+            <button
+                title="Sunset"
+                onclick="setAccent('#fb923c','#f472b6')"
+                style="
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 50%;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    cursor: pointer;
+                    background: linear-gradient(135deg, #fb923c, #f472b6);
+                "
+            ></button>
+            <button
+                title="Rose"
+                onclick="setAccent('#fb7185','#a78bfa')"
+                style="
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 50%;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    cursor: pointer;
+                    background: linear-gradient(135deg, #fb7185, #a78bfa);
+                "
+            ></button>
+            <button
+                title="Sky"
+                onclick="setAccent('#38bdf8','#818cf8')"
+                style="
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 50%;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    cursor: pointer;
+                    background: linear-gradient(135deg, #38bdf8, #818cf8);
+                "
+            ></button>
+            <button
+                title="Amber"
+                onclick="setAccent('#f0b429','#f97066')"
+                style="
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 50%;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    cursor: pointer;
+                    background: linear-gradient(135deg, #f0b429, #f97066);
+                "
+            ></button>
+            <span
+                style="
+                    width: 1px;
+                    height: 20px;
+                    background: var(--hairline-strong);
+                    margin: 0 2px;
+                "
+            ></span>
+            <button
+                class="btn btn-secondary btn-sm"
+                onclick="toggleMode()"
+                id="modeBtn"
+                style="padding: 5px 11px"
+            >
+                ◐ Light
+            </button>
+        </div>
+        <script>
+            function setAccent(a, b) {
+                const r = document.documentElement.style;
+                r.setProperty("--accent", a);
+                r.setProperty("--accent-2", b);
+            }
+            function toggleMode() {
+                const el = document.documentElement;
+                const light = el.getAttribute("data-mode") === "light";
+                el.setAttribute("data-mode", light ? "dark" : "light");
+                document.getElementById("modeBtn").textContent = light
+                    ? "◐ Light"
+                    : "◑ Dark";
+            }
+        </script>
+    </body>
+</html>

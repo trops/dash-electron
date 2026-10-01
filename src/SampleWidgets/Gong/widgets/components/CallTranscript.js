@@ -1,3 +1,5 @@
+import { Button2 } from "@trops/dash-react";
+
 const SPEAKER_COLORS = [
     "text-blue-400",
     "text-green-400",
@@ -74,13 +76,15 @@ export function CallTranscript({ transcript, loading, onLoadMore }) {
                 );
             })}
             {transcript.cursor && (
-                <button
+                <Button2
+                    size="sm"
+                    block
                     onClick={() => onLoadMore(transcript.cursor)}
                     disabled={loading}
-                    className="w-full px-3 py-1.5 text-xs rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-white mt-2"
+                    className="mt-2"
                 >
                     {loading ? "Loading..." : "Load More"}
-                </button>
+                </Button2>
             )}
         </div>
     );

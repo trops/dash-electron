@@ -15,6 +15,17 @@
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
     -->
         <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+        <!-- Aurora fonts (slice 1): Hanken Grotesk (body) + JetBrains Mono
+             (data/micro-labels), served from jsDelivr, which is already
+             allowlisted in the CSP above (style-src + font-src). -->
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@fontsource-variable/hanken-grotesk@5/index.css"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@fontsource-variable/jetbrains-mono@5/index.css"
+        />
         <link
             rel="preload"
             href="%PUBLIC_URL%/tailwind.css"
@@ -27,6 +38,9 @@
         <title>Dash</title>
         <script>
             window.global = window;
+            // Opt the app into the Aurora design treatment (gated .dr-* styles
+            // in dash-react's designSystem.css). Remove this line to revert.
+            document.documentElement.setAttribute("data-design", "aurora");
         </script>
     </head>
     <body>

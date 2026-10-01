@@ -8,7 +8,15 @@
  * @package AlgoliaSETools
  */
 import { useState, useCallback, useRef } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    Button2,
+    Button3,
+    SectionLabel,
+    SegmentedControl,
+} from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 import { parseAny, detectFormat } from "../utils/dataParser";
 import { exportToFormat } from "../utils/dataExporter";
@@ -197,23 +205,15 @@ function DataTransformerContent({ title }) {
             {/* Input Section */}
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">
-                        Input Data
-                    </span>
+                    <SectionLabel as="span">Input Data</SectionLabel>
                     <div className="flex gap-2">
-                        <button
-                            onClick={handleFileUpload}
-                            className="px-2 py-0.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-300"
-                        >
+                        <Button2 size="sm" onClick={handleFileUpload}>
                             Upload File
-                        </button>
+                        </Button2>
                         {inputText && (
-                            <button
-                                onClick={handleClear}
-                                className="px-2 py-0.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-400"
-                            >
+                            <Button3 size="sm" onClick={handleClear}>
                                 Clear
-                            </button>
+                            </Button3>
                         )}
                     </div>
                 </div>
@@ -224,13 +224,13 @@ function DataTransformerContent({ title }) {
                     className="w-full h-32 px-3 py-2 bg-gray-900 border border-gray-700 rounded text-xs text-gray-300 font-mono placeholder-gray-600 focus:outline-none focus:border-blue-500 resize-y"
                 />
                 <div className="flex items-center gap-2">
-                    <button
+                    <Button
+                        size="sm"
                         onClick={handleParse}
                         disabled={!inputText.trim()}
-                        className="px-3 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                     >
                         Parse
-                    </button>
+                    </Button>
                     {detectedFormat !== "unknown" && (
                         <span className="text-xs text-gray-500">
                             Detected:{" "}
@@ -261,10 +261,10 @@ function DataTransformerContent({ title }) {
             {columns.length > 0 && (
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">
+                        <SectionLabel as="span">
                             Preview ({rows.length} rows, {columns.length}{" "}
                             columns)
-                        </span>
+                        </SectionLabel>
                         <span className="text-[10px] text-gray-600">
                             Click column name to rename. Set type per column.
                         </span>
@@ -283,31 +283,20 @@ function DataTransformerContent({ title }) {
             {/* Export Section */}
             {columns.length > 0 && (
                 <div className="space-y-2">
-                    <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">
-                        Export
-                    </span>
+                    <SectionLabel as="span">Export</SectionLabel>
                     <div className="flex items-center gap-2">
-                        <div className="flex gap-1">
-                            {EXPORT_FORMATS.map((fmt) => (
-                                <button
-                                    key={fmt}
-                                    onClick={() => setExportFormat(fmt)}
-                                    className={`px-2 py-0.5 text-xs rounded border ${
-                                        exportFormat === fmt
-                                            ? "bg-blue-700 border-blue-600 text-white"
-                                            : "bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200"
-                                    }`}
-                                >
-                                    {FORMAT_LABELS[fmt]}
-                                </button>
-                            ))}
-                        </div>
-                        <button
-                            onClick={handleExport}
-                            className="px-3 py-1 text-xs rounded bg-emerald-700 hover:bg-emerald-600 text-white"
-                        >
+                        <SegmentedControl
+                            ariaLabel="Export format"
+                            options={EXPORT_FORMATS.map((fmt) => ({
+                                value: fmt,
+                                label: FORMAT_LABELS[fmt],
+                            }))}
+                            value={exportFormat}
+                            onChange={setExportFormat}
+                        />
+                        <Button size="sm" onClick={handleExport}>
                             Convert
-                        </button>
+                        </Button>
                     </div>
                 </div>
             )}
@@ -316,19 +305,12 @@ function DataTransformerContent({ title }) {
             {exportOutput && (
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">
+                        <SectionLabel as="span">
                             Output ({FORMAT_LABELS[exportFormat]})
-                        </span>
-                        <button
-                            onClick={handleCopy}
-                            className={`px-2 py-0.5 text-xs rounded ${
-                                copied
-                                    ? "bg-emerald-700 text-white"
-                                    : "bg-gray-700 hover:bg-gray-600 text-gray-300"
-                            }`}
-                        >
+                        </SectionLabel>
+                        <Button2 size="sm" onClick={handleCopy}>
                             {copied ? "Copied!" : "Copy to Clipboard"}
-                        </button>
+                        </Button2>
                     </div>
                     <pre className="w-full max-h-48 overflow-auto px-3 py-2 bg-gray-900 border border-gray-700 rounded text-xs text-gray-300 font-mono whitespace-pre-wrap">
                         {exportOutput}

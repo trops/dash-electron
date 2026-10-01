@@ -8,7 +8,13 @@
  * @package AlgoliaSETools
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    Button3,
+    SectionLabel,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -205,13 +211,13 @@ function RelevanceTesterContent({ title }) {
                             placeholder="Search query..."
                             className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
                         />
-                        <button
+                        <Button
+                            size="sm"
                             onClick={handleSearch}
                             disabled={!selectedIndex || searching}
-                            className="px-3 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                         >
                             {searching ? "..." : "Search"}
-                        </button>
+                        </Button>
                     </div>
                 </div>
             )}
@@ -256,12 +262,9 @@ function RelevanceTesterContent({ title }) {
                             )}
                         </div>
                     </div>
-                    <button
-                        onClick={clearExpected}
-                        className="px-2 py-0.5 text-[10px] bg-gray-700 hover:bg-gray-600 rounded text-gray-400"
-                    >
+                    <Button3 size="xs" onClick={clearExpected}>
                         Clear
-                    </button>
+                    </Button3>
                 </div>
             )}
 
@@ -278,9 +281,9 @@ function RelevanceTesterContent({ title }) {
             {hits.length > 0 && (
                 <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-wide">
+                        <SectionLabel as="span">
                             Results ({hits.length})
-                        </span>
+                        </SectionLabel>
                         <span className="text-[10px] text-gray-600">
                             Click star to mark as expected result
                         </span>

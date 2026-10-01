@@ -9,7 +9,14 @@
  * @package Algolia
  */
 import { useState, useEffect, useRef } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    Button,
+    Button2,
+    Button3,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -275,13 +282,13 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
                         placeholder="No file selected"
                         className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500"
                     />
-                    <button
+                    <Button2
                         onClick={chooseSourceFile}
                         disabled={isWorking}
-                        className="px-3 py-1 text-xs rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white"
+                        size="sm"
                     >
                         Browse
-                    </button>
+                    </Button2>
                 </div>
             </div>
 
@@ -322,13 +329,14 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
 
             {/* Start Button */}
             {stage === "idle" && (
-                <button
+                <Button
                     onClick={startBatchUpload}
                     disabled={!selectedIndex || !sourceFile || isWorking}
-                    className="w-full px-3 py-2 text-xs rounded bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
+                    size="sm"
+                    block
                 >
                     Start Batch Upload
-                </button>
+                </Button>
             )}
 
             {error && (
@@ -392,12 +400,9 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
                             ))}
                         </div>
                     )}
-                    <button
-                        onClick={reset}
-                        className="px-3 py-1 text-xs rounded bg-gray-600 hover:bg-gray-500 text-white"
-                    >
+                    <Button3 onClick={reset} size="sm">
                         Reset
-                    </button>
+                    </Button3>
                 </div>
             )}
         </div>

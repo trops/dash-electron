@@ -7,7 +7,12 @@
  * @package GitHub
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    SectionLabel,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
@@ -190,9 +195,7 @@ function GitHubIssueDetailContent({ title }) {
                     {/* Body */}
                     {issue.body && (
                         <div className="space-y-1">
-                            <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">
-                                Description
-                            </div>
+                            <SectionLabel>Description</SectionLabel>
                             <div className="text-xs text-gray-300 bg-gray-800/50 rounded p-2 whitespace-pre-wrap max-h-64 overflow-y-auto">
                                 {issue.body}
                             </div>

@@ -19,7 +19,7 @@
  * @package Notion
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Button, Panel, SubHeading2 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse, parseNotionTextEntries } from "../utils/mcpUtils";
 
@@ -200,13 +200,13 @@ function NotionPageSearchContent({ title, initialQuery, debounceMs }) {
                     disabled={!isConnected}
                     className="flex-1 px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500 disabled:opacity-40"
                 />
-                <button
+                <Button
                     type="submit"
+                    size="sm"
                     disabled={!isConnected || loading || !query.trim()}
-                    className="px-3 py-2 text-xs rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                 >
                     {loading ? "…" : "Search"}
-                </button>
+                </Button>
             </form>
 
             {/* Five-way state machine for the results block. Each

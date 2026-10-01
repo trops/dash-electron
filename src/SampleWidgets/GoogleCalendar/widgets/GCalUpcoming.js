@@ -8,7 +8,7 @@
  * @package Google Calendar
  */
 import { useState, useEffect, useCallback } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Button2, Panel, SubHeading2 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
 import { McpReauthBanner } from "../components/McpReauthBanner";
@@ -183,13 +183,13 @@ function GCalUpcomingContent({ title }) {
 
             {/* Refresh */}
             <div className="flex items-center gap-2">
-                <button
+                <Button2
+                    size="sm"
                     onClick={loadEvents}
                     disabled={!isConnected || loading}
-                    className="px-3 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                 >
                     {loading ? "Loading..." : "Refresh"}
-                </button>
+                </Button2>
                 {events.length > 0 && (
                     <span className="text-xs text-gray-500">
                         {events.length} upcoming event

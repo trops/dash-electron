@@ -8,7 +8,7 @@
  * @package Algolia
  */
 import { useState, useEffect, useCallback } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Panel, SubHeading2, Button2 } from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -128,13 +128,13 @@ function AlgoliaIndexDashboardContent({ title }) {
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
             <div className="flex items-center justify-between">
                 <SubHeading2 title={title} padding={false} />
-                <button
+                <Button2
                     onClick={() => loadIndices(true)}
                     disabled={loading}
-                    className="px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white"
+                    size="sm"
                 >
                     {loading ? "Loading..." : "Refresh"}
-                </button>
+                </Button2>
             </div>
 
             {/* Summary Stats */}

@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Dash — "Ledger" direction</title>
+        <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Hanken+Grotesk:wght@400;500;600&display=swap"
+        />
+        <style>
+            /* ============================================================
+         "LEDGER" — editorial, high-contrast, characterful. A serif
+         display (Instrument Serif) against a clean grotesk body,
+         warm amber accent, generous whitespace, precise hairlines.
+         Magazine / premium-finance feel. Self-contained exploration.
+         ============================================================ */
+            :root {
+                --bg: #0b0b0c;
+                --card: #131314;
+                --card-2: #191919;
+                --line: rgba(255, 255, 255, 0.08);
+                --line-2: rgba(255, 255, 255, 0.16);
+                --text: #f4f2ee;
+                --text-2: #a09c94;
+                --text-3: #66635c;
+                --acc: #e0a53b; /* warm amber/gold */
+                --acc-dim: rgba(224, 165, 59, 0.14);
+                --green: #6bbf7f;
+                --red: #e2696b;
+                --serif: "Instrument Serif", Georgia, serif;
+                --sans: "Hanken Grotesk", system-ui, sans-serif;
+                --r: 10px;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            html,
+            body {
+                margin: 0;
+                height: 100%;
+            }
+            body {
+                font-family: var(--sans);
+                color: var(--text);
+                font-size: 14px;
+                line-height: 1.5;
+                background: var(--bg);
+                -webkit-font-smoothing: antialiased;
+            }
+            .app {
+                display: grid;
+                grid-template-columns: 244px 1fr;
+                height: 100vh;
+            }
+            .side {
+                padding: 22px 14px;
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                border-right: 1px solid var(--line);
+            }
+            .brand {
+                display: flex;
+                align-items: baseline;
+                gap: 10px;
+                padding: 4px 10px 22px;
+            }
+            .brand .wm {
+                font-family: var(--serif);
+                font-size: 28px;
+                line-height: 1;
+                letter-spacing: 0.01em;
+            }
+            .brand .tick {
+                font-size: 10px;
+                letter-spacing: 0.18em;
+                text-transform: uppercase;
+                color: var(--acc);
+            }
+            .lbl {
+                font-size: 10.5px;
+                font-weight: 600;
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+                color: var(--text-3);
+                padding: 20px 12px 8px;
+            }
+            .nav {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 8px 12px;
+                border-radius: 8px;
+                color: var(--text-2);
+                cursor: pointer;
+                font-weight: 500;
+                transition: 0.12s;
+            }
+            .nav svg {
+                width: 17px;
+                height: 17px;
+                stroke: currentColor;
+                opacity: 0.8;
+                flex: none;
+            }
+            .nav:hover {
+                background: rgba(255, 255, 255, 0.04);
+                color: var(--text);
+            }
+            .nav.on {
+                color: var(--text);
+                font-weight: 600;
+            }
+            .nav.on svg {
+                stroke: var(--acc);
+                opacity: 1;
+            }
+            .grow {
+                flex: 1;
+            }
+            .main {
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
+            }
+            .top {
+                display: flex;
+                align-items: flex-end;
+                justify-content: space-between;
+                padding: 22px 34px 18px;
+                border-bottom: 1px solid var(--line);
+            }
+            .top h1 {
+                font-family: var(--serif);
+                font-size: 34px;
+                line-height: 1;
+                margin: 0;
+                font-weight: 400;
+                letter-spacing: 0.005em;
+            }
+            .top .sub {
+                color: var(--text-3);
+                font-size: 12px;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                margin-bottom: 6px;
+            }
+            .btn {
+                font: inherit;
+                font-family: var(--sans);
+                font-weight: 600;
+                font-size: 13px;
+                border: 1px solid transparent;
+                border-radius: 8px;
+                padding: 9px 16px;
+                cursor: pointer;
+                transition: 0.12s;
+            }
+            .btn-acc {
+                background: var(--acc);
+                color: #1a1206;
+            }
+            .btn-acc:hover {
+                filter: brightness(1.06);
+            }
+            .btn-line {
+                background: transparent;
+                color: var(--text);
+                border-color: var(--line-2);
+            }
+            .btn-line:hover {
+                border-color: var(--acc);
+                color: var(--acc);
+            }
+            .btn-ghost {
+                background: transparent;
+                color: var(--text-2);
+            }
+            .btn-ghost:hover {
+                color: var(--text);
+            }
+            .stage {
+                flex: 1;
+                overflow-y: auto;
+                padding: 28px 34px;
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 22px;
+                align-content: start;
+            }
+            .card {
+                background: var(--card);
+                border: 1px solid var(--line);
+                border-radius: var(--r);
+                padding: 22px;
+                display: flex;
+                flex-direction: column;
+                gap: 14px;
+                min-height: 180px;
+            }
+            .card:hover {
+                border-color: var(--line-2);
+            }
+            .ch {
+                display: flex;
+                align-items: baseline;
+                justify-content: space-between;
+            }
+            .ct {
+                font-family: var(--serif);
+                font-size: 22px;
+                line-height: 1;
+                font-weight: 400;
+            }
+            .cs {
+                font-size: 11px;
+                letter-spacing: 0.1em;
+                text-transform: uppercase;
+                color: var(--text-3);
+            }
+            .num {
+                font-family: var(--serif);
+                font-size: 46px;
+                line-height: 0.95;
+                font-weight: 400;
+                letter-spacing: 0.01em;
+            }
+            .k {
+                display: flex;
+                justify-content: space-between;
+                padding: 10px 0;
+                border-bottom: 1px solid var(--line);
+                font-size: 13px;
+            }
+            .k:last-child {
+                border-bottom: 0;
+            }
+            .k .kk {
+                color: var(--text-2);
+            }
+            .dot {
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                display: inline-block;
+            }
+            .tag {
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                padding: 3px 9px;
+                border-radius: 5px;
+            }
+            .tag-acc {
+                color: var(--acc);
+                background: var(--acc-dim);
+            }
+            .tag-red {
+                color: var(--red);
+                background: rgba(226, 105, 107, 0.14);
+            }
+            .tag-green {
+                color: var(--green);
+                background: rgba(107, 191, 127, 0.14);
+            }
+            .in {
+                background: var(--card-2);
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                padding: 10px 13px;
+                color: var(--text);
+                font: inherit;
+                font-family: var(--sans);
+                font-size: 13px;
+                width: 100%;
+            }
+            .in::placeholder {
+                color: var(--text-3);
+            }
+            .in:focus {
+                outline: none;
+                border-color: var(--acc);
+            }
+            .empty {
+                flex: 1;
+                display: grid;
+                place-items: center;
+                color: var(--text-3);
+                font-size: 13px;
+                gap: 8px;
+            }
+            .note {
+                grid-column: 1/-1;
+                color: var(--text-3);
+                font-size: 12px;
+                padding-top: 10px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="app">
+            <aside class="side">
+                <div class="brand">
+                    <div class="wm">Dash</div>
+                    <div class="tick">v0.1</div>
+                </div>
+                <div class="nav on">
+                    <svg fill="none" stroke-width="1.7" viewBox="0 0 24 24">
+                        <path d="M3 12l9-9 9 9M5 10v10h14V10" /></svg
+                    >Home
+                </div>
+                <div class="nav">
+                    <svg fill="none" stroke-width="1.7" viewBox="0 0 24 24">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="M21 21l-4.35-4.35" /></svg
+                    >Search
+                </div>
+                <div class="lbl">Workspaces</div>
+                <div class="nav">
+                    <svg fill="none" stroke-width="1.7" viewBox="0 0 24 24">
+                        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                        <rect
+                            x="14"
+                            y="14"
+                            width="7"
+                            height="7"
+                            rx="1.5"
+                        /></svg
+                    >Kitchen Sink
+                </div>
+                <div class="nav">
+                    <svg fill="none" stroke-width="1.7" viewBox="0 0 24 24">
+                        <path d="M4 6h16M4 12h16M4 18h10" /></svg
+                    >Slack Pack
+                </div>
+                <div class="lbl">Bots</div>
+                <div class="nav">
+                    <svg fill="none" stroke-width="1.7" viewBox="0 0 24 24">
+                        <rect x="4" y="8" width="16" height="11" rx="3" />
+                        <path d="M12 8V4M8 14h.01M16 14h.01" /></svg
+                    >Bot Activity
+                </div>
+                <div class="grow"></div>
+                <div class="nav">
+                    <div
+                        style="
+                            width: 24px;
+                            height: 24px;
+                            border-radius: 50%;
+                            background: #2c2a26;
+                            display: grid;
+                            place-items: center;
+                            font-size: 10px;
+                        "
+                    >
+                        JG
+                    </div>
+                    john@…
+                </div>
+            </aside>
+
+            <div class="main">
+                <div class="top">
+                    <div>
+                        <div class="sub">Workspace</div>
+                        <h1>Kitchen Sink</h1>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center">
+                        <button class="btn btn-ghost">Cancel</button>
+                        <button class="btn btn-acc">Save changes</button>
+                    </div>
+                </div>
+
+                <div class="stage">
+                    <div class="card">
+                        <div class="ch">
+                            <div class="ct">AI Chat</div>
+                            <span class="cs">Claude Code</span>
+                        </div>
+                        <div class="empty">
+                            <div
+                                style="
+                                    font-size: 22px;
+                                    font-family: var(--serif);
+                                "
+                            >
+                                “
+                            </div>
+                            Send a message to start
+                        </div>
+                        <input
+                            class="in"
+                            placeholder="Ask a bot, or task an agent…"
+                        />
+                    </div>
+                    <div class="card">
+                        <div class="ch">
+                            <div class="ct">Runs</div>
+                            <span class="tag tag-green">▲ 12%</span>
+                        </div>
+                        <div class="num">1,284</div>
+                        <div class="cs">This week · completed</div>
+                        <div style="margin-top: auto">
+                            <div class="k">
+                                <span class="kk">Scheduled</span
+                                ><span>7 active</span>
+                            </div>
+                            <div class="k">
+                                <span class="kk">Pending approval</span
+                                ><span style="color: var(--acc)">2</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="ch">
+                            <div class="ct">Bot Activity</div>
+                            <span class="tag tag-red">1 pending</span>
+                        </div>
+                        <div style="color: var(--text-2); font-size: 13px">
+                            <b style="color: var(--text)">Coder</b> wants to run
+                            <b style="color: var(--acc)">Write</b> → hello.txt
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: auto">
+                            <button
+                                class="btn btn-acc"
+                                style="padding: 7px 14px"
+                            >
+                                Approve</button
+                            ><button
+                                class="btn btn-ghost"
+                                style="padding: 7px 10px"
+                            >
+                                Deny
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="ch">
+                            <div class="ct">GitHub</div>
+                            <span class="cs"
+                                ><span
+                                    class="dot"
+                                    style="background: var(--red)"
+                                ></span>
+                                Offline</span
+                            >
+                        </div>
+                        <input class="in" placeholder="Search repos…" />
+                        <div class="empty" style="min-height: 0">
+                            No results yet
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="ch">
+                            <div class="ct">Gmail</div>
+                            <span class="cs"
+                                ><span
+                                    class="dot"
+                                    style="background: var(--green)"
+                                ></span>
+                                17 tools</span
+                            >
+                        </div>
+                        <div class="k">
+                            <span class="kk">is:unread</span><span>24</span>
+                        </div>
+                        <div class="k">
+                            <span class="kk">Today</span><span>6</span>
+                        </div>
+                        <button
+                            class="btn btn-line"
+                            style="
+                                margin-top: auto;
+                                align-self: flex-start;
+                                padding: 7px 14px;
+                            "
+                        >
+                            Open inbox
+                        </button>
+                    </div>
+                    <div class="card">
+                        <div class="ch">
+                            <div class="ct">Schedule</div>
+                            <span class="cs">Cron</span>
+                        </div>
+                        <div class="k">
+                            <span class="kk">Every weekday</span
+                            ><span style="color: var(--acc)">7:00 AM</span>
+                        </div>
+                        <div class="k">
+                            <span class="kk">Engine</span
+                            ><span>Claude Agent</span>
+                        </div>
+                        <div class="k">
+                            <span class="kk">Status</span
+                            ><span
+                                class="tag tag-green"
+                                style="padding: 2px 8px"
+                                >On</span
+                            >
+                        </div>
+                    </div>
+                    <div class="note">
+                        "Ledger" — editorial. Instrument Serif display + Hanken
+                        Grotesk body, warm amber accent, generous whitespace,
+                        precise hairlines, big serif numerals. High-contrast,
+                        characterful, magazine-premium.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

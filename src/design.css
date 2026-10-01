@@ -1,0 +1,61 @@
+/* ============================================================================
+   Dash app canvas (Aurora)
+   -----------------------------------------------------------------------------
+   The design SYSTEM (tokens + component treatment) is the source of truth in
+   dash-react (`@trops/dash-react/dist/designSystem.css`), imported before this
+   file in src/index.css. This file only adds what's app-specific: the global
+   font and the near-black gradient-mesh atmosphere behind the whole window.
+
+   Tokens used here (--font, --mesh, --bg) come from designSystem.css. Text
+   color is deliberately NOT set so the existing theme system keeps owning
+   per-surface text colors during migration. The Aurora component treatment is
+   gated on `data-design="aurora"` (set on <html> in src/index.html).
+   ============================================================================ */
+
+body {
+    font-family: var(--font);
+    background: var(--mesh), var(--bg);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* Chrome glass — app-side floating surfaces (right Bot Activity / AI panels)
+   that should read as raised glass over the seamless canvas, not opaque blocks.
+   Uses the same tokens as dash-react's .dr-panel; gated for reversibility. */
+[data-design="aurora"] .chrome-glass {
+    background: var(--raised) !important;
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
+}
+
+/* Chrome rail — the thin right icon rail (AI / Bots toggles). Seamless with the
+   canvas like the left sidebar: no fill, just a hairline divider. */
+[data-design="aurora"] .chrome-rail {
+    background: transparent !important;
+    border-color: var(--hairline) !important;
+}
+
+/* The dashboard stage/grid render opaque dark fills (bg-gray-950 / bg-gray-900)
+   that paint over the body's gradient-mesh atmosphere and flatten everything to
+   a single color. Make those full-height containers transparent so the mesh
+   shows through behind the glass cards — the mockup's depth. Scoped to
+   full-size containers (overflow-clip + h-full), so modals/inputs keep their
+   fills. The fill follows the theme's neutral palette (gray/slate/zinc/…), so
+   every dark-neutral variant is covered. */
+[data-design="aurora"]
+    :is(
+        .bg-gray-950,
+        .bg-gray-900,
+        .bg-slate-950,
+        .bg-slate-900,
+        .bg-zinc-950,
+        .bg-zinc-900,
+        .bg-neutral-950,
+        .bg-neutral-900,
+        .bg-stone-950,
+        .bg-stone-900
+    ).overflow-clip:is(.h-full, .w-full) {
+    background-color: transparent !important;
+    background-image: none !important;
+}

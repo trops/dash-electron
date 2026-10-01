@@ -7,7 +7,7 @@
  * @package Gmail
  */
 import { useState, useEffect } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { Button2, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
 import { McpReauthBanner } from "../components/McpReauthBanner";
@@ -137,13 +137,13 @@ function GmailInboxContent({ title }) {
             {/* Refresh */}
             <div className="flex items-center justify-between">
                 <SubHeading3 title="Inbox" />
-                <button
+                <Button2
+                    size="sm"
                     onClick={fetchInbox}
                     disabled={!isConnected || loading}
-                    className="px-3 py-1 text-xs rounded bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                 >
                     {loading ? "Loading..." : "Refresh"}
-                </button>
+                </Button2>
             </div>
 
             {/* Email List */}

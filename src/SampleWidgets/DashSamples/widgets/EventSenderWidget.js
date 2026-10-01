@@ -8,7 +8,7 @@
  * @package DashSamples
  */
 import { useState, useCallback } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Panel, SubHeading2, Button, SectionLabel } from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 
 function EventSenderContent({ title }) {
@@ -65,12 +65,7 @@ function EventSenderContent({ title }) {
 
             {/* Button Click Publisher */}
             <div className="flex items-center gap-3">
-                <button
-                    onClick={handleButtonClick}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-sm font-medium transition-colors"
-                >
-                    Click Me
-                </button>
+                <Button onClick={handleButtonClick}>Click Me</Button>
                 <span className="text-sm text-gray-400">
                     Clicks: {clickCount}
                 </span>
@@ -86,20 +81,14 @@ function EventSenderContent({ title }) {
                     placeholder="Type a message..."
                     className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500"
                 />
-                <button
-                    onClick={handleSendMessage}
-                    disabled={!message.trim()}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-md text-sm font-medium transition-colors"
-                >
+                <Button onClick={handleSendMessage} disabled={!message.trim()}>
                     Send
-                </button>
+                </Button>
             </div>
 
             {/* Event Log */}
             <div className="flex-1 min-h-0">
-                <div className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">
-                    Published Events
-                </div>
+                <SectionLabel className="mb-1">Published Events</SectionLabel>
                 <div className="overflow-y-auto max-h-48 space-y-1">
                     {eventLog.length === 0 ? (
                         <div className="text-xs text-gray-600 italic">

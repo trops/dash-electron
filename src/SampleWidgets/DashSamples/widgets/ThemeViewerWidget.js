@@ -7,7 +7,12 @@
  * @package DashSamples
  */
 import { useContext } from "react";
-import { Panel, SubHeading2, ThemeContext } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    ThemeContext,
+    SectionLabel,
+} from "@trops/dash-react";
 import { Widget, useDashboard } from "@trops/dash-core";
 
 const THEME_KEYS = [
@@ -36,9 +41,7 @@ function ThemeViewerContent({ title }) {
 
             {/* Theme Variant */}
             <div className="text-xs">
-                <div className="text-gray-500 mb-1 font-medium uppercase tracking-wide">
-                    Theme Variant
-                </div>
+                <SectionLabel className="mb-1">Theme Variant</SectionLabel>
                 <div className="flex items-center gap-2">
                     <span
                         className={`inline-block w-3 h-3 rounded-full border ${
@@ -58,9 +61,7 @@ function ThemeViewerContent({ title }) {
 
             {/* Theme Class Samples */}
             <div className="text-xs">
-                <div className="text-gray-500 mb-1 font-medium uppercase tracking-wide">
-                    Theme CSS Classes
-                </div>
+                <SectionLabel className="mb-1">Theme CSS Classes</SectionLabel>
                 <div className="overflow-y-auto max-h-48 space-y-1">
                     {THEME_KEYS.map((key) => (
                         <div
@@ -85,9 +86,9 @@ function ThemeViewerContent({ title }) {
 
             {/* App Info from useDashboard */}
             <div className="text-xs">
-                <div className="text-gray-500 mb-1 font-medium uppercase tracking-wide">
+                <SectionLabel className="mb-1">
                     App Info (useDashboard)
-                </div>
+                </SectionLabel>
                 <div className="space-y-1 font-mono">
                     <div>
                         <span className="text-gray-500">debug: </span>

@@ -8,7 +8,7 @@
  * @package Google Drive
  */
 import { useState, useCallback } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { Button, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
 import { McpReauthBanner } from "../components/McpReauthBanner";
@@ -174,13 +174,13 @@ function GDriveFileListContent({ title }) {
 
             {/* Controls */}
             <div className="flex items-center gap-2">
-                <button
+                <Button
+                    size="sm"
                     onClick={loadFiles}
                     disabled={!isConnected || loading}
-                    className="px-3 py-1 text-xs rounded bg-yellow-600 hover:bg-yellow-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                 >
                     {loading ? "Loading..." : "Load Files"}
-                </button>
+                </Button>
                 <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}

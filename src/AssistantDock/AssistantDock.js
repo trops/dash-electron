@@ -39,7 +39,7 @@ export const AssistantDock = () => {
                 onCollapsedChange={(c) => setOpen(c ? null : "ai")}
             />
             <div
-                className={`flex flex-col items-center w-10 border-l ${borderColor} ${bgDark} shrink-0 h-screen gap-1 pt-3`}
+                className={`chrome-rail flex flex-col items-center w-10 border-l ${borderColor} ${bgDark} shrink-0 h-screen gap-1 pt-3`}
             >
                 <button
                     onClick={() => toggle("ai")}

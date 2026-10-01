@@ -8,7 +8,7 @@
  * @package DashSamples
  */
 import { useState, useCallback } from "react";
-import { Panel, SubHeading2, Button } from "@trops/dash-react";
+import { Panel, SubHeading2, Button, SectionLabel } from "@trops/dash-react";
 import { Widget, useNotifications } from "@trops/dash-core";
 
 function NotificationContent({ title }) {
@@ -63,9 +63,7 @@ function NotificationContent({ title }) {
 
             {/* Declared Notification Types */}
             <div>
-                <div className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">
-                    Declared Types
-                </div>
+                <SectionLabel className="mb-1">Declared Types</SectionLabel>
                 <div className="flex flex-wrap gap-1">
                     {notificationTypes.map((n) => (
                         <span
@@ -80,9 +78,7 @@ function NotificationContent({ title }) {
 
             {/* Result Log */}
             <div className="flex-1 min-h-0">
-                <div className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">
-                    Results
-                </div>
+                <SectionLabel className="mb-1">Results</SectionLabel>
                 <div className="overflow-y-auto max-h-48 space-y-1">
                     {resultLog.length === 0 ? (
                         <div className="text-xs text-gray-600 italic">

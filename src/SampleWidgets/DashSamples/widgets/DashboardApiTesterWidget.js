@@ -12,36 +12,25 @@
  * @package DashSamples
  */
 import { useState, useEffect, useCallback } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Panel, SubHeading2, Button2, SectionLabel } from "@trops/dash-react";
 import { Widget, DashboardActionsApi } from "@trops/dash-core";
 
 function Section({ title, children }) {
     return (
         <div className="flex flex-col gap-2">
-            <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">
-                {title}
-            </div>
+            <SectionLabel>{title}</SectionLabel>
             <div className="flex flex-wrap gap-2">{children}</div>
         </div>
     );
 }
 
-function Btn({ onClick, children, color = "indigo" }) {
-    const colors = {
-        indigo: "bg-indigo-600 hover:bg-indigo-500",
-        emerald: "bg-emerald-600 hover:bg-emerald-500",
-        rose: "bg-rose-600 hover:bg-rose-500",
-        amber: "bg-amber-600 hover:bg-amber-500",
-        slate: "bg-slate-600 hover:bg-slate-500",
-    };
+// `color` is accepted for call-site compatibility but ignored — tiers are
+// chosen by intent, not color, so every tester action is a secondary button.
+function Btn({ onClick, children }) {
     return (
-        <button
-            type="button"
-            onClick={onClick}
-            className={`px-3 py-1.5 text-white rounded-md text-xs font-medium transition-colors ${colors[color]}`}
-        >
+        <Button2 type="button" onClick={onClick} size="sm">
             {children}
-        </button>
+        </Button2>
     );
 }
 
@@ -166,9 +155,7 @@ function DashboardApiTesterContent({ title }) {
 
             {/* Read Methods Panel */}
             <div className="flex flex-col gap-1 mt-2">
-                <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">
-                    Read Methods (window.__dashState)
-                </div>
+                <SectionLabel>Read Methods (window.__dashState)</SectionLabel>
                 <div className="bg-gray-800/50 rounded p-2 text-xs font-mono text-gray-300 space-y-1">
                     <div>
                         <span className="text-gray-500">currentPageName:</span>{" "}

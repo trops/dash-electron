@@ -8,7 +8,7 @@
  * @package DashSamples
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Panel, SubHeading2, SectionLabel } from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 
 function EventReceiverContent({ title }) {
@@ -67,9 +67,7 @@ function EventReceiverContent({ title }) {
 
             {/* Listener Status */}
             <div className="text-xs">
-                <div className="text-gray-500 mb-1 font-medium uppercase tracking-wide">
-                    Listener Status
-                </div>
+                <SectionLabel className="mb-1">Listener Status</SectionLabel>
                 <div className="flex items-center gap-2">
                     <span
                         className={`inline-block w-2 h-2 rounded-full ${
@@ -102,9 +100,9 @@ function EventReceiverContent({ title }) {
 
             {/* Received Events Log */}
             <div className="flex-1 min-h-0">
-                <div className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">
+                <SectionLabel className="mb-1">
                     Received Events ({eventLog.length})
-                </div>
+                </SectionLabel>
                 <div className="overflow-y-auto max-h-48 space-y-1">
                     {eventLog.length === 0 ? (
                         <div className="text-xs text-gray-600 italic">

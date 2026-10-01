@@ -7,7 +7,7 @@
  * @package AlgoliaSETools
  */
 import { useState, useEffect, useCallback } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { Panel, SubHeading2, Button } from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -161,15 +161,15 @@ function IndexComparatorContent({ title }) {
                             </select>
                         </div>
                     </div>
-                    <button
+                    <Button
+                        size="sm"
                         onClick={handleCompare}
                         disabled={
                             !indexA || !indexB || indexA === indexB || comparing
                         }
-                        className="px-3 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                     >
                         {comparing ? "Comparing..." : "Compare"}
-                    </button>
+                    </Button>
                     {indexA && indexB && indexA === indexB && (
                         <span className="text-[10px] text-yellow-500">
                             Select two different indices to compare.

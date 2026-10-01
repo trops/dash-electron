@@ -8,7 +8,7 @@
  * @package Chat
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { SubHeading2 } from "@trops/dash-react";
+import { SubHeading2, Button2, Button3 } from "@trops/dash-react";
 import { useWidgetEvents, useWidgetProviders } from "@trops/dash-core";
 import { ChatMessages } from "./components/ChatMessages";
 import { ChatInput } from "./components/ChatInput";
@@ -420,19 +420,13 @@ export function ChatCore({
                 </div>
                 <div className="flex items-center gap-1">
                     {isCliBackend && sessionActive && (
-                        <button
-                            onClick={handleEndSession}
-                            className="px-2 py-1 text-xs rounded bg-red-900/50 hover:bg-red-800/50 text-red-300 transition-colors"
-                        >
+                        <Button2 onClick={handleEndSession} size="sm" danger>
                             End Session
-                        </button>
+                        </Button2>
                     )}
-                    <button
-                        onClick={handleNewChat}
-                        className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
-                    >
+                    <Button2 onClick={handleNewChat} size="sm">
                         New Chat
-                    </button>
+                    </Button2>
                 </div>
             </div>
 
@@ -440,12 +434,13 @@ export function ChatCore({
             {error && (
                 <div className="mx-3 mt-2 p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
                     {error}
-                    <button
+                    <Button3
                         onClick={() => setError(null)}
-                        className="ml-2 text-red-400 hover:text-red-300"
+                        size="sm"
+                        className="ml-2"
                     >
                         Dismiss
-                    </button>
+                    </Button3>
                 </div>
             )}
 
@@ -492,12 +487,9 @@ export function ChatCore({
                         </li>
                         <li>Complete authentication in your browser</li>
                     </ol>
-                    <button
-                        onClick={handleCheckCliAgain}
-                        className="px-3 py-1 text-xs rounded bg-yellow-800/60 hover:bg-yellow-700/60 text-yellow-200 border border-yellow-600/50 transition-colors"
-                    >
+                    <Button2 onClick={handleCheckCliAgain} size="sm">
                         Check Again
-                    </button>
+                    </Button2>
                 </div>
             )}
 

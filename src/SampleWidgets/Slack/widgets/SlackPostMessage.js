@@ -7,7 +7,7 @@
  * @package Slack
  */
 import { useState, useEffect } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { Button, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { extractMcpText, isMcpError } from "../utils/mcpUtils";
 
@@ -125,7 +125,8 @@ function SlackPostMessageContent({ title, widgetId }) {
 
                 {/* Send Button */}
                 <div className="flex justify-end">
-                    <button
+                    <Button
+                        size="sm"
                         onClick={handleSendMessage}
                         disabled={
                             !isConnected ||
@@ -133,10 +134,9 @@ function SlackPostMessageContent({ title, widgetId }) {
                             !channelId ||
                             !message.trim()
                         }
-                        className="px-3 py-1 text-xs rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                     >
                         {loading ? "Sending..." : "Send Message"}
-                    </button>
+                    </Button>
                 </div>
             </div>
 

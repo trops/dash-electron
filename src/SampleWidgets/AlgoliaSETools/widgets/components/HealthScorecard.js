@@ -4,6 +4,8 @@
  * Renders the index health report as a scorecard with colored status indicators.
  */
 
+import { SectionLabel } from "@trops/dash-react";
+
 const STATUS_STYLES = {
     pass: {
         dot: "bg-green-500",
@@ -90,9 +92,7 @@ export function HealthScorecard({ score, maxScore, checks }) {
             {/* Checks by Category */}
             {Object.entries(categories).map(([category, catChecks]) => (
                 <div key={category} className="space-y-1">
-                    <div className="text-[10px] text-gray-500 font-medium uppercase tracking-wide px-1">
-                        {category}
-                    </div>
+                    <SectionLabel className="px-1">{category}</SectionLabel>
                     {catChecks.map((check, i) => {
                         const style = STATUS_STYLES[check.status];
                         return (

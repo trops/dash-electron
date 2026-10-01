@@ -7,7 +7,7 @@
  * @package Slack
  */
 import { useState } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { Button, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
@@ -115,13 +115,13 @@ function SlackSearchMessagesContent({ title, widgetId }) {
                         placeholder="Search Slack messages..."
                         className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500"
                     />
-                    <button
+                    <Button
+                        size="sm"
                         onClick={handleSearch}
                         disabled={!isConnected || loading || !query.trim()}
-                        className="px-3 py-1 text-xs rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                     >
                         {loading ? "Searching..." : "Search"}
-                    </button>
+                    </Button>
                 </div>
             </div>
 

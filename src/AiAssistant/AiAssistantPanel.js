@@ -9,7 +9,7 @@
  * the Dash MCP server so the assistant can manage dashboards.
  */
 import React, { useState, useContext, useEffect, useCallback } from "react";
-import { FontAwesomeIcon, ThemeContext } from "@trops/dash-react";
+import { FontAwesomeIcon } from "@trops/dash-react";
 import { ChatCore, AppContext } from "@trops/dash-core";
 
 const DEFAULT_SYSTEM_PROMPT = `You are the Dash AI Assistant — a helpful assistant built into the Dash desktop application. You help users manage dashboards, configure widgets, set up providers, and troubleshoot issues.
@@ -147,10 +147,8 @@ export const AiAssistantPanel = ({
     const [width, setWidth] = useState(384);
     const isDragging = React.useRef(false);
     const appContext = useContext(AppContext);
-    const { currentTheme } = useContext(ThemeContext);
-    const bgDark = currentTheme?.["bg-primary-dark"] || "bg-gray-900";
-    const borderColor =
-        currentTheme?.["border-primary-dark"] || "border-gray-700/50";
+    const bgDark = "chrome-glass";
+    const borderColor = "border-neutral-800";
 
     const settings = appContext?.settings || {};
     const providers = appContext?.providers || {};

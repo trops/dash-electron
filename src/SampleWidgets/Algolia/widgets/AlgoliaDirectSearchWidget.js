@@ -8,7 +8,7 @@
  * @package Algolia
  */
 import { useState, useEffect, useCallback } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { Panel, SubHeading2, SubHeading3, Button2 } from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -297,23 +297,23 @@ function AlgoliaDirectSearchContent({ title, defaultIndex, hitsPerPage = 10 }) {
                     {/* Pagination */}
                     {nbPages > 1 && (
                         <div className="flex items-center justify-center gap-2 pt-1">
-                            <button
+                            <Button2
                                 onClick={() => handleSearch(currentPage - 1)}
                                 disabled={currentPage === 0 || loading}
-                                className="px-2 py-0.5 text-xs rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-30 text-white"
+                                size="sm"
                             >
                                 Prev
-                            </button>
+                            </Button2>
                             <span className="text-xs text-gray-500">
                                 {currentPage + 1} / {nbPages}
                             </span>
-                            <button
+                            <Button2
                                 onClick={() => handleSearch(currentPage + 1)}
                                 disabled={currentPage >= nbPages - 1 || loading}
-                                className="px-2 py-0.5 text-xs rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-30 text-white"
+                                size="sm"
                             >
                                 Next
-                            </button>
+                            </Button2>
                         </div>
                     )}
                 </div>

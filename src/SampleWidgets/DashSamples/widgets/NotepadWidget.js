@@ -8,7 +8,13 @@
  * @package DashSamples
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    Button2,
+    Button3,
+} from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 
 function NotepadContent({ title, placeholder, autoSave, api, uuid }) {
@@ -128,24 +134,15 @@ function NotepadContent({ title, placeholder, autoSave, api, uuid }) {
 
             <div className="flex items-center justify-between">
                 <div className="flex gap-2">
-                    <button
-                        onClick={save}
-                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-md text-xs font-medium transition-colors"
-                    >
+                    <Button onClick={save} size="sm">
                         Save
-                    </button>
-                    <button
-                        onClick={handleLoad}
-                        className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded-md text-xs font-medium transition-colors"
-                    >
+                    </Button>
+                    <Button2 onClick={handleLoad} size="sm">
                         Load
-                    </button>
-                    <button
-                        onClick={handleClear}
-                        className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-md text-xs font-medium transition-colors"
-                    >
+                    </Button2>
+                    <Button3 onClick={handleClear} size="sm">
                         Clear
-                    </button>
+                    </Button3>
                 </div>
                 {lastSaved && (
                     <span className="text-xs text-gray-500">

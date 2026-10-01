@@ -7,7 +7,13 @@
  * @package Slack
  */
 import { useState } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import {
+    Button,
+    Button2,
+    Panel,
+    SubHeading2,
+    SubHeading3,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import {
     parseMcpResponse,
@@ -110,13 +116,13 @@ function SlackContent({ title }) {
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
                     <SubHeading3 title="Channels" />
-                    <button
+                    <Button2
+                        size="sm"
                         onClick={handleListChannels}
                         disabled={!isConnected || loading}
-                        className="px-3 py-1 text-xs rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                     >
                         {loading ? "Loading..." : "List Channels"}
-                    </button>
+                    </Button2>
                 </div>
                 {channels.length > 0 && (
                     <div className="max-h-32 overflow-y-auto space-y-1">
@@ -158,7 +164,8 @@ function SlackContent({ title }) {
                         disabled={!selectedChannel}
                         className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500 disabled:opacity-50"
                     />
-                    <button
+                    <Button
+                        size="sm"
                         onClick={handleSendMessage}
                         disabled={
                             !isConnected ||
@@ -166,10 +173,9 @@ function SlackContent({ title }) {
                             !selectedChannel ||
                             !message.trim()
                         }
-                        className="px-3 py-1 text-xs rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                     >
                         Send
-                    </button>
+                    </Button>
                 </div>
             </div>
 

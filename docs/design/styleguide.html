@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Dash — Design Refresh (Phase 0 preview)</title>
+        <style>
+            /* ---- Tokens (from DESIGN.md) ---- */
+            :root,
+            [data-theme="light"] {
+                --surface-canvas: #fbfbfd;
+                --surface-raised: #ffffff;
+                --surface-sunken: #f4f5f7;
+                --surface-hover: #f0f1f4;
+                --border-hairline: #e7e8ec;
+                --border-strong: #d8dae0;
+                --text-primary: #1c1e23;
+                --text-secondary: #5b606b;
+                --text-tertiary: #8a8f9a;
+                --text-disabled: #b4b8c0;
+                --accent-500: #5b4fe0;
+                --accent-600: #4b3fd0;
+                --accent-700: #3d33b0;
+                --accent-50: #eeecfe;
+                --on-accent: #ffffff;
+                --success: #1f9d6b;
+                --success-bg: #e7f6ef;
+                --warning: #c7861a;
+                --warning-bg: #fbf1de;
+                --danger: #d64545;
+                --danger-bg: #fbe9e9;
+                --glass-bg: rgba(255, 255, 255, 0.65);
+                --glass-border: rgba(20, 22, 28, 0.06);
+                --shadow-e1: 0 1px 2px rgba(16, 18, 24, 0.05);
+                --shadow-e2: 0 1px 2px rgba(16, 18, 24, 0.04),
+                    0 4px 12px rgba(16, 18, 24, 0.06);
+                --shadow-e3: 0 8px 24px rgba(16, 18, 24, 0.08),
+                    0 2px 6px rgba(16, 18, 24, 0.05);
+                --canvas-tint: radial-gradient(
+                        1200px 600px at 12% -10%,
+                        #efeafe 0%,
+                        transparent 55%
+                    ),
+                    radial-gradient(
+                        900px 500px at 100% 0%,
+                        #e9f0fe 0%,
+                        transparent 50%
+                    );
+            }
+            [data-theme="dark"] {
+                --surface-canvas: #0e0f13;
+                --surface-raised: #16181d;
+                --surface-sunken: #0a0b0e;
+                --surface-hover: #1c1f26;
+                --border-hairline: rgba(255, 255, 255, 0.08);
+                --border-strong: rgba(255, 255, 255, 0.14);
+                --text-primary: #ecedf0;
+                --text-secondary: rgba(255, 255, 255, 0.62);
+                --text-tertiary: rgba(255, 255, 255, 0.42);
+                --text-disabled: rgba(255, 255, 255, 0.28);
+                --accent-500: #7b6ef6;
+                --accent-600: #8f84f8;
+                --accent-700: #6a5cf0;
+                --accent-50: rgba(123, 110, 246, 0.14);
+                --on-accent: #ffffff;
+                --success: #34d399;
+                --success-bg: rgba(52, 211, 153, 0.12);
+                --warning: #e0a83a;
+                --warning-bg: rgba(224, 168, 58, 0.12);
+                --danger: #f26d6d;
+                --danger-bg: rgba(242, 109, 109, 0.12);
+                --glass-bg: rgba(22, 24, 30, 0.55);
+                --glass-border: rgba(255, 255, 255, 0.08);
+                --shadow-e1: 0 1px 2px rgba(0, 0, 0, 0.4);
+                --shadow-e2: 0 4px 14px rgba(0, 0, 0, 0.5);
+                --shadow-e3: 0 12px 32px rgba(0, 0, 0, 0.6);
+                --canvas-tint: radial-gradient(
+                        1200px 600px at 12% -10%,
+                        rgba(123, 110, 246, 0.1) 0%,
+                        transparent 55%
+                    ),
+                    radial-gradient(
+                        900px 500px at 100% 0%,
+                        rgba(90, 130, 246, 0.08) 0%,
+                        transparent 50%
+                    );
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                margin: 0;
+                font-family: "Inter", system-ui, -apple-system, "Segoe UI",
+                    sans-serif;
+                font-size: 14px;
+                line-height: 22px;
+                color: var(--text-primary);
+                background: var(--surface-canvas);
+                background-image: var(--canvas-tint);
+                background-attachment: fixed;
+                -webkit-font-smoothing: antialiased;
+            }
+            .wrap {
+                max-width: 1040px;
+                margin: 0 auto;
+                padding: 32px 24px 80px;
+            }
+            header.top {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 8px;
+            }
+            h1 {
+                font-size: 24px;
+                line-height: 32px;
+                font-weight: 600;
+                letter-spacing: -0.01em;
+                margin: 0;
+            }
+            .sub {
+                color: var(--text-secondary);
+                margin: 4px 0 28px;
+            }
+            h2.section {
+                font-size: 12px;
+                line-height: 16px;
+                font-weight: 600;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--text-tertiary);
+                margin: 36px 0 14px;
+            }
+            .grid {
+                display: grid;
+                gap: 16px;
+            }
+            .cards {
+                grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            }
+
+            /* Primitives */
+            .card {
+                background: var(--surface-raised);
+                border: 1px solid var(--border-hairline);
+                border-radius: 14px;
+                box-shadow: var(--shadow-e1);
+                padding: 20px;
+            }
+            .btn {
+                font: inherit;
+                font-weight: 500;
+                border-radius: 10px;
+                padding: 9px 14px;
+                border: 1px solid transparent;
+                cursor: pointer;
+                transition: background 140ms ease, box-shadow 140ms ease,
+                    transform 80ms ease;
+            }
+            .btn:active {
+                transform: translateY(1px);
+            }
+            .btn-primary {
+                background: var(--accent-500);
+                color: var(--on-accent);
+            }
+            .btn-primary:hover {
+                background: var(--accent-600);
+                box-shadow: var(--shadow-e1);
+            }
+            .btn-secondary {
+                background: var(--surface-raised);
+                color: var(--text-primary);
+                border-color: var(--border-hairline);
+            }
+            .btn-secondary:hover {
+                background: var(--surface-hover);
+            }
+            .btn-ghost {
+                background: transparent;
+                color: var(--text-secondary);
+            }
+            .btn-ghost:hover {
+                background: var(--surface-hover);
+                color: var(--text-primary);
+            }
+            .field label {
+                display: block;
+                font-weight: 500;
+                margin-bottom: 6px;
+            }
+            .input,
+            .select {
+                width: 100%;
+                font: inherit;
+                color: var(--text-primary);
+                background: var(--surface-sunken);
+                border: 1px solid var(--border-hairline);
+                border-radius: 10px;
+                padding: 9px 12px;
+                outline: none;
+            }
+            .input:focus,
+            .select:focus {
+                border-color: var(--accent-500);
+                box-shadow: 0 0 0 3px var(--accent-50);
+            }
+            .input::placeholder {
+                color: var(--text-tertiary);
+            }
+            .tag {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 12px;
+                font-weight: 500;
+                border-radius: 9999px;
+                padding: 3px 10px;
+                background: var(--accent-50);
+                color: var(--accent-600);
+            }
+            .muted {
+                color: var(--text-secondary);
+            }
+            .hint {
+                color: var(--text-tertiary);
+                font-size: 12px;
+            }
+
+            /* Swatches */
+            .swatches {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 12px;
+            }
+            .swatch {
+                border: 1px solid var(--border-hairline);
+                border-radius: 12px;
+                overflow: hidden;
+                background: var(--surface-raised);
+            }
+            .swatch .chip {
+                height: 56px;
+            }
+            .swatch .meta {
+                padding: 8px 10px;
+                font-size: 12px;
+            }
+            .swatch .meta b {
+                display: block;
+                font-weight: 600;
+            }
+            .swatch .meta span {
+                color: var(--text-tertiary);
+            }
+
+            /* Type scale */
+            .type-row {
+                display: flex;
+                align-items: baseline;
+                gap: 16px;
+                padding: 8px 0;
+                border-bottom: 1px solid var(--border-hairline);
+            }
+            .type-row .lbl {
+                width: 120px;
+                color: var(--text-tertiary);
+                font-size: 12px;
+                flex: none;
+            }
+            .t-display {
+                font-size: 32px;
+                line-height: 40px;
+                font-weight: 600;
+                letter-spacing: -0.02em;
+            }
+            .t-h1 {
+                font-size: 24px;
+                line-height: 32px;
+                font-weight: 600;
+                letter-spacing: -0.01em;
+            }
+            .t-h2 {
+                font-size: 20px;
+                line-height: 28px;
+                font-weight: 600;
+            }
+            .t-h3 {
+                font-size: 16px;
+                line-height: 24px;
+                font-weight: 600;
+            }
+            .t-body {
+                font-size: 14px;
+                line-height: 22px;
+            }
+            .t-small {
+                font-size: 13px;
+                line-height: 20px;
+            }
+            .t-caption {
+                font-size: 12px;
+                line-height: 16px;
+                font-weight: 500;
+                letter-spacing: 0.02em;
+            }
+
+            /* Glass */
+            .glass-stage {
+                position: relative;
+                border-radius: 16px;
+                padding: 28px;
+                overflow: hidden;
+                border: 1px solid var(--border-hairline);
+                background: radial-gradient(
+                        600px 300px at 20% 20%,
+                        var(--accent-500) 0%,
+                        transparent 60%
+                    ),
+                    radial-gradient(
+                        500px 260px at 90% 80%,
+                        #22b8cf 0%,
+                        transparent 55%
+                    ),
+                    var(--surface-sunken);
+            }
+            .glass {
+                background: var(--glass-bg);
+                -webkit-backdrop-filter: blur(16px);
+                backdrop-filter: blur(16px);
+                border: 1px solid var(--glass-border);
+                border-radius: 14px;
+                box-shadow: var(--shadow-e2);
+                padding: 16px 18px;
+                max-width: 380px;
+            }
+            .row {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .avatar {
+                width: 32px;
+                height: 32px;
+                border-radius: 9999px;
+                background: var(--accent-500);
+                color: #fff;
+                display: grid;
+                place-items: center;
+                font-weight: 600;
+                flex: none;
+            }
+            .toggle {
+                font: inherit;
+                cursor: pointer;
+                border: 1px solid var(--border-hairline);
+                background: var(--surface-raised);
+                color: var(--text-primary);
+                border-radius: 9999px;
+                padding: 7px 14px;
+                box-shadow: var(--shadow-e1);
+            }
+            .settings-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 14px 0;
+                border-bottom: 1px solid var(--border-hairline);
+            }
+            .settings-row:last-child {
+                border-bottom: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="wrap">
+            <header class="top">
+                <h1>Dash — Design Refresh</h1>
+                <button class="toggle" onclick="tg()">
+                    ◐ Toggle light / dark
+                </button>
+            </header>
+            <p class="sub">
+                Phase 0 preview. Light-first, clean, quiet premium depth
+                (Kimi-calibrated). Everything here is driven by the tokens in
+                <code>DESIGN.md</code>.
+            </p>
+
+            <h2 class="section">Color · surfaces &amp; text</h2>
+            <div class="swatches">
+                <div class="swatch">
+                    <div
+                        class="chip"
+                        style="background: var(--surface-canvas)"
+                    ></div>
+                    <div class="meta">
+                        <b>Canvas</b><span>--surface-canvas</span>
+                    </div>
+                </div>
+                <div class="swatch">
+                    <div
+                        class="chip"
+                        style="background: var(--surface-raised)"
+                    ></div>
+                    <div class="meta">
+                        <b>Raised</b><span>--surface-raised</span>
+                    </div>
+                </div>
+                <div class="swatch">
+                    <div
+                        class="chip"
+                        style="background: var(--surface-sunken)"
+                    ></div>
+                    <div class="meta">
+                        <b>Sunken</b><span>--surface-sunken</span>
+                    </div>
+                </div>
+                <div class="swatch">
+                    <div
+                        class="chip"
+                        style="background: var(--text-primary)"
+                    ></div>
+                    <div class="meta">
+                        <b>Text primary</b><span>--text-primary</span>
+                    </div>
+                </div>
+                <div class="swatch">
+                    <div
+                        class="chip"
+                        style="background: var(--text-secondary)"
+                    ></div>
+                    <div class="meta">
+                        <b>Text secondary</b><span>--text-secondary</span>
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="section">Color · accent &amp; semantic</h2>
+            <div class="swatches">
+                <div class="swatch">
+                    <div
+                        class="chip"
+                        style="background: var(--accent-500)"
+                    ></div>
+                    <div class="meta">
+                        <b>Accent</b><span>--accent-500</span>
+                    </div>
+                </div>
+                <div class="swatch">
+                    <div
+                        class="chip"
+                        style="background: var(--accent-50)"
+                    ></div>
+                    <div class="meta">
+                        <b>Accent tint</b><span>--accent-50</span>
+                    </div>
+                </div>
+                <div class="swatch">
+                    <div class="chip" style="background: var(--success)"></div>
+                    <div class="meta"><b>Success</b><span>--success</span></div>
+                </div>
+                <div class="swatch">
+                    <div class="chip" style="background: var(--warning)"></div>
+                    <div class="meta"><b>Warning</b><span>--warning</span></div>
+                </div>
+                <div class="swatch">
+                    <div class="chip" style="background: var(--danger)"></div>
+                    <div class="meta"><b>Danger</b><span>--danger</span></div>
+                </div>
+            </div>
+
+            <h2 class="section">Typography</h2>
+            <div class="card">
+                <div class="type-row">
+                    <span class="lbl">Display · 32/600</span
+                    ><span class="t-display">Delegate the busywork</span>
+                </div>
+                <div class="type-row">
+                    <span class="lbl">H1 · 24/600</span
+                    ><span class="t-h1">Your bots, running quietly</span>
+                </div>
+                <div class="type-row">
+                    <span class="lbl">H2 · 20/600</span
+                    ><span class="t-h2">Bot Activity</span>
+                </div>
+                <div class="type-row">
+                    <span class="lbl">H3 · 16/600</span
+                    ><span class="t-h3">Run on events</span>
+                </div>
+                <div class="type-row">
+                    <span class="lbl">Body · 14/400</span
+                    ><span class="t-body"
+                        >The AI that runs this bot. Claude Code (CLI) uses your
+                        Claude login — no API key needed.</span
+                    >
+                </div>
+                <div class="type-row">
+                    <span class="lbl">Small · 13/400</span
+                    ><span class="t-small muted"
+                        >Tools on these integrations route through the approval
+                        policy.</span
+                    >
+                </div>
+                <div class="type-row" style="border: 0">
+                    <span class="lbl">Caption · 12/500</span
+                    ><span class="t-caption" style="color: var(--text-tertiary)"
+                        >RECENTLY SEEN</span
+                    >
+                </div>
+            </div>
+
+            <h2 class="section">Buttons</h2>
+            <div class="card">
+                <div class="row" style="gap: 12px; flex-wrap: wrap">
+                    <button class="btn btn-primary">Create bot</button>
+                    <button class="btn btn-secondary">Cancel</button>
+                    <button class="btn btn-ghost">Advanced (cron)</button>
+                    <span class="tag">● pr.opened</span>
+                    <span
+                        class="tag"
+                        style="
+                            background: var(--success-bg);
+                            color: var(--success);
+                        "
+                        >running</span
+                    >
+                </div>
+            </div>
+
+            <h2 class="section">Inputs</h2>
+            <div
+                class="card grid"
+                style="grid-template-columns: 1fr 1fr; gap: 16px"
+            >
+                <div class="field">
+                    <label>Name</label>
+                    <input class="input" placeholder="e.g. PR Digest" />
+                </div>
+                <div class="field">
+                    <label>Provider</label>
+                    <select class="select">
+                        <option>Anthropic</option>
+                        <option>Claude Code (CLI) — no API key</option>
+                    </select>
+                </div>
+                <div class="field" style="grid-column: 1/-1">
+                    <label>Instructions</label>
+                    <input
+                        class="input"
+                        placeholder="What should this bot do?"
+                    />
+                    <div class="hint" style="margin-top: 6px">
+                        Body-14 workhorse, hairline border, accent focus ring.
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="section">Cards</h2>
+            <div class="grid cards">
+                <div class="card">
+                    <div class="row">
+                        <div class="avatar">M</div>
+                        <div>
+                            <b>Memo</b>
+                            <div class="hint">Anthropic · scheduled</div>
+                        </div>
+                    </div>
+                    <p class="muted" style="margin: 12px 0 0">
+                        Remembers facts across runs using memory tools.
+                    </p>
+                </div>
+                <div class="card">
+                    <div class="row">
+                        <div class="avatar" style="background: var(--success)">
+                            C
+                        </div>
+                        <div>
+                            <b>Coder</b>
+                            <div class="hint">Claude Agent · native tools</div>
+                        </div>
+                    </div>
+                    <p class="muted" style="margin: 12px 0 0">
+                        Creates and edits files in its sandbox.
+                    </p>
+                </div>
+                <div class="card">
+                    <div class="settings-row">
+                        <div>
+                            <b>Do not disturb</b>
+                            <div class="hint">Pause bot notifications</div>
+                        </div>
+                        <div class="tag">Off</div>
+                    </div>
+                    <div class="settings-row">
+                        <div>
+                            <b>Run in background</b>
+                            <div class="hint">Keep running when closed</div>
+                        </div>
+                        <div
+                            class="tag"
+                            style="
+                                background: var(--accent-50);
+                                color: var(--accent-600);
+                            "
+                        >
+                            On
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="section">
+                Glass · floating surfaces only (dock, palette, menus)
+            </h2>
+            <div class="glass-stage">
+                <div class="glass">
+                    <div class="row" style="justify-content: space-between">
+                        <div class="row">
+                            <div
+                                class="avatar"
+                                style="width: 28px; height: 28px"
+                            >
+                                🤖
+                            </div>
+                            <b>Bot Activity</b>
+                        </div>
+                        <span
+                            class="tag"
+                            style="
+                                background: var(--danger-bg);
+                                color: var(--danger);
+                            "
+                            >1 pending</span
+                        >
+                    </div>
+                    <p class="muted" style="margin: 12px 0 4px">
+                        Coder wants to run <b>Write</b> → hello.txt
+                    </p>
+                    <div class="row" style="margin-top: 12px">
+                        <button
+                            class="btn btn-primary"
+                            style="padding: 7px 12px"
+                        >
+                            Approve
+                        </button>
+                        <button class="btn btn-ghost" style="padding: 7px 12px">
+                            Deny
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <p class="hint" style="margin-top: 36px">
+                This is a static preview of the token direction — not the app.
+                React to the palette, type, spacing, and the restraint of the
+                glass. Next step (Phase 1) ships these as a selectable “Refresh
+                — Light” theme you can toggle in the real app.
+            </p>
+        </div>
+
+        <script>
+            function tg() {
+                var h = document.documentElement;
+                h.dataset.theme = h.dataset.theme === "dark" ? "light" : "dark";
+            }
+        </script>
+    </body>
+</html>

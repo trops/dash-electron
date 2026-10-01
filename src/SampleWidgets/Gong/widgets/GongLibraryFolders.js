@@ -7,7 +7,7 @@
  * @package Gong
  */
 import { useState, useCallback } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { Button2, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
@@ -146,13 +146,13 @@ function GongLibraryFoldersContent({ title }) {
             <div className="space-y-1">
                 <div className="flex items-center justify-between">
                     <SubHeading3 title="Workspaces" />
-                    <button
+                    <Button2
+                        size="xs"
                         onClick={handleLoadWorkspaces}
                         disabled={!isConnected || loading}
-                        className="px-2 py-1 text-[10px] rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-white"
                     >
                         {loading && !selectedWorkspace ? "Loading..." : "Load"}
-                    </button>
+                    </Button2>
                 </div>
                 {workspaces.length > 0 && (
                     <div className="flex flex-wrap gap-1">

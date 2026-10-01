@@ -7,7 +7,13 @@
  * @package Gmail
  */
 import { useState } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import {
+    Button,
+    Button3,
+    Panel,
+    SubHeading2,
+    SubHeading3,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
 import { McpReauthBanner } from "../components/McpReauthBanner";
@@ -186,13 +192,13 @@ function GmailContent({ title, defaultQuery }) {
                         placeholder="Gmail search query..."
                         className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-red-500"
                     />
-                    <button
+                    <Button
+                        size="sm"
                         onClick={handleSearch}
                         disabled={!isConnected || loading}
-                        className="px-3 py-1 text-xs rounded bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                     >
                         Search
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -234,15 +240,15 @@ function GmailContent({ title, defaultQuery }) {
                                 "Message"
                             }
                         />
-                        <button
+                        <Button3
+                            size="sm"
                             onClick={() => {
                                 setEmailBody(null);
                                 setSelectedEmail(null);
                             }}
-                            className="text-xs text-gray-500 hover:text-gray-300"
                         >
                             Back
-                        </button>
+                        </Button3>
                     </div>
                     <div className="text-xs text-gray-500">
                         From: {emailBody.from || selectedEmail?.from || "—"}

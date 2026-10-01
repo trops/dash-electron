@@ -7,7 +7,13 @@
  * @package GitHub
  */
 import { useState } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import {
+    Button,
+    Button2,
+    Panel,
+    SubHeading2,
+    SubHeading3,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { parseMcpResponse, parseGitHubTextEntries } from "../utils/mcpUtils";
 
@@ -114,13 +120,13 @@ function GitHubContent({ title, defaultRepo }) {
                         placeholder="Search repos..."
                         className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-gray-400"
                     />
-                    <button
+                    <Button
+                        size="sm"
                         onClick={handleSearchRepos}
                         disabled={!isConnected || loading}
-                        className="px-3 py-1 text-xs rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 disabled:cursor-not-allowed text-white"
                     >
                         Search
-                    </button>
+                    </Button>
                 </div>
                 {repos.length > 0 && (
                     <div className="max-h-32 overflow-y-auto space-y-1">
@@ -157,13 +163,13 @@ function GitHubContent({ title, defaultRepo }) {
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
                         <SubHeading3 title={`Issues: ${selectedRepo}`} />
-                        <button
+                        <Button2
+                            size="sm"
                             onClick={() => handleListIssues()}
                             disabled={!isConnected || loading}
-                            className="px-2 py-0.5 text-xs rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white"
                         >
                             Refresh
-                        </button>
+                        </Button2>
                     </div>
                     <div className="max-h-48 overflow-y-auto space-y-1">
                         {issues.length === 0 ? (

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "@trops/dash-react";
 
 function todayStr() {
     return new Date().toISOString().slice(0, 10);
@@ -94,13 +95,14 @@ export function CreateEventForm({ onSubmit, loading }) {
                 rows={2}
                 className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
             />
-            <button
+            <Button
                 type="submit"
+                size="sm"
+                block
                 disabled={loading || !title.trim()}
-                className="w-full px-3 py-1.5 text-xs rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white"
             >
                 {loading ? "Creating..." : "Create Event"}
-            </button>
+            </Button>
 
             {result === "success" && (
                 <div className="p-2 bg-green-900/30 border border-green-700 rounded text-green-300 text-xs">

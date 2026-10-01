@@ -75,6 +75,26 @@ module.exports = {
     ],
     theme: {
         extend: {
+            // Aurora fonts (slice 1). Makes the default sans + `font-mono`
+            // resolve to Hanken Grotesk / JetBrains Mono app-wide. Loaded via
+            // @fontsource on jsDelivr in src/index.html (CSP-allowlisted).
+            fontFamily: {
+                sans: [
+                    '"Hanken Grotesk Variable"',
+                    '"Hanken Grotesk"',
+                    "system-ui",
+                    "-apple-system",
+                    "sans-serif",
+                ],
+                mono: [
+                    '"JetBrains Mono Variable"',
+                    '"JetBrains Mono"',
+                    "ui-monospace",
+                    "SFMono-Regular",
+                    "Menlo",
+                    "monospace",
+                ],
+            },
             padding: {
                 "1/2": "50%",
                 "1/5": "20%",
