@@ -82,6 +82,11 @@ export function reduceFeed(feed, event) {
         case "skipped":
             next.push({ type: "skipped", reason: event.reason });
             break;
+        // Non-fatal notice, e.g. a selected provider couldn't start — the run
+        // continues without that provider's tools.
+        case "warning":
+            next.push({ type: "warning", message: event.message });
+            break;
         // "session" carries resume state, not display content — ignore.
         default:
             break;

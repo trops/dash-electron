@@ -72,6 +72,17 @@ describe("reduceFeed", () => {
         expect(reduceFeed([], { type: "session", session: {} })).toEqual([]);
     });
 
+    it("appends a warning (e.g. a provider that couldn't start)", () => {
+        expect(
+            reduceFeed([], {
+                type: "warning",
+                message: "gmail couldn't start: token expired",
+            })
+        ).toEqual([
+            { type: "warning", message: "gmail couldn't start: token expired" },
+        ]);
+    });
+
     it("is pure (does not mutate the input array)", () => {
         const orig = [];
         const out = reduceFeed(orig, { type: "text", text: "hi" });

@@ -703,12 +703,24 @@ const {
     BOTS_PAUSE_BOT,
     BOTS_RESUME_BOT,
     BOTS_GET_PAUSE_STATE,
+    BOTS_LIST_TOOL_SOURCES,
 } = coreEvents;
 
 // Bot Factory background mode (Slice 6b): system tray, powerSaveBlocker, and
 // login-item management so scheduled bots keep running with the window closed.
 const { createBotTray, updateBotTray, destroyBotTray } = require("./botTray");
 const { botsWantBackground } = require("./botBackground");
+const { resolveAppIdentifier } = require("./appIdentifier");
+// package.json sits one level above public/electron.js (the "main" entry) in
+// dev and inside the packaged app.asar. Missing → resolveAppIdentifier's
+// default applies.
+function readPackageName() {
+    try {
+        return require("../package.json").name;
+    } catch (_e) {
+        return null;
+    }
+}
 
 // Widget System
 const { setupWidgetRegistryHandlers } = widgetRegistry;
@@ -2259,6 +2271,11 @@ function createWindow() {
         logger.loggedHandle(BOTS_GET_PAUSE_STATE, () =>
             botController.getPauseState()
         );
+        // The user's Dash MCP providers a bot can use (names/status only —
+        // no credentials cross to the renderer).
+        logger.loggedHandle(BOTS_LIST_TOOL_SOURCES, (e, msg) =>
+            botController.listToolSources((msg && msg.workspaceId) || null)
+        );
 
         // --- Widget Event IPC Bridge ---
         // Broadcasts widget pub/sub events to all windows except the sender.
@@ -3615,7 +3632,9 @@ app.whenReady().then(() => {
         getMainWindow: () => mainWindow,
         mcpController,
         providerController,
-        appId: process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron",
+        // Not raw process.env: in dev, dotenv leaves REACT_APP_IDENTIFIER as the
+        // literal "$npm_package_name", which pointed bots at an empty data dir.
+        appId: resolveAppIdentifier(process.env, readPackageName()),
     });
 
     // --- Bot Factory background mode: tray + login item (Slice 6b) ---
