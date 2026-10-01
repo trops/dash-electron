@@ -1,5 +1,11 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { EmptyState, FontAwesomeIcon } from "@trops/dash-react";
+import {
+    Button,
+    Button2,
+    Button3,
+    EmptyState,
+    FontAwesomeIcon,
+} from "@trops/dash-react";
 import { reduceFeed } from "./runFeed";
 
 /**
@@ -113,8 +119,15 @@ export const BotActivityPanel = ({
         setRunning(false);
     };
 
-    const decide = async (approvalId, allow) => {
-        if (bots) await bots.approve(approvalId, { allow });
+    // remember=true ("Always allow") saves the approval for this bot +
+    // provider + tool so later runs use it without asking.
+    const decide = async (approvalId, allow, remember = false) => {
+        if (bots) {
+            await bots.approve(
+                approvalId,
+                remember ? { allow, remember: true } : { allow }
+            );
+        }
         setApprovals((prev) => prev.filter((a) => a.id !== approvalId));
     };
 
@@ -187,23 +200,34 @@ export const BotActivityPanel = ({
                                     <span className="text-sm text-gray-200">
                                         {(a.request && a.request.toolName) ||
                                             "tool"}{" "}
-                                        on{" "}
-                                        {(a.request && a.request.serverName) ||
-                                            "server"}
+                                        {a.request && a.request.serverName
+                                            ? `on ${a.request.serverName}`
+                                            : "(built-in)"}
                                     </span>
-                                    <div className="flex flex-row gap-2">
-                                        <button
+                                    <div className="flex flex-row flex-wrap gap-2">
+                                        <Button2
+                                            title="Allow once"
+                                            size="xs"
                                             onClick={() => decide(a.id, true)}
-                                            className="px-2 py-1 rounded bg-green-600 text-white text-xs"
-                                        >
-                                            Approve
-                                        </button>
-                                        <button
+                                        />
+                                        {/* Only provider tools can be
+                                            remembered; built-ins always ask. */}
+                                        {a.request && a.request.serverName ? (
+                                            <Button
+                                                title="Always allow"
+                                                size="xs"
+                                                tooltip="Let this bot use this tool without asking again (revoke in Settings › Bots)"
+                                                onClick={() =>
+                                                    decide(a.id, true, true)
+                                                }
+                                            />
+                                        ) : null}
+                                        <Button3
+                                            title="Deny"
+                                            size="xs"
+                                            danger
                                             onClick={() => decide(a.id, false)}
-                                            className="px-2 py-1 rounded bg-red-600 text-white text-xs"
-                                        >
-                                            Deny
-                                        </button>
+                                        />
                                     </div>
                                 </div>
                             ))}
