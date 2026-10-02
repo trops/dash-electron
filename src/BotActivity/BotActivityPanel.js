@@ -1,12 +1,25 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useContext } from "react";
 import {
     Button,
     Button2,
     Button3,
     EmptyState,
     FontAwesomeIcon,
+    SegmentedControl,
 } from "@trops/dash-react";
+import {
+    WorkspaceContext,
+    BotEditorModal,
+    sameWorkspace,
+} from "@trops/dash-core";
 import { reduceFeed } from "./runFeed";
+
+// Which bots "Run a bot" lists (bot-teams TEAM-001 AC5). All is the default,
+// so existing unassigned bots never seem to disappear.
+const SCOPE_OPTIONS = [
+    { value: "all", label: "All" },
+    { value: "dashboard", label: "This dashboard" },
+];
 
 /**
  * BotActivityPanel — a right slide-over (mirrors AiAssistantPanel) for watching
@@ -41,6 +54,19 @@ export const BotActivityPanel = ({
     const [feed, setFeed] = useState([]);
     const [running, setRunning] = useState(false);
     const [approvals, setApprovals] = useState([]);
+
+    // The dashboard you're on (DashboardStage provides it to the dock): new
+    // bots join its team, and the list can be narrowed to that team.
+    const { workspaceData: currentDashboard = null, workspaces = [] } =
+        useContext(WorkspaceContext) || {};
+    const [scope, setScope] = useState("all");
+    const [editorOpen, setEditorOpen] = useState(false);
+    const visibleBots =
+        scope === "dashboard" && currentDashboard
+            ? botList.filter((b) =>
+                  sameWorkspace(b.workspaceId, currentDashboard.id)
+              )
+            : botList;
 
     const refreshBots = useCallback(async () => {
         if (!bots) return;
@@ -156,6 +182,17 @@ export const BotActivityPanel = ({
 
     return (
         <div className="flex flex-row shrink-0 h-screen" style={{ width: 384 }}>
+            {/* The shared bot editor (dash-core), on this dashboard's team. */}
+            <BotEditorModal
+                isOpen={editorOpen}
+                onClose={() => setEditorOpen(false)}
+                workspaceId={currentDashboard ? currentDashboard.id : null}
+                workspaces={workspaces}
+                onSaved={(saved) => {
+                    refreshBots();
+                    if (saved && saved.id) setSelectedBotId(saved.id);
+                }}
+            />
             <div
                 className={`flex flex-col flex-1 min-w-0 ${bgDark} overflow-hidden border-l ${borderColor}`}
             >
@@ -238,16 +275,37 @@ export const BotActivityPanel = ({
                     <div
                         className={`border-b ${borderColor} p-3 flex flex-col gap-2`}
                     >
-                        <span className="text-xs font-medium text-gray-400">
-                            Run a bot
-                        </span>
+                        <div className="flex flex-row items-center justify-between gap-2">
+                            <span className="text-xs font-medium text-gray-400">
+                                Run a bot
+                            </span>
+                            <Button3
+                                title="New bot"
+                                size="xs"
+                                tooltip={
+                                    currentDashboard
+                                        ? "Create a bot on this dashboard's team"
+                                        : "Create a bot"
+                                }
+                                onClick={() => setEditorOpen(true)}
+                            />
+                        </div>
+                        {currentDashboard ? (
+                            <SegmentedControl
+                                options={SCOPE_OPTIONS}
+                                value={scope}
+                                onChange={setScope}
+                                ariaLabel="Which bots"
+                            />
+                        ) : null}
                         <select
                             value={selectedBotId}
                             onChange={(e) => setSelectedBotId(e.target.value)}
+                            aria-label="Bot to run"
                             className="bg-gray-800 text-gray-200 text-sm rounded p-1.5"
                         >
                             <option value="">Select a bot…</option>
-                            {botList.map((b) => (
+                            {visibleBots.map((b) => (
                                 <option key={b.id} value={b.id}>
                                     {b.name}
                                 </option>
