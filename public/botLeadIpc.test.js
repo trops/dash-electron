@@ -32,3 +32,20 @@ describe("team lead IPC handlers", () => {
         });
     }
 });
+
+// Bots view backend (bot-teams TEAM-011 / B1).
+describe("Bots view IPC handlers", () => {
+    it("BOTS_GET_RUNS → botController.getRuns(botId, { limit })", () => {
+        assert.match(
+            src,
+            /loggedHandle\(\s*BOTS_GET_RUNS,[\s\S]{0,200}botController\.getRuns\([\s\S]{0,80}limit/
+        );
+    });
+
+    it("BOTS_RUN passes continueConversation (reply to continue)", () => {
+        assert.match(
+            src,
+            /loggedHandle\(\s*BOTS_RUN,[\s\S]{0,200}botController\.run\([\s\S]{0,120}continueConversation/
+        );
+    });
+});

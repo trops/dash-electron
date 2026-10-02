@@ -713,6 +713,7 @@ const {
     BOTS_GET_SETTINGS,
     BOTS_SET_SETTINGS,
     BOTS_ASK_LEAD,
+    BOTS_GET_RUNS,
 } = coreEvents;
 
 // Bot Factory background mode (Slice 6b): system tray, powerSaveBlocker, and
@@ -2230,8 +2231,19 @@ function createWindow() {
             syncBackgroundMode();
             return result;
         });
-        logger.loggedHandle(BOTS_RUN, (e, { botId, prompt }) =>
-            botController.run(botId, prompt)
+        logger.loggedHandle(
+            BOTS_RUN,
+            (e, { botId, prompt, continueConversation }) =>
+                // A reply in the Bots view continues the bot's conversation.
+                botController.run(botId, prompt, {
+                    continueConversation: !!continueConversation,
+                })
+        );
+        // Bots view (TEAM-011): a bot's run history.
+        logger.loggedHandle(BOTS_GET_RUNS, (e, msg) =>
+            botController.getRuns(msg && msg.botId, {
+                limit: msg && msg.limit,
+            })
         );
         logger.loggedHandle(BOTS_STOP, (e, { botId }) =>
             botController.stop(botId)
