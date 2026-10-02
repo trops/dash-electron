@@ -24,6 +24,17 @@ jest.mock("@trops/dash-react", () => {
         Button3: Btn,
         EmptyState: () => null,
         FontAwesomeIcon: () => null,
+        SegmentedControl: () => null,
+    };
+});
+
+// The panel's team controls come from dash-core (not under test here).
+jest.mock("@trops/dash-core", () => {
+    const React = require("react");
+    return {
+        WorkspaceContext: React.createContext({ workspaceData: null }),
+        sameWorkspace: () => true,
+        BotEditorModal: () => null,
     };
 });
 
