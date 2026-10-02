@@ -6,8 +6,17 @@ const extendedApi = {
     // Bot Factory renderer bridge (mirrors defaultMainApi.llm / .scheduler).
     bots: botApi,
     popout: {
-        open: (workspaceId) =>
-            ipcRenderer.invoke("popout-open", { workspaceId }),
+        // opts (optional): { view: "bots", botId, tab } — open in the Bots
+        // view on a bot (bot-teams TEAM-011 B3). Validated in main.
+        open: (workspaceId, opts = {}) =>
+            ipcRenderer.invoke("popout-open", { ...opts, workspaceId }),
+        // An already-open popout asked to show a bot. Returns an unsubscribe.
+        onShowBots: (callback) => {
+            const listener = (_e, payload) => callback(payload);
+            ipcRenderer.on("popout-show-bots", listener);
+            return () =>
+                ipcRenderer.removeListener("popout-show-bots", listener);
+        },
         setTitle: (workspaceId, title) =>
             ipcRenderer.invoke("popout-set-title", { workspaceId, title }),
     },

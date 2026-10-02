@@ -172,6 +172,7 @@ const {
     validate: validateIpc,
     SCHEMAS: IPC_SCHEMAS,
 } = require("./lib/ipcValidators.cjs");
+const { parseBotsOptions, popoutHashRoute } = require("./lib/popoutRoute.cjs");
 
 const { updateElectronApp } = require("update-electron-app");
 
@@ -714,6 +715,7 @@ const {
     BOTS_SET_SETTINGS,
     BOTS_ASK_LEAD,
     BOTS_GET_RUNS,
+    BOTS_LIST_RECENT_RUNS,
 } = coreEvents;
 
 // Bot Factory background mode (Slice 6b): system tray, powerSaveBlocker, and
@@ -2123,12 +2125,21 @@ function createWindow() {
         // --- Popout Windows ---
         logger.loggedHandle("popout-open", (e, message) => {
             const wsId = String(message.workspaceId);
+            // Optional: open in the Bots view on a bot (the Bot monitor).
+            // Validated here — only a known view, id and tab reach the URL.
+            const bots = parseBotsOptions(message);
             const existing = popoutWindows.get(wsId);
             if (existing && !existing.isDestroyed()) {
                 existing.focus();
+                if (bots) {
+                    existing.webContents.send("popout-show-bots", {
+                        botId: bots.botId,
+                        tab: bots.tab,
+                    });
+                }
                 return { focused: true };
             }
-            createPopoutWindow(wsId);
+            createPopoutWindow(wsId, bots);
             return { opened: true };
         });
         logger.loggedHandle("popout-set-title", (e, message) => {
@@ -2244,6 +2255,10 @@ function createWindow() {
             botController.getRuns(msg && msg.botId, {
                 limit: msg && msg.limit,
             })
+        );
+        // Bot monitor (TEAM-011 B3): the latest runs across every bot.
+        logger.loggedHandle(BOTS_LIST_RECENT_RUNS, (e, msg) =>
+            botController.listRecentRuns({ limit: msg && msg.limit })
         );
         logger.loggedHandle(BOTS_STOP, (e, { botId }) =>
             botController.stop(botId)
@@ -3497,7 +3512,7 @@ function createWindow() {
     });
 }
 
-function createPopoutWindow(workspaceId) {
+function createPopoutWindow(workspaceId, bots = null) {
     const popoutWin = new BrowserWindow({
         width: 1280,
         height: 800,
@@ -3515,7 +3530,7 @@ function createPopoutWindow(workspaceId) {
     });
     applyWindowHardening(popoutWin);
 
-    const hashRoute = `#/popout/${workspaceId}`;
+    const hashRoute = popoutHashRoute(workspaceId, bots);
     popoutWin.loadURL(
         isDev
             ? `http://localhost:3000${hashRoute}`
