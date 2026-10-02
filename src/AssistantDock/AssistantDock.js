@@ -28,7 +28,6 @@ export const AssistantDock = () => {
     return (
         <div className="flex flex-row shrink-0 h-screen">
             <BotActivityPanel
-                docked
                 collapsed={open !== "bots"}
                 onCollapsedChange={(c) => setOpen(c ? null : "bots")}
                 onApprovalsCount={setApprovals}

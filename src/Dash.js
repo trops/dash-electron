@@ -1,5 +1,5 @@
 import React from "react";
-import { Routes, Route, useParams } from "react-router-dom";
+import { Routes, Route, useParams, useSearchParams } from "react-router-dom";
 
 // Core framework from @trops/dash-core
 import * as dashCore from "@trops/dash-core";
@@ -455,9 +455,12 @@ function registerBundleConfigs(
     }
 }
 
-// Popout window: renders a single dashboard in read-only mode
+// Popout window: renders a single dashboard in read-only mode. The Bot
+// monitor can open one in the Bots view on a bot (?view=bots&bot=…&tab=…,
+// validated in main before it reaches the URL).
 function PopoutDashboard() {
     const { workspaceId } = useParams();
+    const [search] = useSearchParams();
     return (
         <ErrorBoundary>
             <DashboardStage
@@ -467,6 +470,9 @@ function PopoutDashboard() {
                 grow={true}
                 popout={true}
                 popoutWorkspaceId={Number(workspaceId)}
+                popoutView={search.get("view")}
+                popoutBotId={search.get("bot")}
+                popoutBotTab={search.get("tab")}
             />
         </ErrorBoundary>
     );

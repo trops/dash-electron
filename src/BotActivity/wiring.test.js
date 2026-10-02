@@ -34,10 +34,29 @@ describe("Bot Factory budget IPC handlers (electron.js)", () => {
     });
 });
 
-describe("Bot Activity panel mount (Dash.js)", () => {
-    it("imports and mounts BotActivityPanel alongside AiAssistantPanel", () => {
-        expect(dashSrc).toMatch(/import \{ BotActivityPanel \}/);
-        expect(dashSrc).toMatch(/<BotActivityPanel \/>/);
-        expect(dashSrc).toMatch(/<AiAssistantPanel \/>/);
+describe("Bot Activity panel mount (AssistantDock)", () => {
+    const dockSrc = fs.readFileSync(
+        path.join(__dirname, "../AssistantDock/AssistantDock.js"),
+        "utf8"
+    );
+
+    it("Dash.js mounts the dock as the stage's assistant", () => {
+        expect(dashSrc).toMatch(/renderAiAssistant=\{<AssistantDock \/>\}/);
+    });
+
+    it("the dock hosts the Bot monitor panel and the AI Assistant", () => {
+        expect(dockSrc).toMatch(/import \{ BotActivityPanel \}/);
+        expect(dockSrc).toMatch(/<BotActivityPanel\s/);
+        expect(dockSrc).toMatch(/<AiAssistantPanel\s/);
+        expect(dockSrc).toMatch(/onApprovalsCount=\{setApprovals\}/);
+    });
+});
+
+describe("Bots view popouts (Dash.js, TEAM-011 B3)", () => {
+    it("passes the popout's view, bot and tab to the stage", () => {
+        expect(dashSrc).toMatch(/useSearchParams/);
+        expect(dashSrc).toMatch(/popoutView=\{search\.get\("view"\)\}/);
+        expect(dashSrc).toMatch(/popoutBotId=\{search\.get\("bot"\)\}/);
+        expect(dashSrc).toMatch(/popoutBotTab=\{search\.get\("tab"\)\}/);
     });
 });
