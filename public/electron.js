@@ -706,6 +706,13 @@ const {
     BOTS_LIST_TOOL_SOURCES,
     BOTS_GET_GRANTS,
     BOTS_REVOKE_GRANT,
+    BOTS_ENSURE_LEAD,
+    BOTS_SET_LEAD_ENABLED,
+    BOTS_GET_TEAM_SETTINGS,
+    BOTS_DISMISS_LEAD_INTRO,
+    BOTS_GET_SETTINGS,
+    BOTS_SET_SETTINGS,
+    BOTS_ASK_LEAD,
 } = coreEvents;
 
 // Bot Factory background mode (Slice 6b): system tray, powerSaveBlocker, and
@@ -2288,6 +2295,37 @@ function createWindow() {
                 msg && msg.serverName,
                 msg && msg.toolName
             )
+        );
+        // Team leads (bot-teams TEAM-002 / TEAM-003).
+        logger.loggedHandle(BOTS_ENSURE_LEAD, (e, msg) =>
+            botController.ensureLead({
+                workspaceId: msg && msg.workspaceId,
+                dashboardName: msg && msg.dashboardName,
+            })
+        );
+        logger.loggedHandle(BOTS_SET_LEAD_ENABLED, (e, msg) =>
+            botController.setLeadEnabled({
+                workspaceId: msg && msg.workspaceId,
+                enabled: !!(msg && msg.enabled),
+                dashboardName: msg && msg.dashboardName,
+            })
+        );
+        logger.loggedHandle(BOTS_GET_TEAM_SETTINGS, (e, msg) =>
+            botController.getTeamSettings(msg && msg.workspaceId)
+        );
+        logger.loggedHandle(BOTS_DISMISS_LEAD_INTRO, (e, msg) =>
+            botController.dismissLeadIntro(msg && msg.workspaceId)
+        );
+        logger.loggedHandle(BOTS_GET_SETTINGS, () =>
+            botController.getBotSettings()
+        );
+        logger.loggedHandle(BOTS_SET_SETTINGS, (e, msg) =>
+            botController.setBotSettings(msg && msg.patch)
+        );
+        logger.loggedHandle(BOTS_ASK_LEAD, (e, msg) =>
+            botController.askLead(msg && msg.botId, msg && msg.question, {
+                continueConversation: !!(msg && msg.continueConversation),
+            })
         );
 
         // --- Widget Event IPC Bridge ---

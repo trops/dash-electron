@@ -10,6 +10,7 @@ import {
 import {
     WorkspaceContext,
     BotEditorModal,
+    TeamLeadSection,
     sameWorkspace,
 } from "@trops/dash-core";
 import { reduceFeed } from "./runFeed";
@@ -271,6 +272,13 @@ export const BotActivityPanel = ({
                         </div>
                     ) : null}
 
+                    {/* This dashboard's team lead — Ask the lead (dash-core). */}
+                    {currentDashboard ? (
+                        <div className={`border-b ${borderColor} p-3`}>
+                            <TeamLeadSection workspace={currentDashboard} />
+                        </div>
+                    ) : null}
+
                     {/* Run control */}
                     <div
                         className={`border-b ${borderColor} p-3 flex flex-col gap-2`}
@@ -340,7 +348,12 @@ export const BotActivityPanel = ({
                     <div className="flex-1 p-3 flex flex-col gap-2">
                         {feed.length === 0 ? (
                             <EmptyState
-                                icon="robot"
+                                icon={
+                                    <FontAwesomeIcon
+                                        icon="robot"
+                                        className="h-6 w-6 opacity-50"
+                                    />
+                                }
                                 title="No run yet"
                                 description="Pick a bot and press Run to watch it work."
                             />
