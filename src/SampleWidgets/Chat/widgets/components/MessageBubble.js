@@ -5,12 +5,22 @@
  */
 import { StreamingText } from "./StreamingText";
 import { ToolCallBlock } from "./ToolCallBlock";
-import { marked } from "marked";
+import { renderSafeMarkdown } from "@trops/dash-core";
 
 function AssistantTextContent({ text }) {
     if (!text) return null;
 
-    const html = marked(text, { breaks: true });
+    // Replies can quote untrusted content (emails, web pages): Markdown is
+    // rendered through dash-core's sanitizer. On an older app without it,
+    // fall back to plain text — never unsanitized HTML.
+    if (typeof renderSafeMarkdown !== "function") {
+        return (
+            <div className="text-sm whitespace-pre-wrap leading-relaxed">
+                {text}
+            </div>
+        );
+    }
+    const html = renderSafeMarkdown(text);
 
     return (
         <div
