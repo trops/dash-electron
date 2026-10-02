@@ -58,6 +58,12 @@ jest.mock("@trops/dash-core", () => {
                       }`
                   )
                 : null,
+        TeamLeadSection: ({ workspace }) =>
+            React.createElement(
+                "div",
+                { "data-testid": "lead-section" },
+                `lead section for ${workspace && workspace.id}`
+            ),
     };
 });
 
@@ -129,4 +135,18 @@ test("with no dashboard open: no filter, and new bots are unassigned", async () 
     expect(screen.getByTestId("bot-editor")).toHaveTextContent(
         "editor for unassigned"
     );
+});
+
+// Team lead (bot-teams TEAM-002/003) — Ask the lead from the panel.
+test("shows the current dashboard's team lead section", async () => {
+    mount({ workspaceData: kitchenSink, workspaces: [kitchenSink] });
+    expect(await screen.findByTestId("lead-section")).toHaveTextContent(
+        "lead section for 7"
+    );
+});
+
+test("no lead section when no dashboard is open", async () => {
+    mount(null);
+    await screen.findByText("Inbox Watch");
+    expect(screen.queryByTestId("lead-section")).toBeNull();
 });

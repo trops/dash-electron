@@ -35,6 +35,7 @@ jest.mock("@trops/dash-core", () => {
         WorkspaceContext: React.createContext({ workspaceData: null }),
         sameWorkspace: () => true,
         BotEditorModal: () => null,
+        TeamLeadSection: () => null,
     };
 });
 
