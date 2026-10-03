@@ -17,6 +17,9 @@ const CHANNELS = {
     BOTS_GET_SETTINGS: "botController.getBotSettings(",
     BOTS_SET_SETTINGS: "botController.setBotSettings(",
     BOTS_ASK_LEAD: "botController.askLead(",
+    // Lead drafts (TEAM-005)
+    BOTS_LIST_DRAFTS: "botController.listDrafts(",
+    BOTS_DISMISS_DRAFT: "botController.dismissDraft(",
 };
 
 describe("team lead IPC handlers", () => {
