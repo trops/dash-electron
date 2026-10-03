@@ -716,6 +716,8 @@ const {
     BOTS_ASK_LEAD,
     BOTS_GET_RUNS,
     BOTS_LIST_RECENT_RUNS,
+    BOTS_LIST_DRAFTS,
+    BOTS_DISMISS_DRAFT,
 } = coreEvents;
 
 // Bot Factory background mode (Slice 6b): system tray, powerSaveBlocker, and
@@ -2257,6 +2259,13 @@ function createWindow() {
             })
         );
         // Bot monitor (TEAM-011 B3): the latest runs across every bot.
+        // Lead drafts (TEAM-005): bots a team lead proposed, awaiting review.
+        logger.loggedHandle(BOTS_LIST_DRAFTS, (e, msg) =>
+            botController.listDrafts(msg && msg.workspaceId)
+        );
+        logger.loggedHandle(BOTS_DISMISS_DRAFT, (e, msg) =>
+            botController.dismissDraft(msg && msg.draftId)
+        );
         logger.loggedHandle(BOTS_LIST_RECENT_RUNS, (e, msg) =>
             botController.listRecentRuns({ limit: msg && msg.limit })
         );
