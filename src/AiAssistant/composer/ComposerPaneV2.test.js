@@ -279,13 +279,11 @@ describe("ComposerPaneV2 — edit-mode guard (don't overwrite editContext.compon
         );
         const input = screen.getByTestId("composer-widget-name");
         // Wait long enough that the effect would have run if it
-        // were going to. The default "ComposedWidget" stays put —
-        // it's not the existing widget's name, but that doesn't
-        // matter here: the point is the auto-bump didn't fire and
-        // rename to "ComposedWidget2", which would re-emit under a
-        // different name.
+        // were going to. The name is seeded from the existing widget
+        // (scope stripped) so an edit never reverts to "ComposedWidget";
+        // the point here is the auto-bump didn't fire and rename it.
         await new Promise((r) => setTimeout(r, 0));
-        expect(input.value).toBe("ComposedWidget");
+        expect(input.value).toBe("MyExistingWidget");
         // The bump effect should have early-returned before calling
         // the IPC.
         expect(getConfigs).not.toHaveBeenCalled();

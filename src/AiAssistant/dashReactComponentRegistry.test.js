@@ -84,8 +84,11 @@ describe("dashReactComponentRegistry — drift against @trops/dash-react dist", 
 
     test("every PascalCase dash-react export is in the registry", () => {
         const real = parseDashReactExports();
+        // ALL_CAPS exports (TAILWIND_PALETTE, SLACK_QUICK_REACTION_SHORTCODES)
+        // are constants, not components — listing one in the registry is
+        // optional (WS_STATES is, because widgets import it).
         const missing = [...real].filter(
-            (name) => !DASH_REACT_COMPONENTS.has(name)
+            (name) => /[a-z]/.test(name) && !DASH_REACT_COMPONENTS.has(name)
         );
         if (missing.length > 0) {
             throw new Error(

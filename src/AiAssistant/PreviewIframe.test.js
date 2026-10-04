@@ -213,9 +213,12 @@ describe("PreviewIframe — bundle pipeline (slice 17c.2)", () => {
             (m) => m && m.type === "bridge:load-bundle"
         );
         expect(loadMsg).toBeTruthy();
+        // initialProps rides along so the widget's first render already
+        // has its props (no props-less frame before bridge:set-props).
         expect(loadMsg.payload).toEqual({
             bundleSource: "module.exports = {};",
             componentName: "Foo",
+            initialProps: {},
         });
     });
 
