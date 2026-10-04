@@ -184,6 +184,38 @@
         },
     };
 
+    // BEGIN appContextWithDashApi
+    // Widgets' MCP / WebSocket hooks (useMcpProvider, useWebSocketProvider)
+    // read `dashApi` from AppContext, but the bridge only carries plain
+    // data — so give the widget a dashApi built from this frame's own
+    // window.mainApi, which is the scoped proxy (undeclared credentialed
+    // namespaces stay blocked). One instance per mainApi, reused across
+    // renders: the hooks reconnect whenever dashApi changes identity.
+    function appContextWithDashApi(ctx, dashCore, mainApi, cache) {
+        var base = ctx || {};
+        if (
+            base.dashApi ||
+            !mainApi ||
+            !dashCore ||
+            !dashCore.ElectronDashboardApi
+        ) {
+            return base;
+        }
+        var appId = (base.credentials && base.credentials.appId) || null;
+        if (
+            !cache.dashApi ||
+            cache.mainApi !== mainApi ||
+            cache.appId !== appId
+        ) {
+            cache.dashApi = new dashCore.ElectronDashboardApi(mainApi, appId);
+            cache.mainApi = mainApi;
+            cache.appId = appId;
+        }
+        return Object.assign({}, base, { dashApi: cache.dashApi });
+    }
+    // END appContextWithDashApi
+    var dashApiCache = {};
+
     function unmountCurrent() {
         if (currentRoot && typeof currentRoot.unmount === "function") {
             try {
@@ -232,7 +264,14 @@
         if (dashCore.AppContext && dashCore.AppContext.Provider) {
             element = React.createElement(
                 dashCore.AppContext.Provider,
-                { value: currentAppCtx || {} },
+                {
+                    value: appContextWithDashApi(
+                        currentAppCtx,
+                        dashCore,
+                        window.mainApi,
+                        dashApiCache
+                    ),
+                },
                 element
             );
         }
