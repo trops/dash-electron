@@ -42,12 +42,14 @@ describe("WidgetBuilderModal — test-inputs form (slice 17b.9)", () => {
         // requiring a newline immediately after the tag name (the
         // comment writes the whole tag inline on one line).
         const iframeMount = source.search(/<PreviewIframe\s*\n/);
-        const iframeEnd = source.indexOf("/>", iframeMount);
         expect(iframeMount).toBeGreaterThan(-1);
-        const block = source.slice(iframeMount, iframeEnd);
+        // The props span many lines; search a window after the tag.
+        const block = source.slice(iframeMount, iframeMount + 8000);
 
         const defaultsPos = block.indexOf("...previewWidgetDefaults");
-        const testInputsPos = block.indexOf("...previewTestInputs");
+        // Test inputs are spread through a filter that drops blank
+        // values, so a "" field can't clobber a real userConfig default.
+        const testInputsPos = block.indexOf("previewTestInputs");
         const userPrefsPos = block.indexOf(
             "...(effectiveEditContext?.userPrefs"
         );
@@ -55,6 +57,8 @@ describe("WidgetBuilderModal — test-inputs form (slice 17b.9)", () => {
         expect(defaultsPos).toBeGreaterThan(-1);
         expect(testInputsPos).toBeGreaterThan(-1);
         expect(userPrefsPos).toBeGreaterThan(-1);
+
+        expect(block.slice(testInputsPos, userPrefsPos)).toMatch(/v !==\s*""/);
 
         // Required precedence: defaults < testInputs < userPrefs.
         expect(defaultsPos).toBeLessThan(testInputsPos);

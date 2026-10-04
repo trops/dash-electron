@@ -188,7 +188,9 @@ const { scanWidgetMcpUsage } = require("../../../scripts/scanWidgetMcpUsage");
 const EXPECTED_MCP_PER_SCENARIO = {
     "01-slack-channels": {
         server: "slack",
-        tool: "slack_search_channels",
+        // The fixture widget calls slack-mcp-server's real tool
+        // (fix 38a79d4: parse its CSV responses).
+        tool: "channels_list",
     },
     "02-github-prs": {
         server: "github",

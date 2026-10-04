@@ -144,6 +144,12 @@ npm run test:audit-pin
 step "Auditing Electron-specific security (electronegativity)"
 npm run audit:electron
 
+# 5d. AI Widget Builder unit tests (src/AiAssistant). Jest for the React /
+# source-pin suites; the two node:test suites run under node --test.
+step "Running AI Widget Builder unit tests"
+npm run test:ai
+npm run test:ai-node
+
 # 6. Widget tests (disabled — test references stale local modules moved to @trops/dash-core)
 # TODO: update testWidgetIntegration.cjs to import from @trops/dash-core/electron
 # if [[ -f scripts/testWidgetIntegration.cjs ]]; then

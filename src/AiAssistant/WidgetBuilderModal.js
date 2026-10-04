@@ -31,6 +31,8 @@ import {
     evaluateBundle,
     extractWidgetConfigs,
     makeScopedComponentId,
+    // Shared with the Widgets page (who may publish / edit a package).
+    deriveWidgetOwnership,
 } from "@trops/dash-core";
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
 import { ChatProviderGate } from "./ChatProviderGate";
@@ -49,7 +51,6 @@ import {
     buildPreviewWidgetData,
 } from "./widgetPreviewData";
 import { PreviewIframe } from "./PreviewIframe";
-import { deriveWidgetOwnership } from "./widgetOwnership";
 import {
     AcceptanceScorecard,
     evaluateScorecard,
@@ -1588,7 +1589,7 @@ ${
     }, []);
 
     // Ownership boundary — gates the Update Original toggle. The
-    // derivation lives in widgetOwnership.js so its security-relevant
+    // derivation lives in dash-core (utils/widgetOwnership.js) so its security-relevant
     // rules can be unit-tested directly instead of through the
     // modal's render tree. See widgetOwnership.test.js for the
     // negative-space coverage (substring matches, Unicode
