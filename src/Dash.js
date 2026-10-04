@@ -27,6 +27,7 @@ import { InstallExternalMcpModal } from "./AiAssistant/InstallExternalMcpModal";
 import { WidgetMcpConsentModal } from "./AiAssistant/WidgetMcpConsentModal";
 import { JitConsentModal } from "./AiAssistant/JitConsentModal";
 import { PreflightConsentModal } from "./AiAssistant/PreflightConsentModal";
+import { registerWidgetPreview } from "./AiAssistant/registerWidgetPreview";
 
 // Local widgets that integrate with Dash. We discover every
 // `src/Widgets/<Package>/<Widget>.dash.js` via webpack's require.context
@@ -41,6 +42,10 @@ const localWidgetCtx = require.context("./Widgets", true, /\.dash\.js$/);
 // This avoids the self-referential import in widgetBundleLoader.js that
 // breaks under webpack scope hoisting in production builds.
 setHostModules({ "@trops/dash-core": dashCore });
+
+// Give dash-core's Widgets page the Widget Builder's sandboxed (iframe)
+// preview for live widget previews (app-navigation NAV-011).
+registerWidgetPreview();
 
 // the mainApi from electron bridge
 // you can overwrite this API with an abstraction for React
