@@ -718,6 +718,9 @@ const {
     BOTS_LIST_RECENT_RUNS,
     BOTS_LIST_DRAFTS,
     BOTS_DISMISS_DRAFT,
+    BOTS_EXPORT_TEAM,
+    BOTS_PREVIEW_TEAM_IMPORT,
+    BOTS_INSTALL_TEAM,
 } = coreEvents;
 
 // Bot Factory background mode (Slice 6b): system tray, powerSaveBlocker, and
@@ -2265,6 +2268,21 @@ function createWindow() {
         );
         logger.loggedHandle(BOTS_DISMISS_DRAFT, (e, msg) =>
             botController.dismissDraft(msg && msg.draftId)
+        );
+        // Team export/import (TEAM-006/007, slice 1): a dashboard's team as
+        // a .team.json — save, pick + check, and install (re-validated).
+        logger.loggedHandle(BOTS_EXPORT_TEAM, (e, msg) =>
+            botController.exportTeam(msg && msg.workspaceId, msg && msg.meta)
+        );
+        logger.loggedHandle(BOTS_PREVIEW_TEAM_IMPORT, (e, msg) =>
+            botController.previewTeamImport(msg && msg.workspaceId)
+        );
+        logger.loggedHandle(BOTS_INSTALL_TEAM, (e, msg) =>
+            botController.installTeam(
+                msg && msg.workspaceId,
+                msg && msg.manifest,
+                (msg && msg.choices) || {}
+            )
         );
         logger.loggedHandle(BOTS_LIST_RECENT_RUNS, (e, msg) =>
             botController.listRecentRuns({ limit: msg && msg.limit })
