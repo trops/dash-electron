@@ -721,6 +721,8 @@ const {
     BOTS_EXPORT_TEAM,
     BOTS_PREVIEW_TEAM_IMPORT,
     BOTS_INSTALL_TEAM,
+    BOTS_PREVIEW_PUBLISH,
+    BOTS_PUBLISH,
 } = coreEvents;
 
 // Bot Factory background mode (Slice 6b): system tray, powerSaveBlocker, and
@@ -2283,6 +2285,14 @@ function createWindow() {
                 msg && msg.manifest,
                 (msg && msg.choices) || {}
             )
+        );
+        // Registry publish (TEAM-006 slice 3a): a bot or a team, rebuilt and
+        // signed in the main process.
+        logger.loggedHandle(BOTS_PREVIEW_PUBLISH, (e, opts) =>
+            botController.previewPublish(opts || {})
+        );
+        logger.loggedHandle(BOTS_PUBLISH, (e, opts) =>
+            botController.publish(opts || {})
         );
         logger.loggedHandle(BOTS_LIST_RECENT_RUNS, (e, msg) =>
             botController.listRecentRuns({ limit: msg && msg.limit })
