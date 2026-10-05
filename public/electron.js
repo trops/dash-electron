@@ -726,6 +726,8 @@ const {
     BOTS_SEARCH_REGISTRY,
     BOTS_PREVIEW_REGISTRY_INSTALL,
     BOTS_INSTALL_FROM_REGISTRY,
+    BOTS_ADD_WIDGET,
+    BOTS_BIND_WIDGET,
 } = coreEvents;
 
 // Bot Factory background mode (Slice 6b): system tray, powerSaveBlocker, and
@@ -2315,6 +2317,21 @@ function createWindow() {
                 msg && msg.previewId,
                 (msg && msg.choices) || {},
                 (msg && msg.roles) || null
+            )
+        );
+        // Bot widgets on the dashboard (TEAM-012): place one, or link one to
+        // a bot on the dashboard's team.
+        logger.loggedHandle(BOTS_ADD_WIDGET, (e, msg) =>
+            botController.addBotWidget(msg && msg.workspaceId, {
+                kind: msg && msg.kind,
+                botId: msg && msg.botId,
+            })
+        );
+        logger.loggedHandle(BOTS_BIND_WIDGET, (e, msg) =>
+            botController.bindBotWidget(
+                msg && msg.workspaceId,
+                msg && msg.widgetId,
+                msg && msg.botId
             )
         );
         logger.loggedHandle(BOTS_LIST_RECENT_RUNS, (e, msg) =>
