@@ -723,6 +723,9 @@ const {
     BOTS_INSTALL_TEAM,
     BOTS_PREVIEW_PUBLISH,
     BOTS_PUBLISH,
+    BOTS_SEARCH_REGISTRY,
+    BOTS_PREVIEW_REGISTRY_INSTALL,
+    BOTS_INSTALL_FROM_REGISTRY,
 } = coreEvents;
 
 // Bot Factory background mode (Slice 6b): system tray, powerSaveBlocker, and
@@ -2283,7 +2286,8 @@ function createWindow() {
             botController.installTeam(
                 msg && msg.workspaceId,
                 msg && msg.manifest,
-                (msg && msg.choices) || {}
+                (msg && msg.choices) || {},
+                (msg && msg.roles) || null
             )
         );
         // Registry publish (TEAM-006 slice 3a): a bot or a team, rebuilt and
@@ -2293,6 +2297,25 @@ function createWindow() {
         );
         logger.loggedHandle(BOTS_PUBLISH, (e, opts) =>
             botController.publish(opts || {})
+        );
+        // Registry install (TEAM-007 slice 3b): find, preview (download +
+        // verify + check, kept in the main process), install the picked bots.
+        logger.loggedHandle(BOTS_SEARCH_REGISTRY, (e, opts) =>
+            botController.searchBotPackages(opts || {})
+        );
+        logger.loggedHandle(BOTS_PREVIEW_REGISTRY_INSTALL, (e, msg) =>
+            botController.previewRegistryInstall(
+                msg && msg.workspaceId,
+                msg && msg.packageRef
+            )
+        );
+        logger.loggedHandle(BOTS_INSTALL_FROM_REGISTRY, (e, msg) =>
+            botController.installFromRegistry(
+                msg && msg.workspaceId,
+                msg && msg.previewId,
+                (msg && msg.choices) || {},
+                (msg && msg.roles) || null
+            )
         );
         logger.loggedHandle(BOTS_LIST_RECENT_RUNS, (e, msg) =>
             botController.listRecentRuns({ limit: msg && msg.limit })
