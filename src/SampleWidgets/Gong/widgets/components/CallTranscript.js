@@ -1,23 +1,35 @@
-import { Button2 } from "@trops/dash-react";
-
-const SPEAKER_COLORS = [
-    "text-blue-400",
-    "text-green-400",
-    "text-purple-400",
-    "text-orange-400",
-    "text-pink-400",
-    "text-cyan-400",
-];
+import { useContext } from "react";
+import {
+    Button2,
+    Caption2,
+    Skeleton,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 
 export function CallTranscript({ transcript, loading, onLoadMore }) {
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+
+    // One color per participant, rotated through theme-aware tokens so
+    // speaker names follow light/dark theme switches.
+    const SPEAKER_COLORS = [
+        currentTheme?.["text-secondary-medium"] || "",
+        currentTheme?.["text-tertiary-medium"] || "",
+        status.info.icon,
+        status.success.icon,
+        status.warning.icon,
+    ];
+
     if (loading && !transcript) {
         return (
-            <div className="space-y-3 animate-pulse">
-                <div className="h-3 bg-gray-700 rounded w-1/4" />
-                <div className="h-3 bg-gray-700 rounded w-full" />
-                <div className="h-3 bg-gray-700 rounded w-3/4" />
-                <div className="h-3 bg-gray-700 rounded w-1/3" />
-                <div className="h-3 bg-gray-700 rounded w-full" />
+            <div className="space-y-3">
+                <Skeleton height="h-3" width="w-1/4" rounded="rounded" />
+                <Skeleton height="h-3" width="w-full" rounded="rounded" />
+                <Skeleton height="h-3" width="w-3/4" rounded="rounded" />
+                <Skeleton height="h-3" width="w-1/3" rounded="rounded" />
+                <Skeleton height="h-3" width="w-full" rounded="rounded" />
             </div>
         );
     }
@@ -27,7 +39,9 @@ export function CallTranscript({ transcript, loading, onLoadMore }) {
     // gongio-mcp returns markdown text, not structured segments
     if (typeof transcript === "string") {
         return (
-            <pre className="whitespace-pre-wrap text-gray-300 overflow-auto max-h-[60vh] text-xs leading-relaxed">
+            <pre
+                className={`whitespace-pre-wrap overflow-auto max-h-96 text-xs leading-relaxed ${bodyText}`}
+            >
                 {transcript}
             </pre>
         );
@@ -66,12 +80,10 @@ export function CallTranscript({ transcript, loading, onLoadMore }) {
                                 {speaker}
                             </div>
                             {time != null && (
-                                <div className="text-gray-600 text-[10px]">
-                                    {formatTime(time)}
-                                </div>
+                                <Caption2 block>{formatTime(time)}</Caption2>
                             )}
                         </div>
-                        <div className="text-gray-300 flex-1">{text}</div>
+                        <div className={`flex-1 ${bodyText}`}>{text}</div>
                     </div>
                 );
             })}

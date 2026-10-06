@@ -6,14 +6,32 @@
  *
  * @package Gong
  */
-import { useState, useCallback } from "react";
-import { Button2, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useCallback, useContext } from "react";
+import {
+    AlertBanner,
+    Button,
+    Button2,
+    Caption2,
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
 function GongLibraryFoldersContent({ title }) {
     const { isConnected, isConnecting, error, callTool, status, tools } =
         useMcpProvider("gong");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+    const surface = currentTheme?.["bg-primary-dark"] || "";
+    const rowHover = currentTheme?.["hover-bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const selectedRow = `${currentTheme?.["bg-secondary-dark"] || ""} ${
+        currentTheme?.["text-secondary-light"] || ""
+    }`;
     const { publishEvent } = useWidgetEvents();
 
     const [workspaces, setWorkspaces] = useState([]);
@@ -124,22 +142,22 @@ function GongLibraryFoldersContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Workspaces */}
@@ -156,20 +174,25 @@ function GongLibraryFoldersContent({ title }) {
                 </div>
                 {workspaces.length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                        {workspaces.map((ws, i) => (
-                            <button
-                                key={ws.id || i}
-                                onClick={() => handleSelectWorkspace(ws)}
-                                className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
-                                    selectedWorkspace ===
-                                    (ws.id || ws.workspaceId)
-                                        ? "bg-emerald-700 text-white"
-                                        : "bg-white/5 text-gray-400 hover:bg-white/10"
-                                }`}
-                            >
-                                {ws.name || ws.id || "Workspace"}
-                            </button>
-                        ))}
+                        {workspaces.map((ws, i) =>
+                            selectedWorkspace === (ws.id || ws.workspaceId) ? (
+                                <Button
+                                    key={ws.id || i}
+                                    size="sm"
+                                    onClick={() => handleSelectWorkspace(ws)}
+                                >
+                                    {ws.name || ws.id || "Workspace"}
+                                </Button>
+                            ) : (
+                                <Button2
+                                    key={ws.id || i}
+                                    size="sm"
+                                    onClick={() => handleSelectWorkspace(ws)}
+                                >
+                                    {ws.name || ws.id || "Workspace"}
+                                </Button2>
+                            )
+                        )}
                     </div>
                 )}
             </div>
@@ -186,11 +209,11 @@ function GongLibraryFoldersContent({ title }) {
                                 className={`w-full text-left px-2 py-1 rounded text-xs transition-colors ${
                                     selectedFolder ===
                                     (folder.id || folder.folderId)
-                                        ? "bg-emerald-900/40 border border-emerald-600"
-                                        : "bg-white/5 hover:bg-white/10"
+                                        ? selectedRow
+                                        : `${surface} ${rowHover} ${bodyText}`
                                 }`}
                             >
-                                <span className="text-gray-300">
+                                <span>
                                     {folder.name || folder.id || "Folder"}
                                 </span>
                             </button>
@@ -208,15 +231,15 @@ function GongLibraryFoldersContent({ title }) {
                             <button
                                 key={call.id || call.callId || i}
                                 onClick={() => handleSelectCall(call)}
-                                className="w-full text-left px-2 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs transition-colors"
+                                className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${surface} ${rowHover}`}
                             >
-                                <div className="text-gray-300 truncate">
+                                <div className={`truncate ${bodyText}`}>
                                     {call.title || call.name || "Untitled"}
                                 </div>
                                 {call.curatorNotes && (
-                                    <div className="text-gray-500 truncate mt-0.5">
+                                    <Caption2 block className="truncate mt-0.5">
                                         {call.curatorNotes}
-                                    </div>
+                                    </Caption2>
                                 )}
                             </button>
                         ))}
@@ -225,15 +248,17 @@ function GongLibraryFoldersContent({ title }) {
             )}
 
             {workspaces.length === 0 && !loading && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     Click Load to browse Gong library folders.
-                </div>
+                </Caption2>
             )}
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
         </div>
     );

@@ -6,14 +6,31 @@
  *
  * @package Gong
  */
-import { useState, useCallback } from "react";
-import { Button, Panel, SubHeading2 } from "@trops/dash-react";
+import { useState, useCallback, useContext } from "react";
+import {
+    AlertBanner,
+    Button,
+    Caption2,
+    InputText,
+    Panel,
+    SubHeading2,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
 function GongUserListContent({ title }) {
     const { isConnected, isConnecting, error, callTool, status, tools } =
         useMcpProvider("gong");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+    const surface = currentTheme?.["bg-primary-dark"] || "";
+    const rowHover = currentTheme?.["hover-bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const selectedRow = `${currentTheme?.["bg-secondary-dark"] || ""} ${
+        currentTheme?.["text-secondary-light"] || ""
+    }`;
     const { publishEvent } = useWidgetEvents();
 
     const [users, setUsers] = useState([]);
@@ -78,31 +95,34 @@ function GongUserListContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
-            <div className="flex gap-2">
-                <input
+            <div className="flex flex-wrap items-center gap-2">
+                <InputText
                     type="text"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(value) => setSearchQuery(value)}
                     placeholder="Filter users..."
-                    className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                    className="flex-1 min-w-0"
+                    height="h-7"
+                    padding="px-2 py-1"
+                    inputClassName="text-xs"
                 />
                 <Button
                     size="sm"
@@ -130,19 +150,23 @@ function GongUserListContent({ title }) {
                                 onClick={() => handleSelectUser(user)}
                                 className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
                                     selectedUserId === id
-                                        ? "bg-emerald-900/40 border border-emerald-600"
-                                        : "bg-white/5 hover:bg-white/10"
+                                        ? selectedRow
+                                        : `${surface} ${rowHover}`
                                 }`}
                             >
-                                <div className="text-gray-300 font-medium">
+                                <div
+                                    className={`font-medium ${
+                                        selectedUserId === id ? "" : bodyText
+                                    }`}
+                                >
                                     {name}
                                 </div>
-                                <div className="flex items-center gap-2 mt-0.5 text-gray-500">
-                                    {email && <span>{email}</span>}
+                                <div className="flex items-center gap-2 mt-0.5">
+                                    {email && <Caption2>{email}</Caption2>}
                                     {user.title && (
-                                        <span className="text-gray-600">
+                                        <Caption2 className="opacity-70">
                                             {user.title}
-                                        </span>
+                                        </Caption2>
                                     )}
                                 </div>
                             </button>
@@ -152,15 +176,17 @@ function GongUserListContent({ title }) {
             )}
 
             {users.length === 0 && !loading && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     Click Load Users to browse your Gong workspace.
-                </div>
+                </Caption2>
             )}
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
         </div>
     );
