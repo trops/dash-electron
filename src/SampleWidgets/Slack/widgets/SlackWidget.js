@@ -6,13 +6,18 @@
  *
  * @package Slack
  */
-import { useState } from "react";
+import { useState, useContext } from "react";
 import {
+    AlertBanner,
     Button,
     Button2,
+    Caption2,
+    InputText,
     Panel,
     SubHeading2,
     SubHeading3,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import {
@@ -25,6 +30,8 @@ import {
 function SlackContent({ title }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("slack");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const [channels, setChannels] = useState([]);
     const [selectedChannel, setSelectedChannel] = useState(null);
@@ -85,6 +92,16 @@ function SlackContent({ title }) {
         }
     };
 
+    const rowSurface = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["hover-bg-primary-dark"] || ""
+    }`;
+    const selectedSurface = `border ${
+        currentTheme?.["bg-secondary-dark"] || ""
+    } ${currentTheme?.["text-secondary-light"] || ""} ${
+        currentTheme?.["border-secondary-medium"] || ""
+    }`;
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+
     return (
         <div className="flex flex-col gap-4 h-full text-sm overflow-y-auto">
             <SubHeading2 title={title} />
@@ -94,22 +111,22 @@ function SlackContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* List Channels */}
@@ -132,13 +149,11 @@ function SlackContent({ title }) {
                                 onClick={() => setSelectedChannel(ch.id || ch)}
                                 className={`w-full text-left px-2 py-1 rounded text-xs transition-colors ${
                                     selectedChannel === (ch.id || ch)
-                                        ? "bg-purple-900/50 border border-purple-500"
-                                        : "bg-white/5 hover:bg-white/10"
+                                        ? selectedSurface
+                                        : `${rowSurface} ${bodyText}`
                                 }`}
                             >
-                                <span className="text-gray-300">
-                                    #{ch.name || ch.id || ch}
-                                </span>
+                                <span>#{ch.name || ch.id || ch}</span>
                             </button>
                         ))}
                     </div>
@@ -148,8 +163,8 @@ function SlackContent({ title }) {
             {/* Send Message */}
             <div className="space-y-2">
                 <SubHeading3 title="Send Message" />
-                <div className="flex gap-2">
-                    <input
+                <div className="flex flex-wrap items-center gap-2">
+                    <InputText
                         type="text"
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
@@ -162,7 +177,10 @@ function SlackContent({ title }) {
                                 : "Select a channel first"
                         }
                         disabled={!selectedChannel}
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500 disabled:opacity-50"
+                        className="flex-1 min-w-0"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs disabled:opacity-50"
                     />
                     <Button
                         size="sm"
@@ -181,17 +199,11 @@ function SlackContent({ title }) {
 
             {/* Result */}
             {result && (
-                <div
-                    className={`p-2 rounded text-xs border ${
-                        result.type === "error"
-                            ? "bg-red-900/30 border-red-700 text-red-300"
-                            : "bg-green-900/30 border-green-700 text-green-300"
-                    }`}
-                >
+                <AlertBanner variant={result.type} size="compact">
                     <pre className="whitespace-pre-wrap overflow-auto max-h-32">
                         {result.text}
                     </pre>
-                </div>
+                </AlertBanner>
             )}
         </div>
     );

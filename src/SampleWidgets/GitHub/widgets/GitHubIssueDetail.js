@@ -6,12 +6,17 @@
  *
  * @package GitHub
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
 import {
     Panel,
     SubHeading2,
     SubHeading3,
     SectionLabel,
+    AlertBanner,
+    Caption2,
+    StatusBadge,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
@@ -20,6 +25,9 @@ function GitHubIssueDetailContent({ title }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("github");
     const { listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
 
     const [issue, setIssue] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -94,43 +102,43 @@ function GitHubIssueDetailContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             <div className="flex items-center gap-2 text-xs">
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         listenerStatus === "listening"
-                            ? "bg-green-500"
-                            : "bg-yellow-500"
+                            ? statusTokens.success.solidBg
+                            : statusTokens.warning.solidBg
                     }`}
                 />
-                <span className="text-gray-500">
+                <Caption2>
                     {listenerStatus === "listening"
                         ? "Listening for issueSelected"
                         : "No event listeners configured"}
-                </span>
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {loading && (
-                <div className="text-xs text-gray-400 animate-pulse">
+                <Caption2 block className="animate-pulse">
                     Loading issue...
-                </div>
+                </Caption2>
             )}
 
             {/* Issue Detail */}
@@ -139,19 +147,18 @@ function GitHubIssueDetailContent({ title }) {
                     {/* Title & Number */}
                     <div>
                         <div className="flex items-center gap-2 mb-1">
-                            <span
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                    issue.state === "open"
-                                        ? "bg-green-900/50 text-green-400"
-                                        : "bg-purple-900/50 text-purple-400"
-                                }`}
-                            >
-                                {issue.state || "open"}
-                            </span>
+                            <StatusBadge
+                                state={
+                                    (issue.state || "open") === "open"
+                                        ? "open"
+                                        : "closed"
+                                }
+                                label={issue.state || "open"}
+                            />
                             {issue.number && (
-                                <span className="text-gray-500 font-mono text-xs">
+                                <Caption2 className="font-mono">
                                     #{issue.number}
-                                </span>
+                                </Caption2>
                             )}
                         </div>
                         <SubHeading3 title={issue.title || "Untitled Issue"} />
@@ -163,7 +170,12 @@ function GitHubIssueDetailContent({ title }) {
                             {issue.labels.map((l, i) => (
                                 <span
                                     key={i}
-                                    className="px-1.5 py-0.5 bg-gray-700 rounded text-[10px] text-gray-400"
+                                    className={`px-1.5 py-0.5 rounded border text-xs ${
+                                        currentTheme?.["bg-primary-dark"] || ""
+                                    } ${
+                                        currentTheme?.["border-primary-dark"] ||
+                                        ""
+                                    } ${bodyText}`}
                                     style={
                                         l.color
                                             ? {
@@ -181,10 +193,10 @@ function GitHubIssueDetailContent({ title }) {
                     {/* Assignees */}
                     {issue.assignees?.length > 0 && (
                         <div className="text-xs">
-                            <span className="text-gray-500 font-medium">
+                            <Caption2 className="font-medium">
                                 Assignees:{" "}
-                            </span>
-                            <span className="text-gray-300">
+                            </Caption2>
+                            <span className={bodyText}>
                                 {issue.assignees
                                     .map((a) => a.login || a)
                                     .join(", ")}
@@ -196,18 +208,22 @@ function GitHubIssueDetailContent({ title }) {
                     {issue.body && (
                         <div className="space-y-1">
                             <SectionLabel>Description</SectionLabel>
-                            <div className="text-xs text-gray-300 bg-gray-800/50 rounded p-2 whitespace-pre-wrap max-h-64 overflow-y-auto">
+                            <div
+                                className={`text-xs rounded p-2 whitespace-pre-wrap max-h-64 overflow-y-auto ${
+                                    currentTheme?.["bg-primary-dark"] || ""
+                                } ${bodyText}`}
+                            >
                                 {issue.body}
                             </div>
                         </div>
                     )}
 
                     {/* Meta */}
-                    <div className="text-xs text-gray-600 space-y-0.5">
+                    <Caption2 block className="space-y-0.5">
                         {issue.user?.login && (
                             <div>
                                 Created by:{" "}
-                                <span className="text-gray-400">
+                                <span className={bodyText}>
                                     {issue.user.login}
                                 </span>
                             </div>
@@ -215,7 +231,7 @@ function GitHubIssueDetailContent({ title }) {
                         {issue.created_at && (
                             <div>
                                 Created:{" "}
-                                <span className="text-gray-400">
+                                <span className={bodyText}>
                                     {new Date(
                                         issue.created_at
                                     ).toLocaleDateString()}
@@ -225,28 +241,30 @@ function GitHubIssueDetailContent({ title }) {
                         {issue.comments != null && (
                             <div>
                                 Comments:{" "}
-                                <span className="text-gray-400">
+                                <span className={bodyText}>
                                     {issue.comments}
                                 </span>
                             </div>
                         )}
-                    </div>
+                    </Caption2>
                 </div>
             ) : (
                 !loading && (
-                    <div className="text-xs text-gray-600 italic">
+                    <Caption2 block className="italic">
                         {listenerStatus === "no listeners assigned"
                             ? "No event listeners configured. Wire issueSelected from a GitHubIssueList widget."
                             : "Select an issue from the GitHubIssueList widget to view details."}
-                    </div>
+                    </Caption2>
                 )
             )}
 
             {/* Error */}
             {result?.type === "error" && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {result.text}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={result.text}
+                />
             )}
         </div>
     );

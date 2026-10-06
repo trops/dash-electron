@@ -6,13 +6,20 @@
  *
  * @package GitHub
  */
-import { useState } from "react";
+import { useState, useContext } from "react";
 import {
+    AlertBanner,
     Button,
     Button2,
+    Caption2,
+    InputText,
     Panel,
+    StatusBadge,
     SubHeading2,
     SubHeading3,
+    Tag3,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { parseMcpResponse, parseGitHubTextEntries } from "../utils/mcpUtils";
@@ -20,6 +27,17 @@ import { parseMcpResponse, parseGitHubTextEntries } from "../utils/mcpUtils";
 function GitHubContent({ title, defaultRepo }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("github");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const rowSurface = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["hover-bg-primary-dark"] || ""
+    } ${bodyText}`;
+    const selectedSurface = `border ${
+        currentTheme?.["bg-secondary-dark"] || ""
+    } ${currentTheme?.["text-secondary-light"] || ""} ${
+        currentTheme?.["border-secondary-medium"] || ""
+    }`;
 
     const [searchQuery, setSearchQuery] = useState("");
     const [repos, setRepos] = useState([]);
@@ -88,37 +106,40 @@ function GitHubContent({ title, defaultRepo }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Search Repos */}
             <div className="space-y-2">
                 <SubHeading3 title="Search Repositories" />
-                <div className="flex gap-2">
-                    <input
+                <div className="flex flex-wrap gap-2">
+                    <InputText
                         type="text"
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(value) => setSearchQuery(value)}
                         onKeyDown={(e) =>
                             e.key === "Enter" && handleSearchRepos()
                         }
                         placeholder="Search repos..."
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-gray-400"
+                        className="flex-1 min-w-0"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs"
                     />
                     <Button
                         size="sm"
@@ -139,17 +160,15 @@ function GitHubContent({ title, defaultRepo }) {
                                     onClick={() => handleListIssues(fullName)}
                                     className={`w-full text-left px-2 py-1 rounded text-xs transition-colors ${
                                         selectedRepo === fullName
-                                            ? "bg-gray-700 border border-gray-500"
-                                            : "bg-white/5 hover:bg-white/10"
+                                            ? selectedSurface
+                                            : rowSurface
                                     }`}
                                 >
-                                    <span className="text-gray-300">
-                                        {fullName}
-                                    </span>
+                                    <span>{fullName}</span>
                                     {repo.description && (
-                                        <div className="text-gray-500 truncate">
+                                        <Caption2 block className="truncate">
                                             {repo.description}
-                                        </div>
+                                        </Caption2>
                                     )}
                                 </button>
                             );
@@ -173,26 +192,28 @@ function GitHubContent({ title, defaultRepo }) {
                     </div>
                     <div className="max-h-48 overflow-y-auto space-y-1">
                         {issues.length === 0 ? (
-                            <div className="text-xs text-gray-600 italic">
+                            <Caption2 block className="italic">
                                 No issues found.
-                            </div>
+                            </Caption2>
                         ) : (
                             issues.map((issue, i) => (
                                 <div
                                     key={issue.number || i}
-                                    className="px-2 py-1 bg-white/5 rounded text-xs"
+                                    className={`px-2 py-1 rounded text-xs ${
+                                        currentTheme?.["bg-primary-dark"] || ""
+                                    } ${bodyText}`}
                                 >
                                     <div className="flex items-center gap-2">
-                                        <span
-                                            className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                                issue.state === "open"
-                                                    ? "bg-green-900/50 text-green-400"
-                                                    : "bg-purple-900/50 text-purple-400"
-                                            }`}
-                                        >
-                                            {issue.state || "open"}
-                                        </span>
-                                        <span className="text-gray-300 truncate">
+                                        <StatusBadge
+                                            state={
+                                                (issue.state || "open") ===
+                                                "open"
+                                                    ? "open"
+                                                    : "closed"
+                                            }
+                                            label={issue.state || "open"}
+                                        />
+                                        <span className="truncate">
                                             {issue.title ||
                                                 JSON.stringify(issue)}
                                         </span>
@@ -200,12 +221,11 @@ function GitHubContent({ title, defaultRepo }) {
                                     {issue.labels?.length > 0 && (
                                         <div className="flex gap-1 mt-1">
                                             {issue.labels.map((l, j) => (
-                                                <span
+                                                <Tag3
                                                     key={j}
-                                                    className="px-1 py-0.5 bg-gray-700 rounded text-[10px] text-gray-400"
-                                                >
-                                                    {l.name || l}
-                                                </span>
+                                                    text={l.name || l}
+                                                    padding="px-1 py-0.5"
+                                                />
                                             ))}
                                         </div>
                                     )}
@@ -218,9 +238,11 @@ function GitHubContent({ title, defaultRepo }) {
 
             {/* Error */}
             {result?.type === "error" && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {result.text}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={result.text}
+                />
             )}
         </div>
     );

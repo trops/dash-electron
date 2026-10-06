@@ -7,8 +7,17 @@
  *
  * @package Slack
  */
-import { useState, useEffect, useRef } from "react";
-import { Button2, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useEffect, useRef, useContext } from "react";
+import {
+    AlertBanner,
+    Button2,
+    Caption2,
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
@@ -16,6 +25,8 @@ function SlackChannelMessagesContent({ title, widgetId }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("slack");
     const { publishEvent, listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const [channelId, setChannelId] = useState(null);
     const [channelName, setChannelName] = useState(null);
@@ -108,6 +119,17 @@ function SlackChannelMessagesContent({ title, widgetId }) {
         }
     };
 
+    const rowSurface = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["hover-bg-primary-dark"] || ""
+    }`;
+    const selectedSurface = `border ${
+        currentTheme?.["bg-secondary-dark"] || ""
+    } ${currentTheme?.["text-secondary-light"] || ""} ${
+        currentTheme?.["border-secondary-medium"] || ""
+    }`;
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
+
     return (
         <div className="flex flex-col gap-4 h-full text-sm overflow-y-auto">
             <SubHeading2 title={title} />
@@ -117,22 +139,22 @@ function SlackChannelMessagesContent({ title, widgetId }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Channel Info */}
@@ -164,19 +186,19 @@ function SlackChannelMessagesContent({ title, widgetId }) {
                             onClick={() => handleSelectMessage(msg)}
                             className={`w-full text-left px-2 py-2 rounded text-xs transition-colors ${
                                 selectedTs === (msg.ts || msg.timestamp)
-                                    ? "bg-purple-900/50 border border-purple-500"
-                                    : "bg-white/5 hover:bg-white/10"
+                                    ? selectedSurface
+                                    : `${rowSurface} ${bodyText}`
                             }`}
                         >
                             <div className="flex items-center gap-2 mb-1">
-                                <span className="text-purple-300 font-semibold">
+                                <span className={`font-semibold ${accentText}`}>
                                     {msg.user || msg.username || "unknown"}
                                 </span>
-                                <span className="text-gray-500">
+                                <Caption2>
                                     {formatTimestamp(msg.ts || msg.timestamp)}
-                                </span>
+                                </Caption2>
                             </div>
-                            <div className="text-gray-300 whitespace-pre-wrap break-words">
+                            <div className="whitespace-pre-wrap break-words">
                                 {msg.text || ""}
                             </div>
                         </button>
@@ -188,24 +210,24 @@ function SlackChannelMessagesContent({ title, widgetId }) {
                 no messages" so the user sees a clear next step
                 (pair this widget with SlackListChannels). */}
             {!loading && !channelId && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     {isConnected
                         ? "Pick a channel in SlackListChannels to load its messages."
                         : "Connect the Slack provider in Settings to load messages."}
-                </div>
+                </Caption2>
             )}
 
             {/* Channel picked, but the history is empty. */}
             {!loading && channelId && messages.length === 0 && !error && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     #{channelName || "channel"} has no recent messages.
-                </div>
+                </Caption2>
             )}
 
             {/* Last-fetch failure: subtle inline notice. The provider-
                 level error already renders in the panel above. */}
             {result && result.type === "error" && (
-                <div className="text-xs text-red-400">
+                <div className={`text-xs ${statusTokens.error.icon}`}>
                     Last fetch failed: {result.text}
                 </div>
             )}

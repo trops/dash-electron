@@ -6,8 +6,18 @@
  *
  * @package Slack
  */
-import { useState, useEffect } from "react";
-import { Button, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useEffect, useContext } from "react";
+import {
+    AlertBanner,
+    Button,
+    Caption2,
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    TextArea,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { extractMcpText, isMcpError } from "../utils/mcpUtils";
 
@@ -15,6 +25,8 @@ function SlackPostMessageContent({ title, widgetId }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("slack");
     const { listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const [channelId, setChannelId] = useState("");
     const [channelName, setChannelName] = useState("");
@@ -68,22 +80,22 @@ function SlackPostMessageContent({ title, widgetId }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Compose Form */}
@@ -92,20 +104,22 @@ function SlackPostMessageContent({ title, widgetId }) {
 
                 {/* Channel Display */}
                 <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400">To:</span>
+                    <Caption2>To:</Caption2>
                     {channelName ? (
-                        <span className="text-xs text-purple-300 font-semibold">
+                        <span
+                            className={`text-xs font-semibold ${
+                                currentTheme?.["text-secondary-medium"] || ""
+                            }`}
+                        >
                             #{channelName}
                         </span>
                     ) : (
-                        <span className="text-xs text-gray-500">
-                            No channel selected
-                        </span>
+                        <Caption2>No channel selected</Caption2>
                     )}
                 </div>
 
                 {/* Message Input */}
-                <textarea
+                <TextArea
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyDown={(e) => {
@@ -120,7 +134,8 @@ function SlackPostMessageContent({ title, widgetId }) {
                     }
                     disabled={!channelId}
                     rows={4}
-                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500 disabled:opacity-50 resize-none"
+                    padding="px-2 py-1"
+                    inputClassName="text-xs rounded disabled:opacity-50 resize-none"
                 />
 
                 {/* Send Button */}
@@ -142,17 +157,11 @@ function SlackPostMessageContent({ title, widgetId }) {
 
             {/* Result */}
             {result && (
-                <div
-                    className={`p-2 rounded text-xs border ${
-                        result.type === "error"
-                            ? "bg-red-900/30 border-red-700 text-red-300"
-                            : "bg-green-900/30 border-green-700 text-green-300"
-                    }`}
-                >
+                <AlertBanner variant={result.type} size="compact">
                     <pre className="whitespace-pre-wrap overflow-auto max-h-32">
                         {result.text}
                     </pre>
-                </div>
+                </AlertBanner>
             )}
         </div>
     );

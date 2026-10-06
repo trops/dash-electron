@@ -6,8 +6,19 @@
  *
  * @package GitHub
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Button2, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+    AlertBanner,
+    Button2,
+    Caption2,
+    Panel,
+    StatusBadge,
+    SubHeading2,
+    SubHeading3,
+    Tag3,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
@@ -15,6 +26,17 @@ function GitHubIssueListContent({ title }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("github");
     const { publishEvent, listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const rowSurface = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["hover-bg-primary-dark"] || ""
+    } ${bodyText}`;
+    const selectedSurface = `border ${
+        currentTheme?.["bg-secondary-dark"] || ""
+    } ${currentTheme?.["text-secondary-light"] || ""} ${
+        currentTheme?.["border-secondary-medium"] || ""
+    }`;
 
     const [repo, setRepo] = useState(null);
     const [issues, setIssues] = useState([]);
@@ -108,37 +130,37 @@ function GitHubIssueListContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             <div className="flex items-center gap-2 text-xs">
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         listenerStatus === "listening"
-                            ? "bg-green-500"
-                            : "bg-yellow-500"
+                            ? statusTokens.success.solidBg
+                            : statusTokens.warning.solidBg
                     }`}
                 />
-                <span className="text-gray-500">
+                <Caption2>
                     {listenerStatus === "listening"
                         ? "Listening for repoSelected"
                         : "No event listeners configured"}
-                </span>
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Repo Context */}
@@ -156,9 +178,9 @@ function GitHubIssueListContent({ title }) {
                     </div>
                     <div className="max-h-64 overflow-y-auto space-y-1">
                         {issues.length === 0 && !loading ? (
-                            <div className="text-xs text-gray-600 italic">
+                            <Caption2 block className="italic">
                                 No issues found.
-                            </div>
+                            </Caption2>
                         ) : (
                             issues.map((issue, i) => (
                                 <button
@@ -166,24 +188,24 @@ function GitHubIssueListContent({ title }) {
                                     onClick={() => handleSelectIssue(issue)}
                                     className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
                                         selectedIssue === issue.number
-                                            ? "bg-gray-700 border border-gray-500"
-                                            : "bg-white/5 hover:bg-white/10"
+                                            ? selectedSurface
+                                            : rowSurface
                                     }`}
                                 >
                                     <div className="flex items-center gap-2">
-                                        <span
-                                            className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                                issue.state === "open"
-                                                    ? "bg-green-900/50 text-green-400"
-                                                    : "bg-purple-900/50 text-purple-400"
-                                            }`}
-                                        >
-                                            {issue.state || "open"}
-                                        </span>
-                                        <span className="text-gray-500 font-mono">
+                                        <StatusBadge
+                                            state={
+                                                (issue.state || "open") ===
+                                                "open"
+                                                    ? "open"
+                                                    : "closed"
+                                            }
+                                            label={issue.state || "open"}
+                                        />
+                                        <Caption2 className="font-mono">
                                             #{issue.number}
-                                        </span>
-                                        <span className="text-gray-300 truncate">
+                                        </Caption2>
+                                        <span className="truncate">
                                             {issue.title ||
                                                 JSON.stringify(issue)}
                                         </span>
@@ -191,12 +213,11 @@ function GitHubIssueListContent({ title }) {
                                     {issue.labels?.length > 0 && (
                                         <div className="flex gap-1 mt-1">
                                             {issue.labels.map((l, j) => (
-                                                <span
+                                                <Tag3
                                                     key={j}
-                                                    className="px-1 py-0.5 bg-gray-700 rounded text-[10px] text-gray-400"
-                                                >
-                                                    {l.name || l}
-                                                </span>
+                                                    text={l.name || l}
+                                                    padding="px-1 py-0.5"
+                                                />
                                             ))}
                                         </div>
                                     )}
@@ -206,18 +227,20 @@ function GitHubIssueListContent({ title }) {
                     </div>
                 </div>
             ) : (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     {listenerStatus === "no listeners assigned"
                         ? "No event listeners configured. Wire repoSelected from a GitHubRepoList widget."
                         : "Select a repository from the GitHubRepoList widget to view issues."}
-                </div>
+                </Caption2>
             )}
 
             {/* Error */}
             {result?.type === "error" && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {result.text}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={result.text}
+                />
             )}
         </div>
     );

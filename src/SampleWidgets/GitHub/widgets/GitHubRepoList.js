@@ -6,8 +6,18 @@
  *
  * @package GitHub
  */
-import { useState } from "react";
-import { Button, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useContext } from "react";
+import {
+    AlertBanner,
+    Button,
+    Caption2,
+    InputText,
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse, parseGitHubTextEntries } from "../utils/mcpUtils";
 
@@ -15,6 +25,17 @@ function GitHubRepoListContent({ title }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("github");
     const { publishEvent } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const rowSurface = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["hover-bg-primary-dark"] || ""
+    } ${bodyText}`;
+    const selectedSurface = `border ${
+        currentTheme?.["bg-secondary-dark"] || ""
+    } ${currentTheme?.["text-secondary-light"] || ""} ${
+        currentTheme?.["border-secondary-medium"] || ""
+    }`;
 
     const [searchQuery, setSearchQuery] = useState("");
     const [repos, setRepos] = useState([]);
@@ -69,35 +90,38 @@ function GitHubRepoListContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Search */}
             <div className="space-y-2">
                 <SubHeading3 title="Search Repositories" />
-                <div className="flex gap-2">
-                    <input
+                <div className="flex flex-wrap gap-2">
+                    <InputText
                         type="text"
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(value) => setSearchQuery(value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                         placeholder="Search repos..."
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-gray-400"
+                        className="flex-1 min-w-0"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs"
                     />
                     <Button
                         size="sm"
@@ -123,31 +147,39 @@ function GitHubRepoListContent({ title }) {
                                     onClick={() => handleSelectRepo(repo)}
                                     className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
                                         selectedRepo === fullName
-                                            ? "bg-gray-700 border border-gray-500"
-                                            : "bg-white/5 hover:bg-white/10"
+                                            ? selectedSurface
+                                            : rowSurface
                                     }`}
                                 >
                                     <div className="flex items-center justify-between">
-                                        <span className="text-gray-300 font-medium">
+                                        <span className="font-medium">
                                             {fullName}
                                         </span>
                                         <div className="flex items-center gap-2">
                                             {repo.language && (
-                                                <span className="text-gray-500">
+                                                <Caption2>
                                                     {repo.language}
-                                                </span>
+                                                </Caption2>
                                             )}
                                             {repo.stargazers_count != null && (
-                                                <span className="text-yellow-500">
+                                                <span
+                                                    className={
+                                                        statusTokens.warning
+                                                            .icon
+                                                    }
+                                                >
                                                     ★ {repo.stargazers_count}
                                                 </span>
                                             )}
                                         </div>
                                     </div>
                                     {repo.description && (
-                                        <div className="text-gray-500 truncate mt-0.5">
+                                        <Caption2
+                                            block
+                                            className="truncate mt-0.5"
+                                        >
                                             {repo.description}
-                                        </div>
+                                        </Caption2>
                                     )}
                                 </button>
                             );
@@ -158,9 +190,11 @@ function GitHubRepoListContent({ title }) {
 
             {/* Error */}
             {result?.type === "error" && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {result.text}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={result.text}
+                />
             )}
         </div>
     );

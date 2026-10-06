@@ -6,13 +6,18 @@
  *
  * @package Filesystem
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useContext } from "react";
 import {
     Panel,
     SubHeading2,
     SubHeading3,
     Button,
     Button3,
+    AlertBanner,
+    Caption2,
+    InputText,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { extractMcpText, isMcpError } from "../utils/mcpUtils";
@@ -45,7 +50,9 @@ function parseDirectoryEntries(text) {
 }
 
 function Breadcrumb({ currentPath, onNavigate }) {
+    const { currentTheme } = useContext(ThemeContext);
     if (!currentPath) return null;
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
 
     const parts = currentPath.split("/").filter(Boolean);
     const crumbs = parts.map((part, i) => ({
@@ -54,20 +61,24 @@ function Breadcrumb({ currentPath, onNavigate }) {
     }));
 
     return (
-        <div className="flex items-center gap-1 text-xs text-gray-400 flex-wrap">
+        <div
+            className={`flex items-center gap-1 text-xs flex-wrap ${bodyText}`}
+        >
             <button
                 onClick={() => onNavigate(null)}
-                className="hover:text-emerald-400 transition-colors"
+                className="opacity-70 hover:underline transition-colors"
             >
                 ~
             </button>
             {crumbs.map((crumb, i) => (
                 <span key={crumb.path} className="flex items-center gap-1">
-                    <span className="text-gray-600">/</span>
+                    <span className="opacity-50">/</span>
                     <button
                         onClick={() => onNavigate(crumb.path)}
-                        className={`hover:text-emerald-400 transition-colors ${
-                            i === crumbs.length - 1 ? "text-gray-200" : ""
+                        className={`hover:underline transition-colors ${
+                            i === crumbs.length - 1
+                                ? "font-medium"
+                                : "opacity-70"
                         }`}
                     >
                         {crumb.label}
@@ -81,6 +92,15 @@ function Breadcrumb({ currentPath, onNavigate }) {
 function FilesystemContent({ title }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("filesystem");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+
+    // Theme-driven surfaces so rows follow light/dark themes.
+    const rowSurface = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["hover-bg-primary-dark"] || ""
+    }`;
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
 
     const [currentPath, setCurrentPath] = useState(null);
     const [entries, setEntries] = useState([]);
@@ -222,38 +242,41 @@ function FilesystemContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Search */}
             {currentPath && (
                 <div className="space-y-2">
                     <SubHeading3 title="Search Files" />
-                    <div className="flex gap-2">
-                        <input
+                    <div className="flex flex-wrap items-center gap-2">
+                        <InputText
                             type="text"
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(value) => setSearchQuery(value)}
                             onKeyDown={(e) =>
                                 e.key === "Enter" && handleSearch()
                             }
                             placeholder="Search by filename pattern..."
-                            className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                            className="flex-1 min-w-0"
+                            height="h-7"
+                            padding="px-2 py-1"
+                            inputClassName="text-xs"
                         />
                         <Button
                             onClick={handleSearch}
@@ -284,12 +307,14 @@ function FilesystemContent({ title }) {
                                 key={i}
                                 onClick={() => handleListDirectory(dir)}
                                 disabled={loading}
-                                className="w-full text-left px-2 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs flex items-center gap-2 transition-colors disabled:opacity-40"
+                                className={`w-full text-left px-2 py-1.5 rounded text-xs flex items-center gap-2 transition-colors disabled:opacity-40 ${rowSurface}`}
                             >
-                                <span className="text-emerald-400 text-[10px]">
+                                <span className={`text-xs ${accentText}`}>
                                     folder
                                 </span>
-                                <span className="text-gray-300 truncate font-mono">
+                                <span
+                                    className={`truncate font-mono ${bodyText}`}
+                                >
                                     {dir}
                                 </span>
                             </button>
@@ -315,12 +340,12 @@ function FilesystemContent({ title }) {
                                     key={i}
                                     onClick={() => handleEntryClick(entry)}
                                     disabled={loading}
-                                    className="w-full text-left px-2 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs flex items-center gap-2 transition-colors disabled:opacity-40"
+                                    className={`w-full text-left px-2 py-1.5 rounded text-xs flex items-center gap-2 transition-colors disabled:opacity-40 ${rowSurface}`}
                                 >
-                                    <span className="text-emerald-400 text-[10px]">
+                                    <span className={`text-xs ${accentText}`}>
                                         {getEntryIcon(entry.name, entry.isDir)}
                                     </span>
-                                    <span className="text-gray-300 truncate">
+                                    <span className={`truncate ${bodyText}`}>
                                         {entry.name}
                                         {entry.isDir ? "/" : ""}
                                     </span>
@@ -357,7 +382,7 @@ function FilesystemContent({ title }) {
                                         handleReadFile(result);
                                     }
                                 }}
-                                className="w-full text-left px-2 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs text-gray-300 truncate font-mono transition-colors"
+                                className={`w-full text-left px-2 py-1.5 rounded text-xs truncate font-mono transition-colors ${rowSurface} ${bodyText}`}
                             >
                                 {result}
                             </button>
@@ -383,7 +408,13 @@ function FilesystemContent({ title }) {
                             Back
                         </Button3>
                     </div>
-                    <pre className="p-2 bg-black/30 border border-gray-700 rounded text-xs text-gray-300 overflow-auto max-h-64 whitespace-pre-wrap font-mono">
+                    <pre
+                        className={`p-2 border rounded text-xs overflow-auto max-h-64 whitespace-pre-wrap font-mono ${
+                            currentTheme?.["bg-primary-dark"] || ""
+                        } ${
+                            currentTheme?.["border-primary-dark"] || ""
+                        } ${bodyText}`}
+                    >
                         {fileContent}
                     </pre>
                 </div>
@@ -391,16 +422,18 @@ function FilesystemContent({ title }) {
 
             {/* Loading */}
             {loading && (
-                <div className="text-xs text-gray-500 animate-pulse">
+                <Caption2 block className="animate-pulse">
                     Loading...
-                </div>
+                </Caption2>
             )}
 
             {/* Error */}
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
         </div>
     );
