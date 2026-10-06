@@ -7,7 +7,7 @@
  *
  * @package AlgoliaSETools
  */
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useContext } from "react";
 import {
     Panel,
     SubHeading2,
@@ -16,6 +16,11 @@ import {
     Button3,
     SectionLabel,
     SegmentedControl,
+    AlertBanner,
+    Caption2,
+    TextArea,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 import { parseAny, detectFormat } from "../utils/dataParser";
@@ -34,6 +39,14 @@ const EXPORT_FORMATS = ["json", "csv", "tsv", "ndjson"];
 
 function DataTransformerContent({ title }) {
     const { publishEvent } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
+
+    // Theme tokens for the read-only output block and accent text.
+    const outputSurface = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["border-primary-dark"] || ""
+    } ${currentTheme?.["text-primary-medium"] || ""}`;
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
 
     // Input state
     const [inputText, setInputText] = useState("");
@@ -217,11 +230,11 @@ function DataTransformerContent({ title }) {
                         )}
                     </div>
                 </div>
-                <textarea
+                <TextArea
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     placeholder="Paste CSV, TSV, JSON, or NDJSON data here..."
-                    className="w-full h-32 px-3 py-2 bg-gray-900 border border-gray-700 rounded text-xs text-gray-300 font-mono placeholder-gray-600 focus:outline-none focus:border-blue-500 resize-y"
+                    inputClassName="h-32 rounded text-xs font-mono resize-y"
                 />
                 <div className="flex items-center gap-2">
                     <Button
@@ -232,29 +245,31 @@ function DataTransformerContent({ title }) {
                         Parse
                     </Button>
                     {detectedFormat !== "unknown" && (
-                        <span className="text-xs text-gray-500">
+                        <Caption2>
                             Detected:{" "}
-                            <span className="text-blue-400 font-medium">
+                            <span className={`font-medium ${accentText}`}>
                                 {FORMAT_LABELS[detectedFormat]}
                             </span>
-                        </span>
+                        </Caption2>
                     )}
                     {inputText.trim() && detectedFormat === "unknown" && (
-                        <span className="text-xs text-gray-500">
+                        <Caption2>
                             Format:{" "}
-                            <span className="text-yellow-500">
+                            <span className={status.warning.icon}>
                                 auto-detect on parse
                             </span>
-                        </span>
+                        </Caption2>
                     )}
                 </div>
             </div>
 
             {/* Parse Error */}
             {parseError && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {parseError}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={parseError}
+                />
             )}
 
             {/* Data Preview */}
@@ -265,9 +280,9 @@ function DataTransformerContent({ title }) {
                             Preview ({rows.length} rows, {columns.length}{" "}
                             columns)
                         </SectionLabel>
-                        <span className="text-[10px] text-gray-600">
+                        <Caption2>
                             Click column name to rename. Set type per column.
-                        </span>
+                        </Caption2>
                     </div>
                     <DataPreviewTable
                         columns={columns}
@@ -284,7 +299,7 @@ function DataTransformerContent({ title }) {
             {columns.length > 0 && (
                 <div className="space-y-2">
                     <SectionLabel as="span">Export</SectionLabel>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <SegmentedControl
                             ariaLabel="Export format"
                             options={EXPORT_FORMATS.map((fmt) => ({
@@ -312,7 +327,9 @@ function DataTransformerContent({ title }) {
                             {copied ? "Copied!" : "Copy to Clipboard"}
                         </Button2>
                     </div>
-                    <pre className="w-full max-h-48 overflow-auto px-3 py-2 bg-gray-900 border border-gray-700 rounded text-xs text-gray-300 font-mono whitespace-pre-wrap">
+                    <pre
+                        className={`w-full max-h-48 overflow-auto px-3 py-2 border rounded text-xs font-mono whitespace-pre-wrap ${outputSurface}`}
+                    >
                         {exportOutput}
                     </pre>
                 </div>

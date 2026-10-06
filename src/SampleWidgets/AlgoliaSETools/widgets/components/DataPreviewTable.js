@@ -4,9 +4,18 @@
  * Renders a scrollable table preview of parsed data with column headers.
  * Supports column type selection and column rename.
  */
-import { useState } from "react";
+import { useState, useContext } from "react";
+import {
+    Caption2,
+    InputText,
+    SelectInput,
+    ThemeContext,
+} from "@trops/dash-react";
 
-const TYPE_OPTIONS = ["string", "number", "boolean", "auto"];
+const TYPE_OPTIONS = ["string", "number", "boolean", "auto"].map((t) => ({
+    value: t,
+    label: t,
+}));
 const MAX_PREVIEW_ROWS = 100;
 
 export function DataPreviewTable({
@@ -17,6 +26,7 @@ export function DataPreviewTable({
     columnNames = {},
     onColumnRename,
 }) {
+    const { currentTheme } = useContext(ThemeContext);
     const [editingCol, setEditingCol] = useState(null);
     const [editValue, setEditValue] = useState("");
     const previewRows = rows.slice(0, MAX_PREVIEW_ROWS);
@@ -35,20 +45,26 @@ export function DataPreviewTable({
 
     if (columns.length === 0) return null;
 
+    // Theme tokens: header/footer sit one step above the Panel surface.
+    const surface = currentTheme?.["bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const border = currentTheme?.["border-primary-dark"] || "";
+    const rowHover = currentTheme?.["hover-bg-primary-dark"] || "";
+
     return (
-        <div className="border border-gray-700 rounded overflow-hidden">
+        <div className={`border rounded overflow-hidden ${border}`}>
             <div className="overflow-x-auto overflow-y-auto max-h-80">
                 <table className="w-full text-xs border-collapse">
                     <thead className="sticky top-0 z-10">
-                        <tr className="bg-gray-800">
+                        <tr className={surface}>
                             {columns.map((col) => (
                                 <th
                                     key={col}
-                                    className="px-2 py-1.5 text-left border-b border-gray-700 font-medium text-gray-300 min-w-[120px]"
+                                    className={`px-2 py-1.5 text-left border-b font-medium ${border} ${bodyText}`}
                                 >
                                     <div className="flex flex-col gap-1">
                                         {editingCol === col ? (
-                                            <input
+                                            <InputText
                                                 type="text"
                                                 value={editValue}
                                                 onChange={(e) =>
@@ -61,12 +77,15 @@ export function DataPreviewTable({
                                                     if (e.key === "Escape")
                                                         setEditingCol(null);
                                                 }}
-                                                className="px-1 py-0.5 bg-gray-900 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500 w-full"
+                                                height="h-7"
+                                                padding="px-1 py-0.5"
+                                                inputClassName="text-xs"
+                                                className="w-28"
                                                 autoFocus
                                             />
                                         ) : (
                                             <span
-                                                className="cursor-pointer hover:text-blue-400"
+                                                className="cursor-pointer hover:underline"
                                                 onClick={() => startRename(col)}
                                                 title="Click to rename"
                                             >
@@ -74,22 +93,16 @@ export function DataPreviewTable({
                                             </span>
                                         )}
                                         {onTypeChange && (
-                                            <select
+                                            <SelectInput
                                                 value={typeMap[col] || "string"}
-                                                onChange={(e) =>
-                                                    onTypeChange(
-                                                        col,
-                                                        e.target.value
-                                                    )
+                                                onChange={(value) =>
+                                                    onTypeChange(col, value)
                                                 }
-                                                className="px-1 py-0.5 bg-gray-900 border border-gray-700 rounded text-[10px] text-gray-400 focus:outline-none cursor-pointer"
-                                            >
-                                                {TYPE_OPTIONS.map((t) => (
-                                                    <option key={t} value={t}>
-                                                        {t}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                                options={TYPE_OPTIONS}
+                                                placeholder="Type"
+                                                className="w-28"
+                                                inputClassName="text-xs cursor-pointer"
+                                            />
                                         )}
                                     </div>
                                 </th>
@@ -100,12 +113,12 @@ export function DataPreviewTable({
                         {previewRows.map((row, i) => (
                             <tr
                                 key={i}
-                                className="border-b border-gray-800 hover:bg-white/5"
+                                className={`border-b ${border} ${rowHover}`}
                             >
                                 {columns.map((col) => (
                                     <td
                                         key={col}
-                                        className="px-2 py-1 text-gray-400 truncate max-w-[200px]"
+                                        className={`px-2 py-1 truncate max-w-xs ${bodyText}`}
                                         title={String(row[col] ?? "")}
                                     >
                                         {String(row[col] ?? "")}
@@ -117,9 +130,9 @@ export function DataPreviewTable({
                 </table>
             </div>
             {rows.length > MAX_PREVIEW_ROWS && (
-                <div className="px-2 py-1 bg-gray-800/50 text-[10px] text-gray-500 text-center">
+                <Caption2 block className={`px-2 py-1 text-center ${surface}`}>
                     Showing {MAX_PREVIEW_ROWS} of {rows.length} rows
-                </div>
+                </Caption2>
             )}
         </div>
     );
