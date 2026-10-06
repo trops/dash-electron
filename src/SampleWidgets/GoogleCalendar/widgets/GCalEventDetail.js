@@ -7,8 +7,17 @@
  *
  * @package Google Calendar
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    AlertBanner,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
+    Skeleton,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
 import { McpReauthBanner } from "../components/McpReauthBanner";
@@ -44,16 +53,21 @@ function formatDateTime(dateStr) {
 }
 
 function MetadataRow({ label, value, multiline }) {
+    const { currentTheme } = useContext(ThemeContext);
     if (!value) return null;
     return (
-        <div className="flex items-start gap-2 py-1.5 border-b border-gray-800 last:border-b-0">
-            <span className="text-gray-500 text-[10px] uppercase tracking-wide w-20 shrink-0 pt-0.5">
+        <div
+            className={`flex items-start gap-2 py-1.5 border-b last:border-b-0 ${
+                currentTheme?.["border-primary-dark"] || ""
+            }`}
+        >
+            <Caption2 className="text-xs uppercase tracking-wide w-20 shrink-0 pt-0.5">
                 {label}
-            </span>
+            </Caption2>
             <span
-                className={`text-gray-300 text-xs ${
-                    multiline ? "whitespace-pre-wrap" : ""
-                } break-words`}
+                className={`text-xs ${
+                    currentTheme?.["text-primary-medium"] || ""
+                } ${multiline ? "whitespace-pre-wrap" : ""} break-words`}
             >
                 {value}
             </span>
@@ -73,6 +87,8 @@ function GCalEventDetailContent({ title }) {
         connect,
         disconnect,
     } = useMcpProvider("google-calendar");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const { listen, listeners } = useWidgetEvents();
 
@@ -213,29 +229,29 @@ function GCalEventDetailContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Loading State */}
             {loading && (
-                <div className="space-y-2 animate-pulse">
+                <div className="space-y-2">
                     {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="h-6 bg-white/5 rounded" />
+                        <Skeleton key={i} height="h-6" rounded="rounded" />
                     ))}
                 </div>
             )}
@@ -250,7 +266,11 @@ function GCalEventDetailContent({ title }) {
                             "Untitled Event"
                         }
                     />
-                    <div className="bg-white/5 rounded p-2">
+                    <div
+                        className={`rounded p-2 ${
+                            currentTheme?.["bg-primary-dark"] || ""
+                        }`}
+                    >
                         <MetadataRow
                             label="Title"
                             value={eventDetail.summary || eventDetail.title}
@@ -308,15 +328,15 @@ function GCalEventDetailContent({ title }) {
 
             {/* Empty State */}
             {!loading && !eventDetail && !selectedEvent && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     Select an event from GCalUpcoming to view its details.
-                </div>
+                </Caption2>
             )}
 
             {!loading && !eventDetail && selectedEvent && !errorMsg && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     No details available for "{selectedEvent.title}".
-                </div>
+                </Caption2>
             )}
 
             <McpReauthBanner
@@ -329,9 +349,11 @@ function GCalEventDetailContent({ title }) {
             />
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
 
             <McpDebugLog entries={debugLog} />

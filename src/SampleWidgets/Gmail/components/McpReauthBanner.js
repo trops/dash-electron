@@ -6,7 +6,7 @@
  */
 import { useState, useEffect, useContext } from "react";
 import { AppContext } from "@trops/dash-core";
-import { Button } from "@trops/dash-react";
+import { AlertBanner, Button } from "@trops/dash-react";
 
 const AUTH_ERROR_PATTERNS = [
     "invalid_request",
@@ -109,16 +109,18 @@ export function McpReauthBanner({
     if (!needsReauth) return null;
 
     return (
-        <div className="p-2 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs flex items-center justify-between gap-2">
-            <span>Authorization expired. Re-authorize to continue.</span>
-            <Button
-                size="sm"
-                onClick={handleReauth}
-                disabled={reauthing}
-                className="whitespace-nowrap shrink-0"
-            >
-                {reauthing ? "Authorizing..." : "Re-authorize"}
-            </Button>
-        </div>
+        <AlertBanner variant="warning" size="compact">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>Authorization expired. Re-authorize to continue.</span>
+                <Button
+                    size="sm"
+                    onClick={handleReauth}
+                    disabled={reauthing}
+                    className="whitespace-nowrap shrink-0"
+                >
+                    {reauthing ? "Authorizing..." : "Re-authorize"}
+                </Button>
+            </div>
+        </AlertBanner>
     );
 }

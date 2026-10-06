@@ -480,9 +480,6 @@ const THEME_PENDING_PACKAGES = [
     "DashSamples",
     "Filesystem",
     "GitHub",
-    "Gmail",
-    "GoogleCalendar",
-    "GoogleDrive",
     "Notion",
     "Slack",
 ];

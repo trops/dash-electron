@@ -7,8 +7,19 @@
  *
  * @package Google Drive
  */
-import { useState, useCallback } from "react";
-import { Button, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useCallback, useContext } from "react";
+import {
+    AlertBanner,
+    Button,
+    Caption2,
+    Panel,
+    SelectInput,
+    Skeleton,
+    SubHeading2,
+    SubHeading3,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
 import { McpReauthBanner } from "../components/McpReauthBanner";
@@ -53,6 +64,20 @@ function GDriveFileListContent({ title }) {
     } = useMcpProvider("google-drive");
 
     const { publishEvent } = useWidgetEvents();
+
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+
+    const rowSurface = `border ${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["hover-bg-primary-dark"] || ""
+    }`;
+    const selectedSurface = `border ${
+        currentTheme?.["bg-secondary-dark"] || ""
+    } ${currentTheme?.["text-secondary-light"] || ""} ${
+        currentTheme?.["border-secondary-medium"] || ""
+    }`;
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
 
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -154,26 +179,26 @@ function GDriveFileListContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Controls */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
                 <Button
                     size="sm"
                     onClick={loadFiles}
@@ -181,24 +206,24 @@ function GDriveFileListContent({ title }) {
                 >
                     {loading ? "Loading..." : "Load Files"}
                 </Button>
-                <select
+                <SelectInput
                     value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-yellow-500"
-                >
-                    {SORT_OPTIONS.map((opt) => (
-                        <option key={opt.key} value={opt.key}>
-                            {opt.label}
-                        </option>
-                    ))}
-                </select>
+                    onChange={(value) => setSortBy(value)}
+                    options={SORT_OPTIONS.map((opt) => ({
+                        value: opt.key,
+                        label: opt.label,
+                    }))}
+                    placeholder="Sort by"
+                    className="flex-1 min-w-0"
+                    inputClassName="text-xs"
+                />
             </div>
 
             {/* Loading State */}
             {loading && (
-                <div className="space-y-2 animate-pulse">
+                <div className="space-y-2">
                     {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="h-8 bg-white/5 rounded" />
+                        <Skeleton key={i} height="h-8" rounded="rounded" />
                     ))}
                 </div>
             )}
@@ -216,30 +241,34 @@ function GDriveFileListContent({ title }) {
                                 onClick={() => handleFileClick(file)}
                                 className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
                                     isSelected
-                                        ? "bg-yellow-800/40 border border-yellow-600"
-                                        : "bg-white/5 hover:bg-white/10 border border-transparent"
+                                        ? selectedSurface
+                                        : `${rowSurface} border-transparent`
                                 }`}
                             >
                                 <div className="flex items-center gap-2">
-                                    <span className="text-yellow-400 text-[10px]">
+                                    <span className={`text-xs ${accentText}`}>
                                         {getFileIcon(file.mimeType)}
                                     </span>
-                                    <span className="text-gray-300 truncate">
+                                    <span
+                                        className={`truncate ${
+                                            isSelected ? "" : bodyText
+                                        }`}
+                                    >
                                         {file.name || file.title || "Untitled"}
                                     </span>
                                 </div>
                                 {file.mimeType && (
-                                    <div className="text-gray-600 text-[10px] mt-0.5 ml-5">
+                                    <Caption2 block className="mt-0.5 ml-5">
                                         {file.mimeType}
-                                    </div>
+                                    </Caption2>
                                 )}
                                 {file.modifiedTime && (
-                                    <div className="text-gray-600 text-[10px] mt-0.5 ml-5">
+                                    <Caption2 block className="mt-0.5 ml-5">
                                         Modified:{" "}
                                         {new Date(
                                             file.modifiedTime
                                         ).toLocaleDateString()}
-                                    </div>
+                                    </Caption2>
                                 )}
                             </button>
                         );
@@ -249,9 +278,9 @@ function GDriveFileListContent({ title }) {
 
             {/* Empty State */}
             {!loading && files.length === 0 && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     Click "Load Files" to browse your Google Drive.
-                </div>
+                </Caption2>
             )}
 
             <McpReauthBanner
@@ -264,9 +293,11 @@ function GDriveFileListContent({ title }) {
             />
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
 
             <McpDebugLog entries={debugLog} />

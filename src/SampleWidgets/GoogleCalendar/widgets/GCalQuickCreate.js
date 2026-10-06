@@ -6,8 +6,17 @@
  *
  * @package Google Calendar
  */
-import { useState } from "react";
-import { Button, Panel, SubHeading2 } from "@trops/dash-react";
+import { useState, useContext } from "react";
+import {
+    Button,
+    Panel,
+    SubHeading2,
+    AlertBanner,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
+    InputText,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
 import { McpReauthBanner } from "../components/McpReauthBanner";
@@ -43,6 +52,8 @@ function GCalQuickCreateContent({ title }) {
         connect,
         disconnect,
     } = useMcpProvider("google-calendar");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const [eventTitle, setEventTitle] = useState("");
     const [date, setDate] = useState(todayStr());
@@ -117,66 +128,76 @@ function GCalQuickCreateContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Create Form */}
             <form onSubmit={handleSubmit} className="space-y-2">
-                <input
+                <InputText
                     type="text"
                     value={eventTitle}
                     onChange={(e) => setEventTitle(e.target.value)}
                     placeholder="Event title"
                     required
-                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                    height="h-7"
+                    padding="px-2 py-1"
+                    inputClassName="text-xs"
                 />
-                <input
+                <InputText
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
                     required
-                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                    height="h-7"
+                    padding="px-2 py-1"
+                    inputClassName="text-xs"
                 />
-                <div className="flex gap-2">
-                    <input
+                <div className="flex flex-wrap gap-2">
+                    <InputText
                         type="time"
                         value={startTime}
                         onChange={(e) => setStartTime(e.target.value)}
                         required
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                        className="flex-1 min-w-0"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs"
                     />
-                    <span className="text-gray-500 text-xs self-center">
-                        to
-                    </span>
-                    <input
+                    <Caption2 className="self-center">to</Caption2>
+                    <InputText
                         type="time"
                         value={endTime}
                         onChange={(e) => setEndTime(e.target.value)}
                         required
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                        className="flex-1 min-w-0"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs"
                     />
                 </div>
-                <input
+                <InputText
                     type="text"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     placeholder="Location (optional)"
-                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                    height="h-7"
+                    padding="px-2 py-1"
+                    inputClassName="text-xs"
                 />
                 <Button
                     type="submit"
@@ -188,14 +209,18 @@ function GCalQuickCreateContent({ title }) {
                 </Button>
 
                 {result === "success" && (
-                    <div className="p-2 bg-green-900/30 border border-green-700 rounded text-green-300 text-xs">
-                        Event created successfully
-                    </div>
+                    <AlertBanner
+                        variant="success"
+                        size="compact"
+                        message="Event created successfully"
+                    />
                 )}
                 {result === "error" && !errorMsg && (
-                    <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                        Failed to create event
-                    </div>
+                    <AlertBanner
+                        variant="error"
+                        size="compact"
+                        message="Failed to create event"
+                    />
                 )}
             </form>
 
@@ -209,9 +234,11 @@ function GCalQuickCreateContent({ title }) {
             />
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
 
             <McpDebugLog entries={debugLog} />

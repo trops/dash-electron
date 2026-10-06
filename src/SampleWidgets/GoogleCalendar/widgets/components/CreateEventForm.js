@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { Button } from "@trops/dash-react";
+import {
+    AlertBanner,
+    Button,
+    Caption2,
+    InputText,
+    TextArea,
+} from "@trops/dash-react";
 
 function todayStr() {
     return new Date().toISOString().slice(0, 10);
@@ -54,46 +60,58 @@ export function CreateEventForm({ onSubmit, loading }) {
 
     return (
         <form onSubmit={handleSubmit} className="space-y-2">
-            <input
+            <InputText
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Event title"
                 required
-                className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                height="h-7"
+                padding="px-2 py-1"
+                inputClassName="text-xs"
             />
-            <div className="flex gap-2">
-                <input
+            <div className="flex flex-wrap gap-2">
+                <InputText
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
                     required
-                    className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                    className="flex-1 min-w-0"
+                    height="h-7"
+                    padding="px-2 py-1"
+                    inputClassName="text-xs"
                 />
             </div>
-            <div className="flex gap-2">
-                <input
+            <div className="flex flex-wrap gap-2">
+                <InputText
                     type="time"
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
                     required
-                    className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                    className="flex-1 min-w-0"
+                    height="h-7"
+                    padding="px-2 py-1"
+                    inputClassName="text-xs"
                 />
-                <span className="text-gray-500 text-xs self-center">to</span>
-                <input
+                <Caption2 className="self-center">to</Caption2>
+                <InputText
                     type="time"
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
                     required
-                    className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                    className="flex-1 min-w-0"
+                    height="h-7"
+                    padding="px-2 py-1"
+                    inputClassName="text-xs"
                 />
             </div>
-            <textarea
+            <TextArea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Description (optional)"
                 rows={2}
-                className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+                padding="px-2 py-1"
+                inputClassName="text-xs resize-none"
             />
             <Button
                 type="submit"
@@ -105,14 +123,18 @@ export function CreateEventForm({ onSubmit, loading }) {
             </Button>
 
             {result === "success" && (
-                <div className="p-2 bg-green-900/30 border border-green-700 rounded text-green-300 text-xs">
-                    Event created successfully
-                </div>
+                <AlertBanner
+                    variant="success"
+                    size="compact"
+                    message="Event created successfully"
+                />
             )}
             {result === "error" && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    Failed to create event
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message="Failed to create event"
+                />
             )}
         </form>
     );

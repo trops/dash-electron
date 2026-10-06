@@ -7,8 +7,17 @@
  *
  * @package Google Drive
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+    AlertBanner,
+    Caption2,
+    Panel,
+    Skeleton,
+    SubHeading2,
+    SubHeading3,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
 import { McpReauthBanner } from "../components/McpReauthBanner";
@@ -29,13 +38,24 @@ function getFileIcon(mimeType) {
 }
 
 function MetadataRow({ label, value }) {
+    const { currentTheme } = useContext(ThemeContext);
     if (!value) return null;
     return (
-        <div className="flex items-start gap-2 py-1 border-b border-gray-800 last:border-b-0">
-            <span className="text-gray-500 text-[10px] uppercase tracking-wide w-20 shrink-0">
+        <div
+            className={`flex items-start gap-2 py-1 border-b last:border-b-0 ${
+                currentTheme?.["border-primary-dark"] || ""
+            }`}
+        >
+            <Caption2 className="uppercase tracking-wide w-20 shrink-0">
                 {label}
+            </Caption2>
+            <span
+                className={`text-xs break-all ${
+                    currentTheme?.["text-primary-medium"] || ""
+                }`}
+            >
+                {value}
             </span>
-            <span className="text-gray-300 text-xs break-all">{value}</span>
         </div>
     );
 }
@@ -54,6 +74,9 @@ function GDriveFilePreviewContent({ title }) {
     } = useMcpProvider("google-drive");
 
     const { listen, listeners } = useWidgetEvents();
+
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const [selectedFile, setSelectedFile] = useState(null);
     const [metadata, setMetadata] = useState(null);
@@ -157,29 +180,29 @@ function GDriveFilePreviewContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Loading State */}
             {loading && (
-                <div className="space-y-2 animate-pulse">
+                <div className="space-y-2">
                     {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-6 bg-white/5 rounded" />
+                        <Skeleton key={i} height="h-6" rounded="rounded" />
                     ))}
                 </div>
             )}
@@ -188,7 +211,11 @@ function GDriveFilePreviewContent({ title }) {
             {!loading && metadata && (
                 <div className="space-y-2">
                     <div className="flex items-center gap-2 mb-2">
-                        <span className="text-yellow-400 text-sm">
+                        <span
+                            className={`text-sm ${
+                                currentTheme?.["text-secondary-medium"] || ""
+                            }`}
+                        >
                             {getFileIcon(metadata.mimeType)}
                         </span>
                         <SubHeading3
@@ -197,7 +224,11 @@ function GDriveFilePreviewContent({ title }) {
                             }
                         />
                     </div>
-                    <div className="bg-white/5 rounded p-2">
+                    <div
+                        className={`rounded p-2 ${
+                            currentTheme?.["bg-primary-dark"] || ""
+                        }`}
+                    >
                         <MetadataRow
                             label="Name"
                             value={metadata.name || metadata.title}
@@ -255,17 +286,17 @@ function GDriveFilePreviewContent({ title }) {
 
             {/* Empty State */}
             {!loading && !metadata && !selectedFile && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     Select a file from GDriveFileList or GDriveFileSearch to
                     view its details.
-                </div>
+                </Caption2>
             )}
 
             {/* Selected but no metadata yet */}
             {!loading && !metadata && selectedFile && !errorMsg && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     No metadata available for "{selectedFile.name}".
-                </div>
+                </Caption2>
             )}
 
             <McpReauthBanner
@@ -278,9 +309,11 @@ function GDriveFilePreviewContent({ title }) {
             />
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
 
             <McpDebugLog entries={debugLog} />

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useContext } from "react";
+import { Caption2, ThemeContext, useStatusTokens } from "@trops/dash-react";
 
 function formatTime(date) {
     const d = new Date(date);
@@ -7,55 +8,76 @@ function formatTime(date) {
 }
 
 function JsonBlock({ data }) {
+    const { currentTheme } = useContext(ThemeContext);
     const text =
         typeof data === "string" ? data : JSON.stringify(data, null, 2);
     return (
-        <pre className="p-1.5 bg-black/30 rounded mt-1 whitespace-pre-wrap break-words overflow-hidden">
+        <pre
+            className={`p-1.5 rounded mt-1 whitespace-pre-wrap break-words overflow-hidden font-mono ${
+                currentTheme?.["bg-primary-dark"] || ""
+            } ${currentTheme?.["text-primary-medium"] || ""}`}
+        >
             {text}
         </pre>
     );
 }
 
 function DebugEntry({ entry }) {
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
     const [open, setOpen] = useState(false);
     const isError = !!entry.error;
 
     return (
-        <div className="border-b border-gray-800 last:border-b-0">
+        <div
+            className={`border-b last:border-b-0 ${
+                currentTheme?.["border-primary-dark"] || ""
+            }`}
+        >
             <button
                 onClick={() => setOpen(!open)}
-                className="w-full flex items-center gap-1.5 py-1 px-1 text-left hover:bg-white/5 transition-colors"
+                className={`w-full flex items-center gap-1.5 py-1 px-1 text-left transition-colors ${
+                    currentTheme?.["hover-bg-primary-dark"] || ""
+                }`}
             >
                 <span
                     className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                        isError ? "bg-red-500" : "bg-green-500"
+                        isError
+                            ? statusTokens.error.solidBg
+                            : statusTokens.success.solidBg
                     }`}
                 />
-                <span className="text-gray-500">
+                <Caption2 className="font-mono">
                     {formatTime(entry.timestamp)}
+                </Caption2>
+                <span
+                    className={`truncate ${
+                        currentTheme?.["text-primary-medium"] || ""
+                    }`}
+                >
+                    {entry.toolName}
                 </span>
-                <span className="text-gray-300 truncate">{entry.toolName}</span>
-                <span className="text-gray-600 ml-auto flex-shrink-0">
+                <Caption2 className="font-mono opacity-70 ml-auto flex-shrink-0">
                     {entry.duration}ms
-                </span>
-                <span className="text-gray-600 flex-shrink-0">
-                    {open ? "\u25B4" : "\u25BE"}
-                </span>
+                </Caption2>
+                <Caption2 className="opacity-70 flex-shrink-0">
+                    {open ? "▴" : "▾"}
+                </Caption2>
             </button>
             {open && (
                 <div className="px-1 pb-2 space-y-1.5">
                     <div>
-                        <span className="text-gray-500">Request:</span>
+                        <Caption2 className="font-mono">Request:</Caption2>
                         <JsonBlock data={entry.args} />
                     </div>
                     <div>
-                        <span
-                            className={
-                                isError ? "text-red-400" : "text-gray-500"
-                            }
-                        >
-                            {isError ? "Error:" : "Response:"}
-                        </span>
+                        {isError ? (
+                            <span className={statusTokens.error.icon}>
+                                Error:
+                            </span>
+                        ) : (
+                            <Caption2 className="font-mono">Response:</Caption2>
+                        )}
                         <JsonBlock
                             data={isError ? entry.error : entry.response}
                         />
@@ -67,18 +89,25 @@ function DebugEntry({ entry }) {
 }
 
 export function McpDebugLog({ entries }) {
+    const { currentTheme } = useContext(ThemeContext);
     const [open, setOpen] = useState(false);
 
     if (entries.length === 0) return null;
 
     return (
-        <div className="border-t border-gray-700/50 mt-2 pt-1 text-[10px] font-mono">
+        <div
+            className={`border-t mt-2 pt-1 text-xs font-mono ${
+                currentTheme?.["border-primary-dark"] || ""
+            }`}
+        >
             <button
                 onClick={() => setOpen(!open)}
-                className="flex items-center gap-1.5 w-full text-left py-1 text-gray-500 hover:text-gray-400 transition-colors"
+                className="flex items-center gap-1.5 w-full text-left py-1 transition-colors"
             >
-                <span>{open ? "\u25B4" : "\u25BE"}</span>
-                <span>Debug ({entries.length})</span>
+                <Caption2 className="font-mono">{open ? "▴" : "▾"}</Caption2>
+                <Caption2 className="font-mono">
+                    Debug ({entries.length})
+                </Caption2>
             </button>
             {open && (
                 <div className="max-h-60 overflow-y-auto">

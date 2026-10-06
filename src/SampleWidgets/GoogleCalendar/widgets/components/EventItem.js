@@ -1,3 +1,6 @@
+import { useContext } from "react";
+import { Caption2, ThemeContext } from "@trops/dash-react";
+
 function formatTime(dateStr) {
     if (!dateStr) return "";
     const d = new Date(dateStr);
@@ -29,6 +32,7 @@ function isAllDay(event) {
 }
 
 export function EventItem({ event }) {
+    const { currentTheme } = useContext(ThemeContext);
     const joinLink = getJoinLink(event);
     const allDay = isAllDay(event);
     const startTime = allDay
@@ -39,20 +43,28 @@ export function EventItem({ event }) {
         : formatTime(event.end?.dateTime || event.end?.date);
 
     return (
-        <div className="px-2 py-1.5 bg-white/5 rounded text-xs">
+        <div
+            className={`px-2 py-1.5 rounded text-xs ${
+                currentTheme?.["bg-primary-dark"] || ""
+            }`}
+        >
             <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                    <div className="text-gray-200 truncate">
+                    <div
+                        className={`truncate ${
+                            currentTheme?.["text-primary-medium"] || ""
+                        }`}
+                    >
                         {event.summary || "Untitled Event"}
                     </div>
-                    <div className="text-gray-500 mt-0.5">
+                    <Caption2 block className="mt-0.5">
                         {startTime}
                         {endTime && ` - ${endTime}`}
-                    </div>
+                    </Caption2>
                     {event.location && (
-                        <div className="text-gray-600 truncate mt-0.5">
+                        <Caption2 block className="truncate mt-0.5 opacity-70">
                             {event.location}
-                        </div>
+                        </Caption2>
                     )}
                 </div>
                 {joinLink && (
@@ -61,7 +73,11 @@ export function EventItem({ event }) {
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="shrink-0 px-2 py-0.5 bg-blue-600 hover:bg-blue-500 rounded text-white text-xs"
+                        className={`shrink-0 px-2 py-0.5 rounded text-xs transition-colors ${
+                            currentTheme?.["bg-secondary-dark"] || ""
+                        } ${currentTheme?.["text-secondary-light"] || ""} ${
+                            currentTheme?.["hover-bg-secondary-medium"] || ""
+                        }`}
                     >
                         Join
                     </a>
