@@ -6,6 +6,7 @@
  * credentials are resolved on the main process side.
  */
 import { useState, useEffect } from "react";
+import { Caption2, SelectInput } from "@trops/dash-react";
 
 export function IndexSelector({ pc, selectedIndex, onSelect }) {
     const [indices, setIndices] = useState([]);
@@ -38,24 +39,24 @@ export function IndexSelector({ pc, selectedIndex, onSelect }) {
 
     if (loading) {
         return (
-            <div className="text-xs text-gray-400 italic">
+            <Caption2 block className="italic">
                 Loading indices...
-            </div>
+            </Caption2>
         );
     }
 
     return (
-        <select
+        <SelectInput
             value={selectedIndex}
-            onChange={(e) => onSelect(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
-        >
-            <option value="">Select an index...</option>
-            {indices.map((idx) => (
-                <option key={idx.name} value={idx.name}>
-                    {idx.name} ({(idx.entries || 0).toLocaleString()} records)
-                </option>
-            ))}
-        </select>
+            onChange={(value) => onSelect(value)}
+            placeholder="Select an index..."
+            options={indices.map((idx) => ({
+                value: idx.name,
+                label: `${idx.name} (${(
+                    idx.entries || 0
+                ).toLocaleString()} records)`,
+            }))}
+            inputClassName="text-xs"
+        />
     );
 }

@@ -6,8 +6,18 @@
  *
  * @package Algolia
  */
-import { useState, useEffect, useRef } from "react";
-import { Panel, SubHeading2, Button, Button2 } from "@trops/dash-react";
+import { useState, useEffect, useRef, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    Button2,
+    AlertBanner,
+    Caption2,
+    InputText,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -36,6 +46,8 @@ function AlgoliaSearchableAttributesContent({ title }) {
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
     const { listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
 
     const [selectedIndex, setSelectedIndex] = useState("");
     const { settings, loading, saving, error, updateSettings } =
@@ -137,13 +149,18 @@ function AlgoliaSearchableAttributesContent({ title }) {
         return (
             <div className="flex flex-col gap-3 h-full text-sm">
                 <SubHeading2 title={title} padding={false} />
-                <div className="p-3 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia credential provider not configured. Add an Algolia
-                    provider with your App ID and API Key.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia credential provider not configured. Add an Algolia provider with your App ID and API Key."
+                />
             </div>
         );
     }
+
+    const rowClass = currentTheme?.["bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const borderClass = currentTheme?.["border-primary-dark"] || "";
 
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
@@ -154,19 +171,17 @@ function AlgoliaSearchableAttributesContent({ title }) {
                 onSelect={setSelectedIndex}
             />
             {!selectedIndex && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     Select an index to configure searchable attributes.
-                </div>
+                </Caption2>
             )}
             {loading && (
-                <div className="text-xs text-gray-400 italic">
+                <Caption2 block className="italic">
                     Loading settings...
-                </div>
+                </Caption2>
             )}
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
             {settings && selectedIndex && (
                 <div className="flex flex-col gap-4">
@@ -178,10 +193,10 @@ function AlgoliaSearchableAttributesContent({ title }) {
                         docUrl={SETTINGS_META.searchableAttributes.docUrl}
                     />
                     {attrs.length === 0 && (
-                        <div className="text-xs text-gray-500 italic">
+                        <Caption2 block className="italic">
                             No searchable attributes configured (all attributes
                             are searchable by default).
-                        </div>
+                        </Caption2>
                     )}
                     <div className="flex flex-col gap-1">
                         {attrs.map((a, i) => (
@@ -192,23 +207,23 @@ function AlgoliaSearchableAttributesContent({ title }) {
                                 onDragEnter={() => handleDragEnter(i)}
                                 onDragEnd={handleDragEnd}
                                 onDragOver={(e) => e.preventDefault()}
-                                className="flex items-center gap-2 p-1.5 bg-gray-800/50 rounded cursor-grab active:cursor-grabbing"
+                                className={`flex items-center gap-2 p-1.5 rounded cursor-grab active:cursor-grabbing ${rowClass}`}
                             >
-                                <span className="text-gray-500 text-xs select-none">
+                                <Caption2 className="select-none">
                                     &#x2630;
-                                </span>
-                                <span className="text-xs text-gray-400 w-4">
-                                    {i + 1}.
-                                </span>
-                                <span className="flex-1 text-xs text-gray-200 font-mono">
+                                </Caption2>
+                                <Caption2 className="w-4">{i + 1}.</Caption2>
+                                <span
+                                    className={`flex-1 text-xs font-mono ${bodyText}`}
+                                >
                                     {a.attr}
                                 </span>
                                 <button
                                     onClick={() => toggleUnordered(a.attr)}
                                     className={`px-1.5 py-0.5 rounded text-xs ${
                                         a.unordered
-                                            ? "bg-amber-900/50 text-amber-300 border border-amber-700"
-                                            : "bg-gray-700 text-gray-400 border border-gray-600"
+                                            ? `border ${status.warning.bg} ${status.warning.text} ${status.warning.border}`
+                                            : `border ${rowClass} ${bodyText} ${borderClass}`
                                     }`}
                                     title={
                                         a.unordered
@@ -220,7 +235,7 @@ function AlgoliaSearchableAttributesContent({ title }) {
                                 </button>
                                 <button
                                     onClick={() => removeAttr(a.attr)}
-                                    className="text-gray-400 hover:text-red-400 text-xs px-1"
+                                    className={`text-xs px-1 ${bodyText} ${status.error.hoverText}`}
                                 >
                                     &times;
                                 </button>
@@ -228,13 +243,16 @@ function AlgoliaSearchableAttributesContent({ title }) {
                         ))}
                     </div>
                     <div className="flex gap-2">
-                        <input
+                        <InputText
                             type="text"
                             value={newAttr}
                             onChange={(e) => setNewAttr(e.target.value)}
                             onKeyDown={(e) => e.key === "Enter" && addAttr()}
                             placeholder="Attribute name"
-                            className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            className="flex-1"
+                            height="h-7"
+                            padding="px-2 py-1"
+                            inputClassName="text-xs"
                         />
                         <Button2 onClick={addAttr} size="sm">
                             Add
@@ -249,7 +267,7 @@ function AlgoliaSearchableAttributesContent({ title }) {
                             {saving ? "Saving..." : "Save"}
                         </Button>
                         {saveSuccess && (
-                            <span className="text-xs text-green-400">
+                            <span className={`text-xs ${status.success.icon}`}>
                                 Saved!
                             </span>
                         )}

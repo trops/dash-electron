@@ -7,8 +7,16 @@
  *
  * @package Algolia
  */
-import { useState, useEffect, useCallback } from "react";
-import { Panel, SubHeading2, Button2 } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    Button2,
+    AlertBanner,
+    Caption2,
+    EmptyState,
+    ThemeContext,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -17,6 +25,7 @@ import {
 
 function AlgoliaIndexDashboardContent({ title }) {
     const { hasProvider, getProvider } = useWidgetProviders();
+    const { currentTheme } = useContext(ThemeContext);
     const [indices, setIndices] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -116,13 +125,40 @@ function AlgoliaIndexDashboardContent({ title }) {
         return (
             <div className="flex flex-col gap-3 h-full text-sm">
                 <SubHeading2 title={title} padding={false} />
-                <div className="p-3 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia credential provider not configured. Add an Algolia
-                    provider with your App ID and API Key.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia credential provider not configured. Add an Algolia provider with your App ID and API Key."
+                />
             </div>
         );
     }
+
+    // Theme tokens: tiles and rows sit one step above the Panel surface;
+    // headline numbers use the secondary/tertiary accent channels.
+    const surfaceClass = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["text-primary-medium"] || ""
+    }`;
+    const rowHover = currentTheme?.["hover-bg-primary-dark"] || "";
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
+    const accentText2 = currentTheme?.["text-tertiary-medium"] || "";
+
+    const summaryTiles = [
+        { label: "Indices", value: indices.length, className: accentText },
+        {
+            label: "Total Records",
+            value: totalRecords.toLocaleString(),
+            className: accentText,
+        },
+        {
+            label: "Total Size",
+            value: formatSize(totalSize),
+            className: accentText2,
+        },
+    ];
+
+    const sortArrow = (field) =>
+        sortField === field ? (sortAsc ? "^" : "v") : "";
 
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
@@ -139,109 +175,83 @@ function AlgoliaIndexDashboardContent({ title }) {
 
             {/* Summary Stats */}
             <div className="grid grid-cols-3 gap-2">
-                <div className="bg-white/5 rounded p-2 text-center">
-                    <div className="text-lg font-bold text-blue-400">
-                        {indices.length}
+                {summaryTiles.map((tile) => (
+                    <div
+                        key={tile.label}
+                        className={`rounded p-2 text-center ${surfaceClass}`}
+                    >
+                        <div className={`text-lg font-bold ${tile.className}`}>
+                            {tile.value}
+                        </div>
+                        <Caption2 block className="uppercase tracking-wider">
+                            {tile.label}
+                        </Caption2>
                     </div>
-                    <div className="text-[10px] text-gray-500 uppercase tracking-wider">
-                        Indices
-                    </div>
-                </div>
-                <div className="bg-white/5 rounded p-2 text-center">
-                    <div className="text-lg font-bold text-green-400">
-                        {totalRecords.toLocaleString()}
-                    </div>
-                    <div className="text-[10px] text-gray-500 uppercase tracking-wider">
-                        Total Records
-                    </div>
-                </div>
-                <div className="bg-white/5 rounded p-2 text-center">
-                    <div className="text-lg font-bold text-purple-400">
-                        {formatSize(totalSize)}
-                    </div>
-                    <div className="text-[10px] text-gray-500 uppercase tracking-wider">
-                        Total Size
-                    </div>
-                </div>
+                ))}
             </div>
 
             {/* App ID */}
-            <div className="text-[10px] text-gray-500 font-mono">
+            <Caption2 block className="font-mono">
                 App: {algoliaAppId}
-            </div>
+            </Caption2>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Index Table */}
             {indices.length > 0 && (
                 <div className="space-y-0.5">
                     {/* Header */}
-                    <div className="grid grid-cols-12 gap-1 text-[10px] text-gray-500 uppercase tracking-wider px-2 py-1">
+                    <Caption2
+                        block
+                        className="grid grid-cols-12 gap-1 uppercase tracking-wider px-2 py-1"
+                    >
                         <button
                             onClick={() => handleSort("name")}
-                            className="col-span-5 text-left hover:text-gray-300"
+                            className="col-span-5 text-left hover:underline"
                         >
-                            Name{" "}
-                            {sortField === "name" ? (sortAsc ? "^" : "v") : ""}
+                            Name {sortArrow("name")}
                         </button>
                         <button
                             onClick={() => handleSort("entries")}
-                            className="col-span-3 text-right hover:text-gray-300"
+                            className="col-span-3 text-right hover:underline"
                         >
-                            Records{" "}
-                            {sortField === "entries"
-                                ? sortAsc
-                                    ? "^"
-                                    : "v"
-                                : ""}
+                            Records {sortArrow("entries")}
                         </button>
                         <button
                             onClick={() => handleSort("dataSize")}
-                            className="col-span-2 text-right hover:text-gray-300"
+                            className="col-span-2 text-right hover:underline"
                         >
-                            Size{" "}
-                            {sortField === "dataSize"
-                                ? sortAsc
-                                    ? "^"
-                                    : "v"
-                                : ""}
+                            Size {sortArrow("dataSize")}
                         </button>
                         <button
                             onClick={() => handleSort("updatedAt")}
-                            className="col-span-2 text-right hover:text-gray-300"
+                            className="col-span-2 text-right hover:underline"
                         >
-                            Updated{" "}
-                            {sortField === "updatedAt"
-                                ? sortAsc
-                                    ? "^"
-                                    : "v"
-                                : ""}
+                            Updated {sortArrow("updatedAt")}
                         </button>
-                    </div>
+                    </Caption2>
 
                     {/* Rows */}
-                    <div className="max-h-[60vh] overflow-y-auto space-y-0.5">
+                    <div className="overflow-y-auto space-y-0.5">
                         {sorted.map((idx, i) => (
                             <div
                                 key={idx.name + i}
-                                className="grid grid-cols-12 gap-1 px-2 py-1.5 bg-white/5 rounded text-xs hover:bg-white/10 transition-colors"
+                                className={`grid grid-cols-12 gap-1 px-2 py-1.5 rounded text-xs transition-colors ${surfaceClass} ${rowHover}`}
                             >
-                                <div className="col-span-5 text-gray-200 truncate font-mono text-[11px]">
+                                <div className="col-span-5 truncate font-mono">
                                     {idx.name}
                                 </div>
-                                <div className="col-span-3 text-right text-gray-300">
+                                <div className="col-span-3 text-right">
                                     {(idx.entries || 0).toLocaleString()}
                                 </div>
-                                <div className="col-span-2 text-right text-gray-400">
+                                <Caption2 className="col-span-2 text-right">
                                     {formatSize(idx.dataSize || 0)}
-                                </div>
-                                <div className="col-span-2 text-right text-gray-500 text-[10px]">
+                                </Caption2>
+                                <Caption2 className="col-span-2 text-right">
                                     {formatDate(idx.updatedAt)}
-                                </div>
+                                </Caption2>
                             </div>
                         ))}
                     </div>
@@ -249,9 +259,7 @@ function AlgoliaIndexDashboardContent({ title }) {
             )}
 
             {!loading && indices.length === 0 && !error && (
-                <div className="text-xs text-gray-600 italic p-2">
-                    No indices found.
-                </div>
+                <EmptyState description="No indices found." className="p-2" />
             )}
         </div>
     );

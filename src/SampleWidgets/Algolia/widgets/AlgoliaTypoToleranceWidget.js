@@ -7,8 +7,20 @@
  *
  * @package Algolia
  */
-import { useState, useEffect } from "react";
-import { Panel, SubHeading2, Button, Button2 } from "@trops/dash-react";
+import { useState, useEffect, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    Button2,
+    AlertBanner,
+    Caption2,
+    Checkbox,
+    InputText,
+    SelectInput,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -49,6 +61,8 @@ function AlgoliaTypoToleranceContent({ title }) {
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
     const { listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
 
     const [selectedIndex, setSelectedIndex] = useState("");
     const { settings, loading, saving, error, updateSettings } =
@@ -131,13 +145,19 @@ function AlgoliaTypoToleranceContent({ title }) {
         return (
             <div className="flex flex-col gap-3 h-full text-sm">
                 <SubHeading2 title={title} padding={false} />
-                <div className="p-3 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia credential provider not configured. Add an Algolia
-                    provider with your App ID and API Key.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia credential provider not configured. Add an Algolia provider with your App ID and API Key."
+                />
             </div>
         );
     }
+
+    // Attribute chips sit one step above the Panel surface.
+    const chipClass = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["text-primary-medium"] || ""
+    }`;
 
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
@@ -148,19 +168,17 @@ function AlgoliaTypoToleranceContent({ title }) {
                 onSelect={setSelectedIndex}
             />
             {!selectedIndex && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     Select an index to configure typo tolerance.
-                </div>
+                </Caption2>
             )}
             {loading && (
-                <div className="text-xs text-gray-400 italic">
+                <Caption2 block className="italic">
                     Loading settings...
-                </div>
+                </Caption2>
             )}
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
             {settings && selectedIndex && (
                 <div className="flex flex-col gap-4">
@@ -172,20 +190,20 @@ function AlgoliaTypoToleranceContent({ title }) {
                             }
                             docUrl={SETTINGS_META.typoTolerance.docUrl}
                         />
-                        <select
+                        <SelectInput
                             value={typoTolerance}
-                            onChange={(e) => {
-                                setTypoTolerance(e.target.value);
+                            onChange={(value) => {
+                                setTypoTolerance(value);
                                 setDirty(true);
                             }}
-                            className="w-48 bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
-                        >
-                            {TYPO_MODES.map((m) => (
-                                <option key={m.value} value={m.value}>
-                                    {m.label} — {m.description}
-                                </option>
-                            ))}
-                        </select>
+                            options={TYPO_MODES.map((m) => ({
+                                value: m.value,
+                                label: `${m.label} — ${m.description}`,
+                            }))}
+                            placeholder="Select a mode"
+                            className="w-48"
+                            inputClassName="text-xs"
+                        />
                     </div>
                     <div className="flex flex-col gap-2">
                         <SettingHeader
@@ -195,7 +213,7 @@ function AlgoliaTypoToleranceContent({ title }) {
                             }
                             docUrl={SETTINGS_META.minWordSizefor1Typo.docUrl}
                         />
-                        <input
+                        <InputText
                             type="number"
                             min={1}
                             value={minWord1}
@@ -203,7 +221,10 @@ function AlgoliaTypoToleranceContent({ title }) {
                                 setMinWord1(parseInt(e.target.value, 10) || 1);
                                 setDirty(true);
                             }}
-                            className="w-24 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            className="w-24"
+                            height="h-7"
+                            padding="px-2 py-1"
+                            inputClassName="text-xs"
                         />
                     </div>
                     <div className="flex flex-col gap-2">
@@ -214,7 +235,7 @@ function AlgoliaTypoToleranceContent({ title }) {
                             }
                             docUrl={SETTINGS_META.minWordSizefor2Typos.docUrl}
                         />
-                        <input
+                        <InputText
                             type="number"
                             min={1}
                             value={minWord2}
@@ -222,7 +243,10 @@ function AlgoliaTypoToleranceContent({ title }) {
                                 setMinWord2(parseInt(e.target.value, 10) || 1);
                                 setDirty(true);
                             }}
-                            className="w-24 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            className="w-24"
+                            height="h-7"
+                            padding="px-2 py-1"
+                            inputClassName="text-xs"
                         />
                     </div>
                     <div className="flex flex-col gap-2">
@@ -238,20 +262,15 @@ function AlgoliaTypoToleranceContent({ title }) {
                                 SETTINGS_META.allowTyposOnNumericTokens.docUrl
                             }
                         />
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={allowNumeric}
-                                onChange={(e) => {
-                                    setAllowNumeric(e.target.checked);
-                                    setDirty(true);
-                                }}
-                                className="rounded"
-                            />
-                            <span className="text-xs text-gray-300">
-                                Allow typos on numeric tokens
-                            </span>
-                        </label>
+                        <Checkbox
+                            checked={allowNumeric}
+                            onChange={(checked) => {
+                                setAllowNumeric(checked);
+                                setDirty(true);
+                            }}
+                            label="Allow typos on numeric tokens"
+                            className="cursor-pointer"
+                        />
                     </div>
                     <div className="flex flex-col gap-2">
                         <SettingHeader
@@ -272,12 +291,12 @@ function AlgoliaTypoToleranceContent({ title }) {
                             {disabledAttrs.map((attr) => (
                                 <span
                                     key={attr}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-700 rounded text-xs text-gray-200"
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${chipClass}`}
                                 >
                                     {attr}
                                     <button
                                         onClick={() => removeDisabledAttr(attr)}
-                                        className="text-gray-400 hover:text-red-400"
+                                        className={`opacity-70 ${status.error.hoverText}`}
                                     >
                                         &times;
                                     </button>
@@ -285,15 +304,17 @@ function AlgoliaTypoToleranceContent({ title }) {
                             ))}
                         </div>
                         <div className="flex gap-2">
-                            <input
-                                type="text"
+                            <InputText
                                 value={newAttr}
                                 onChange={(e) => setNewAttr(e.target.value)}
                                 onKeyDown={(e) =>
                                     e.key === "Enter" && addDisabledAttr()
                                 }
                                 placeholder="Attribute name"
-                                className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                                className="flex-1"
+                                height="h-7"
+                                padding="px-2 py-1"
+                                inputClassName="text-xs"
                             />
                             <Button2 onClick={addDisabledAttr} size="sm">
                                 Add
@@ -309,7 +330,7 @@ function AlgoliaTypoToleranceContent({ title }) {
                             {saving ? "Saving..." : "Save"}
                         </Button>
                         {saveSuccess && (
-                            <span className="text-xs text-green-400">
+                            <span className={`text-xs ${status.success.icon}`}>
                                 Saved!
                             </span>
                         )}

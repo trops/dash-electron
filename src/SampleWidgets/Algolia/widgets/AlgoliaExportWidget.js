@@ -8,8 +8,20 @@
  *
  * @package Algolia
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, SubHeading3, Button } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    Button,
+    AlertBanner,
+    Caption2,
+    InputText,
+    SelectInput,
+    StatusBadge,
+    ProgressBar2,
+    ThemeContext,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -29,6 +41,7 @@ function AlgoliaExportContent({ title }) {
     const [exportComplete, setExportComplete] = useState(false);
     const [exportFilePath, setExportFilePath] = useState("");
     const cleanupRef = useRef(null);
+    const { currentTheme } = useContext(ThemeContext);
 
     const hasCredentials = hasProvider("algolia");
     const provider = hasCredentials ? getProvider("algolia") : null;
@@ -156,10 +169,11 @@ function AlgoliaExportContent({ title }) {
         return (
             <div className="flex flex-col gap-3 h-full text-sm">
                 <SubHeading2 title={title} padding={false} />
-                <div className="p-3 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia credential provider not configured. Add an Algolia
-                    provider with your App ID and API Key.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia credential provider not configured. Add an Algolia provider with your App ID and API Key."
+                />
             </div>
         );
     }
@@ -171,56 +185,65 @@ function AlgoliaExportContent({ title }) {
             {/* Index Selector */}
             <div className="space-y-1">
                 <SubHeading3 title="Index" padding={false} />
-                <select
+                <SelectInput
                     value={selectedIndex}
-                    onChange={(e) => {
-                        setSelectedIndex(e.target.value);
+                    onChange={(value) => {
+                        setSelectedIndex(value);
                         setExportComplete(false);
                     }}
                     disabled={
                         loadingIndices || indices.length === 0 || exporting
                     }
-                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-amber-500 disabled:opacity-50"
-                >
-                    <option value="">
-                        {loadingIndices
+                    placeholder={
+                        loadingIndices
                             ? "Loading indices..."
                             : indices.length === 0
                             ? "No indices available"
-                            : "Select an index"}
-                    </option>
-                    {indices.map((idx, i) => (
-                        <option key={idx.name + i} value={idx.name}>
-                            {idx.name} ({(idx.entries || 0).toLocaleString()}{" "}
-                            records)
-                        </option>
-                    ))}
-                </select>
+                            : "Select an index"
+                    }
+                    options={indices.map((idx) => ({
+                        value: idx.name,
+                        label: `${idx.name} (${(
+                            idx.entries || 0
+                        ).toLocaleString()} records)`,
+                    }))}
+                    inputClassName="text-xs"
+                />
             </div>
 
             {/* Selected Index Info */}
             {selectedIndexInfo && (
-                <div className="bg-white/5 rounded p-2 text-xs text-gray-400">
-                    <span className="text-gray-200 font-mono">
+                <div
+                    className={`rounded p-2 text-xs ${
+                        currentTheme?.["bg-primary-dark"] || ""
+                    }`}
+                >
+                    <span
+                        className={`font-mono ${
+                            currentTheme?.["text-primary-medium"] || ""
+                        }`}
+                    >
                         {selectedIndexInfo.name}
                     </span>
-                    <span className="ml-2">
+                    <Caption2 className="ml-2">
                         {(selectedIndexInfo.entries || 0).toLocaleString()}{" "}
                         records
-                    </span>
+                    </Caption2>
                 </div>
             )}
 
             {/* Filter Query */}
             <div className="space-y-1">
                 <SubHeading3 title="Filter (optional)" padding={false} />
-                <input
+                <InputText
                     type="text"
                     value={filterQuery}
-                    onChange={(e) => setFilterQuery(e.target.value)}
+                    onChange={(value) => setFilterQuery(value)}
                     placeholder="Filter query (leave empty for all records)"
                     disabled={exporting}
-                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-amber-500 disabled:opacity-50"
+                    height="h-7"
+                    padding="px-2 py-1"
+                    inputClassName="text-xs"
                 />
             </div>
 
@@ -235,49 +258,44 @@ function AlgoliaExportContent({ title }) {
             </Button>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Progress */}
             {exporting && (
                 <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                        <span className="text-xs text-gray-300">
-                            Exported {exportedCount.toLocaleString()} records...
-                        </span>
-                    </div>
-                    <div className="w-full bg-gray-700 rounded-full h-1.5">
-                        <div
-                            className="bg-amber-500 h-1.5 rounded-full transition-all"
-                            style={{
-                                width: selectedIndexInfo?.entries
-                                    ? `${Math.min(
-                                          100,
-                                          (exportedCount /
-                                              selectedIndexInfo.entries) *
-                                              100
-                                      )}%`
-                                    : "50%",
-                            }}
-                        />
-                    </div>
+                    <StatusBadge
+                        state="pending"
+                        label={`Exported ${exportedCount.toLocaleString()} records...`}
+                        compact
+                    />
+                    <ProgressBar2
+                        size="sm"
+                        value={
+                            selectedIndexInfo?.entries
+                                ? Math.min(
+                                      100,
+                                      (exportedCount /
+                                          selectedIndexInfo.entries) *
+                                          100
+                                  )
+                                : 50
+                        }
+                    />
                 </div>
             )}
 
             {/* Complete */}
             {exportComplete && (
-                <div className="p-2 bg-green-900/30 border border-green-700 rounded text-green-300 text-xs space-y-1">
-                    <div>
-                        Export complete: {exportedCount.toLocaleString()}{" "}
-                        records
-                    </div>
-                    <div className="text-[10px] text-green-400/70 font-mono break-all">
+                <AlertBanner
+                    variant="success"
+                    size="compact"
+                    message={`Export complete: ${exportedCount.toLocaleString()} records`}
+                >
+                    <div className="font-mono break-all opacity-75">
                         {exportFilePath}
                     </div>
-                </div>
+                </AlertBanner>
             )}
         </div>
     );

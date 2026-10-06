@@ -4,19 +4,24 @@
  * Shared header for each setting section within a settings widget.
  * Shows a title, description blurb, and a doc link icon.
  */
+import { useContext } from "react";
+import { Caption2, ThemeContext } from "@trops/dash-react";
+
 export function SettingHeader({ title, description, docUrl }) {
+    const { currentTheme } = useContext(ThemeContext);
+    // Title inherits the Panel text color; the docs link uses the
+    // secondary channel as its accent.
+    const linkClass = currentTheme?.["text-secondary-medium"] || "";
     return (
         <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-gray-200">
-                    {title}
-                </span>
+                <span className="text-xs font-semibold">{title}</span>
                 {docUrl && (
                     <a
                         href={docUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 text-xs"
+                        className={`${linkClass} hover:underline text-xs`}
                         title="View Algolia documentation"
                     >
                         docs &rarr;
@@ -24,9 +29,9 @@ export function SettingHeader({ title, description, docUrl }) {
                 )}
             </div>
             {description && (
-                <p className="text-xs text-gray-400 leading-relaxed">
+                <Caption2 block className="leading-relaxed">
                     {description}
-                </p>
+                </Caption2>
             )}
         </div>
     );

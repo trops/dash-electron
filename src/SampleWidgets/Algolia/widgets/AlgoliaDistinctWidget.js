@@ -7,7 +7,16 @@
  * @package Algolia
  */
 import { useState, useEffect } from "react";
-import { Panel, SubHeading2, Button } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    AlertBanner,
+    Caption2,
+    InputText,
+    SelectInput,
+    useStatusTokens,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -25,6 +34,7 @@ function AlgoliaDistinctContent({ title }) {
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
     const { listen, listeners } = useWidgetEvents();
+    const status = useStatusTokens();
 
     const [selectedIndex, setSelectedIndex] = useState("");
     const { settings, loading, saving, error, updateSettings } =
@@ -80,10 +90,11 @@ function AlgoliaDistinctContent({ title }) {
         return (
             <div className="flex flex-col gap-3 h-full text-sm">
                 <SubHeading2 title={title} padding={false} />
-                <div className="p-3 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia credential provider not configured. Add an Algolia
-                    provider with your App ID and API Key.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia credential provider not configured. Add an Algolia provider with your App ID and API Key."
+                />
             </div>
         );
     }
@@ -97,19 +108,17 @@ function AlgoliaDistinctContent({ title }) {
                 onSelect={setSelectedIndex}
             />
             {!selectedIndex && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     Select an index to configure distinct settings.
-                </div>
+                </Caption2>
             )}
             {loading && (
-                <div className="text-xs text-gray-400 italic">
+                <Caption2 block className="italic">
                     Loading settings...
-                </div>
+                </Caption2>
             )}
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
             {settings && selectedIndex && (
                 <div className="flex flex-col gap-4">
@@ -121,7 +130,7 @@ function AlgoliaDistinctContent({ title }) {
                             }
                             docUrl={SETTINGS_META.attributeForDistinct.docUrl}
                         />
-                        <input
+                        <InputText
                             type="text"
                             value={attributeForDistinct}
                             onChange={(e) => {
@@ -129,7 +138,9 @@ function AlgoliaDistinctContent({ title }) {
                                 setDirty(true);
                             }}
                             placeholder="e.g., product_id"
-                            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            height="h-7"
+                            padding="px-2 py-1"
+                            inputClassName="text-xs"
                         />
                     </div>
                     <div className="flex flex-col gap-2">
@@ -138,25 +149,33 @@ function AlgoliaDistinctContent({ title }) {
                             description={SETTINGS_META.distinct.description}
                             docUrl={SETTINGS_META.distinct.docUrl}
                         />
-                        <select
+                        <SelectInput
                             value={distinct}
-                            onChange={(e) => {
-                                setDistinct(parseInt(e.target.value, 10));
+                            onChange={(value) => {
+                                setDistinct(parseInt(value, 10));
                                 setDirty(true);
                             }}
-                            className="w-40 bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
-                        >
-                            <option value={0}>0 — Off</option>
-                            <option value={1}>
-                                1 — Single result per group
-                            </option>
-                            <option value={2}>2 — Two results per group</option>
-                            <option value={3}>
-                                3 — Three results per group
-                            </option>
-                        </select>
+                            placeholder="Select distinct level"
+                            options={[
+                                { value: 0, label: "0 — Off" },
+                                {
+                                    value: 1,
+                                    label: "1 — Single result per group",
+                                },
+                                {
+                                    value: 2,
+                                    label: "2 — Two results per group",
+                                },
+                                {
+                                    value: 3,
+                                    label: "3 — Three results per group",
+                                },
+                            ]}
+                            className="w-40"
+                            inputClassName="text-xs"
+                        />
                         {distinct > 0 && !attributeForDistinct && (
-                            <div className="text-xs text-amber-400">
+                            <div className={`text-xs ${status.warning.icon}`}>
                                 Set attributeForDistinct before enabling
                                 distinct.
                             </div>
@@ -171,7 +190,7 @@ function AlgoliaDistinctContent({ title }) {
                             {saving ? "Saving..." : "Save"}
                         </Button>
                         {saveSuccess && (
-                            <span className="text-xs text-green-400">
+                            <span className={`text-xs ${status.success.icon}`}>
                                 Saved!
                             </span>
                         )}

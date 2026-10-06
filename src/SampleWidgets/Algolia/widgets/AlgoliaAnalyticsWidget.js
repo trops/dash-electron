@@ -8,7 +8,19 @@
  * @package Algolia
  */
 import { useState, useEffect, useContext, useCallback } from "react";
-import { Panel, SubHeading2, Button2 } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    Button2,
+    AlertBanner,
+    Caption2,
+    EmptyState,
+    InputText,
+    SelectInput,
+    Tabs,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -37,6 +49,8 @@ function AlgoliaAnalyticsContent({ id, title, defaultIndex, defaultDays = 7 }) {
     const { listen, listeners } = useWidgetEvents();
 
     const { widgetApi } = useContext(DashboardContext);
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
 
     const [indices, setIndices] = useState([]);
     const [selectedIndex, setSelectedIndex] = useState(defaultIndex || "");
@@ -272,62 +286,125 @@ function AlgoliaAnalyticsContent({ id, title, defaultIndex, defaultDays = 7 }) {
         return (
             <div className="flex flex-col gap-3 h-full text-sm">
                 <SubHeading2 title={title} padding={false} />
-                <div className="p-3 bg-amber-900/30 border border-amber-700 rounded text-amber-300 text-xs">
-                    No Algolia credential provider configured. Add an Algolia
-                    provider with your App ID and API Key to use analytics.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="No Algolia credential provider configured. Add an Algolia provider with your App ID and API Key to use analytics."
+                />
             </div>
         );
     }
+
+    // Theme tokens: rows sit one step above the Panel surface, and the
+    // count column uses the secondary channel as its accent.
+    const rowClass = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["text-primary-medium"] || ""
+    }`;
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
+
+    const renderRows = (items, renderItem) =>
+        items.length === 0 ? (
+            <EmptyState description="No data available." className="p-2" />
+        ) : (
+            <div className="space-y-1">
+                {items.map((item, i) => (
+                    <div
+                        key={i}
+                        className={`flex items-center justify-between px-2 py-1 rounded text-xs ${rowClass}`}
+                    >
+                        {renderItem(item, i)}
+                    </div>
+                ))}
+            </div>
+        );
+
+    const renderRank = (i, label) => (
+        <div className="flex items-center gap-2">
+            <Caption2 className="font-mono w-5 text-right">{i + 1}</Caption2>
+            <span>{label}</span>
+        </div>
+    );
+
+    const renderCount = (value, className = accentText) => (
+        <span className={`font-mono ${className}`}>
+            {(value ?? "").toLocaleString()}
+        </span>
+    );
+
+    const summaryTiles = summary
+        ? [
+              {
+                  label: "Searches",
+                  value: formatNumber(summary.searches),
+                  className: accentText,
+              },
+              {
+                  label: "Users",
+                  value: formatNumber(summary.users),
+                  className: accentText,
+              },
+              {
+                  label: "No Results",
+                  value: formatRate(summary.noResultsRate),
+                  className: status.warning.icon,
+              },
+              {
+                  label: "No Clicks",
+                  value: formatRate(summary.noClickRate),
+                  className: status.warning.icon,
+              },
+          ]
+        : [];
 
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
             <SubHeading2 title={title} padding={false} />
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
 
             {/* Index Selector + Date Range */}
             <div className="space-y-2">
-                <div className="flex gap-2">
-                    <select
-                        value={selectedIndex}
-                        onChange={(e) => handleIndexChange(e.target.value)}
-                        disabled={indicesLoading}
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
-                    >
-                        <option value="">
-                            {indicesLoading
-                                ? "Loading indices..."
-                                : "Select an index"}
-                        </option>
-                        {indices.map((idx, i) => {
-                            const name = idx?.name || idx;
-                            return (
-                                <option key={name + i} value={name}>
-                                    {name}
-                                </option>
-                            );
-                        })}
-                    </select>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                    <label className="text-gray-400">From</label>
-                    <input
+                <SelectInput
+                    value={selectedIndex}
+                    onChange={(value) => handleIndexChange(value)}
+                    disabled={indicesLoading}
+                    placeholder={
+                        indicesLoading
+                            ? "Loading indices..."
+                            : "Select an index"
+                    }
+                    options={indices.map((idx) => {
+                        const name = idx?.name || idx;
+                        return { value: name, label: name };
+                    })}
+                    inputClassName="text-xs"
+                />
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <Caption2>From</Caption2>
+                    <InputText
                         type="date"
                         value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-indigo-500"
+                        onChange={(value) => setStartDate(value)}
+                        height="h-7"
+                        padding="px-1.5 py-0.5"
+                        inputClassName="text-xs"
+                        className="flex-1 min-w-0"
                     />
-                    <label className="text-gray-400">To</label>
-                    <input
+                    <Caption2>To</Caption2>
+                    <InputText
                         type="date"
                         value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-indigo-500"
+                        onChange={(value) => setEndDate(value)}
+                        height="h-7"
+                        padding="px-1.5 py-0.5"
+                        inputClassName="text-xs"
+                        className="flex-1 min-w-0"
                     />
                     <Button2
                         onClick={() => fetchAnalytics(true)}
@@ -342,228 +419,121 @@ function AlgoliaAnalyticsContent({ id, title, defaultIndex, defaultDays = 7 }) {
             {/* Summary Stats */}
             {summary && (
                 <div className="grid grid-cols-4 gap-2">
-                    <div className="bg-white/5 rounded p-2 text-center">
-                        <div className="text-lg font-semibold text-indigo-300">
-                            {formatNumber(summary.searches)}
+                    {summaryTiles.map((tile) => (
+                        <div
+                            key={tile.label}
+                            className={`rounded p-2 text-center ${rowClass}`}
+                        >
+                            <div
+                                className={`text-lg font-semibold ${tile.className}`}
+                            >
+                                {tile.value}
+                            </div>
+                            <Caption2 block>{tile.label}</Caption2>
                         </div>
-                        <div className="text-[10px] text-gray-500">
-                            Searches
-                        </div>
-                    </div>
-                    <div className="bg-white/5 rounded p-2 text-center">
-                        <div className="text-lg font-semibold text-indigo-300">
-                            {formatNumber(summary.users)}
-                        </div>
-                        <div className="text-[10px] text-gray-500">Users</div>
-                    </div>
-                    <div className="bg-white/5 rounded p-2 text-center">
-                        <div className="text-lg font-semibold text-amber-300">
-                            {formatRate(summary.noResultsRate)}
-                        </div>
-                        <div className="text-[10px] text-gray-500">
-                            No Results
-                        </div>
-                    </div>
-                    <div className="bg-white/5 rounded p-2 text-center">
-                        <div className="text-lg font-semibold text-amber-300">
-                            {formatRate(summary.noClickRate)}
-                        </div>
-                        <div className="text-[10px] text-gray-500">
-                            No Clicks
-                        </div>
-                    </div>
+                    ))}
                 </div>
             )}
 
             {/* Tabs */}
-            <div className="flex gap-1 border-b border-gray-700 pb-0">
-                {TABS.map((tab) => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setActiveTab(tab.key)}
-                        className={`px-2 py-1 text-xs rounded-t transition-colors ${
-                            activeTab === tab.key
-                                ? "bg-indigo-900/50 text-indigo-300 border-b-2 border-indigo-500"
-                                : "text-gray-500 hover:text-gray-300"
-                        }`}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <Tabs.List className="flex flex-wrap">
+                    {TABS.map((tab) => (
+                        <Tabs.Trigger
+                            key={tab.key}
+                            value={tab.key}
+                            className="text-xs"
+                        >
+                            {tab.label}
+                        </Tabs.Trigger>
+                    ))}
+                </Tabs.List>
+            </Tabs>
 
             {/* Tab Content */}
-            <div className="flex-1 overflow-y-auto max-h-[50vh]">
+            <div className="flex-1 overflow-y-auto">
                 {loading && (
-                    <div className="text-xs text-gray-500 italic p-2">
+                    <Caption2 block className="italic p-2">
                         Loading analytics...
-                    </div>
+                    </Caption2>
                 )}
 
-                {!loading && activeTab === "topSearches" && (
-                    <div className="space-y-1">
-                        {topSearches.length === 0 ? (
-                            <div className="text-xs text-gray-600 italic p-2">
-                                No data available.
-                            </div>
-                        ) : (
-                            topSearches.map((item, i) => (
-                                <div
-                                    key={i}
-                                    className="flex items-center justify-between px-2 py-1 bg-white/5 rounded text-xs"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-gray-600 font-mono w-5 text-right">
-                                            {i + 1}
-                                        </span>
-                                        <span className="text-gray-200">
-                                            {item.search ||
-                                                item.query ||
-                                                JSON.stringify(item)}
-                                        </span>
-                                    </div>
-                                    <span className="text-indigo-400 font-mono">
-                                        {(
-                                            item.count ??
-                                            item.nbSearches ??
-                                            ""
-                                        ).toLocaleString()}
-                                    </span>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                )}
+                {!loading &&
+                    activeTab === "topSearches" &&
+                    renderRows(topSearches, (item, i) => (
+                        <>
+                            {renderRank(
+                                i,
+                                item.search ||
+                                    item.query ||
+                                    JSON.stringify(item)
+                            )}
+                            {renderCount(item.count ?? item.nbSearches)}
+                        </>
+                    ))}
 
-                {!loading && activeTab === "noResults" && (
-                    <div className="space-y-1">
-                        {noResultsSearches.length === 0 ? (
-                            <div className="text-xs text-gray-600 italic p-2">
-                                No data available.
-                            </div>
-                        ) : (
-                            noResultsSearches.map((item, i) => (
-                                <div
-                                    key={i}
-                                    className="flex items-center justify-between px-2 py-1 bg-white/5 rounded text-xs"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-gray-600 font-mono w-5 text-right">
-                                            {i + 1}
-                                        </span>
-                                        <span className="text-gray-200">
-                                            {item.search ||
-                                                item.query ||
-                                                JSON.stringify(item)}
-                                        </span>
-                                    </div>
-                                    <span className="text-amber-400 font-mono">
-                                        {(
-                                            item.count ??
-                                            item.nbSearches ??
-                                            ""
-                                        ).toLocaleString()}
-                                    </span>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                )}
+                {!loading &&
+                    activeTab === "noResults" &&
+                    renderRows(noResultsSearches, (item, i) => (
+                        <>
+                            {renderRank(
+                                i,
+                                item.search ||
+                                    item.query ||
+                                    JSON.stringify(item)
+                            )}
+                            {renderCount(
+                                item.count ?? item.nbSearches,
+                                status.warning.icon
+                            )}
+                        </>
+                    ))}
 
-                {!loading && activeTab === "clickPositions" && (
-                    <div className="space-y-1">
-                        {clickPositions.length === 0 ? (
-                            <div className="text-xs text-gray-600 italic p-2">
-                                No data available.
-                            </div>
-                        ) : (
-                            clickPositions.map((item, i) => (
-                                <div
-                                    key={i}
-                                    className="flex items-center justify-between px-2 py-1 bg-white/5 rounded text-xs"
-                                >
-                                    <span className="text-gray-300">
-                                        Position{" "}
-                                        {item.position ??
-                                            item.clickPosition ??
-                                            i + 1}
-                                    </span>
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-indigo-400 font-mono">
-                                            {(
-                                                item.clickCount ??
-                                                item.count ??
-                                                ""
-                                            ).toLocaleString()}{" "}
-                                            clicks
-                                        </span>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                )}
+                {!loading &&
+                    activeTab === "clickPositions" &&
+                    renderRows(clickPositions, (item, i) => (
+                        <>
+                            <span>
+                                Position{" "}
+                                {item.position ?? item.clickPosition ?? i + 1}
+                            </span>
+                            <span className={`font-mono ${accentText}`}>
+                                {(
+                                    item.clickCount ??
+                                    item.count ??
+                                    ""
+                                ).toLocaleString()}{" "}
+                                clicks
+                            </span>
+                        </>
+                    ))}
 
-                {!loading && activeTab === "countries" && (
-                    <div className="space-y-1">
-                        {topCountries.length === 0 ? (
-                            <div className="text-xs text-gray-600 italic p-2">
-                                No data available.
-                            </div>
-                        ) : (
-                            topCountries.map((item, i) => (
-                                <div
-                                    key={i}
-                                    className="flex items-center justify-between px-2 py-1 bg-white/5 rounded text-xs"
-                                >
-                                    <span className="text-gray-200">
-                                        {item.country ||
-                                            item.code ||
-                                            JSON.stringify(item)}
-                                    </span>
-                                    <span className="text-indigo-400 font-mono">
-                                        {(
-                                            item.count ??
-                                            item.nbSearches ??
-                                            ""
-                                        ).toLocaleString()}
-                                    </span>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                )}
+                {!loading &&
+                    activeTab === "countries" &&
+                    renderRows(topCountries, (item) => (
+                        <>
+                            <span>
+                                {item.country ||
+                                    item.code ||
+                                    JSON.stringify(item)}
+                            </span>
+                            {renderCount(item.count ?? item.nbSearches)}
+                        </>
+                    ))}
 
-                {!loading && activeTab === "filters" && (
-                    <div className="space-y-1">
-                        {topFilters.length === 0 ? (
-                            <div className="text-xs text-gray-600 italic p-2">
-                                No data available.
-                            </div>
-                        ) : (
-                            topFilters.map((item, i) => (
-                                <div
-                                    key={i}
-                                    className="flex items-center justify-between px-2 py-1 bg-white/5 rounded text-xs"
-                                >
-                                    <span className="text-gray-200 font-mono">
-                                        {item.attribute ||
-                                            item.filter ||
-                                            item.value ||
-                                            JSON.stringify(item)}
-                                    </span>
-                                    <span className="text-indigo-400 font-mono">
-                                        {(
-                                            item.count ??
-                                            item.nbSearches ??
-                                            ""
-                                        ).toLocaleString()}
-                                    </span>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                )}
+                {!loading &&
+                    activeTab === "filters" &&
+                    renderRows(topFilters, (item) => (
+                        <>
+                            <span className="font-mono">
+                                {item.attribute ||
+                                    item.filter ||
+                                    item.value ||
+                                    JSON.stringify(item)}
+                            </span>
+                            {renderCount(item.count ?? item.nbSearches)}
+                        </>
+                    ))}
             </div>
         </div>
     );

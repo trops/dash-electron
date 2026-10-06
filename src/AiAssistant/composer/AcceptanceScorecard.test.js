@@ -215,6 +215,27 @@ describe("evaluateScorecard — good widget code", () => {
     });
 });
 
+describe("evaluateScorecard — AlertBanner error region", () => {
+    // AlertBanner is the light/dark-aware status banner the
+    // widget-builder skill now recommends for errors; it must satisfy
+    // the same error-region checks as Alert/Alert2.
+    const code = GOOD_WIDGET_CODE.replace(/\bAlert2\b/g, "AlertBanner").replace(
+        '<AlertBanner title="Failed" message={error} />',
+        '<AlertBanner variant="error" size="compact" message={error} />'
+    );
+    const result = evaluateScorecard(code);
+    const byIndex = Object.fromEntries(result.map((r) => [r.index, r]));
+
+    test("passes item 4 (AlertBanner used for error region)", () => {
+        expect(code).toContain("<AlertBanner variant=");
+        expect(byIndex[4].pass).toBe(true);
+    });
+
+    test("passes item 15 (EmptyState + Skeleton + AlertBanner present)", () => {
+        expect(byIndex[15].pass).toBe(true);
+    });
+});
+
 describe("evaluateScorecard — empty / unparseable input", () => {
     test("non-string input does not throw", () => {
         expect(() => evaluateScorecard(null)).not.toThrow();
