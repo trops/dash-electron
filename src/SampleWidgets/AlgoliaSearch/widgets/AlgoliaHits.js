@@ -7,7 +7,8 @@
  *
  * @package Algolia Search
  */
-import { Panel } from "@trops/dash-react";
+import { useContext } from "react";
+import { Panel, AlertBanner, Caption2, ThemeContext } from "@trops/dash-react";
 import { Widget } from "@trops/dash-core";
 import { useHits } from "react-instantsearch-hooks-web";
 import Mustache from "mustache";
@@ -19,39 +20,55 @@ function DefaultHitCard({ hit }) {
         hit.title || hit.name || hit.label || hit.objectID || "Untitled";
     const displaySubtitle =
         hit.description || hit.subtitle || hit.content?.substring(0, 120) || "";
+    const { currentTheme } = useContext(ThemeContext);
 
     return (
-        <div className="px-3 py-2 bg-white/5 rounded hover:bg-white/10 transition-colors">
-            <div className="text-sm text-gray-200 font-medium">
+        <div
+            className={`px-3 py-2 rounded transition-colors ${
+                currentTheme?.["bg-primary-dark"] || ""
+            } ${currentTheme?.["hover-bg-primary-dark"] || ""}`}
+        >
+            <div
+                className={`text-sm font-medium ${
+                    currentTheme?.["text-primary-medium"] || ""
+                }`}
+            >
                 {displayTitle}
             </div>
             {displaySubtitle && (
-                <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                <Caption2 block className="mt-0.5 line-clamp-2">
                     {displaySubtitle}
-                </div>
+                </Caption2>
             )}
-            <div className="text-[10px] text-gray-600 mt-1 font-mono">
+            <Caption2 block className="mt-1 font-mono opacity-75">
                 {hit.objectID}
-            </div>
+            </Caption2>
         </div>
     );
 }
 
 function TemplateHitCard({ hit, template }) {
+    const { currentTheme } = useContext(ThemeContext);
     let html;
     try {
         html = Mustache.render(template, hit);
     } catch {
         return (
-            <div className="px-3 py-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                Template render error
-            </div>
+            <AlertBanner
+                variant="error"
+                size="compact"
+                message="Template render error"
+            />
         );
     }
 
     return (
         <div
-            className="px-3 py-2 bg-white/5 rounded hover:bg-white/10 transition-colors text-sm text-gray-200"
+            className={`px-3 py-2 rounded transition-colors text-sm ${
+                currentTheme?.["bg-primary-dark"] || ""
+            } ${currentTheme?.["hover-bg-primary-dark"] || ""} ${
+                currentTheme?.["text-primary-medium"] || ""
+            }`}
             dangerouslySetInnerHTML={{ __html: html }}
         />
     );
@@ -63,9 +80,9 @@ function HitsDisplay({ hitTemplate }) {
     if (hits.length === 0) {
         return (
             <div className="flex items-center justify-center h-full p-4">
-                <div className="text-gray-500 text-xs italic">
+                <Caption2 block className="italic">
                     No results found.
-                </div>
+                </Caption2>
             </div>
         );
     }

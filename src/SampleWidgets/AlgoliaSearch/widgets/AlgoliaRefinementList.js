@@ -7,7 +7,15 @@
  *
  * @package Algolia Search
  */
-import { Panel, SubHeading3 } from "@trops/dash-react";
+import { useContext } from "react";
+import {
+    Panel,
+    SubHeading3,
+    Caption2,
+    Checkbox,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget } from "@trops/dash-core";
 import { useRefinementList } from "react-instantsearch-hooks-web";
 import { AlgoliaInstantSearchWrapper } from "./AlgoliaInstantSearchWrapper";
@@ -21,18 +29,22 @@ function RefinementListDisplay({ attribute, limit, title }) {
         attribute: attribute || "_missing_attribute_",
         limit: parsedLimit,
     });
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
 
     if (!attribute) {
         return (
             <div className="flex items-center justify-center h-full p-4">
                 <div className="text-center space-y-2">
-                    <div className="text-yellow-400 text-sm font-medium">
+                    <div
+                        className={`text-sm font-medium ${status.warning.icon}`}
+                    >
                         Attribute Required
                     </div>
-                    <div className="text-gray-500 text-xs">
+                    <Caption2 block>
                         Set the facet attribute in this widget's settings (e.g.
                         "brand", "category").
-                    </div>
+                    </Caption2>
                 </div>
             </div>
         );
@@ -42,29 +54,28 @@ function RefinementListDisplay({ attribute, limit, title }) {
         <div className="flex flex-col gap-2 h-full overflow-y-auto">
             {title && <SubHeading3 title={title} padding={false} />}
             {items.length === 0 ? (
-                <div className="text-gray-500 text-xs italic px-1">
+                <Caption2 block className="italic px-1">
                     No facet values available.
-                </div>
+                </Caption2>
             ) : (
                 <div className="flex flex-col gap-1">
                     {items.map((item) => (
-                        <label
+                        <div
                             key={item.label}
-                            className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer transition-colors"
+                            className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer transition-colors ${
+                                currentTheme?.["hover-bg-primary-dark"] || ""
+                            }`}
                         >
-                            <input
-                                type="checkbox"
+                            <Checkbox
                                 checked={item.isRefined}
                                 onChange={() => refine(item.value)}
-                                className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                                label={item.label}
+                                className="flex-1 min-w-0 cursor-pointer"
                             />
-                            <span className="text-sm text-gray-200 flex-1 truncate">
-                                {item.label}
-                            </span>
-                            <span className="text-xs text-gray-500 tabular-nums">
+                            <Caption2 className="tabular-nums">
                                 {item.count.toLocaleString()}
-                            </span>
-                        </label>
+                            </Caption2>
+                        </div>
                     ))}
                 </div>
             )}

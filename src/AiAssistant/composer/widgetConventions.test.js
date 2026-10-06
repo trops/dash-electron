@@ -475,7 +475,6 @@ const SAMPLE_WIDGET_COLOR_REGEX =
     /(?<![\w-])(?:[a-z-]+:)*(?:bg|text|border|ring|divide|placeholder|from|via|to)-(?:gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|white|black)(?:-(?:50|100|200|300|400|500|600|700|800|900|950))?(?:\/\d+)?\b/g;
 
 const THEME_PENDING_PACKAGES = [
-    "AlgoliaSearch",
     "Chat",
     "Clock",
     "DashSamples",

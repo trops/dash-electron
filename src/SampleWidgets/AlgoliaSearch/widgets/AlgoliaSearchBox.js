@@ -7,13 +7,14 @@
  *
  * @package Algolia Search
  */
-import { useState } from "react";
-import { Panel } from "@trops/dash-react";
+import { useState, useContext } from "react";
+import { Panel, InputText, ThemeContext } from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 
 export const AlgoliaSearchBox = ({ placeholder = "Search...", ...props }) => {
     const [inputValue, setInputValue] = useState("");
     const { publishEvent } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
 
     const handleChange = (e) => {
         const value = e.target.value;
@@ -36,19 +37,22 @@ export const AlgoliaSearchBox = ({ placeholder = "Search...", ...props }) => {
         <Widget {...props} width="w-full" height="h-full">
             <Panel>
                 <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                        <input
+                    <div className="relative flex-1 min-w-0">
+                        <InputText
                             type="text"
                             value={inputValue}
                             onChange={handleChange}
                             onKeyDown={handleKeyDown}
                             placeholder={placeholder}
-                            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 pr-8"
+                            padding="pl-3 pr-8 py-2"
+                            inputClassName="text-sm rounded-md"
                         />
                         {inputValue && (
                             <button
                                 onClick={handleClear}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-sm"
+                                className={`absolute right-2 top-1/2 -translate-y-1/2 text-sm opacity-70 hover:opacity-100 ${
+                                    currentTheme?.["text-primary-medium"] || ""
+                                }`}
                                 aria-label="Clear search"
                             >
                                 &times;

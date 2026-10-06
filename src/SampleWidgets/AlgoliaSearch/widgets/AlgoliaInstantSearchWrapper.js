@@ -9,12 +9,14 @@
  * widgets sharing the same appId reuse a single instance.
  */
 import { useMemo } from "react";
+import { Caption2, useStatusTokens } from "@trops/dash-react";
 import { useWidgetProviders } from "@trops/dash-core";
 import { InstantSearch } from "react-instantsearch-hooks-web";
 import { getSearchClient } from "./algoliaClientCache";
 
 export function AlgoliaInstantSearchWrapper({ indexName, children }) {
     const { hasProvider, getProvider } = useWidgetProviders();
+    const status = useStatusTokens();
 
     const provider = hasProvider("algolia-search")
         ? getProvider("algolia-search")
@@ -34,13 +36,13 @@ export function AlgoliaInstantSearchWrapper({ indexName, children }) {
         return (
             <div className="flex items-center justify-center h-full p-4">
                 <div className="text-center space-y-2">
-                    <div className="text-blue-400 text-sm font-medium">
+                    <div className={`text-sm font-medium ${status.info.icon}`}>
                         Algolia Search Provider Required
                     </div>
-                    <div className="text-gray-500 text-xs">
+                    <Caption2 block>
                         Create a new "algolia-search" credential provider with
                         your Application ID, Search API Key, and Index Name.
-                    </div>
+                    </Caption2>
                 </div>
             </div>
         );
@@ -49,7 +51,7 @@ export function AlgoliaInstantSearchWrapper({ indexName, children }) {
     if (!searchClient) {
         return (
             <div className="flex items-center justify-center h-full p-4">
-                <div className="text-yellow-400 text-xs animate-pulse">
+                <div className={`text-xs animate-pulse ${status.warning.icon}`}>
                     Initializing search client...
                 </div>
             </div>
@@ -60,12 +62,14 @@ export function AlgoliaInstantSearchWrapper({ indexName, children }) {
         return (
             <div className="flex items-center justify-center h-full p-4">
                 <div className="text-center space-y-2">
-                    <div className="text-yellow-400 text-sm font-medium">
+                    <div
+                        className={`text-sm font-medium ${status.warning.icon}`}
+                    >
                         Index Name Required
                     </div>
-                    <div className="text-gray-500 text-xs">
+                    <Caption2 block>
                         Set an index name in the provider credentials.
-                    </div>
+                    </Caption2>
                 </div>
             </div>
         );
