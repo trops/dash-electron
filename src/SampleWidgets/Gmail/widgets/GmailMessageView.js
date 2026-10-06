@@ -6,8 +6,16 @@
  *
  * @package Gmail
  */
-import { useState, useEffect } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useEffect, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    AlertBanner,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
 import { McpReauthBanner } from "../components/McpReauthBanner";
@@ -25,6 +33,8 @@ function GmailMessageViewContent({ title }) {
         connect,
         disconnect,
     } = useMcpProvider("gmail");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const { listen } = useWidgetEvents();
 
@@ -105,37 +115,37 @@ function GmailMessageViewContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* No Email Selected */}
             {!selectedEmail && !loading && (
-                <div className="text-xs text-gray-500 text-center py-8">
+                <Caption2 block className="text-center py-8">
                     No email selected. Click an email in the Inbox or Search
                     widget to view it here.
-                </div>
+                </Caption2>
             )}
 
             {/* Loading */}
             {loading && (
-                <div className="text-xs text-gray-400 text-center py-4 animate-pulse">
+                <Caption2 block className="text-center py-4 animate-pulse">
                     Loading email...
-                </div>
+                </Caption2>
             )}
 
             {/* Email Body */}
@@ -148,7 +158,7 @@ function GmailMessageViewContent({ title }) {
                             "Message"
                         }
                     />
-                    <div className="space-y-1 text-xs text-gray-500">
+                    <Caption2 block className="space-y-1">
                         <div>
                             From: {emailBody.from || selectedEmail?.from || "—"}
                         </div>
@@ -156,8 +166,12 @@ function GmailMessageViewContent({ title }) {
                         <div>
                             Date: {emailBody.date || selectedEmail?.date || "—"}
                         </div>
-                    </div>
-                    <div className="p-2 bg-white/5 rounded text-xs text-gray-300 overflow-auto max-h-64 whitespace-pre-wrap">
+                    </Caption2>
+                    <div
+                        className={`p-2 rounded text-xs overflow-auto max-h-64 whitespace-pre-wrap ${
+                            currentTheme?.["bg-primary-dark"] || ""
+                        } ${currentTheme?.["text-primary-medium"] || ""}`}
+                    >
                         {emailBody.body ||
                             emailBody.text ||
                             JSON.stringify(emailBody, null, 2)}
@@ -176,9 +190,11 @@ function GmailMessageViewContent({ title }) {
 
             {/* Error */}
             {result?.type === "error" && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {result.text}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={result.text}
+                />
             )}
 
             <McpDebugLog entries={debugLog} />

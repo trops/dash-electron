@@ -19,12 +19,17 @@
  *
  * @package Google Drive
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
 import {
+    AlertBanner,
     Button2,
+    Caption2,
     Panel,
+    Skeleton,
     SubHeading2,
     FontAwesomeIcon,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import {
@@ -49,16 +54,22 @@ function fileIcon(mimeType) {
     return "file";
 }
 
-function fileIconColor(mimeType) {
-    if (!mimeType) return "text-gray-400";
+// File-type accent colors come from the theme (status tokens + the
+// secondary/tertiary palette) so the icons follow light/dark themes.
+function fileIconColor(mimeType, currentTheme, statusTokens) {
+    const neutral = `${currentTheme?.["text-primary-medium"] || ""} opacity-70`;
+    if (!mimeType) return neutral;
     const t = mimeType.toLowerCase();
-    if (t.includes("folder")) return "text-yellow-400";
-    if (t.includes("spreadsheet")) return "text-emerald-400";
-    if (t.includes("presentation")) return "text-orange-400";
-    if (t.includes("document")) return "text-blue-400";
-    if (t.includes("pdf")) return "text-red-400";
-    if (t.includes("image")) return "text-pink-400";
-    return "text-gray-400";
+    if (t.includes("folder")) return statusTokens.warning.icon;
+    if (t.includes("spreadsheet")) return statusTokens.success.icon;
+    if (t.includes("presentation"))
+        return currentTheme?.["text-tertiary-medium"] || "";
+    if (t.includes("document"))
+        return currentTheme?.["text-secondary-medium"] || "";
+    if (t.includes("pdf")) return statusTokens.error.icon;
+    if (t.includes("image"))
+        return currentTheme?.["text-tertiary-medium"] || "";
+    return neutral;
 }
 
 function relativeTime(input) {
@@ -89,6 +100,16 @@ function GoogleDriveRecentFilesContent({
     const { isConnected, isConnecting, error, callTool, status } =
         useMcpProvider("google-drive");
     const { publishEvent } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+
+    const rowSurface = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["hover-bg-primary-dark"] || ""
+    } border-transparent`;
+    const selectedSurface = `${currentTheme?.["bg-secondary-dark"] || ""} ${
+        currentTheme?.["text-secondary-light"] || ""
+    } ${currentTheme?.["border-secondary-medium"] || ""}`;
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
 
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -195,39 +216,37 @@ function GoogleDriveRecentFilesContent({
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         !isConnected && !isConnecting
-                            ? "bg-gray-500"
+                            ? currentTheme?.["bg-primary-medium"] || ""
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
+                            ? statusTokens.error.solidBg
                             : loading
-                            ? "bg-blue-500 animate-pulse"
-                            : "bg-green-500"
+                            ? `${statusTokens.info.solidBg} animate-pulse`
+                            : statusTokens.success.solidBg
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
+                <Caption2 className="font-mono">{status}</Caption2>
                 {lastFetchedAt && (
-                    <span className="text-gray-600">
+                    <Caption2 className="opacity-70">
                         · updated {relativeTime(lastFetchedAt)}
-                    </span>
+                    </Caption2>
                 )}
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Loading skeleton — same row count as the configured
                 limit (capped) so the layout doesn't reflow when files
                 land. */}
             {loading && files.length === 0 && (
-                <div className="space-y-2 animate-pulse">
+                <div className="space-y-2">
                     {Array.from({
                         length: Math.min(5, Math.max(1, Number(limit) || 5)),
                     }).map((_, i) => (
-                        <div key={i} className="h-8 bg-white/5 rounded" />
+                        <Skeleton key={i} height="h-8" rounded="rounded" />
                     ))}
                 </div>
             )}
@@ -236,13 +255,13 @@ function GoogleDriveRecentFilesContent({
                 so the user knows whether to wait, connect, or accept
                 that Drive is genuinely empty for this query. */}
             {!loading && !error && files.length === 0 && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     {!isConnected
                         ? "Connect the Google Drive provider in Settings to load recent files."
                         : `No files matched the query "${
                               query || "*"
                           }". Try a broader query or check your Drive.`}
-                </div>
+                </Caption2>
             )}
 
             {files.length > 0 && (
@@ -257,24 +276,28 @@ function GoogleDriveRecentFilesContent({
                                 type="button"
                                 onClick={() => handleClick(file)}
                                 className={`w-full text-left px-3 py-2 rounded text-xs transition-colors border ${
-                                    isSelected
-                                        ? "bg-yellow-900/40 border-yellow-600"
-                                        : "bg-white/5 hover:bg-white/10 border-transparent"
+                                    isSelected ? selectedSurface : rowSurface
                                 }`}
                             >
                                 <div className="flex items-center gap-2">
                                     <FontAwesomeIcon
                                         icon={fileIcon(file.mimeType)}
                                         className={`${fileIconColor(
-                                            file.mimeType
+                                            file.mimeType,
+                                            currentTheme,
+                                            statusTokens
                                         )} shrink-0`}
                                     />
-                                    <span className="text-gray-200 truncate flex-1">
+                                    <span
+                                        className={`truncate flex-1 ${
+                                            isSelected ? "" : bodyText
+                                        }`}
+                                    >
                                         {name}
                                     </span>
-                                    <span className="text-[11px] text-gray-500 shrink-0 font-mono">
+                                    <Caption2 className="shrink-0 font-mono">
                                         {relativeTime(file.modifiedTime)}
-                                    </span>
+                                    </Caption2>
                                 </div>
                             </button>
                         );
@@ -285,19 +308,21 @@ function GoogleDriveRecentFilesContent({
             {/* Per-fetch error — distinct from the provider-level
                 error rendered above. */}
             {fetchError && (
-                <div className="text-xs text-red-400">
-                    Last refresh failed: {fetchError}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={`Last refresh failed: ${fetchError}`}
+                />
             )}
 
             {/* Footer with refresh — always present, disabled when not
                 connected/loading. */}
-            <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
-                <span>
+            <div className="flex items-center justify-between gap-2 text-xs">
+                <Caption2>
                     {files.length > 0
                         ? `top ${files.length} of recent`
                         : "no files yet"}
-                </span>
+                </Caption2>
                 <Button2
                     type="button"
                     size="sm"

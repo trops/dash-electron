@@ -6,13 +6,17 @@
  *
  * @package Google Calendar
  */
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useContext } from "react";
 import {
     Button2,
     Panel,
     SegmentedControl,
     SubHeading2,
     SubHeading3,
+    AlertBanner,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { EventList } from "./components/EventList";
@@ -90,6 +94,8 @@ function GoogleCalendarContent({ title, defaultView }) {
         connect,
         disconnect,
     } = useMcpProvider("google-calendar");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const [view, setView] = useState(defaultView || "today");
     const [events, setEvents] = useState([]);
@@ -233,22 +239,22 @@ function GoogleCalendarContent({ title, defaultView }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* View Toggle */}
@@ -301,9 +307,9 @@ function GoogleCalendarContent({ title, defaultView }) {
                             ))}
                         </div>
                     ) : (
-                        <div className="text-xs text-gray-600 italic">
+                        <Caption2 block className="italic">
                             No events found
-                        </div>
+                        </Caption2>
                     )}
                 </>
             )}
@@ -326,9 +332,11 @@ function GoogleCalendarContent({ title, defaultView }) {
             />
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
 
             <McpDebugLog entries={debugLog} />

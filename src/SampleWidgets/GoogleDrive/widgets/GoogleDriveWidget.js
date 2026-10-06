@@ -6,8 +6,18 @@
  *
  * @package GoogleDrive
  */
-import { useState } from "react";
-import { Button, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useContext } from "react";
+import {
+    AlertBanner,
+    Button,
+    Caption2,
+    InputText,
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
 import { McpReauthBanner } from "../components/McpReauthBanner";
@@ -43,6 +53,13 @@ function GoogleDriveContent({ title }) {
         connect,
         disconnect,
     } = useMcpProvider("google-drive");
+
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+
+    const rowSurface = currentTheme?.["bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
 
     const [searchQuery, setSearchQuery] = useState("");
     const [files, setFiles] = useState([]);
@@ -115,35 +132,38 @@ function GoogleDriveContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Search */}
             <div className="space-y-2">
                 <SubHeading3 title="Search Files" />
-                <div className="flex gap-2">
-                    <input
+                <div className="flex flex-wrap items-center gap-2">
+                    <InputText
                         type="text"
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(value) => setSearchQuery(value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                         placeholder="Search Google Drive..."
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                        className="flex-1 min-w-0"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs"
                     />
                     <Button
                         size="sm"
@@ -161,28 +181,28 @@ function GoogleDriveContent({ title }) {
                     {files.map((file, i) => (
                         <div
                             key={file.id || i}
-                            className="w-full text-left px-2 py-1.5 bg-white/5 rounded text-xs"
+                            className={`w-full text-left px-2 py-1.5 rounded text-xs ${rowSurface}`}
                         >
                             <div className="flex items-center gap-2">
-                                <span className="text-yellow-400 text-[10px]">
+                                <span className={`text-xs ${accentText}`}>
                                     {getFileIcon(file.mimeType)}
                                 </span>
-                                <span className="text-gray-300 truncate">
+                                <span className={`truncate ${bodyText}`}>
                                     {file.name || file.title || "Untitled"}
                                 </span>
                             </div>
                             {file.mimeType && (
-                                <div className="text-gray-600 text-[10px] mt-0.5 ml-5">
+                                <Caption2 block className="mt-0.5 ml-5">
                                     {file.mimeType}
-                                </div>
+                                </Caption2>
                             )}
                             {file.modifiedTime && (
-                                <div className="text-gray-600 text-[10px] mt-0.5 ml-5">
+                                <Caption2 block className="mt-0.5 ml-5">
                                     Modified:{" "}
                                     {new Date(
                                         file.modifiedTime
                                     ).toLocaleDateString()}
-                                </div>
+                                </Caption2>
                             )}
                         </div>
                     ))}
@@ -191,7 +211,9 @@ function GoogleDriveContent({ title }) {
 
             {/* Raw text fallback when no files could be parsed */}
             {rawText && files.length === 0 && (
-                <div className="p-2 bg-white/5 rounded text-xs text-gray-300 whitespace-pre-wrap">
+                <div
+                    className={`p-2 rounded text-xs whitespace-pre-wrap ${rowSurface} ${bodyText}`}
+                >
                     {rawText}
                 </div>
             )}
@@ -207,9 +229,11 @@ function GoogleDriveContent({ title }) {
 
             {/* Error */}
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
 
             <McpDebugLog entries={debugLog} />

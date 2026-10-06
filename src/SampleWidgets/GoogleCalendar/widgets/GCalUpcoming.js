@@ -7,8 +7,17 @@
  *
  * @package Google Calendar
  */
-import { useState, useEffect, useCallback } from "react";
-import { Button2, Panel, SubHeading2 } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useContext } from "react";
+import {
+    Button2,
+    Panel,
+    SubHeading2,
+    AlertBanner,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
+    Skeleton,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
 import { McpReauthBanner } from "../components/McpReauthBanner";
@@ -68,6 +77,17 @@ function GCalUpcomingContent({ title }) {
         connect,
         disconnect,
     } = useMcpProvider("google-calendar");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+    const rowSurface = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["hover-bg-primary-dark"] || ""
+    }`;
+    const selectedSurface = `border ${
+        currentTheme?.["bg-secondary-dark"] || ""
+    } ${currentTheme?.["text-secondary-light"] || ""} ${
+        currentTheme?.["border-secondary-medium"] || ""
+    }`;
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
 
     const { publishEvent } = useWidgetEvents();
 
@@ -163,22 +183,22 @@ function GCalUpcomingContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Refresh */}
@@ -191,18 +211,18 @@ function GCalUpcomingContent({ title }) {
                     {loading ? "Loading..." : "Refresh"}
                 </Button2>
                 {events.length > 0 && (
-                    <span className="text-xs text-gray-500">
+                    <Caption2>
                         {events.length} upcoming event
                         {events.length !== 1 ? "s" : ""}
-                    </span>
+                    </Caption2>
                 )}
             </div>
 
             {/* Loading State */}
             {loading && (
-                <div className="space-y-2 animate-pulse">
+                <div className="space-y-2">
                     {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-10 bg-white/5 rounded" />
+                        <Skeleton key={i} height="h-10" rounded="rounded" />
                     ))}
                 </div>
             )}
@@ -224,27 +244,30 @@ function GCalUpcomingContent({ title }) {
                                 onClick={() => handleEventClick(event)}
                                 className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
                                     isSelected
-                                        ? "bg-blue-800/40 border border-blue-600"
-                                        : "bg-white/5 hover:bg-white/10 border border-transparent"
+                                        ? selectedSurface
+                                        : `${rowSurface} ${bodyText} border border-transparent`
                                 }`}
                             >
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0 flex-1">
-                                        <div className="text-gray-200 truncate">
+                                        <div className="truncate">
                                             {event.summary || "Untitled Event"}
                                         </div>
-                                        <div className="text-gray-500 mt-0.5">
+                                        <Caption2 block className="mt-0.5">
                                             {formatDate(startStr)}{" "}
                                             {allDay
                                                 ? "All day"
                                                 : `${formatTime(
                                                       startStr
                                                   )} - ${formatTime(endStr)}`}
-                                        </div>
+                                        </Caption2>
                                         {event.location && (
-                                            <div className="text-gray-600 truncate mt-0.5">
+                                            <Caption2
+                                                block
+                                                className="truncate mt-0.5 opacity-70"
+                                            >
                                                 {event.location}
-                                            </div>
+                                            </Caption2>
                                         )}
                                     </div>
                                 </div>
@@ -256,9 +279,9 @@ function GCalUpcomingContent({ title }) {
 
             {/* Empty State */}
             {!loading && events.length === 0 && !errorMsg && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     No upcoming events found.
-                </div>
+                </Caption2>
             )}
 
             <McpReauthBanner
@@ -271,9 +294,11 @@ function GCalUpcomingContent({ title }) {
             />
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
 
             <McpDebugLog entries={debugLog} />

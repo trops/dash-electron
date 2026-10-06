@@ -6,8 +6,17 @@
  *
  * @package Gmail
  */
-import { useState, useEffect } from "react";
-import { Button2, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useEffect, useContext } from "react";
+import {
+    Button2,
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    AlertBanner,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
 import { McpReauthBanner } from "../components/McpReauthBanner";
@@ -29,6 +38,8 @@ function GmailInboxContent({ title }) {
         connect,
         disconnect,
     } = useMcpProvider("gmail");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const { publishEvent } = useWidgetEvents();
 
@@ -116,22 +127,22 @@ function GmailInboxContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Refresh */}
@@ -153,22 +164,39 @@ function GmailInboxContent({ title }) {
                         <button
                             key={email.id || i}
                             onClick={() => handleSelectEmail(email)}
-                            className="w-full text-left px-2 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs transition-colors"
+                            className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
+                                currentTheme?.["bg-primary-dark"] || ""
+                            } ${currentTheme?.["hover-bg-primary-dark"] || ""}`}
                         >
                             <div className="flex items-center gap-2">
                                 {email.unread && (
-                                    <span className="inline-block w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                                    <span
+                                        className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
+                                            currentTheme?.[
+                                                "bg-secondary-medium"
+                                            ] || ""
+                                        }`}
+                                    />
                                 )}
-                                <span className="text-gray-300 font-medium truncate">
+                                <span
+                                    className={`font-medium truncate ${
+                                        currentTheme?.["text-primary-medium"] ||
+                                        ""
+                                    }`}
+                                >
                                     {email.from || email.sender || "Unknown"}
                                 </span>
                                 {email.date && (
-                                    <span className="text-gray-600 text-[10px] ml-auto flex-shrink-0">
+                                    <Caption2 className="ml-auto flex-shrink-0">
                                         {email.date}
-                                    </span>
+                                    </Caption2>
                                 )}
                             </div>
-                            <div className="text-gray-400 truncate">
+                            <div
+                                className={`truncate opacity-80 ${
+                                    currentTheme?.["text-primary-medium"] || ""
+                                }`}
+                            >
                                 {email.subject || "(no subject)"}
                             </div>
                         </button>
@@ -177,9 +205,9 @@ function GmailInboxContent({ title }) {
             )}
 
             {emails.length === 0 && !loading && !result && (
-                <div className="text-xs text-gray-500 text-center py-4">
+                <Caption2 block className="text-center py-4">
                     No inbox emails loaded yet.
-                </div>
+                </Caption2>
             )}
 
             <McpReauthBanner
@@ -193,9 +221,11 @@ function GmailInboxContent({ title }) {
 
             {/* Error */}
             {result?.type === "error" && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {result.text}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={result.text}
+                />
             )}
 
             <McpDebugLog entries={debugLog} />

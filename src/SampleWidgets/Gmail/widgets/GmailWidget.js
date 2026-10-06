@@ -6,13 +6,18 @@
  *
  * @package Gmail
  */
-import { useState } from "react";
+import { useState, useContext } from "react";
 import {
     Button,
     Button3,
     Panel,
     SubHeading2,
     SubHeading3,
+    AlertBanner,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
+    InputText,
 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { McpDebugLog } from "../components/McpDebugLog";
@@ -36,6 +41,8 @@ function GmailContent({ title, defaultQuery }) {
         connect,
         disconnect,
     } = useMcpProvider("gmail");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const [query, setQuery] = useState(defaultQuery || "is:unread");
     const [emails, setEmails] = useState([]);
@@ -162,35 +169,38 @@ function GmailContent({ title, defaultQuery }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Search */}
             <div className="space-y-2">
                 <SubHeading3 title="Search Emails" />
-                <div className="flex gap-2">
-                    <input
+                <div className="flex flex-wrap items-center gap-2">
+                    <InputText
                         type="text"
                         value={query}
-                        onChange={(e) => setQuery(e.target.value)}
+                        onChange={(value) => setQuery(value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                         placeholder="Gmail search query..."
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-red-500"
+                        className="flex-1 min-w-0"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs"
                     />
                     <Button
                         size="sm"
@@ -209,20 +219,31 @@ function GmailContent({ title, defaultQuery }) {
                         <button
                             key={email.id || i}
                             onClick={() => handleReadEmail(email)}
-                            className="w-full text-left px-2 py-1.5 bg-white/5 hover:bg-white/10 rounded text-xs transition-colors"
+                            className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
+                                currentTheme?.["bg-primary-dark"] || ""
+                            } ${currentTheme?.["hover-bg-primary-dark"] || ""}`}
                         >
                             <div className="flex items-center gap-2">
-                                <span className="text-gray-300 font-medium truncate">
+                                <span
+                                    className={`font-medium truncate ${
+                                        currentTheme?.["text-primary-medium"] ||
+                                        ""
+                                    }`}
+                                >
                                     {email.from || email.sender || "Unknown"}
                                 </span>
                             </div>
-                            <div className="text-gray-400 truncate">
+                            <div
+                                className={`truncate opacity-80 ${
+                                    currentTheme?.["text-primary-medium"] || ""
+                                }`}
+                            >
                                 {email.subject || "(no subject)"}
                             </div>
                             {email.snippet && (
-                                <div className="text-gray-600 truncate mt-0.5">
+                                <Caption2 block className="truncate mt-0.5">
                                     {email.snippet}
-                                </div>
+                                </Caption2>
                             )}
                         </button>
                     ))}
@@ -250,10 +271,14 @@ function GmailContent({ title, defaultQuery }) {
                             Back
                         </Button3>
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <Caption2 block>
                         From: {emailBody.from || selectedEmail?.from || "—"}
-                    </div>
-                    <div className="p-2 bg-white/5 rounded text-xs text-gray-300 overflow-auto max-h-48 whitespace-pre-wrap">
+                    </Caption2>
+                    <div
+                        className={`p-2 rounded text-xs overflow-auto max-h-48 whitespace-pre-wrap ${
+                            currentTheme?.["bg-primary-dark"] || ""
+                        } ${currentTheme?.["text-primary-medium"] || ""}`}
+                    >
                         {emailBody.body ||
                             emailBody.text ||
                             JSON.stringify(emailBody, null, 2)}
@@ -272,9 +297,11 @@ function GmailContent({ title, defaultQuery }) {
 
             {/* Error */}
             {result?.type === "error" && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {result.text}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={result.text}
+                />
             )}
 
             <McpDebugLog entries={debugLog} />

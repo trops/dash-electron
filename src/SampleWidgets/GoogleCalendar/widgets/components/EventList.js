@@ -1,11 +1,12 @@
+import { Caption2, Skeleton } from "@trops/dash-react";
 import { EventItem } from "./EventItem";
 
 export function EventList({ events, loading }) {
     if (loading) {
         return (
-            <div className="space-y-2 animate-pulse">
+            <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-10 bg-white/5 rounded" />
+                    <Skeleton key={i} height="h-10" rounded="rounded" />
                 ))}
             </div>
         );
@@ -13,7 +14,9 @@ export function EventList({ events, loading }) {
 
     if (events.length === 0) {
         return (
-            <div className="text-xs text-gray-600 italic">No events found</div>
+            <Caption2 block className="italic">
+                No events found
+            </Caption2>
         );
     }
 
