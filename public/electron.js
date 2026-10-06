@@ -714,6 +714,7 @@ const {
     BOTS_GET_SETTINGS,
     BOTS_SET_SETTINGS,
     BOTS_ASK_LEAD,
+    BOTS_LIST_LEADS,
     BOTS_GET_RUNS,
     BOTS_LIST_RECENT_RUNS,
     BOTS_LIST_DRAFTS,
@@ -2429,8 +2430,13 @@ function createWindow() {
         logger.loggedHandle(BOTS_ASK_LEAD, (e, msg) =>
             botController.askLead(msg && msg.botId, msg && msg.question, {
                 continueConversation: !!(msg && msg.continueConversation),
+                // Only the AI Assistant's direct-to-lead picker labels its
+                // runs (TEAM-013); any other value is dropped.
+                via: msg && msg.via === "assistant" ? "assistant" : null,
             })
         );
+        // AI Assistant "To:" picker: team leads by dashboard (TEAM-013).
+        logger.loggedHandle(BOTS_LIST_LEADS, () => botController.listLeads());
 
         // --- Widget Event IPC Bridge ---
         // Broadcasts widget pub/sub events to all windows except the sender.

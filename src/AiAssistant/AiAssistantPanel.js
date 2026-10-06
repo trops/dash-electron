@@ -328,6 +328,7 @@ export const AiAssistantPanel = ({
                         sessionKey="dash-ai-assistant"
                         hideToolsBanner={true}
                         initialMessage="Hi"
+                        enableLeadRecipients
                     />
                 </div>
             </div>
