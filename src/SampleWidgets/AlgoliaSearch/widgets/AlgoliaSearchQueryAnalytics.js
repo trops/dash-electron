@@ -10,8 +10,15 @@
  *
  * @package Algolia Search
  */
-import { useState, useEffect, useCallback } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    AlertBanner,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetEvents,
@@ -39,6 +46,8 @@ function AnalyticsContent({ title, days = 7 }) {
     const hasCredentials = hasProvider("algolia-search");
     const provider = hasCredentials ? getProvider("algolia-search") : null;
     const pc = useProviderClient(provider);
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
 
     const [query, setQuery] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -151,14 +160,25 @@ function AnalyticsContent({ title, days = 7 }) {
         return { totalSearches, avgCtr, avgClickPos };
     })();
 
+    // Theme tokens: rows/tiles sit one step above the Panel surface; the
+    // count uses the secondary channel and CTR the tertiary channel.
+    const rowClass = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["text-primary-medium"] || ""
+    }`;
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
+    const accentText2 = currentTheme?.["text-tertiary-medium"] || "";
+    const rowHover = currentTheme?.["hover-bg-primary-dark"] || "";
+
     if (!hasCredentials) {
         return (
             <div className="flex flex-col gap-3 h-full text-sm">
                 <SubHeading2 title={title} padding={false} />
-                <div className="p-3 bg-amber-900/30 border border-amber-700 rounded text-amber-300 text-xs">
-                    No Algolia Search credential provider configured. Add an
-                    algolia-search provider to use query analytics.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="No Algolia Search credential provider configured. Add an algolia-search provider to use query analytics."
+                />
             </div>
         );
     }
@@ -168,9 +188,9 @@ function AnalyticsContent({ title, days = 7 }) {
             <div className="flex flex-col gap-3 h-full text-sm">
                 <SubHeading2 title={title} padding={false} />
                 <div className="flex items-center justify-center flex-1">
-                    <div className="text-gray-500 text-xs italic">
+                    <Caption2 block className="italic">
                         Loading top searches...
-                    </div>
+                    </Caption2>
                 </div>
             </div>
         );
@@ -178,67 +198,79 @@ function AnalyticsContent({ title, days = 7 }) {
 
     const hasQuery = query && query.length > 0;
 
+    const summaryTiles = summary
+        ? [
+              {
+                  label: "Total Searches",
+                  value: formatNumber(summary.totalSearches),
+                  className: accentText,
+              },
+              {
+                  label: "Avg CTR",
+                  value: formatRate(summary.avgCtr),
+                  className: accentText2,
+              },
+              {
+                  label: "Avg Click Pos",
+                  value:
+                      summary.avgClickPos > 0
+                          ? summary.avgClickPos.toFixed(1)
+                          : "\u2014",
+                  className: status.info.icon,
+              },
+          ]
+        : [];
+
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
             <SubHeading2 title={title} padding={false} />
 
             {hasQuery && (
-                <div className="text-xs text-gray-400">
+                <Caption2 block>
                     Filtering for:{" "}
-                    <span className="text-gray-200 font-medium">
+                    <span className={`font-medium ${bodyText}`}>
                         &ldquo;{query}&rdquo;
                     </span>
-                    <span className="text-gray-500 ml-1">
+                    <span className="ml-1">
                         ({filteredSearches.length} match
                         {filteredSearches.length !== 1 ? "es" : ""})
                     </span>
-                </div>
+                </Caption2>
             )}
 
             {!hasQuery && (
-                <div className="text-xs text-gray-400">
-                    Top searches &mdash; last {days} days
-                </div>
+                <Caption2 block>Top searches &mdash; last {days} days</Caption2>
             )}
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
 
             {loading && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     Loading analytics...
-                </div>
+                </Caption2>
             )}
 
             {!loading && summary && (
                 <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-white/5 rounded p-2 text-center">
-                        <div className="text-lg font-semibold text-indigo-300">
-                            {formatNumber(summary.totalSearches)}
+                    {summaryTiles.map((tile) => (
+                        <div
+                            key={tile.label}
+                            className={`rounded p-2 text-center ${rowClass}`}
+                        >
+                            <div
+                                className={`text-lg font-semibold ${tile.className}`}
+                            >
+                                {tile.value}
+                            </div>
+                            <Caption2 block>{tile.label}</Caption2>
                         </div>
-                        <div className="text-[10px] text-gray-500">
-                            Total Searches
-                        </div>
-                    </div>
-                    <div className="bg-white/5 rounded p-2 text-center">
-                        <div className="text-lg font-semibold text-emerald-300">
-                            {formatRate(summary.avgCtr)}
-                        </div>
-                        <div className="text-[10px] text-gray-500">Avg CTR</div>
-                    </div>
-                    <div className="bg-white/5 rounded p-2 text-center">
-                        <div className="text-lg font-semibold text-sky-300">
-                            {summary.avgClickPos > 0
-                                ? summary.avgClickPos.toFixed(1)
-                                : "\u2014"}
-                        </div>
-                        <div className="text-[10px] text-gray-500">
-                            Avg Click Pos
-                        </div>
-                    </div>
+                    ))}
                 </div>
             )}
 
@@ -247,7 +279,7 @@ function AnalyticsContent({ title, days = 7 }) {
                     {filteredSearches.map((item, i) => (
                         <div
                             key={i}
-                            className="flex items-center justify-between px-2 py-1 bg-white/5 rounded text-xs cursor-pointer hover:bg-white/10 transition-colors"
+                            className={`flex items-center justify-between px-2 py-1 rounded text-xs cursor-pointer transition-colors ${rowClass} ${rowHover}`}
                             onClick={() =>
                                 publishEvent("searchQuerySelected", {
                                     query: item.search,
@@ -255,22 +287,20 @@ function AnalyticsContent({ title, days = 7 }) {
                             }
                         >
                             <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-gray-600 font-mono w-4 text-right flex-shrink-0">
+                                <Caption2 className="font-mono w-4 text-right flex-shrink-0">
                                     {i + 1}
-                                </span>
-                                <span className="text-gray-200 truncate">
-                                    {item.search}
-                                </span>
+                                </Caption2>
+                                <span className="truncate">{item.search}</span>
                             </div>
                             <div className="flex items-center gap-3 flex-shrink-0 ml-2">
                                 <span
-                                    className="text-indigo-400 font-mono"
+                                    className={`font-mono ${accentText}`}
                                     title="Search count"
                                 >
                                     {formatNumber(item.count)}
                                 </span>
                                 <span
-                                    className="text-emerald-400 font-mono w-12 text-right"
+                                    className={`font-mono w-12 text-right ${accentText2}`}
                                     title="Click-through rate"
                                 >
                                     {formatRate(item.clickThroughRate)}
@@ -283,9 +313,9 @@ function AnalyticsContent({ title, days = 7 }) {
 
             {!loading && filteredSearches.length === 0 && hasQuery && (
                 <div className="flex items-center justify-center flex-1">
-                    <div className="text-gray-500 text-xs italic">
+                    <Caption2 block className="italic">
                         No searches match &ldquo;{query}&rdquo;
-                    </div>
+                    </Caption2>
                 </div>
             )}
         </div>

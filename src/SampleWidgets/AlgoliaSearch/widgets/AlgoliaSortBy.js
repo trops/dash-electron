@@ -8,7 +8,7 @@
  * @package Algolia Search
  */
 import { useMemo } from "react";
-import { Panel } from "@trops/dash-react";
+import { Panel, AlertBanner, SelectInput } from "@trops/dash-react";
 import { Widget } from "@trops/dash-core";
 import { useSortBy } from "react-instantsearch-hooks-web";
 import { AlgoliaInstantSearchWrapper } from "./AlgoliaInstantSearchWrapper";
@@ -20,17 +20,16 @@ function SortBySelect({ parsedItems }) {
     });
 
     return (
-        <select
+        <SelectInput
             value={currentRefinement}
-            onChange={(e) => refine(e.target.value)}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-sm text-gray-200 focus:outline-none focus:border-blue-500"
-        >
-            {options.map((option) => (
-                <option key={option.value} value={option.value}>
-                    {option.label}
-                </option>
-            ))}
-        </select>
+            onChange={(value) => refine(value)}
+            options={options.map((option) => ({
+                value: option.value,
+                label: option.label,
+            }))}
+            placeholder="Sort by"
+            inputClassName="text-sm"
+        />
     );
 }
 
@@ -55,16 +54,12 @@ function SortByContent({ items }) {
     if (!parsedItems) {
         return (
             <div className="flex items-center justify-center h-full p-4">
-                <div className="text-center space-y-2">
-                    <div className="text-yellow-400 text-sm font-medium">
-                        Sort Items Required
-                    </div>
-                    <div className="text-gray-500 text-xs">
-                        Configure sort items as a JSON array in this widget's
-                        settings. Each item needs "value" (index name) and
-                        "label" (display text).
-                    </div>
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    title="Sort Items Required"
+                    message={`Configure sort items as a JSON array in this widget's settings. Each item needs "value" (index name) and "label" (display text).`}
+                />
             </div>
         );
     }

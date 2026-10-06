@@ -7,8 +7,17 @@
  *
  * @package Algolia Search
  */
-import { useState, useRef, useCallback, useEffect } from "react";
-import { Panel, SubHeading2, CodeEditorVS, Button } from "@trops/dash-react";
+import { useState, useRef, useCallback, useEffect, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    CodeEditorVS,
+    Button,
+    Caption2,
+    Tabs,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 
 /* ─── Transform preview runner ──────────────────────────────────── */
@@ -55,45 +64,57 @@ function runTransformPreview(sampleHit, transformCode) {
 /* ─── Transform preview display ─────────────────────────────────── */
 
 function TransformPreview({ previewResult, collapsed, onToggle }) {
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
+
     if (!previewResult) return null;
 
-    const { status, output, error } = previewResult;
+    const { status: previewStatus, output, error } = previewResult;
+    const borderColor = currentTheme?.["border-primary-dark"] || "";
+    const headerClass = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["hover-bg-primary-dark"] || ""
+    }`;
+    const preClass = `text-xs font-mono whitespace-pre-wrap break-all ${
+        currentTheme?.["text-primary-medium"] || ""
+    }`;
 
     return (
-        <div className="border border-gray-700 rounded mt-2 overflow-hidden">
+        <div className={`border rounded mt-2 overflow-hidden ${borderColor}`}>
             <button
                 onClick={onToggle}
-                className="flex items-center justify-between w-full px-3 py-1.5 bg-white/5 hover:bg-white/10 transition-colors text-xs text-gray-400"
+                className={`flex items-center justify-between w-full px-3 py-1.5 transition-colors text-xs ${headerClass}`}
             >
-                <span className="font-medium">Transform Preview</span>
-                <span className="text-gray-500">
-                    {collapsed ? "+" : "\u2013"}
-                </span>
+                <Caption2 className="font-medium">Transform Preview</Caption2>
+                <Caption2>{collapsed ? "+" : "\u2013"}</Caption2>
             </button>
             {!collapsed && (
                 <div className="px-3 py-2 max-h-48 overflow-y-auto">
-                    {status === "empty" && (
-                        <div className="text-xs text-gray-500 italic">
+                    {previewStatus === "empty" && (
+                        <Caption2 block className="italic">
                             Waiting for search results&hellip;
-                        </div>
+                        </Caption2>
                     )}
-                    {status === "passthrough" && (
-                        <pre className="text-xs text-gray-400 font-mono whitespace-pre-wrap break-all">
+                    {previewStatus === "passthrough" && (
+                        <pre className={preClass}>
                             {JSON.stringify(output, null, 2)}
                         </pre>
                     )}
-                    {status === "success" && (
-                        <pre className="text-xs text-gray-400 font-mono whitespace-pre-wrap break-all">
+                    {previewStatus === "success" && (
+                        <pre className={preClass}>
                             {JSON.stringify(output, null, 2)}
                         </pre>
                     )}
-                    {status === "error" && (
-                        <div className="text-xs text-red-400 bg-red-900/20 rounded px-2 py-1.5 font-mono">
+                    {previewStatus === "error" && (
+                        <div
+                            className={`text-xs rounded px-2 py-1.5 font-mono ${status.error.bg} ${status.error.text}`}
+                        >
                             {error}
                         </div>
                     )}
-                    {status === "warning" && (
-                        <div className="text-xs text-amber-400">{error}</div>
+                    {previewStatus === "warning" && (
+                        <div className={`text-xs ${status.warning.icon}`}>
+                            {error}
+                        </div>
                     )}
                 </div>
             )}
@@ -104,10 +125,15 @@ function TransformPreview({ previewResult, collapsed, onToggle }) {
 /* ─── Attribute sidebar ──────────────────────────────────────────── */
 
 function AttributeChip({ name, onClick }) {
+    const { currentTheme } = useContext(ThemeContext);
     return (
         <button
             onClick={() => onClick(name)}
-            className="text-left text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-gray-300 hover:text-gray-100 transition-colors truncate font-mono"
+            className={`text-left text-xs px-2 py-1 rounded transition-colors truncate font-mono ${
+                currentTheme?.["bg-primary-dark"] || ""
+            } ${currentTheme?.["hover-bg-primary-dark"] || ""} ${
+                currentTheme?.["text-primary-medium"] || ""
+            }`}
         >
             {name}
         </button>
@@ -115,20 +141,27 @@ function AttributeChip({ name, onClick }) {
 }
 
 function AttributePanel({ attributes, onAttributeClick }) {
+    const { currentTheme } = useContext(ThemeContext);
     return (
-        <div className="w-48 flex-shrink-0 flex flex-col gap-1 pl-3 border-l border-gray-700 overflow-y-auto">
+        <div
+            className={`w-48 flex-shrink-0 flex flex-col gap-1 pl-3 border-l overflow-y-auto ${
+                currentTheme?.["border-primary-dark"] || ""
+            }`}
+        >
             <SubHeading2 title="Attributes" padding={false} />
-            <div className="text-[10px] text-gray-500 pb-1">
+            <Caption2 block className="pb-1">
                 Click to insert at cursor
-            </div>
+            </Caption2>
             {attributes.length === 0 ? (
-                <div className="text-xs text-gray-500 italic pt-2">
-                    Waiting for hits data&hellip;
-                    <div className="pt-1 text-[10px] text-gray-600">
+                <div className="pt-2">
+                    <Caption2 block className="italic">
+                        Waiting for hits data&hellip;
+                    </Caption2>
+                    <Caption2 block className="pt-1 opacity-70">
                         Wire{" "}
                         <span className="font-mono">attributesAvailable</span>{" "}
                         from AlgoliaSearchPage.
-                    </div>
+                    </Caption2>
                 </div>
             ) : (
                 <div className="flex flex-col gap-1">
@@ -296,31 +329,20 @@ function TemplateEditorContent({ defaultTemplate, api, uuid }) {
         [activeTab]
     );
 
-    const tabBase =
-        "px-3 py-1 text-xs font-medium rounded-full transition-colors";
-    const activeStyle = `${tabBase} bg-blue-600 text-white`;
-    const inactiveStyle = `${tabBase} bg-white/5 text-gray-400 hover:text-gray-200 hover:bg-white/10`;
-
     return (
         <div className="flex flex-col flex-1 min-h-0">
             {/* Tab bar */}
-            <div className="flex items-center gap-1 pb-2">
-                <button
-                    className={
-                        activeTab === "template" ? activeStyle : inactiveStyle
-                    }
-                    onClick={() => setActiveTab("template")}
-                >
-                    Template
-                </button>
-                <button
-                    className={
-                        activeTab === "transform" ? activeStyle : inactiveStyle
-                    }
-                    onClick={() => setActiveTab("transform")}
-                >
-                    Transform
-                </button>
+            <div className="pb-2">
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                    <Tabs.List className="flex flex-wrap">
+                        <Tabs.Trigger value="template" className="text-xs">
+                            Template
+                        </Tabs.Trigger>
+                        <Tabs.Trigger value="transform" className="text-xs">
+                            Transform
+                        </Tabs.Trigger>
+                    </Tabs.List>
+                </Tabs>
             </div>
 
             <div className="flex flex-1 min-h-0 gap-0">

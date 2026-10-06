@@ -7,6 +7,8 @@
  *
  * @package Algolia Search
  */
+import { useContext } from "react";
+import { Caption2, ThemeContext } from "@trops/dash-react";
 import { Widget } from "@trops/dash-core";
 import { useStats } from "react-instantsearch-hooks-web";
 import { AlgoliaInstantSearchWrapper } from "./AlgoliaInstantSearchWrapper";
@@ -14,15 +16,17 @@ import { QuerySync } from "./QuerySync";
 
 function StatsDisplay() {
     const { nbHits, processingTimeMS } = useStats();
+    const { currentTheme } = useContext(ThemeContext);
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
 
     return (
-        <div className="flex items-center gap-1 text-xs text-gray-400 px-1">
-            <span className="text-gray-200 font-medium">
+        <div className="flex items-center gap-1 text-xs px-1">
+            <span className={`font-medium ${bodyText}`}>
                 {nbHits.toLocaleString()}
             </span>
-            <span>result{nbHits !== 1 ? "s" : ""}</span>
-            <span className="text-gray-600">found in</span>
-            <span className="text-gray-300">{processingTimeMS}ms</span>
+            <Caption2>result{nbHits !== 1 ? "s" : ""}</Caption2>
+            <Caption2 className="opacity-75">found in</Caption2>
+            <span className={bodyText}>{processingTimeMS}ms</span>
         </div>
     );
 }

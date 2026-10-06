@@ -7,7 +7,7 @@
  *
  * @package Algolia Search
  */
-import { Button2 } from "@trops/dash-react";
+import { Button, Button2 } from "@trops/dash-react";
 import { Widget } from "@trops/dash-core";
 import { usePagination } from "react-instantsearch-hooks-web";
 import { AlgoliaInstantSearchWrapper } from "./AlgoliaInstantSearchWrapper";
@@ -31,7 +31,7 @@ function PaginationDisplay({ padding }) {
     }
 
     return (
-        <div className="flex items-center justify-center gap-1 px-1">
+        <div className="flex flex-wrap items-center justify-center gap-1 px-1">
             <Button2
                 size="sm"
                 onClick={() => refine(currentRefinement - 1)}
@@ -39,19 +39,17 @@ function PaginationDisplay({ padding }) {
             >
                 Prev
             </Button2>
-            {pages.map((page) => (
-                <button
-                    key={page}
-                    onClick={() => refine(page)}
-                    className={`px-2 py-1 text-xs rounded transition-colors ${
-                        page === currentRefinement
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-700 hover:bg-gray-600 text-gray-300"
-                    }`}
-                >
-                    {page + 1}
-                </button>
-            ))}
+            {pages.map((page) =>
+                page === currentRefinement ? (
+                    <Button key={page} size="sm" onClick={() => refine(page)}>
+                        {page + 1}
+                    </Button>
+                ) : (
+                    <Button2 key={page} size="sm" onClick={() => refine(page)}>
+                        {page + 1}
+                    </Button2>
+                )
+            )}
             <Button2
                 size="sm"
                 onClick={() => refine(currentRefinement + 1)}

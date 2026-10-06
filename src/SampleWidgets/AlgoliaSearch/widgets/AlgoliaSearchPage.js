@@ -7,8 +7,19 @@
  *
  * @package Algolia Search
  */
-import { useState, useMemo, useEffect, useRef } from "react";
-import { Panel, SubHeading3, Button2 } from "@trops/dash-react";
+import { useState, useMemo, useEffect, useRef, useContext } from "react";
+import {
+    Panel,
+    SubHeading3,
+    Button,
+    Button2,
+    AlertBanner,
+    Caption2,
+    Checkbox,
+    InputText,
+    SelectInput,
+    ThemeContext,
+} from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 import {
     useSearchBox,
@@ -26,6 +37,7 @@ import { AlgoliaInstantSearchWrapper } from "./AlgoliaInstantSearchWrapper";
 
 function SearchBar({ placeholder, publishEvent, externalQuery }) {
     const { query, refine } = useSearchBox();
+    const { currentTheme } = useContext(ThemeContext);
     const [inputValue, setInputValue] = useState(query);
 
     useEffect(() => {
@@ -54,19 +66,22 @@ function SearchBar({ placeholder, publishEvent, externalQuery }) {
     };
 
     return (
-        <div className="relative flex-1">
-            <input
+        <div className="relative flex-1 min-w-0">
+            <InputText
                 type="text"
                 value={inputValue}
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
                 placeholder={placeholder}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 pr-8"
+                padding="pl-3 pr-8 py-2"
+                inputClassName="text-sm rounded-md"
             />
             {inputValue && (
                 <button
                     onClick={handleClear}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-sm"
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 text-sm opacity-70 hover:opacity-100 ${
+                        currentTheme?.["text-primary-medium"] || ""
+                    }`}
                     aria-label="Clear search"
                 >
                     &times;
@@ -82,17 +97,16 @@ function SortDropdown({ parsedItems }) {
     });
 
     return (
-        <select
+        <SelectInput
             value={currentRefinement}
-            onChange={(e) => refine(e.target.value)}
-            className="px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-sm text-gray-200 focus:outline-none focus:border-blue-500"
-        >
-            {options.map((option) => (
-                <option key={option.value} value={option.value}>
-                    {option.label}
-                </option>
-            ))}
-        </select>
+            onChange={(value) => refine(value)}
+            options={options.map((option) => ({
+                value: option.value,
+                label: option.label,
+            }))}
+            placeholder="Sort by"
+            inputClassName="text-sm"
+        />
     );
 }
 
@@ -104,33 +118,32 @@ function FacetSection({ attribute, title, limit }) {
         attribute: attribute,
         limit: parsedLimit,
     });
+    const { currentTheme } = useContext(ThemeContext);
+    const rowHover = currentTheme?.["hover-bg-primary-dark"] || "";
 
     return (
         <div className="flex flex-col gap-1">
             {title && <SubHeading3 title={title} padding={false} />}
             {items.length === 0 ? (
-                <div className="text-gray-500 text-xs italic px-1">
+                <Caption2 block className="italic px-1">
                     No facet values.
-                </div>
+                </Caption2>
             ) : (
                 items.map((item) => (
-                    <label
+                    <div
                         key={item.label}
-                        className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer transition-colors"
+                        className={`flex items-center gap-2 px-2 py-1 rounded transition-colors ${rowHover}`}
                     >
-                        <input
-                            type="checkbox"
+                        <Checkbox
                             checked={item.isRefined}
                             onChange={() => refine(item.value)}
-                            className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                            label={item.label}
+                            className="flex-1 min-w-0 cursor-pointer"
                         />
-                        <span className="text-sm text-gray-200 flex-1 truncate">
-                            {item.label}
-                        </span>
-                        <span className="text-xs text-gray-500 tabular-nums">
+                        <Caption2 className="tabular-nums">
                             {item.count.toLocaleString()}
-                        </span>
-                    </label>
+                        </Caption2>
+                    </div>
                 ))
             )}
         </div>
@@ -138,8 +151,13 @@ function FacetSection({ attribute, title, limit }) {
 }
 
 function FilterSidebar({ facets }) {
+    const { currentTheme } = useContext(ThemeContext);
     return (
-        <div className="w-48 flex-shrink-0 flex flex-col gap-4 pr-4 border-r border-gray-700 overflow-y-auto">
+        <div
+            className={`w-48 flex-shrink-0 flex flex-col gap-4 pr-4 border-r overflow-y-auto ${
+                currentTheme?.["border-primary-dark"] || ""
+            }`}
+        >
             {facets.map((facet) => (
                 <FacetSection
                     key={facet.attribute}
@@ -154,15 +172,17 @@ function FilterSidebar({ facets }) {
 
 function StatsBar() {
     const { nbHits, processingTimeMS } = useStats();
+    const { currentTheme } = useContext(ThemeContext);
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
 
     return (
-        <div className="flex items-center gap-1 text-xs text-gray-400 px-1 pb-2">
-            <span className="text-gray-200 font-medium">
+        <div className="flex items-center gap-1 text-xs px-1 pb-2">
+            <span className={`font-medium ${bodyText}`}>
                 {nbHits.toLocaleString()}
             </span>
-            <span>result{nbHits !== 1 ? "s" : ""}</span>
-            <span className="text-gray-600">found in</span>
-            <span className="text-gray-300">{processingTimeMS}ms</span>
+            <Caption2>result{nbHits !== 1 ? "s" : ""}</Caption2>
+            <Caption2 className="opacity-75">found in</Caption2>
+            <span className={bodyText}>{processingTimeMS}ms</span>
         </div>
     );
 }
@@ -172,20 +192,29 @@ function DefaultHitCard({ hit }) {
         hit.title || hit.name || hit.label || hit.objectID || "Untitled";
     const displaySubtitle =
         hit.description || hit.subtitle || hit.content?.substring(0, 120) || "";
+    const { currentTheme } = useContext(ThemeContext);
 
     return (
-        <div className="px-3 py-2 bg-white/5 rounded hover:bg-white/10 transition-colors">
-            <div className="text-sm text-gray-200 font-medium">
+        <div
+            className={`px-3 py-2 rounded transition-colors ${
+                currentTheme?.["bg-primary-dark"] || ""
+            } ${currentTheme?.["hover-bg-primary-dark"] || ""}`}
+        >
+            <div
+                className={`text-sm font-medium ${
+                    currentTheme?.["text-primary-medium"] || ""
+                }`}
+            >
                 {displayTitle}
             </div>
             {displaySubtitle && (
-                <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                <Caption2 block className="mt-0.5 line-clamp-2">
                     {displaySubtitle}
-                </div>
+                </Caption2>
             )}
-            <div className="text-[10px] text-gray-600 mt-1 font-mono">
+            <Caption2 block className="mt-1 font-mono opacity-75">
                 {hit.objectID}
-            </div>
+            </Caption2>
         </div>
     );
 }
@@ -207,21 +236,28 @@ function applyTransform(hit, transformCode) {
 }
 
 function TemplateHitCard({ hit, template, transform }) {
+    const { currentTheme } = useContext(ThemeContext);
     let html;
     try {
         const enrichedHit = applyTransform(hit, transform);
         html = Mustache.render(template, enrichedHit);
     } catch {
         return (
-            <div className="px-3 py-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                Template render error
-            </div>
+            <AlertBanner
+                variant="error"
+                size="compact"
+                message="Template render error"
+            />
         );
     }
 
     return (
         <div
-            className="px-3 py-2 bg-white/5 rounded hover:bg-white/10 transition-colors text-sm text-gray-200"
+            className={`px-3 py-2 rounded transition-colors text-sm ${
+                currentTheme?.["bg-primary-dark"] || ""
+            } ${currentTheme?.["hover-bg-primary-dark"] || ""} ${
+                currentTheme?.["text-primary-medium"] || ""
+            }`}
             dangerouslySetInnerHTML={{ __html: html }}
         />
     );
@@ -233,9 +269,9 @@ function HitsGrid({ hitTemplate, hitTransform }) {
     if (hits.length === 0) {
         return (
             <div className="flex items-center justify-center py-8">
-                <div className="text-gray-500 text-xs italic">
+                <Caption2 block className="italic">
                     No results found.
-                </div>
+                </Caption2>
             </div>
         );
     }
@@ -287,19 +323,17 @@ function PaginationBar({ padding }) {
             >
                 Prev
             </Button2>
-            {pages.map((page) => (
-                <button
-                    key={page}
-                    onClick={() => refine(page)}
-                    className={`px-2 py-1 text-xs rounded transition-colors ${
-                        page === currentRefinement
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-700 hover:bg-gray-600 text-gray-300"
-                    }`}
-                >
-                    {page + 1}
-                </button>
-            ))}
+            {pages.map((page) =>
+                page === currentRefinement ? (
+                    <Button key={page} size="sm" onClick={() => refine(page)}>
+                        {page + 1}
+                    </Button>
+                ) : (
+                    <Button2 key={page} size="sm" onClick={() => refine(page)}>
+                        {page + 1}
+                    </Button2>
+                )
+            )}
             <Button2
                 size="sm"
                 onClick={() => refine(currentRefinement + 1)}
@@ -420,7 +454,7 @@ function SearchPageContent({
             <AttributePublisher publishEvent={publishEvent} />
 
             {/* Top bar: search + sort */}
-            <div className="flex items-center gap-2 pb-3">
+            <div className="flex flex-wrap items-center gap-2 pb-3">
                 <SearchBar
                     placeholder={placeholder}
                     publishEvent={publishEvent}
