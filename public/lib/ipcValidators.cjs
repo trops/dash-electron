@@ -37,6 +37,12 @@ function check(type, value) {
     }
 
     switch (baseType) {
+        // Algolia search text: any string, including "" — an empty query
+        // means "match all records" (used to sample an index).
+        case "searchQuery":
+            if (typeof value !== "string")
+                return { ok: false, reason: "must be a string" };
+            return { ok: true };
         case "string":
             if (typeof value !== "string" || value.length === 0)
                 return { ok: false, reason: "must be a non-empty string" };
@@ -183,12 +189,12 @@ const SCHEMAS = {
         ...PROVIDER_FIELDS,
         indexName: "indexName",
         toFilename: "absPath",
-        query: "string?",
+        query: "searchQuery?",
     },
     "algolia-search": {
         ...PROVIDER_FIELDS,
         indexName: "indexName",
-        query: "string?",
+        query: "searchQuery?",
         options: "object?",
     },
     "algolia-get-settings": {
@@ -203,7 +209,7 @@ const SCHEMAS = {
     "algolia-search-rules": {
         ...PROVIDER_FIELDS_WITH_HASH,
         indexName: "indexName",
-        query: "string?",
+        query: "searchQuery?",
         hitsPerPage: "number?",
         page: "number?",
     },
