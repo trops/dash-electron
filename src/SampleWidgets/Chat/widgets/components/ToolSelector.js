@@ -3,10 +3,13 @@
  *
  * Toggle available MCP tools on/off. Grouped by server.
  */
-import { useState } from "react";
+import { useContext, useState } from "react";
+import { Caption2, Checkbox, ThemeContext } from "@trops/dash-react";
 
 export const ToolSelector = ({ servers, enabledTools, onToggle }) => {
     const [expanded, setExpanded] = useState(false);
+    const { currentTheme } = useContext(ThemeContext);
+    const rowHover = currentTheme?.["hover-bg-primary-dark"] || "";
 
     const totalTools = servers.reduce(
         (sum, s) => sum + (s.tools?.length || 0),
@@ -20,7 +23,9 @@ export const ToolSelector = ({ servers, enabledTools, onToggle }) => {
         <div className="text-xs">
             <button
                 onClick={() => setExpanded(!expanded)}
-                className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-white/5 transition-colors text-gray-400"
+                className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${rowHover} ${
+                    currentTheme?.["text-primary-medium"] || ""
+                }`}
             >
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -37,36 +42,36 @@ export const ToolSelector = ({ servers, enabledTools, onToggle }) => {
                 <span>
                     Tools ({enabledCount}/{totalTools})
                 </span>
-                <span className="text-gray-600">
+                <Caption2 className="opacity-70">
                     {expanded ? "\u25B2" : "\u25BC"}
-                </span>
+                </Caption2>
             </button>
             {expanded && (
-                <div className="mt-1 p-2 bg-gray-800/50 rounded-md border border-gray-700 max-h-48 overflow-y-auto space-y-2">
+                <div
+                    className={`mt-1 p-2 rounded-md border max-h-48 overflow-y-auto space-y-2 ${
+                        currentTheme?.["bg-primary-dark"] || ""
+                    } ${currentTheme?.["border-primary-dark"] || ""}`}
+                >
                     {servers.map((server) => (
                         <div key={server.serverName}>
-                            <div className="text-gray-500 font-medium mb-1">
+                            <Caption2 block className="font-medium mb-1">
                                 {server.serverName}
-                            </div>
+                            </Caption2>
                             <div className="space-y-0.5 ml-2">
                                 {server.tools.map((tool) => (
-                                    <label
+                                    <Checkbox
                                         key={tool.name}
-                                        className="flex items-center gap-2 py-0.5 cursor-pointer hover:bg-white/5 rounded px-1"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={
-                                                enabledTools[tool.name] !==
-                                                false
-                                            }
-                                            onChange={() => onToggle(tool.name)}
-                                            className="rounded border-gray-600 bg-gray-700 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 w-3 h-3"
-                                        />
-                                        <span className="text-gray-300 font-mono">
-                                            {tool.name}
-                                        </span>
-                                    </label>
+                                        checked={
+                                            enabledTools[tool.name] !== false
+                                        }
+                                        onChange={() => onToggle(tool.name)}
+                                        label={
+                                            <span className="text-xs font-mono">
+                                                {tool.name}
+                                            </span>
+                                        }
+                                        className={`py-0.5 cursor-pointer rounded px-1 ${rowHover}`}
+                                    />
                                 ))}
                             </div>
                         </div>

@@ -7,12 +7,21 @@
  *
  * @package DashSamples
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, SectionLabel } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    SectionLabel,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 
 function EventReceiverContent({ title }) {
     const { listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
     const [eventLog, setEventLog] = useState([]);
     const [listenerStatus, setListenerStatus] = useState("not configured");
 
@@ -72,18 +81,21 @@ function EventReceiverContent({ title }) {
                     <span
                         className={`inline-block w-2 h-2 rounded-full ${
                             listenerStatus === "listening"
-                                ? "bg-green-400"
-                                : "bg-yellow-500"
+                                ? statusTokens.success.solidBg
+                                : statusTokens.warning.solidBg
                         }`}
                     />
-                    <span className="text-gray-400">{listenerStatus}</span>
+                    <Caption2>{listenerStatus}</Caption2>
                 </div>
                 {listenerSummary.length > 0 && (
                     <div className="mt-1 space-y-0.5">
                         {listenerSummary.map((sub, i) => (
                             <div
                                 key={i}
-                                className="text-xs font-mono text-indigo-400"
+                                className={`text-xs font-mono ${
+                                    currentTheme?.["text-secondary-medium"] ||
+                                    ""
+                                }`}
                             >
                                 {sub.handler} &larr; {sub.eventName}
                             </div>
@@ -91,10 +103,10 @@ function EventReceiverContent({ title }) {
                     </div>
                 )}
                 {listenerSummary.length === 0 && (
-                    <div className="mt-1 text-xs text-gray-600 italic">
+                    <Caption2 block className="mt-1 italic">
                         No listeners assigned. Use the layout builder to wire
                         events from EventSenderWidget.
-                    </div>
+                    </Caption2>
                 )}
             </div>
 
@@ -105,23 +117,36 @@ function EventReceiverContent({ title }) {
                 </SectionLabel>
                 <div className="overflow-y-auto max-h-48 space-y-1">
                     {eventLog.length === 0 ? (
-                        <div className="text-xs text-gray-600 italic">
+                        <Caption2 block className="italic">
                             No events received yet. Publish an event from the
                             EventSenderWidget.
-                        </div>
+                        </Caption2>
                     ) : (
                         eventLog.map((entry, i) => (
                             <div
                                 key={i}
-                                className="text-xs font-mono bg-gray-800/50 rounded px-2 py-1"
+                                className={`text-xs font-mono rounded px-2 py-1 ${
+                                    currentTheme?.["bg-primary-dark"] || ""
+                                }`}
                             >
-                                <span className="text-gray-500">
+                                <Caption2 className="font-mono">
                                     {entry.timestamp}
-                                </span>{" "}
-                                <span className="text-indigo-400">
+                                </Caption2>{" "}
+                                <span
+                                    className={
+                                        currentTheme?.[
+                                            "text-secondary-medium"
+                                        ] || ""
+                                    }
+                                >
                                     {entry.event}
                                 </span>{" "}
-                                <span className="text-gray-400">
+                                <span
+                                    className={
+                                        currentTheme?.["text-primary-medium"] ||
+                                        ""
+                                    }
+                                >
                                     {JSON.stringify(entry.message)}
                                 </span>
                             </div>

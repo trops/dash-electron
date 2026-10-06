@@ -1,6 +1,6 @@
 # PRD: Widget Theme Compliance
 
-**Status:** In Progress
+**Status:** Implemented
 **Last Updated:** 2026-10-05
 **Owner:** trops
 **Related PRDs:** [arbitrary-color-themes.md](arbitrary-color-themes.md)
@@ -121,6 +121,8 @@ There is also no theme-aware primitive for status colors: dash-react `AlertBanne
 -   **PR 5 (Gong):** all 11 files converted (8 widgets + CallList/CallSummary/CallTranscript components). Speaker colors rotate through theme accent + status tokens; workspace chips stay real buttons (Button active / Button2). Verified Workshop Command Center + Gong Testing in light + dark (empty states only — the Gong account returned no calls).
 -   **PR 6 (GoogleCalendar, GoogleDrive, Gmail):** all 23 files converted. The per-package copies of `McpDebugLog.js` were byte-identical on master and are kept identical (the Drive conversion was copied to the other two); `McpReauthBanner.js` keeps its one pre-existing Gmail difference (`shrink-0`). Calendar's "Join" stays an `<a>` styled with theme tokens (a Button can't nest in a link). Verified gdrive (20 real files) and Workshop Command Center (Gmail inbox) in light + dark.
 -   **PR 7 (GitHub, Slack, Notion, Filesystem):** 12 files converted (exemplars GitHubPRList / SlackListChannels were already clean). Issue state → `StatusBadge`; GitHub label hex colors from API data stay as inline styles. Verified Kitchen Sinkq Page 1 (GitHub, Slack error banner, Notion, Filesystem, Calendar) in light + dark.
+-   **PR 8 (DashSamples, Chat, Clock):** final 20 files converted; THEME_PENDING_PACKAGES removed — the guard now covers every package under src/SampleWidgets. Chat passes currentTheme/statusTokens down as props because MessageBubble/ChatInput tests mock dash-react. Verified Kitchen Sinkq (Chat info banner, Notepad, Theme Viewer, Scheduler, Event Sender/Receiver) and Algolia Test 1 (Analog Clock, Scheduler) in light + dark.
+-   **Follow-ups (outside SampleWidgets):** dash-core widget footer strip ("N timers · next in Ns") is unreadable on light themes; Monaco CodeEditorVS stays dark on light themes; dark-theme native date-picker icon is low contrast.
 -   **Token mapping used:** raised rows/tiles `bg-primary-dark`, body text `text-primary-medium`, borders `border-primary-dark`, accent `text-secondary-medium`, muted text `Caption2`, inputs `SelectInput`/`InputText` (`h-7`), status `useStatusTokens()`.
 -   **Known trade-offs:** `SelectInput` renders its placeholder disabled, so an index can't be cleared back to "none"; `text-[10px]` labels became `text-xs`; the dark-theme native date-picker icon is low contrast (dash-react follow-up).
 -   **Lesson:** sample widgets run from installed bundles — verify by rebuilding the package zip and `installLocal` in the running app (the Widgets-page preview with an Algolia key lacking the analytics ACL reproduces the error banner).

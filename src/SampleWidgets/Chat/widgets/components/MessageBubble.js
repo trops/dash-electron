@@ -2,12 +2,16 @@
  * MessageBubble
  *
  * Renders a single message — user, assistant (with markdown), or tool-use blocks.
+ *
+ * Theme / status tokens arrive as props (from ChatMessages) rather than via
+ * ThemeContext / useStatusTokens: this file is loaded by its jest test,
+ * which cannot import @trops/dash-react's ESM bundle.
  */
 import { StreamingText } from "./StreamingText";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { renderSafeMarkdown } from "@trops/dash-core";
 
-function AssistantTextContent({ text }) {
+function AssistantTextContent({ text, bodyText }) {
     if (!text) return null;
 
     // Replies can quote untrusted content (emails, web pages): Markdown is
@@ -15,7 +19,9 @@ function AssistantTextContent({ text }) {
     // fall back to plain text — never unsanitized HTML.
     if (typeof renderSafeMarkdown !== "function") {
         return (
-            <div className="text-sm whitespace-pre-wrap leading-relaxed">
+            <div
+                className={`text-sm whitespace-pre-wrap leading-relaxed ${bodyText}`}
+            >
                 {text}
             </div>
         );
@@ -24,17 +30,23 @@ function AssistantTextContent({ text }) {
 
     return (
         <div
-            className="prose prose-invert prose-sm max-w-none
+            className={`prose prose-sm max-w-none
                 prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1
-                prose-pre:bg-black/40 prose-pre:text-gray-300 prose-code:text-indigo-300
-                prose-a:text-indigo-400"
+                ${bodyText}`}
             dangerouslySetInnerHTML={{ __html: html }}
         />
     );
 }
 
-export const MessageBubble = ({ message, isStreaming, streamingText }) => {
+export const MessageBubble = ({
+    message,
+    isStreaming,
+    streamingText,
+    currentTheme,
+    statusTokens,
+}) => {
     const { role, content, toolCalls } = message;
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
 
     if (role === "user") {
         // Extract text from user message content
@@ -49,8 +61,12 @@ export const MessageBubble = ({ message, isStreaming, streamingText }) => {
                 : "";
 
         return (
-            <div className="flex justify-end mb-3">
-                <div className="max-w-[85%] px-3 py-2 rounded-lg bg-indigo-700/50 text-gray-100 text-sm whitespace-pre-wrap break-words">
+            <div className="flex justify-end mb-3 pl-8">
+                <div
+                    className={`px-3 py-2 rounded-lg text-sm whitespace-pre-wrap break-words ${
+                        currentTheme?.["bg-secondary-dark"] || ""
+                    } ${currentTheme?.["text-secondary-light"] || ""}`}
+                >
                     {text}
                 </div>
             </div>
@@ -88,20 +104,21 @@ export const MessageBubble = ({ message, isStreaming, streamingText }) => {
 
         return (
             <div className="mb-3">
-                <div className="max-w-[95%] text-sm">
+                <div className="text-sm pr-4">
                     {/* Streaming text (active response) */}
                     {isStreaming && (
-                        <div className="text-gray-200">
+                        <div className={bodyText}>
                             <StreamingText
                                 text={streamingText}
                                 isStreaming={true}
+                                currentTheme={currentTheme}
                             />
                         </div>
                     )}
 
                     {/* Final rendered text */}
                     {!isStreaming && text && (
-                        <AssistantTextContent text={text} />
+                        <AssistantTextContent text={text} bodyText={bodyText} />
                     )}
 
                     {/* Tool call blocks */}
@@ -114,6 +131,8 @@ export const MessageBubble = ({ message, isStreaming, streamingText }) => {
                             result={block.result}
                             isError={block.isError}
                             isLoading={block.isLoading}
+                            currentTheme={currentTheme}
+                            statusTokens={statusTokens}
                         />
                     ))}
                 </div>

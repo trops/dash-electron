@@ -8,22 +8,20 @@
  *
  * @package DashSamples
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useContext } from "react";
 import {
     Panel,
     SubHeading2,
     Button,
     Button2,
     SectionLabel,
+    AlertBanner,
+    Caption2,
+    InputText,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import { Widget, useWebSocketProvider } from "@trops/dash-core";
-
-const STATUS_STYLES = {
-    disconnected: "bg-gray-500",
-    connecting: "bg-yellow-500",
-    connected: "bg-green-500",
-    error: "bg-red-500",
-};
 
 function SocketWidgetContent({ title }) {
     const {
@@ -42,6 +40,15 @@ function SocketWidgetContent({ title }) {
 
     const [sentMessages, setSentMessages] = useState([]);
     const [input, setInput] = useState("");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+
+    const STATUS_STYLES = {
+        disconnected: currentTheme?.["bg-primary-medium"] || "",
+        connecting: statusTokens.warning.solidBg,
+        connected: statusTokens.success.solidBg,
+        error: statusTokens.error.solidBg,
+    };
 
     // Merge sent + received into a single log, newest first
     const allMessages = [
@@ -99,22 +106,18 @@ function SocketWidgetContent({ title }) {
                     <span
                         className={`w-2.5 h-2.5 rounded-full ${statusColor}`}
                     />
-                    <span className="text-xs text-gray-400">
-                        {displayStatus}
-                    </span>
+                    <Caption2>{displayStatus}</Caption2>
                 </div>
             </div>
 
             {serverName && (
-                <div className="text-xs text-gray-500 font-mono truncate">
+                <Caption2 block className="font-mono truncate">
                     Provider: {serverName}
-                </div>
+                </Caption2>
             )}
 
             {error && (
-                <div className="text-xs text-red-400 bg-red-900/30 rounded px-2 py-1">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             <div className="flex items-center gap-2">
@@ -133,15 +136,16 @@ function SocketWidgetContent({ title }) {
                 </Button2>
             </div>
 
-            <div className="flex items-center gap-2">
-                <input
+            <div className="flex flex-wrap items-center gap-2">
+                <InputText
                     type="text"
                     value={input}
-                    onChange={(e) => setInput(e.target.value)}
+                    onChange={(value) => setInput(value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Type a message..."
                     disabled={!isConnected}
-                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+                    className="flex-1 min-w-0"
+                    inputClassName="text-sm"
                 />
                 <Button
                     onClick={handleSend}
@@ -155,30 +159,34 @@ function SocketWidgetContent({ title }) {
                 <SectionLabel className="mb-1">Messages</SectionLabel>
                 <div className="overflow-y-auto max-h-48 space-y-1">
                     {allMessages.length === 0 ? (
-                        <div className="text-xs text-gray-600 italic">
+                        <Caption2 block className="italic">
                             No messages yet. Connect and send a message.
-                        </div>
+                        </Caption2>
                     ) : (
                         allMessages.map((entry, i) => (
                             <div
                                 key={i}
-                                className="text-xs font-mono bg-gray-800/50 rounded px-2 py-1"
+                                className={`text-xs font-mono ${
+                                    currentTheme?.["bg-primary-dark"] || ""
+                                } ${
+                                    currentTheme?.["text-primary-medium"] || ""
+                                } rounded px-2 py-1`}
                             >
-                                <span className="text-gray-500">
+                                <Caption2 className="font-mono">
                                     {entry.timestamp}
-                                </span>{" "}
+                                </Caption2>{" "}
                                 <span
                                     className={
                                         entry.direction === "sent"
-                                            ? "text-cyan-400"
-                                            : "text-green-400"
+                                            ? currentTheme?.[
+                                                  "text-secondary-medium"
+                                              ] || ""
+                                            : statusTokens.success.icon
                                     }
                                 >
                                     {entry.direction === "sent" ? "→" : "←"}
                                 </span>{" "}
-                                <span className="text-gray-300">
-                                    {entry.text}
-                                </span>
+                                <span>{entry.text}</span>
                             </div>
                         ))
                     )}

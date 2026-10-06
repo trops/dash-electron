@@ -7,18 +7,24 @@
  *
  * @package DashSamples
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
 import {
     Panel,
     SubHeading2,
     Button,
     Button2,
     Button3,
+    Caption2,
+    TextArea,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 
 function NotepadContent({ title, placeholder, autoSave, api, uuid }) {
     const { publishEvent } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
     const [content, setContent] = useState("");
     const [status, setStatus] = useState("idle");
     const [lastSaved, setLastSaved] = useState(null);
@@ -106,11 +112,11 @@ function NotepadContent({ title, placeholder, autoSave, api, uuid }) {
     };
 
     const statusColors = {
-        idle: "bg-gray-500",
-        loading: "bg-blue-400 animate-pulse",
-        saving: "bg-yellow-400 animate-pulse",
-        saved: "bg-green-400",
-        error: "bg-red-400",
+        idle: currentTheme?.["bg-primary-medium"] || "",
+        loading: `${statusTokens.info.solidBg} animate-pulse`,
+        saving: `${statusTokens.warning.solidBg} animate-pulse`,
+        saved: statusTokens.success.solidBg,
+        error: statusTokens.error.solidBg,
     };
 
     return (
@@ -121,15 +127,16 @@ function NotepadContent({ title, placeholder, autoSave, api, uuid }) {
                     <span
                         className={`inline-block w-2 h-2 rounded-full ${statusColors[status]}`}
                     />
-                    <span className="text-xs text-gray-400">{status}</span>
+                    <Caption2>{status}</Caption2>
                 </div>
             </div>
 
-            <textarea
+            <TextArea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder={placeholder}
-                className="flex-1 min-h-[100px] w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-amber-500 resize-none"
+                className="flex-1 min-h-24 w-full"
+                inputClassName="flex-1 text-sm resize-none"
             />
 
             <div className="flex items-center justify-between">
@@ -145,16 +152,16 @@ function NotepadContent({ title, placeholder, autoSave, api, uuid }) {
                     </Button3>
                 </div>
                 {lastSaved && (
-                    <span className="text-xs text-gray-500">
+                    <Caption2>
                         Last saved: {new Date(lastSaved).toLocaleTimeString()}
-                    </span>
+                    </Caption2>
                 )}
             </div>
 
             {autoSave !== "off" && (
-                <div className="text-xs text-gray-600">
+                <Caption2 block>
                     Auto-save: {autoSave === "5s" ? "every 5s" : "every 30s"}
-                </div>
+                </Caption2>
             )}
         </div>
     );
