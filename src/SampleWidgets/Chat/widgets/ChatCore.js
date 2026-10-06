@@ -7,8 +7,15 @@
  *
  * @package Chat
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { SubHeading2, Button2, Button3 } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+    SubHeading2,
+    Button2,
+    Button3,
+    AlertBanner,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { useWidgetEvents, useWidgetProviders } from "@trops/dash-core";
 import { ChatMessages } from "./components/ChatMessages";
 import { ChatInput } from "./components/ChatInput";
@@ -43,6 +50,8 @@ export function ChatCore({
     const mainApi = window.mainApi;
 
     // Conversation state
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
     const [messages, setMessages] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -408,12 +417,16 @@ export function ChatCore({
     return (
         <div className="flex flex-col h-full">
             {/* Header */}
-            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700/50">
+            <div
+                className={`flex items-center justify-between px-3 py-2 border-b ${
+                    currentTheme?.["border-primary-dark"] || ""
+                }`}
+            >
                 <div className="flex items-center gap-2">
                     <SubHeading2 title={title} />
                     {isCliBackend && sessionActive && (
                         <span
-                            className="inline-block w-2 h-2 rounded-full bg-green-400"
+                            className={`inline-block w-2 h-2 rounded-full ${statusTokens.success.solidBg}`}
                             title="CLI session active"
                         />
                     )}
@@ -432,40 +445,47 @@ export function ChatCore({
 
             {/* Error banner */}
             {error && (
-                <div className="mx-3 mt-2 p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                    <Button3
-                        onClick={() => setError(null)}
-                        size="sm"
-                        className="ml-2"
-                    >
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={error}
+                    className="mx-3 mt-2"
+                >
+                    <Button3 onClick={() => setError(null)} size="sm">
                         Dismiss
                     </Button3>
-                </div>
+                </AlertBanner>
             )}
 
             {/* Anthropic API key warning */}
             {isAnthropicBackend && !apiKey && (
-                <div className="mx-3 mt-2 p-2 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Add an Anthropic provider with your API key in the dashboard
-                    settings to start chatting.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Add an Anthropic provider with your API key in the dashboard settings to start chatting."
+                    className="mx-3 mt-2"
+                />
             )}
 
             {/* CLI checking state */}
             {isCliBackend && cliAvailable === null && (
-                <div className="mx-3 mt-2 p-2 bg-gray-800/50 border border-gray-700 rounded text-gray-400 text-xs">
-                    Checking for Claude Code CLI...
-                </div>
+                <AlertBanner
+                    variant="info"
+                    size="compact"
+                    message="Checking for Claude Code CLI..."
+                    className="mx-3 mt-2"
+                />
             )}
 
             {/* CLI setup panel */}
             {isCliBackend && cliAvailable === false && (
-                <div className="mx-3 mt-2 p-3 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    <p className="font-semibold mb-2">
-                        Claude Code CLI not found
-                    </p>
-                    <ol className="list-decimal list-inside space-y-1 mb-3 text-yellow-300/90">
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    title="Claude Code CLI not found"
+                    className="mx-3 mt-2"
+                >
+                    <ol className="list-decimal list-inside space-y-1 mb-3">
                         <li>
                             Download Claude Code from{" "}
                             <button
@@ -474,14 +494,16 @@ export function ChatCore({
                                         "https://claude.ai/download"
                                     )
                                 }
-                                className="underline hover:text-yellow-200 font-mono"
+                                className={`underline font-mono ${statusTokens.warning.strongText}`}
                             >
                                 claude.ai/download
                             </button>
                         </li>
                         <li>
                             Open your terminal and run{" "}
-                            <span className="font-mono bg-yellow-900/50 px-1 rounded">
+                            <span
+                                className={`font-mono px-1 rounded border ${statusTokens.warning.border}`}
+                            >
                                 claude auth login
                             </span>
                         </li>
@@ -490,7 +512,7 @@ export function ChatCore({
                     <Button2 onClick={handleCheckCliAgain} size="sm">
                         Check Again
                     </Button2>
-                </div>
+                </AlertBanner>
             )}
 
             {/* No tools info (anthropic only) */}
@@ -498,18 +520,22 @@ export function ChatCore({
                 !hasTools &&
                 apiKey &&
                 messages.length === 0 && (
-                    <div className="mx-3 mt-2 p-2 bg-gray-800/50 border border-gray-700 rounded text-gray-400 text-xs">
-                        No MCP tools connected. Connect providers (GitHub,
-                        Slack, etc.) to enable tool-use.
-                    </div>
+                    <AlertBanner
+                        variant="info"
+                        size="compact"
+                        message="No MCP tools connected. Connect providers (GitHub, Slack, etc.) to enable tool-use."
+                        className="mx-3 mt-2"
+                    />
                 )}
 
             {/* CLI tools info */}
             {isCliBackend && cliAvailable && messages.length === 0 && (
-                <div className="mx-3 mt-2 p-2 bg-gray-800/50 border border-gray-700 rounded text-gray-400 text-xs">
-                    Using Claude Code CLI. Your configured MCP tools pass
-                    through automatically.
-                </div>
+                <AlertBanner
+                    variant="info"
+                    size="compact"
+                    message="Using Claude Code CLI. Your configured MCP tools pass through automatically."
+                    className="mx-3 mt-2"
+                />
             )}
 
             {/* Tool selector (anthropic only) */}
@@ -536,6 +562,7 @@ export function ChatCore({
                 onStop={handleStop}
                 isLoading={isLoading}
                 disabled={!isReady}
+                currentTheme={currentTheme}
             />
         </div>
     );

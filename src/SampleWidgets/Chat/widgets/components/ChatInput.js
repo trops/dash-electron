@@ -19,7 +19,16 @@ const autoResize = (el) => {
     el.style.height = Math.min(el.scrollHeight, 120) + "px";
 };
 
-export const ChatInput = ({ onSend, onStop, isLoading, disabled }) => {
+// Theme tokens arrive as the `currentTheme` prop (from ChatCore) rather
+// than via ThemeContext: ChatInput's jest test stubs @trops/dash-react with
+// only the buttons, so a ThemeContext import would be undefined there.
+export const ChatInput = ({
+    onSend,
+    onStop,
+    isLoading,
+    disabled,
+    currentTheme,
+}) => {
     const [input, setInput] = useState("");
     const textareaRef = useRef(null);
 
@@ -53,7 +62,11 @@ export const ChatInput = ({ onSend, onStop, isLoading, disabled }) => {
     };
 
     return (
-        <div className="flex items-end gap-2 px-3 py-2 border-t border-gray-700/50">
+        <div
+            className={`flex items-end gap-2 px-3 py-2 border-t ${
+                currentTheme?.["border-primary-dark"] || ""
+            }`}
+        >
             <textarea
                 ref={textareaRef}
                 value={input}
@@ -62,7 +75,11 @@ export const ChatInput = ({ onSend, onStop, isLoading, disabled }) => {
                 placeholder="Type a message..."
                 disabled={disabled}
                 rows={1}
-                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 resize-none disabled:opacity-50"
+                className={`flex-1 px-3 py-2 border rounded-lg text-sm resize-none disabled:opacity-50 ${
+                    currentTheme?.["bg-primary-dark"] || ""
+                } ${currentTheme?.["border-primary-dark"] || ""} ${
+                    currentTheme?.["text-primary-medium"] || ""
+                }`}
             />
             {isLoading ? (
                 <Button2 onClick={onStop} danger className="shrink-0">

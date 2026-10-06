@@ -12,6 +12,8 @@ import {
     SubHeading2,
     ThemeContext,
     SectionLabel,
+    Caption2,
+    useStatusTokens,
 } from "@trops/dash-react";
 import { Widget, useDashboard } from "@trops/dash-core";
 
@@ -32,6 +34,9 @@ const THEME_KEYS = [
 function ThemeViewerContent({ title }) {
     const { currentTheme, themeVariant } = useContext(ThemeContext);
     const { app } = useDashboard();
+    const statusTokens = useStatusTokens();
+    const valueClass = currentTheme?.["text-primary-medium"] || "";
+    const swatchBorder = currentTheme?.["border-primary-medium"] || "";
 
     const themeKeyCount = currentTheme ? Object.keys(currentTheme).length : 0;
 
@@ -44,18 +49,16 @@ function ThemeViewerContent({ title }) {
                 <SectionLabel className="mb-1">Theme Variant</SectionLabel>
                 <div className="flex items-center gap-2">
                     <span
-                        className={`inline-block w-3 h-3 rounded-full border ${
+                        className={`inline-block w-3 h-3 rounded-full border ${swatchBorder} ${
                             themeVariant === "dark"
-                                ? "bg-gray-800 border-gray-600"
-                                : "bg-yellow-100 border-yellow-400"
+                                ? currentTheme?.["bg-primary-dark"] || ""
+                                : statusTokens.warning.solidBg
                         }`}
                     />
-                    <span className="text-gray-300 font-mono">
+                    <span className={`${valueClass} font-mono`}>
                         {themeVariant || "unknown"}
                     </span>
-                    <span className="text-gray-600">
-                        ({themeKeyCount} keys)
-                    </span>
+                    <Caption2>({themeKeyCount} keys)</Caption2>
                 </div>
             </div>
 
@@ -68,15 +71,20 @@ function ThemeViewerContent({ title }) {
                             key={key}
                             className="flex items-center gap-2 font-mono"
                         >
-                            <span className="text-violet-400 w-40 truncate">
+                            <span
+                                className={`${
+                                    currentTheme?.["text-secondary-medium"] ||
+                                    ""
+                                } w-40 truncate`}
+                            >
                                 {key}
                             </span>
-                            <span className="text-gray-400 truncate">
+                            <Caption2 className="font-mono truncate">
                                 {currentTheme?.[key] || "—"}
-                            </span>
+                            </Caption2>
                             {currentTheme?.[key] && key.startsWith("bg-") && (
                                 <span
-                                    className={`inline-block w-4 h-4 rounded border border-gray-600 ${currentTheme[key]}`}
+                                    className={`inline-block w-4 h-4 rounded border ${swatchBorder} ${currentTheme[key]}`}
                                 />
                             )}
                         </div>
@@ -91,20 +99,20 @@ function ThemeViewerContent({ title }) {
                 </SectionLabel>
                 <div className="space-y-1 font-mono">
                     <div>
-                        <span className="text-gray-500">debug: </span>
-                        <span className="text-gray-300">
+                        <Caption2 className="font-mono">debug: </Caption2>
+                        <span className={valueClass}>
                             {app?.debug !== undefined ? String(app.debug) : "—"}
                         </span>
                     </div>
                     <div>
-                        <span className="text-gray-500">identifier: </span>
-                        <span className="text-gray-300">
+                        <Caption2 className="font-mono">identifier: </Caption2>
+                        <span className={valueClass}>
                             {app?.identifier || "—"}
                         </span>
                     </div>
                     <div>
-                        <span className="text-gray-500">version: </span>
-                        <span className="text-gray-300">
+                        <Caption2 className="font-mono">version: </Caption2>
+                        <span className={valueClass}>
                             {app?.version || "—"}
                         </span>
                     </div>

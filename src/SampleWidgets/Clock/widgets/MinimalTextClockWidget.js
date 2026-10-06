@@ -7,8 +7,8 @@
  *
  * @package Clock
  */
-import { useState, useEffect, useRef } from "react";
-import { Panel } from "@trops/dash-react";
+import { useState, useEffect, useRef, useContext } from "react";
+import { Panel, Caption2, ThemeContext } from "@trops/dash-react";
 import { Widget } from "@trops/dash-core";
 
 function getTimeInZone(timezone) {
@@ -92,6 +92,7 @@ function MinimalTextClockContent({
     hourFormat,
     timezone,
 }) {
+    const { currentTheme } = useContext(ThemeContext);
     const [time, setTime] = useState(() => getTimeInZone(timezone));
     const prevMinuteRef = useRef(null);
     const [displayText, setDisplayText] = useState("");
@@ -132,34 +133,42 @@ function MinimalTextClockContent({
     return (
         <div className="flex flex-col justify-center h-full gap-3 px-1">
             {title && (
-                <div className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                <Caption2
+                    block
+                    className="font-medium uppercase tracking-wider"
+                >
                     {title}
-                </div>
+                </Caption2>
             )}
 
             {displayGreeting && (
-                <div className="text-sm text-gray-400 italic">
+                <Caption2 block className="text-sm italic">
                     {getGreeting(hours)}
-                </div>
+                </Caption2>
             )}
 
-            <div className="text-2xl font-light text-gray-100 leading-snug capitalize">
+            <div
+                className={`text-2xl font-light leading-snug capitalize ${
+                    currentTheme?.["text-primary-medium"] || ""
+                }`}
+            >
                 {displayText}
             </div>
 
             {displayNumeric && (
-                <div
-                    className="text-xs text-gray-500 font-mono"
+                <Caption2
+                    block
+                    className="font-mono"
                     style={{ fontVariantNumeric: "tabular-nums" }}
                 >
                     {numericTime}
-                </div>
+                </Caption2>
             )}
 
             {timezone && (
-                <div className="text-[10px] text-gray-600 font-mono">
+                <Caption2 block className="font-mono opacity-70">
                     {timezone}
-                </div>
+                </Caption2>
             )}
         </div>
     );

@@ -7,12 +7,22 @@
  *
  * @package DashSamples
  */
-import { useState, useCallback } from "react";
-import { Panel, SubHeading2, Button, SectionLabel } from "@trops/dash-react";
+import { useState, useCallback, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    SectionLabel,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useNotifications } from "@trops/dash-core";
 
 function NotificationContent({ title }) {
     const { notify, notificationTypes } = useNotifications();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
     const [resultLog, setResultLog] = useState([]);
 
     const addToLog = useCallback((type, result) => {
@@ -68,7 +78,9 @@ function NotificationContent({ title }) {
                     {notificationTypes.map((n) => (
                         <span
                             key={n.key}
-                            className="text-xs font-mono bg-gray-800/50 rounded px-2 py-1 text-rose-400"
+                            className={`text-xs font-mono rounded px-2 py-1 ${
+                                currentTheme?.["bg-primary-dark"] || ""
+                            } ${currentTheme?.["text-secondary-medium"] || ""}`}
                         >
                             {n.key}
                         </span>
@@ -81,26 +93,34 @@ function NotificationContent({ title }) {
                 <SectionLabel className="mb-1">Results</SectionLabel>
                 <div className="overflow-y-auto max-h-48 space-y-1">
                     {resultLog.length === 0 ? (
-                        <div className="text-xs text-gray-600 italic">
+                        <Caption2 block className="italic">
                             No notifications sent yet. Click a button above.
-                        </div>
+                        </Caption2>
                     ) : (
                         resultLog.map((entry, i) => (
                             <div
                                 key={i}
-                                className="text-xs font-mono bg-gray-800/50 rounded px-2 py-1"
+                                className={`text-xs font-mono rounded px-2 py-1 ${
+                                    currentTheme?.["bg-primary-dark"] || ""
+                                }`}
                             >
-                                <span className="text-gray-500">
+                                <Caption2 className="font-mono">
                                     {entry.timestamp}
-                                </span>{" "}
-                                <span className="text-rose-400">
+                                </Caption2>{" "}
+                                <span
+                                    className={
+                                        currentTheme?.[
+                                            "text-secondary-medium"
+                                        ] || ""
+                                    }
+                                >
                                     {entry.type}
                                 </span>{" "}
                                 <span
                                     className={
                                         entry.result?.success
-                                            ? "text-green-400"
-                                            : "text-red-400"
+                                            ? statusTokens.success.icon
+                                            : statusTokens.error.icon
                                     }
                                 >
                                     {JSON.stringify(entry.result)}

@@ -6,8 +6,8 @@
  *
  * @package Clock
  */
-import { useState, useEffect, useRef } from "react";
-import { Panel } from "@trops/dash-react";
+import { useState, useEffect, useRef, useContext } from "react";
+import { Panel, Caption2, ThemeContext } from "@trops/dash-react";
 import { Widget } from "@trops/dash-core";
 
 function getTimeInZone(timezone) {
@@ -29,6 +29,7 @@ function DigitalClockContent({
     blinkColon,
     timezone,
 }) {
+    const { currentTheme } = useContext(ThemeContext);
     const [time, setTime] = useState(() => getTimeInZone(timezone));
     const [colonVisible, setColonVisible] = useState(true);
     const blinkRef = useRef(null);
@@ -84,14 +85,19 @@ function DigitalClockContent({
     return (
         <div className="flex flex-col items-center justify-center h-full gap-2">
             {title && (
-                <div className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                <Caption2
+                    block
+                    className="font-medium uppercase tracking-wider"
+                >
                     {title}
-                </div>
+                </Caption2>
             )}
 
             <div className="flex items-baseline gap-0">
                 <span
-                    className="text-5xl font-bold text-gray-100 font-mono tracking-tight"
+                    className={`text-5xl font-bold font-mono tracking-tight ${
+                        currentTheme?.["text-primary-medium"] || ""
+                    }`}
                     style={{ fontVariantNumeric: "tabular-nums" }}
                 >
                     {hStr}
@@ -119,25 +125,30 @@ function DigitalClockContent({
                     )}
                 </span>
                 {!is24 && (
-                    <span className="text-sm font-semibold text-emerald-400 ml-2 uppercase">
+                    <span
+                        className={`text-sm font-semibold ml-2 uppercase ${
+                            currentTheme?.["text-secondary-medium"] || ""
+                        }`}
+                    >
                         {period}
                     </span>
                 )}
             </div>
 
             {displayDate && (
-                <div
-                    className="text-xs text-gray-400 font-mono tracking-wide"
+                <Caption2
+                    block
+                    className="font-mono tracking-wide"
                     style={{ fontVariantNumeric: "tabular-nums" }}
                 >
                     {dateStr}
-                </div>
+                </Caption2>
             )}
 
             {timezone && (
-                <div className="text-[10px] text-gray-500 font-mono">
+                <Caption2 block className="font-mono opacity-70">
                     {timezone}
-                </div>
+                </Caption2>
             )}
         </div>
     );

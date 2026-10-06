@@ -6,8 +6,13 @@
  *
  * @package Clock
  */
-import { useState, useEffect } from "react";
-import { Panel } from "@trops/dash-react";
+import { useState, useEffect, useContext } from "react";
+import {
+    Panel,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget } from "@trops/dash-core";
 
 function getTimeInZone(timezone) {
@@ -28,6 +33,8 @@ function AnalogClockContent({
     hourFormat,
     timezone,
 }) {
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
     const [time, setTime] = useState(() => getTimeInZone(timezone));
 
     useEffect(() => {
@@ -80,7 +87,8 @@ function AnalogClockContent({
                 y1={y1}
                 x2={x2}
                 y2={y2}
-                stroke="#94a3b8"
+                stroke="currentColor"
+                strokeOpacity="0.7"
                 strokeWidth="2.5"
                 strokeLinecap="round"
             />
@@ -102,7 +110,8 @@ function AnalogClockContent({
                 y1={y1}
                 x2={x2}
                 y2={y2}
-                stroke="#475569"
+                stroke="currentColor"
+                strokeOpacity="0.35"
                 strokeWidth="1"
                 strokeLinecap="round"
             />
@@ -112,13 +121,18 @@ function AnalogClockContent({
     return (
         <div className="flex flex-col items-center justify-center h-full gap-2">
             {title && (
-                <div className="text-xs text-gray-400 font-medium uppercase tracking-wider">
+                <Caption2
+                    block
+                    className="font-medium uppercase tracking-wider"
+                >
                     {title}
-                </div>
+                </Caption2>
             )}
             <svg
                 viewBox="0 0 200 200"
-                className="w-full max-w-[180px] aspect-square"
+                className={`w-44 max-w-full aspect-square ${
+                    currentTheme?.["text-primary-medium"] || ""
+                }`}
             >
                 {/* Clock face */}
                 <circle
@@ -126,7 +140,8 @@ function AnalogClockContent({
                     cy={cy}
                     r={radius}
                     fill="none"
-                    stroke="#334155"
+                    stroke="currentColor"
+                    strokeOpacity="0.25"
                     strokeWidth="2"
                 />
 
@@ -140,7 +155,7 @@ function AnalogClockContent({
                     y1={cy}
                     x2={cx + 50 * Math.sin((hourAngle * Math.PI) / 180)}
                     y2={cy - 50 * Math.cos((hourAngle * Math.PI) / 180)}
-                    stroke="#e2e8f0"
+                    stroke="currentColor"
                     strokeWidth="4"
                     strokeLinecap="round"
                 />
@@ -151,7 +166,8 @@ function AnalogClockContent({
                     y1={cy}
                     x2={cx + 70 * Math.sin((minuteAngle * Math.PI) / 180)}
                     y2={cy - 70 * Math.cos((minuteAngle * Math.PI) / 180)}
-                    stroke="#cbd5e1"
+                    stroke="currentColor"
+                    strokeOpacity="0.85"
                     strokeWidth="2.5"
                     strokeLinecap="round"
                 />
@@ -159,26 +175,35 @@ function AnalogClockContent({
                 {/* Second hand */}
                 {displaySeconds && (
                     <line
+                        className={statusTokens.error.icon}
                         x1={cx}
                         y1={cy + 15}
                         x2={cx + 75 * Math.sin((secondAngle * Math.PI) / 180)}
                         y2={cy - 75 * Math.cos((secondAngle * Math.PI) / 180)}
-                        stroke="#ef4444"
+                        stroke="currentColor"
                         strokeWidth="1.5"
                         strokeLinecap="round"
                     />
                 )}
 
                 {/* Center dot */}
-                <circle cx={cx} cy={cy} r="4" fill="#e2e8f0" />
+                <circle cx={cx} cy={cy} r="4" fill="currentColor" />
                 {displaySeconds && (
-                    <circle cx={cx} cy={cy} r="2.5" fill="#ef4444" />
+                    <circle
+                        className={statusTokens.error.icon}
+                        cx={cx}
+                        cy={cy}
+                        r="2.5"
+                        fill="currentColor"
+                    />
                 )}
             </svg>
 
             {displayDigital && (
                 <div
-                    className="text-sm text-gray-300 font-mono tracking-wider"
+                    className={`text-sm font-mono tracking-wider ${
+                        currentTheme?.["text-primary-medium"] || ""
+                    }`}
                     style={{ fontVariantNumeric: "tabular-nums" }}
                 >
                     {digitalTime}
@@ -186,9 +211,9 @@ function AnalogClockContent({
             )}
 
             {timezone && (
-                <div className="text-[10px] text-gray-500 font-mono">
+                <Caption2 block className="font-mono">
                     {timezone}
-                </div>
+                </Caption2>
             )}
         </div>
     );

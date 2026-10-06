@@ -7,8 +7,8 @@
  *
  * @package Clock
  */
-import { useState, useEffect } from "react";
-import { Panel } from "@trops/dash-react";
+import { useState, useEffect, useContext } from "react";
+import { Panel, Caption2, ThemeContext } from "@trops/dash-react";
 import { Widget } from "@trops/dash-core";
 
 function getTimeInZone(timezone) {
@@ -23,7 +23,9 @@ function getTimeInZone(timezone) {
 }
 
 function FlipCard({ value }) {
+    const { currentTheme } = useContext(ThemeContext);
     const display = String(value).padStart(2, "0");
+    const digitText = currentTheme?.["text-primary-medium"] || "";
 
     return (
         <div
@@ -37,11 +39,12 @@ function FlipCard({ value }) {
         >
             {/* Top half */}
             <div
-                className="flex items-end justify-center flex-1"
-                style={{ backgroundColor: "#1a1a1a" }}
+                className={`flex items-end justify-center flex-1 ${
+                    currentTheme?.["bg-primary-very-dark"] || ""
+                }`}
             >
                 <span
-                    className="text-3xl font-bold text-gray-100 font-mono leading-none"
+                    className={`text-3xl font-bold font-mono leading-none ${digitText}`}
                     style={{
                         fontVariantNumeric: "tabular-nums",
                         transform: "translateY(50%)",
@@ -53,11 +56,12 @@ function FlipCard({ value }) {
 
             {/* Bottom half */}
             <div
-                className="flex items-start justify-center flex-1"
-                style={{ backgroundColor: "#222222" }}
+                className={`flex items-start justify-center flex-1 ${
+                    currentTheme?.["bg-primary-dark"] || ""
+                }`}
             >
                 <span
-                    className="text-3xl font-bold text-gray-200 font-mono leading-none"
+                    className={`text-3xl font-bold font-mono leading-none ${digitText}`}
                     style={{
                         fontVariantNumeric: "tabular-nums",
                         transform: "translateY(-50%)",
@@ -69,22 +73,25 @@ function FlipCard({ value }) {
 
             {/* Divider line */}
             <div
-                className="absolute left-0 right-0"
-                style={{
-                    top: "50%",
-                    height: "1px",
-                    backgroundColor: "rgba(0,0,0,0.6)",
-                }}
+                className={`absolute left-0 right-0 border-t ${
+                    currentTheme?.["border-primary-dark"] || ""
+                }`}
+                style={{ top: "50%" }}
             />
         </div>
     );
 }
 
 function ColonSeparator() {
+    const { currentTheme } = useContext(ThemeContext);
     return (
-        <div className="flex flex-col items-center justify-center gap-2 mx-1">
-            <div className="w-2 h-2 rounded-full bg-gray-500" />
-            <div className="w-2 h-2 rounded-full bg-gray-500" />
+        <div
+            className={`flex flex-col items-center justify-center gap-2 mx-1 ${
+                currentTheme?.["text-primary-medium"] || ""
+            }`}
+        >
+            <div className="w-2 h-2 rounded-full bg-current opacity-50" />
+            <div className="w-2 h-2 rounded-full bg-current opacity-50" />
         </div>
     );
 }
@@ -129,9 +136,12 @@ function FlipClockContent({
     return (
         <div className="flex flex-col items-center justify-center h-full gap-3">
             {title && (
-                <div className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+                <Caption2
+                    block
+                    className="font-medium uppercase tracking-wider"
+                >
                     {title}
-                </div>
+                </Caption2>
             )}
 
             <div className="flex items-center">
@@ -145,22 +155,25 @@ function FlipClockContent({
                     </>
                 )}
                 {!is24 && (
-                    <div className="ml-2 text-sm font-semibold text-gray-400 self-end mb-1">
+                    <Caption2
+                        block
+                        className="ml-2 text-sm font-semibold self-end mb-1"
+                    >
                         {period}
-                    </div>
+                    </Caption2>
                 )}
             </div>
 
             {displayDate && (
-                <div className="text-xs text-gray-500 font-mono tracking-wide">
+                <Caption2 block className="font-mono tracking-wide">
                     {dateStr}
-                </div>
+                </Caption2>
             )}
 
             {timezone && (
-                <div className="text-[10px] text-gray-600 font-mono">
+                <Caption2 block className="font-mono opacity-70">
                     {timezone}
-                </div>
+                </Caption2>
             )}
         </div>
     );

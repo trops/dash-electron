@@ -3,7 +3,8 @@
  *
  * Scrollable message list that auto-scrolls to the bottom on new messages.
  */
-import { useEffect, useRef } from "react";
+import { useContext, useEffect, useRef } from "react";
+import { ThemeContext, useStatusTokens, EmptyState } from "@trops/dash-react";
 import { MessageBubble } from "./MessageBubble";
 
 export const ChatMessages = ({
@@ -12,6 +13,8 @@ export const ChatMessages = ({
     streamingText,
 }) => {
     const scrollRef = useRef(null);
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     // Auto-scroll to bottom when messages change or during streaming
     useEffect(() => {
@@ -22,11 +25,11 @@ export const ChatMessages = ({
 
     if (messages.length === 0) {
         return (
-            <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
-                <div className="text-center space-y-1">
-                    <div className="text-2xl">&#x1f4ac;</div>
-                    <div>Send a message to start chatting</div>
-                </div>
+            <div className="flex-1 flex items-center justify-center">
+                <EmptyState
+                    icon={<div className="text-2xl">&#x1f4ac;</div>}
+                    description="Send a message to start chatting"
+                />
             </div>
         );
     }
@@ -49,6 +52,8 @@ export const ChatMessages = ({
                         message={message}
                         isStreaming={isStreaming}
                         streamingText={isStreaming ? streamingText : ""}
+                        currentTheme={currentTheme}
+                        statusTokens={statusTokens}
                     />
                 );
             })}

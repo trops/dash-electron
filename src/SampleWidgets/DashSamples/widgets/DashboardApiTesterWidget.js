@@ -11,8 +11,16 @@
  *
  * @package DashSamples
  */
-import { useState, useEffect, useCallback } from "react";
-import { Panel, SubHeading2, Button2, SectionLabel } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    Button2,
+    SectionLabel,
+    Caption2,
+    InputText,
+    ThemeContext,
+} from "@trops/dash-react";
 import { Widget, DashboardActionsApi } from "@trops/dash-core";
 
 function Section({ title, children }) {
@@ -38,6 +46,8 @@ function DashboardApiTesterContent({ title }) {
     const [pageInput, setPageInput] = useState("");
     const [dashInput, setDashInput] = useState("");
     const [readState, setReadState] = useState({});
+    const { currentTheme } = useContext(ThemeContext);
+    const valueClass = currentTheme?.["text-secondary-medium"] || "";
 
     // Poll read methods so the panel reflects current state
     useEffect(() => {
@@ -73,12 +83,15 @@ function DashboardApiTesterContent({ title }) {
                 <Btn onClick={() => DashboardActionsApi.goBack()} color="slate">
                     goBack()
                 </Btn>
-                <input
+                <InputText
                     type="text"
                     value={pageInput}
-                    onChange={(e) => setPageInput(e.target.value)}
+                    onChange={(value) => setPageInput(value)}
                     placeholder="Page name"
-                    className="px-2 py-1 bg-gray-800 border border-gray-600 rounded-md text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 w-32"
+                    className="w-32"
+                    height="h-7"
+                    padding="px-2 py-1"
+                    inputClassName="text-xs"
                 />
                 <Btn
                     onClick={() =>
@@ -130,12 +143,15 @@ function DashboardApiTesterContent({ title }) {
 
             {/* Workspace Navigation */}
             <Section title="Dashboard Navigation">
-                <input
+                <InputText
                     type="text"
                     value={dashInput}
-                    onChange={(e) => setDashInput(e.target.value)}
+                    onChange={(value) => setDashInput(value)}
                     placeholder="Dashboard name"
-                    className="px-2 py-1 bg-gray-800 border border-gray-600 rounded-md text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 w-40"
+                    className="w-40"
+                    height="h-7"
+                    padding="px-2 py-1"
+                    inputClassName="text-xs"
                 />
                 <Btn
                     onClick={() =>
@@ -156,47 +172,65 @@ function DashboardApiTesterContent({ title }) {
             {/* Read Methods Panel */}
             <div className="flex flex-col gap-1 mt-2">
                 <SectionLabel>Read Methods (window.__dashState)</SectionLabel>
-                <div className="bg-gray-800/50 rounded p-2 text-xs font-mono text-gray-300 space-y-1">
+                <div
+                    className={`${currentTheme?.["bg-primary-dark"] || ""} ${
+                        currentTheme?.["text-primary-medium"] || ""
+                    } rounded p-2 text-xs font-mono space-y-1`}
+                >
                     <div>
-                        <span className="text-gray-500">currentPageName:</span>{" "}
-                        <span className="text-emerald-400">
+                        <Caption2 className="font-mono">
+                            currentPageName:
+                        </Caption2>{" "}
+                        <span className={valueClass}>
                             {readState.currentPageName || "null"}
                         </span>
                     </div>
                     <div>
-                        <span className="text-gray-500">currentPageId:</span>{" "}
-                        <span className="text-emerald-400">
+                        <Caption2 className="font-mono">
+                            currentPageId:
+                        </Caption2>{" "}
+                        <span className={valueClass}>
                             {readState.currentPageId || "null"}
                         </span>
                     </div>
                     <div>
-                        <span className="text-gray-500">
+                        <Caption2 className="font-mono">
                             currentDashboardName:
-                        </span>{" "}
-                        <span className="text-emerald-400">
+                        </Caption2>{" "}
+                        <span className={valueClass}>
                             {readState.currentDashboardName || "null"}
                         </span>
                     </div>
                     <div>
-                        <span className="text-gray-500">
+                        <Caption2 className="font-mono">
                             currentDashboardId:
-                        </span>{" "}
-                        <span className="text-emerald-400">
+                        </Caption2>{" "}
+                        <span className={valueClass}>
                             {readState.currentDashboardId || "null"}
                         </span>
                     </div>
                     <div>
-                        <span className="text-gray-500">listPages():</span>
+                        <Caption2 className="font-mono">listPages():</Caption2>
                         {(readState.pages || []).length === 0 ? (
-                            <span className="text-gray-600 italic"> []</span>
+                            <Caption2 className="font-mono italic">
+                                {" "}
+                                []
+                            </Caption2>
                         ) : (
                             <ul className="ml-4 mt-1 space-y-0.5">
                                 {(readState.pages || []).map((p) => (
-                                    <li key={p.id} className="text-amber-400">
+                                    <li
+                                        key={p.id}
+                                        className={
+                                            currentTheme?.[
+                                                "text-tertiary-medium"
+                                            ] || ""
+                                        }
+                                    >
                                         [{p.order}] {p.name}{" "}
-                                        <span className="text-gray-600">
+                                        <Caption2 className="font-mono">
                                             ({p.id})
-                                        </span>
+                                        </Caption2>
                                     </li>
                                 ))}
                             </ul>

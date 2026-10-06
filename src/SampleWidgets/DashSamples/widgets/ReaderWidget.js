@@ -6,12 +6,22 @@
  *
  * @package DashSamples
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, Button3, SectionLabel } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    Button3,
+    SectionLabel,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useWidgetEvents } from "@trops/dash-core";
 
 function ReaderContent({ title }) {
     const { listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
     const [notes, setNotes] = useState([]);
     const [listenerStatus, setListenerStatus] = useState("not configured");
 
@@ -62,13 +72,11 @@ function ReaderContent({ title }) {
                     <span
                         className={`inline-block w-2 h-2 rounded-full ${
                             listenerStatus === "listening"
-                                ? "bg-green-400"
-                                : "bg-yellow-500"
+                                ? statusTokens.success.solidBg
+                                : statusTokens.warning.solidBg
                         }`}
                     />
-                    <span className="text-xs text-gray-400">
-                        {listenerStatus}
-                    </span>
+                    <Caption2>{listenerStatus}</Caption2>
                 </div>
             </div>
 
@@ -83,30 +91,40 @@ function ReaderContent({ title }) {
 
             <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
                 {notes.length === 0 ? (
-                    <div className="text-xs text-gray-600 italic">
+                    <Caption2 block className="italic">
                         No notes received yet. Save a note in NotepadWidget.
-                    </div>
+                    </Caption2>
                 ) : (
                     notes.map((note, i) => (
                         <div
                             key={i}
-                            className="bg-gray-800/50 rounded-md px-3 py-2 border border-gray-700/50"
+                            className={`rounded-md px-3 py-2 border ${
+                                currentTheme?.["bg-primary-dark"] || ""
+                            } ${currentTheme?.["border-primary-dark"] || ""}`}
                         >
                             <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs text-teal-400 font-medium">
+                                <span
+                                    className={`text-xs font-medium ${
+                                        currentTheme?.[
+                                            "text-secondary-medium"
+                                        ] || ""
+                                    }`}
+                                >
                                     {new Date(
                                         note.savedAt
                                     ).toLocaleTimeString()}
                                 </span>
-                                <span className="text-xs text-gray-500">
-                                    {note.length} chars
-                                </span>
+                                <Caption2>{note.length} chars</Caption2>
                             </div>
-                            <div className="text-sm text-gray-300 whitespace-pre-wrap break-words">
+                            <div
+                                className={`text-sm whitespace-pre-wrap break-words ${
+                                    currentTheme?.["text-primary-medium"] || ""
+                                }`}
+                            >
                                 {note.content || (
-                                    <span className="text-gray-600 italic">
+                                    <Caption2 className="italic">
                                         (empty)
-                                    </span>
+                                    </Caption2>
                                 )}
                             </div>
                         </div>

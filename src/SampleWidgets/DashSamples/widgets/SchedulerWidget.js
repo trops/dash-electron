@@ -7,12 +7,16 @@
  *
  * @package DashSamples
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useContext } from "react";
 import {
     Panel,
     SubHeading2,
     FontAwesomeIcon,
     SectionLabel,
+    Caption2,
+    Tag3,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import { Widget, useScheduler } from "@trops/dash-core";
 
@@ -20,6 +24,12 @@ function SchedulerContent({ title }) {
     const [refreshCount, setRefreshCount] = useState(0);
     const [reportCount, setReportCount] = useState(0);
     const [eventLog, setEventLog] = useState([]);
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+    const rowClass = `text-xs font-mono ${
+        currentTheme?.["bg-primary-dark"] || ""
+    } ${currentTheme?.["text-primary-medium"] || ""} rounded px-2 py-1`;
+    const accentClass = currentTheme?.["text-secondary-medium"] || "";
 
     const addToLog = useCallback((taskKey) => {
         setEventLog((prev) => [
@@ -51,15 +61,15 @@ function SchedulerContent({ title }) {
                 <SectionLabel className="mb-1">Task States</SectionLabel>
                 <div className="space-y-1">
                     {tasks.length === 0 ? (
-                        <div className="text-xs text-gray-600 italic">
+                        <Caption2 block className="italic">
                             No tasks configured. Open Settings &gt; Schedule to
                             add one.
-                        </div>
+                        </Caption2>
                     ) : (
                         tasks.map((task) => (
                             <div
                                 key={task.taskKey}
-                                className="text-xs font-mono bg-gray-800/50 rounded px-2 py-1 flex items-center gap-2"
+                                className={`${rowClass} flex items-center gap-2`}
                             >
                                 <FontAwesomeIcon
                                     icon={
@@ -69,23 +79,23 @@ function SchedulerContent({ title }) {
                                     }
                                     className={
                                         task.enabled
-                                            ? "text-green-400"
-                                            : "text-gray-600"
+                                            ? statusTokens.success.icon
+                                            : "opacity-50"
                                     }
                                 />
-                                <span className="text-indigo-400">
+                                <span className={accentClass}>
                                     {task.taskKey}
                                 </span>
-                                <span className="text-gray-500">
+                                <Caption2 className="font-mono">
                                     fires: {task.fireCount || 0}
-                                </span>
+                                </Caption2>
                                 {task.lastFiredAt && (
-                                    <span className="text-gray-500">
+                                    <Caption2 className="font-mono">
                                         last:{" "}
                                         {new Date(
                                             task.lastFiredAt
                                         ).toLocaleTimeString()}
-                                    </span>
+                                    </Caption2>
                                 )}
                             </div>
                         ))
@@ -97,12 +107,12 @@ function SchedulerContent({ title }) {
             <div>
                 <SectionLabel className="mb-1">Declared Tasks</SectionLabel>
                 <div className="flex flex-wrap gap-1">
-                    <span className="text-xs font-mono bg-gray-800/50 rounded px-2 py-1 text-indigo-400">
+                    <Tag3 className="font-mono" padding="px-2 py-1">
                         refreshData (fired: {refreshCount})
-                    </span>
-                    <span className="text-xs font-mono bg-gray-800/50 rounded px-2 py-1 text-indigo-400">
+                    </Tag3>
+                    <Tag3 className="font-mono" padding="px-2 py-1">
                         generateReport (fired: {reportCount})
-                    </span>
+                    </Tag3>
                 </div>
             </div>
 
@@ -111,23 +121,22 @@ function SchedulerContent({ title }) {
                 <SectionLabel className="mb-1">Event Log</SectionLabel>
                 <div className="overflow-y-auto max-h-48 space-y-1">
                     {eventLog.length === 0 ? (
-                        <div className="text-xs text-gray-600 italic">
+                        <Caption2 block className="italic">
                             No fires yet. Configure a schedule in Settings &gt;
                             Schedule.
-                        </div>
+                        </Caption2>
                     ) : (
                         eventLog.map((entry, i) => (
-                            <div
-                                key={i}
-                                className="text-xs font-mono bg-gray-800/50 rounded px-2 py-1"
-                            >
-                                <span className="text-gray-500">
+                            <div key={i} className={rowClass}>
+                                <Caption2 className="font-mono">
                                     {entry.timestamp}
-                                </span>{" "}
-                                <span className="text-indigo-400">
+                                </Caption2>{" "}
+                                <span className={accentClass}>
                                     {entry.taskKey}
                                 </span>{" "}
-                                <span className="text-green-400">fired</span>
+                                <span className={statusTokens.success.icon}>
+                                    fired
+                                </span>
                             </div>
                         ))
                     )}
