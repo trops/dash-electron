@@ -6,8 +6,18 @@
  *
  * @package Slack
  */
-import { useState } from "react";
-import { Button, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useContext } from "react";
+import {
+    AlertBanner,
+    Button,
+    Caption2,
+    InputText,
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
@@ -15,6 +25,8 @@ function SlackSearchMessagesContent({ title, widgetId }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("slack");
     const { publishEvent } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const [query, setQuery] = useState("");
     const [results, setResults] = useState([]);
@@ -76,6 +88,17 @@ function SlackSearchMessagesContent({ title, widgetId }) {
         }
     };
 
+    const rowSurface = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["hover-bg-primary-dark"] || ""
+    }`;
+    const selectedSurface = `border ${
+        currentTheme?.["bg-secondary-dark"] || ""
+    } ${currentTheme?.["text-secondary-light"] || ""} ${
+        currentTheme?.["border-secondary-medium"] || ""
+    }`;
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
+
     return (
         <div className="flex flex-col gap-4 h-full text-sm overflow-y-auto">
             <SubHeading2 title={title} />
@@ -85,35 +108,38 @@ function SlackSearchMessagesContent({ title, widgetId }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Search Input */}
             <div className="space-y-2">
                 <SubHeading3 title="Search Messages" />
-                <div className="flex gap-2">
-                    <input
+                <div className="flex flex-wrap items-center gap-2">
+                    <InputText
                         type="text"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                         placeholder="Search Slack messages..."
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                        className="flex-1 min-w-0"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs"
                     />
                     <Button
                         size="sm"
@@ -134,23 +160,23 @@ function SlackSearchMessagesContent({ title, widgetId }) {
                             onClick={() => handleSelectMessage(msg)}
                             className={`w-full text-left px-2 py-2 rounded text-xs transition-colors ${
                                 selectedTs === (msg.ts || msg.timestamp)
-                                    ? "bg-purple-900/50 border border-purple-500"
-                                    : "bg-white/5 hover:bg-white/10"
+                                    ? selectedSurface
+                                    : `${rowSurface} ${bodyText}`
                             }`}
                         >
                             <div className="flex items-center gap-2 mb-1">
-                                <span className="text-purple-300 font-semibold">
+                                <span className={`font-semibold ${accentText}`}>
                                     {msg.user || msg.username || "unknown"}
                                 </span>
-                                <span className="text-gray-600">in</span>
-                                <span className="text-gray-400">
+                                <Caption2 className="opacity-70">in</Caption2>
+                                <Caption2>
                                     #{msg.channel?.name || msg.channel || ""}
-                                </span>
-                                <span className="text-gray-500">
+                                </Caption2>
+                                <Caption2>
                                     {formatTimestamp(msg.ts || msg.timestamp)}
-                                </span>
+                                </Caption2>
                             </div>
-                            <div className="text-gray-300 whitespace-pre-wrap break-words">
+                            <div className="whitespace-pre-wrap break-words">
                                 {msg.text || ""}
                             </div>
                         </button>
@@ -159,24 +185,18 @@ function SlackSearchMessagesContent({ title, widgetId }) {
             )}
 
             {!loading && results.length === 0 && query && (
-                <div className="text-xs text-gray-500">
+                <Caption2 block>
                     No results. Try a different search query.
-                </div>
+                </Caption2>
             )}
 
             {/* Result */}
             {result && (
-                <div
-                    className={`p-2 rounded text-xs border ${
-                        result.type === "error"
-                            ? "bg-red-900/30 border-red-700 text-red-300"
-                            : "bg-green-900/30 border-green-700 text-green-300"
-                    }`}
-                >
+                <AlertBanner variant={result.type} size="compact">
                     <pre className="whitespace-pre-wrap overflow-auto max-h-32">
                         {result.text}
                     </pre>
-                </div>
+                </AlertBanner>
             )}
         </div>
     );

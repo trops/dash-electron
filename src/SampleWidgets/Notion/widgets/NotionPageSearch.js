@@ -18,8 +18,17 @@
  *
  * @package Notion
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Button, Panel, SubHeading2 } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+    AlertBanner,
+    Button,
+    Caption2,
+    InputText,
+    Panel,
+    SubHeading2,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse, parseNotionTextEntries } from "../utils/mcpUtils";
 
@@ -59,6 +68,23 @@ function NotionPageSearchContent({ title, initialQuery, debounceMs }) {
     const { isConnected, isConnecting, error, callTool, status } =
         useMcpProvider("notion");
     const { publishEvent } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+
+    // Row surfaces come from the theme so the list follows light/dark.
+    const rowSurface = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["hover-bg-primary-dark"] || ""
+    } border-transparent`;
+    const selectedSurface = `${currentTheme?.["bg-secondary-dark"] || ""} ${
+        currentTheme?.["text-secondary-light"] || ""
+    } ${currentTheme?.["border-secondary-medium"] || ""}`;
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const databaseBadge = `${currentTheme?.["bg-secondary-dark"] || ""} ${
+        currentTheme?.["text-secondary-light"] || ""
+    }`;
+    const pageBadge = `border ${currentTheme?.["border-primary-dark"] || ""} ${
+        currentTheme?.["text-primary-medium"] || ""
+    } opacity-70`;
 
     const [query, setQuery] = useState(initialQuery || "");
     const [debouncedQuery, setDebouncedQuery] = useState(initialQuery || "");
@@ -164,41 +190,43 @@ function NotionPageSearchContent({ title, initialQuery, debounceMs }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         !isConnected && !isConnecting
-                            ? "bg-gray-500"
+                            ? currentTheme?.["bg-primary-medium"] || ""
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
+                            ? statusTokens.error.solidBg
                             : loading
-                            ? "bg-blue-500 animate-pulse"
-                            : "bg-green-500"
+                            ? `${statusTokens.info.solidBg} animate-pulse`
+                            : statusTokens.success.solidBg
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
+                <Caption2 className="font-mono">{status}</Caption2>
                 {lastFetchedQuery !== null && (
-                    <span className="text-gray-600 truncate">
+                    <Caption2 className="opacity-70 truncate">
                         {lastFetchedQuery
                             ? `"${lastFetchedQuery}" → ${results.length}`
                             : "—"}
-                    </span>
+                    </Caption2>
                 )}
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Search input — onSubmit (Enter) bypasses the debounce. */}
-            <form onSubmit={submitForm} className="flex items-center gap-2">
-                <input
+            <form
+                onSubmit={submitForm}
+                className="flex flex-wrap items-center gap-2"
+            >
+                <InputText
                     type="text"
                     value={query}
-                    onChange={(e) => setQuery(e.target.value)}
+                    onChange={(value) => setQuery(value)}
                     placeholder="Search Notion pages…"
                     disabled={!isConnected}
-                    className="flex-1 px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500 disabled:opacity-40"
+                    className="flex-1 min-w-0"
+                    inputClassName="text-sm disabled:opacity-40"
                 />
                 <Button
                     type="submit"
@@ -213,16 +241,16 @@ function NotionPageSearchContent({ title, initialQuery, debounceMs }) {
                 branch is mutually exclusive so the user never sees a
                 blank or ambiguous list. */}
             {!isConnected && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     Connect the Notion provider in Settings to search pages.
-                </div>
+                </Caption2>
             )}
 
             {isConnected && !query.trim() && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     Type to search Notion pages and databases. Click a result to
                     publish pageSelected for a paired viewer widget.
-                </div>
+                </Caption2>
             )}
 
             {isConnected &&
@@ -231,9 +259,9 @@ function NotionPageSearchContent({ title, initialQuery, debounceMs }) {
                 !fetchError &&
                 results.length === 0 &&
                 lastFetchedQuery && (
-                    <div className="text-xs text-gray-500 italic">
+                    <Caption2 block className="italic">
                         No pages match "{lastFetchedQuery}".
-                    </div>
+                    </Caption2>
                 )}
 
             {results.length > 0 && (
@@ -252,30 +280,35 @@ function NotionPageSearchContent({ title, initialQuery, debounceMs }) {
                                 type="button"
                                 onClick={() => handleSelect(page)}
                                 className={`w-full text-left px-3 py-2 rounded text-xs transition-colors border ${
-                                    isSelected
-                                        ? "bg-purple-900/40 border-purple-500"
-                                        : "bg-white/5 hover:bg-white/10 border-transparent"
+                                    isSelected ? selectedSurface : rowSurface
                                 }`}
                             >
                                 <div className="flex items-center justify-between gap-2">
-                                    <span className="text-gray-200 truncate flex-1">
+                                    <span
+                                        className={`truncate flex-1 ${
+                                            isSelected ? "" : bodyText
+                                        }`}
+                                    >
                                         {getPageTitle(page)}
                                     </span>
                                     <span
-                                        className={`px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide shrink-0 ${
+                                        className={`px-1.5 py-0.5 rounded text-xs uppercase tracking-wide shrink-0 ${
                                             isDatabase
-                                                ? "bg-indigo-900/50 text-indigo-300"
-                                                : "bg-gray-700/50 text-gray-400"
+                                                ? databaseBadge
+                                                : pageBadge
                                         }`}
                                     >
                                         {isDatabase ? "db" : "page"}
                                     </span>
                                 </div>
                                 {page.last_edited_time && (
-                                    <div className="text-[11px] text-gray-500 font-mono mt-0.5">
+                                    <Caption2
+                                        block
+                                        className="font-mono mt-0.5"
+                                    >
                                         edited{" "}
                                         {relativeTime(page.last_edited_time)}
-                                    </div>
+                                    </Caption2>
                                 )}
                             </button>
                         );
@@ -286,9 +319,11 @@ function NotionPageSearchContent({ title, initialQuery, debounceMs }) {
             {/* Per-fetch error — distinct from the provider-level
                 error rendered above. */}
             {fetchError && (
-                <div className="text-xs text-red-400">
-                    Search failed: {fetchError}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={`Search failed: ${fetchError}`}
+                />
             )}
         </div>
     );

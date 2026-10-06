@@ -22,12 +22,16 @@
  *
  * @package Filesystem
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
 import {
     Panel,
     SubHeading2,
     FontAwesomeIcon,
     Button2,
+    AlertBanner,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { extractMcpText, isMcpError } from "../utils/mcpUtils";
@@ -104,6 +108,15 @@ function DirectoryNode({
     onToggle,
     onSelectFile,
 }) {
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+    // Theme-driven row + icon colors so the tree follows light/dark.
+    const rowHover = currentTheme?.["hover-bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const mutedIcon = `${bodyText} opacity-70`;
+    const selectedSurface = `${currentTheme?.["bg-secondary-dark"] || ""} ${
+        currentTheme?.["text-secondary-light"] || ""
+    } ${currentTheme?.["border-secondary-medium"] || ""}`;
     const indent = { paddingLeft: `${Math.min(depth, 6) * 12}px` };
     const isLoading = loadingPaths.has(path);
     const err = errorByPath[path];
@@ -116,7 +129,7 @@ function DirectoryNode({
                 type="button"
                 onClick={() => onToggle(path)}
                 style={indent}
-                className="w-full text-left px-2 py-1 text-xs flex items-center gap-2 rounded hover:bg-white/5"
+                className={`w-full text-left px-2 py-1 text-xs flex items-center gap-2 rounded ${rowHover}`}
             >
                 <FontAwesomeIcon
                     icon={
@@ -126,46 +139,48 @@ function DirectoryNode({
                             ? "chevron-down"
                             : "chevron-right"
                     }
-                    className={`text-gray-500 shrink-0 ${
+                    className={`${bodyText} opacity-50 shrink-0 ${
                         isLoading ? "animate-spin" : ""
                     }`}
                 />
                 <FontAwesomeIcon
                     icon={expanded ? "folder-open" : "folder"}
-                    className="text-yellow-400 shrink-0"
+                    className={`${statusTokens.warning.icon} shrink-0`}
                 />
-                <span className="text-gray-200 truncate flex-1">{name}</span>
+                <span className={`truncate flex-1 ${bodyText}`}>{name}</span>
             </button>
             {expanded && err && (
                 <div
                     style={{ paddingLeft: `${Math.min(depth + 1, 7) * 12}px` }}
-                    className="text-[11px] text-red-400 px-2 py-1"
+                    className={`text-xs px-2 py-1 ${statusTokens.error.icon}`}
                 >
                     {err}
                 </div>
             )}
             {expanded && overDepth && !children && (
-                <div
+                <Caption2
+                    block
                     style={{ paddingLeft: `${Math.min(depth + 1, 7) * 12}px` }}
-                    className="text-[11px] text-gray-500 italic px-2 py-1"
+                    className="italic px-2 py-1"
                 >
                     depth limit ({maxDepth}). Increase Max depth in widget
                     settings to load deeper.
-                </div>
+                </Caption2>
             )}
             {expanded &&
                 children &&
                 children.length === 0 &&
                 !isLoading &&
                 !err && (
-                    <div
+                    <Caption2
+                        block
                         style={{
                             paddingLeft: `${Math.min(depth + 1, 7) * 12}px`,
                         }}
-                        className="text-[11px] text-gray-500 italic px-2 py-1"
+                        className="italic px-2 py-1"
                     >
                         empty
-                    </div>
+                    </Caption2>
                 )}
             {expanded && children && children.length > 0 && (
                 <div>
@@ -206,15 +221,21 @@ function DirectoryNode({
                                 }}
                                 className={`w-full text-left px-2 py-1 text-xs flex items-center gap-2 rounded border ${
                                     isSelected
-                                        ? "bg-emerald-900/40 border-emerald-600"
-                                        : "border-transparent hover:bg-white/5"
+                                        ? selectedSurface
+                                        : `border-transparent ${rowHover}`
                                 }`}
                             >
                                 <FontAwesomeIcon
                                     icon={fileIcon(entry.name)}
-                                    className="text-gray-400 shrink-0"
+                                    className={`${
+                                        isSelected ? "" : mutedIcon
+                                    } shrink-0`}
                                 />
-                                <span className="text-gray-300 truncate flex-1">
+                                <span
+                                    className={`truncate flex-1 ${
+                                        isSelected ? "" : bodyText
+                                    }`}
+                                >
                                     {entry.name}
                                 </span>
                             </button>
@@ -230,6 +251,8 @@ function FilesystemDirectoryViewerContent({ title, rootPath, maxDepth }) {
     const { isConnected, isConnecting, error, callTool, status } =
         useMcpProvider("filesystem");
     const { publishEvent } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     // `childrenByPath` is the tree's authoritative state. Setting a
     // key collapses naturally to "fetched + expanded"; deleting a key
@@ -324,52 +347,52 @@ function FilesystemDirectoryViewerContent({ title, rootPath, maxDepth }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         !isConnected && !isConnecting
-                            ? "bg-gray-500"
+                            ? currentTheme?.["bg-primary-medium"] || ""
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
+                            ? statusTokens.error.solidBg
                             : loadingPaths.size > 0
-                            ? "bg-blue-500 animate-pulse"
-                            : "bg-green-500"
+                            ? `${statusTokens.info.solidBg} animate-pulse`
+                            : statusTokens.success.solidBg
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
+                <Caption2 className="font-mono">{status}</Caption2>
                 {rootPath && (
-                    <span className="text-gray-600 truncate">({rootPath})</span>
+                    <Caption2 className="opacity-70 truncate">
+                        ({rootPath})
+                    </Caption2>
                 )}
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* No-path / not-connected / root-error / tree states.
                 Each is mutually exclusive so the user always sees a
                 concrete next step. */}
             {!isConnected && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     Connect the Filesystem provider in Settings to browse files.
                     The provider's allowed directories control which paths can
                     be opened.
-                </div>
+                </Caption2>
             )}
 
             {isConnected && !rootPath && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     Set Root path in this widget's settings to an absolute
                     directory the Filesystem provider has access to (e.g.
                     `/Users/me/projects` on macOS).
-                </div>
+                </Caption2>
             )}
 
             {isConnected && rootPath && errorByPath[rootPath] && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
+                <AlertBanner variant="error" size="compact">
                     Could not list <span className="font-mono">{rootPath}</span>
                     : {errorByPath[rootPath]}
-                </div>
+                </AlertBanner>
             )}
 
             {isConnected && rootPath && !errorByPath[rootPath] && (
@@ -394,14 +417,14 @@ function FilesystemDirectoryViewerContent({ title, rootPath, maxDepth }) {
                 under the widget — the lazy-load cache doesn't auto-
                 invalidate. */}
             {isConnected && rootPath && (
-                <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
-                    <span>
+                <div className="flex items-center justify-between gap-2 text-xs">
+                    <Caption2>
                         {Object.keys(childrenByPath).length === 0
                             ? "not yet loaded"
                             : `${
                                   Object.keys(childrenByPath).length
                               } folder(s) loaded`}
-                    </span>
+                    </Caption2>
                     <Button2
                         type="button"
                         size="sm"
