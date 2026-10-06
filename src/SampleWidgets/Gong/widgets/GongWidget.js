@@ -6,13 +6,18 @@
  *
  * @package Gong
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useContext } from "react";
 import {
+    AlertBanner,
     Button,
     Button3,
+    Caption2,
+    InputText,
     Panel,
+    StatusBadge,
     SubHeading2,
     SubHeading3,
+    ThemeContext,
 } from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { CallList } from "./components/CallList";
@@ -26,18 +31,27 @@ import { parseMcpResponse, parseGongTextEntries } from "../utils/mcpUtils";
  */
 function RawResponsePanel({ raw, label }) {
     const [expanded, setExpanded] = useState(false);
+    const { currentTheme } = useContext(ThemeContext);
     if (!raw) return null;
     return (
         <div className="mt-2">
             <button
                 onClick={() => setExpanded((p) => !p)}
-                className="text-[10px] text-gray-500 hover:text-gray-300 underline"
+                className="underline opacity-70 hover:opacity-100"
             >
-                {expanded ? "Hide" : "Show"} raw response
-                {label ? ` (${label})` : ""}
+                <Caption2>
+                    {expanded ? "Hide" : "Show"} raw response
+                    {label ? ` (${label})` : ""}
+                </Caption2>
             </button>
             {expanded && (
-                <pre className="mt-1 p-2 bg-gray-900 border border-gray-700 rounded text-[10px] text-gray-400 overflow-auto max-h-48 whitespace-pre-wrap">
+                <pre
+                    className={`mt-1 p-2 border rounded text-xs overflow-auto max-h-48 whitespace-pre-wrap ${
+                        currentTheme?.["bg-primary-dark"] || ""
+                    } ${currentTheme?.["border-primary-dark"] || ""} ${
+                        currentTheme?.["text-primary-medium"] || ""
+                    }`}
+                >
                     {typeof raw === "string"
                         ? raw
                         : JSON.stringify(raw, null, 2)}
@@ -223,33 +237,34 @@ function GongContent({ title, defaultDaysBack }) {
 
             {/* Connection Status */}
             <div className="flex items-center gap-2 text-xs">
-                <span
-                    className={`inline-block w-2 h-2 rounded-full ${
+                <StatusBadge
+                    compact
+                    state={
                         isConnected
-                            ? "bg-green-500"
+                            ? "success"
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? "pending"
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
-                    }`}
+                            ? "error"
+                            : "neutral"
+                    }
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {view === "list" && (
                 <>
                     {/* Filters */}
                     <div className="space-y-2">
-                        <div className="flex gap-2">
-                            <input
+                        <div className="flex flex-wrap items-center gap-2">
+                            <InputText
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -257,7 +272,10 @@ function GongContent({ title, defaultDaysBack }) {
                                     e.key === "Enter" && handleLoadCalls()
                                 }
                                 placeholder="Search calls..."
-                                className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                                height="h-7"
+                                padding="px-2 py-1"
+                                className="flex-1 min-w-0"
+                                inputClassName="text-xs"
                             />
                             <Button
                                 size="sm"
@@ -267,8 +285,8 @@ function GongContent({ title, defaultDaysBack }) {
                                 {loading ? "Loading..." : "Load Calls"}
                             </Button>
                         </div>
-                        <div className="flex gap-2">
-                            <input
+                        <div className="flex flex-wrap gap-2">
+                            <InputText
                                 type="date"
                                 value={fromDate ? fromDate.slice(0, 10) : ""}
                                 onChange={(e) =>
@@ -280,9 +298,12 @@ function GongContent({ title, defaultDaysBack }) {
                                             : ""
                                     )
                                 }
-                                className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-emerald-500"
+                                height="h-7"
+                                padding="px-2 py-1"
+                                className="flex-1 min-w-0"
+                                inputClassName="text-xs"
                             />
-                            <input
+                            <InputText
                                 type="date"
                                 value={toDate ? toDate.slice(0, 10) : ""}
                                 onChange={(e) =>
@@ -294,7 +315,10 @@ function GongContent({ title, defaultDaysBack }) {
                                             : ""
                                     )
                                 }
-                                className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-emerald-500"
+                                height="h-7"
+                                padding="px-2 py-1"
+                                className="flex-1 min-w-0"
+                                inputClassName="text-xs"
                             />
                         </div>
                     </div>
@@ -329,9 +353,9 @@ function GongContent({ title, defaultDaysBack }) {
 
                     {/* Summary */}
                     <div className="space-y-1">
-                        <div className="text-xs text-gray-400 font-medium">
+                        <Caption2 block className="font-medium">
                             Summary
-                        </div>
+                        </Caption2>
                         <CallSummary
                             summary={summary}
                             loading={detailLoading.summary}
@@ -340,9 +364,9 @@ function GongContent({ title, defaultDaysBack }) {
 
                     {/* Transcript */}
                     <div className="space-y-1">
-                        <div className="text-xs text-gray-400 font-medium">
+                        <Caption2 block className="font-medium">
                             Transcript
-                        </div>
+                        </Caption2>
                         <CallTranscript
                             transcript={transcript}
                             loading={detailLoading.transcript}
@@ -353,9 +377,11 @@ function GongContent({ title, defaultDaysBack }) {
             )}
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
         </div>
     );

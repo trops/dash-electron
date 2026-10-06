@@ -6,8 +6,16 @@
  *
  * @package Gong
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    AlertBanner,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { CallSummary } from "./components/CallSummary";
 import { parseMcpResponse } from "../utils/mcpUtils";
@@ -16,6 +24,8 @@ function GongCallSummaryContent({ title }) {
     const { isConnected, isConnecting, error, callTool, status, tools } =
         useMcpProvider("gong");
     const { listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const [callTitle, setCallTitle] = useState(null);
     const [summary, setSummary] = useState(null);
@@ -89,37 +99,37 @@ function GongCallSummaryContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             <div className="flex items-center gap-2 text-xs">
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         listenerStatus === "listening"
-                            ? "bg-green-500"
-                            : "bg-yellow-500"
+                            ? statusTokens.success.solidBg
+                            : statusTokens.warning.solidBg
                     }`}
                 />
-                <span className="text-gray-500">
+                <Caption2>
                     {listenerStatus === "listening"
                         ? "Listening for callSelected"
                         : "No event listeners configured"}
-                </span>
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {callTitle && <SubHeading3 title={callTitle} />}
@@ -127,17 +137,19 @@ function GongCallSummaryContent({ title }) {
             <CallSummary summary={summary} loading={loading} />
 
             {!summary && !loading && !errorMsg && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     {listenerStatus === "no listeners assigned"
                         ? "No event listeners configured. Wire callSelected from a Gong Call Search or Library Folders widget."
                         : "Select a call from Gong Call Search to view its summary."}
-                </div>
+                </Caption2>
             )}
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
         </div>
     );

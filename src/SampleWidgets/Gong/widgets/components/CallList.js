@@ -1,9 +1,26 @@
+import { useContext } from "react";
+import { Caption2, ThemeContext } from "@trops/dash-react";
+
 export function CallList({ calls, onSelectCall, selectedId = null }) {
+    const { currentTheme } = useContext(ThemeContext);
+
     if (calls.length === 0) {
         return (
-            <div className="text-xs text-gray-600 italic">No calls found</div>
+            <Caption2 block className="italic">
+                No calls found
+            </Caption2>
         );
     }
+
+    const rowSurface = `${currentTheme?.["bg-primary-dark"] || ""} ${
+        currentTheme?.["hover-bg-primary-dark"] || ""
+    }`;
+    const selectedSurface = `border ${
+        currentTheme?.["bg-secondary-dark"] || ""
+    } ${currentTheme?.["text-secondary-light"] || ""} ${
+        currentTheme?.["border-secondary-medium"] || ""
+    }`;
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
 
     return (
         <div className="max-h-96 overflow-y-auto space-y-1">
@@ -15,18 +32,18 @@ export function CallList({ calls, onSelectCall, selectedId = null }) {
                         selectedId &&
                         selectedId ===
                             (call.id || call.metaData?.id || call.callId)
-                            ? "bg-emerald-900/40 border border-emerald-600"
-                            : "bg-white/5 hover:bg-white/10"
+                            ? selectedSurface
+                            : `${rowSurface} ${bodyText}`
                     }`}
                 >
-                    <div className="text-gray-300 truncate">
+                    <div className="truncate">
                         {call.title ||
                             call.metaData?.title ||
                             call.subject ||
                             call.name ||
                             "Untitled"}
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5 text-gray-500">
+                    <Caption2 block className="flex items-center gap-2 mt-0.5">
                         {(call.started ||
                             call.date ||
                             call.metaData?.started) && (
@@ -48,7 +65,7 @@ export function CallList({ calls, onSelectCall, selectedId = null }) {
                             </span>
                         )}
                         {call.scope && (
-                            <span className="text-gray-600">{call.scope}</span>
+                            <span className="opacity-70">{call.scope}</span>
                         )}
                         {call.parties?.length > 0 && (
                             <span>
@@ -56,7 +73,7 @@ export function CallList({ calls, onSelectCall, selectedId = null }) {
                                 {call.parties.length !== 1 ? "s" : ""}
                             </span>
                         )}
-                    </div>
+                    </Caption2>
                 </button>
             ))}
         </div>

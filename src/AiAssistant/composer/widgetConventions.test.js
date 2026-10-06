@@ -481,7 +481,6 @@ const THEME_PENDING_PACKAGES = [
     "Filesystem",
     "GitHub",
     "Gmail",
-    "Gong",
     "GoogleCalendar",
     "GoogleDrive",
     "Notion",

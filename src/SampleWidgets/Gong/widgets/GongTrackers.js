@@ -5,14 +5,29 @@
  *
  * @package Gong
  */
-import { useState, useCallback } from "react";
-import { Button, Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useCallback, useContext } from "react";
+import {
+    AlertBanner,
+    Button,
+    Caption2,
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    Tag3,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
 function GongTrackersContent({ title }) {
     const { isConnected, isConnecting, error, callTool, status, tools } =
         useMcpProvider("gong");
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+    const surface = currentTheme?.["bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
 
     const [trackers, setTrackers] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -46,22 +61,22 @@ function GongTrackersContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             <Button
@@ -80,15 +95,17 @@ function GongTrackersContent({ title }) {
                         {trackers.map((tracker, i) => (
                             <div
                                 key={tracker.id || tracker.trackerId || i}
-                                className="px-3 py-2 bg-white/5 rounded space-y-1"
+                                className={`px-3 py-2 rounded space-y-1 ${surface}`}
                             >
-                                <div className="text-gray-300 font-medium text-xs">
+                                <div
+                                    className={`font-medium text-xs ${bodyText}`}
+                                >
                                     {tracker.name ||
                                         tracker.displayName ||
                                         "Tracker"}
                                 </div>
                                 {tracker.affiliation && (
-                                    <div className="text-[10px] text-emerald-400">
+                                    <div className={`text-xs ${accentText}`}>
                                         {tracker.affiliation}
                                     </div>
                                 )}
@@ -97,29 +114,26 @@ function GongTrackersContent({ title }) {
                                         {tracker.phrases
                                             .slice(0, 20)
                                             .map((phrase, j) => (
-                                                <span
-                                                    key={j}
-                                                    className="px-1.5 py-0.5 bg-gray-700 rounded text-[10px] text-gray-400"
-                                                >
+                                                <Tag3 key={j} border={false}>
                                                     {typeof phrase === "string"
                                                         ? phrase
                                                         : phrase.text ||
                                                           phrase.phrase ||
                                                           ""}
-                                                </span>
+                                                </Tag3>
                                             ))}
                                         {tracker.phrases.length > 20 && (
-                                            <span className="text-[10px] text-gray-600">
+                                            <Caption2 className="opacity-70">
                                                 +{tracker.phrases.length - 20}{" "}
                                                 more
-                                            </span>
+                                            </Caption2>
                                         )}
                                     </div>
                                 )}
                                 {tracker.filterQuery && (
-                                    <div className="text-[10px] text-gray-600 mt-1">
+                                    <Caption2 block className="mt-1">
                                         Filter: {tracker.filterQuery}
-                                    </div>
+                                    </Caption2>
                                 )}
                             </div>
                         ))}
@@ -128,15 +142,17 @@ function GongTrackersContent({ title }) {
             )}
 
             {trackers.length === 0 && !loading && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     Click Load Trackers to view keyword tracker definitions.
-                </div>
+                </Caption2>
             )}
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
         </div>
     );

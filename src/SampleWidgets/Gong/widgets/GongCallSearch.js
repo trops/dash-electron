@@ -5,8 +5,17 @@
  *
  * @package Gong
  */
-import { useState, useCallback } from "react";
-import { Button, Panel, SubHeading2 } from "@trops/dash-react";
+import { useState, useCallback, useContext } from "react";
+import {
+    Button,
+    Panel,
+    SubHeading2,
+    AlertBanner,
+    Caption2,
+    InputText,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { CallList } from "./components/CallList";
 import { parseMcpResponse, parseGongTextEntries } from "../utils/mcpUtils";
@@ -15,6 +24,8 @@ function GongCallSearchContent({ title, defaultDaysBack }) {
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("gong");
     const { publishEvent } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const [calls, setCalls] = useState([]);
     const [selectedCallId, setSelectedCallId] = useState(null);
@@ -88,36 +99,39 @@ function GongCallSearchContent({ title, defaultDaysBack }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Search & Filters */}
             <div className="space-y-2">
-                <div className="flex gap-2">
-                    <input
+                <div className="flex flex-wrap items-center gap-2">
+                    <InputText
                         type="text"
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(value) => setSearchQuery(value)}
                         onKeyDown={(e) =>
                             e.key === "Enter" && handleLoadCalls()
                         }
                         placeholder="Search calls..."
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                        className="flex-1 min-w-0"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs"
                     />
                     <Button
                         size="sm"
@@ -127,30 +141,32 @@ function GongCallSearchContent({ title, defaultDaysBack }) {
                         {loading ? "Loading..." : "Load Calls"}
                     </Button>
                 </div>
-                <div className="flex gap-2">
-                    <input
+                <div className="flex flex-wrap gap-2">
+                    <InputText
                         type="date"
                         value={fromDate ? fromDate.slice(0, 10) : ""}
-                        onChange={(e) =>
+                        onChange={(value) =>
                             setFromDate(
-                                e.target.value
-                                    ? new Date(e.target.value).toISOString()
-                                    : ""
+                                value ? new Date(value).toISOString() : ""
                             )
                         }
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-emerald-500"
+                        className="flex-1 min-w-0"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs"
                     />
-                    <input
+                    <InputText
                         type="date"
                         value={toDate ? toDate.slice(0, 10) : ""}
-                        onChange={(e) =>
+                        onChange={(value) =>
                             setToDate(
-                                e.target.value
-                                    ? new Date(e.target.value).toISOString()
-                                    : ""
+                                value ? new Date(value).toISOString() : ""
                             )
                         }
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-emerald-500"
+                        className="flex-1 min-w-0"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs"
                     />
                 </div>
             </div>
@@ -162,9 +178,11 @@ function GongCallSearchContent({ title, defaultDaysBack }) {
             />
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
         </div>
     );

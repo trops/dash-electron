@@ -6,8 +6,17 @@
  *
  * @package Gong
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, SubHeading3 } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    AlertBanner,
+    Caption2,
+    Skeleton,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import { Widget, useMcpProvider, useWidgetEvents } from "@trops/dash-core";
 import { parseMcpResponse } from "../utils/mcpUtils";
 
@@ -15,6 +24,9 @@ function GongCallDetailContent({ title }) {
     const { isConnected, isConnecting, error, callTool, status, tools } =
         useMcpProvider("gong");
     const { listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
 
     const [call, setCall] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -85,44 +97,44 @@ function GongCallDetailContent({ title }) {
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         isConnected
-                            ? "bg-green-500"
+                            ? statusTokens.success.solidBg
                             : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
+                            ? `${statusTokens.warning.solidBg} animate-pulse`
                             : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
+                            ? statusTokens.error.solidBg
+                            : currentTheme?.["bg-primary-medium"] || ""
                     }`}
                 />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <Caption2 className="font-mono">{status}</Caption2>
+                <Caption2 className="opacity-70">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             <div className="flex items-center gap-2 text-xs">
                 <span
                     className={`inline-block w-2 h-2 rounded-full ${
                         listenerStatus === "listening"
-                            ? "bg-green-500"
-                            : "bg-yellow-500"
+                            ? statusTokens.success.solidBg
+                            : statusTokens.warning.solidBg
                     }`}
                 />
-                <span className="text-gray-500">
+                <Caption2>
                     {listenerStatus === "listening"
                         ? "Listening for callSelected"
                         : "No event listeners configured"}
-                </span>
+                </Caption2>
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {loading && (
-                <div className="space-y-2 animate-pulse">
-                    <div className="h-3 bg-gray-700 rounded w-3/4" />
-                    <div className="h-3 bg-gray-700 rounded w-1/2" />
-                    <div className="h-3 bg-gray-700 rounded w-2/3" />
+                <div className="space-y-2">
+                    <Skeleton width="w-3/4" height="h-3" rounded="rounded" />
+                    <Skeleton width="w-1/2" height="h-3" rounded="rounded" />
+                    <Skeleton width="w-2/3" height="h-3" rounded="rounded" />
                 </div>
             )}
 
@@ -130,7 +142,9 @@ function GongCallDetailContent({ title }) {
                 <div className="space-y-3 text-xs">
                     {/* Markdown text response from gongio-mcp */}
                     {typeof call.description === "string" ? (
-                        <pre className="whitespace-pre-wrap text-gray-300 overflow-auto max-h-[60vh] text-xs leading-relaxed">
+                        <pre
+                            className={`whitespace-pre-wrap overflow-auto max-h-96 text-xs leading-relaxed ${bodyText}`}
+                        >
                             {call.description}
                         </pre>
                     ) : (
@@ -142,51 +156,77 @@ function GongCallDetailContent({ title }) {
                             )}
 
                             {/* Metadata fields */}
-                            <div className="space-y-1.5 text-gray-400">
+                            <div className="space-y-1.5">
                                 {renderField(
                                     "URL",
-                                    call.url || call.metaData?.url
+                                    call.url || call.metaData?.url,
+                                    bodyText
                                 )}
-                                {renderField("Direction", call.direction)}
-                                {renderField("Scope", call.scope)}
-                                {renderField("System", call.system)}
+                                {renderField(
+                                    "Direction",
+                                    call.direction,
+                                    bodyText
+                                )}
+                                {renderField("Scope", call.scope, bodyText)}
+                                {renderField("System", call.system, bodyText)}
                                 {renderField(
                                     "Duration",
                                     formatDuration(
                                         call.duration ?? call.metaData?.duration
-                                    )
+                                    ),
+                                    bodyText
                                 )}
                                 {renderField(
                                     "Date",
-                                    call.started || call.metaData?.started
+                                    call.started || call.metaData?.started,
+                                    bodyText
                                 )}
-                                {renderField("Language", call.language)}
+                                {renderField(
+                                    "Language",
+                                    call.language,
+                                    bodyText
+                                )}
                             </div>
 
                             {/* Participants */}
                             {call.parties?.length > 0 && (
                                 <div>
-                                    <div className="text-gray-400 font-medium mb-1">
+                                    <Caption2
+                                        block
+                                        className="font-medium mb-1"
+                                    >
                                         Participants ({call.parties.length})
-                                    </div>
+                                    </Caption2>
                                     <div className="space-y-1">
                                         {call.parties.map((p, i) => (
                                             <div
                                                 key={i}
-                                                className="flex items-center gap-2 px-2 py-1 bg-white/5 rounded"
+                                                className={`flex flex-wrap items-center gap-2 px-2 py-1 rounded ${
+                                                    currentTheme?.[
+                                                        "bg-primary-dark"
+                                                    ] || ""
+                                                }`}
                                             >
-                                                <span className="text-gray-300 font-medium">
+                                                <span
+                                                    className={`font-medium ${bodyText}`}
+                                                >
                                                     {p.name ||
                                                         p.emailAddress ||
                                                         "Unknown"}
                                                 </span>
                                                 {p.title && (
-                                                    <span className="text-gray-500">
+                                                    <Caption2>
                                                         {p.title}
-                                                    </span>
+                                                    </Caption2>
                                                 )}
                                                 {p.affiliation && (
-                                                    <span className="text-emerald-500 text-[10px]">
+                                                    <span
+                                                        className={`text-xs ${
+                                                            currentTheme?.[
+                                                                "text-secondary-medium"
+                                                            ] || ""
+                                                        }`}
+                                                    >
                                                         {p.affiliation}
                                                     </span>
                                                 )}
@@ -201,29 +241,31 @@ function GongCallDetailContent({ title }) {
             ) : (
                 !loading &&
                 !errorMsg && (
-                    <div className="text-xs text-gray-600 italic">
+                    <Caption2 block className="italic">
                         {listenerStatus === "no listeners assigned"
                             ? "No event listeners configured. Wire callSelected from a Gong Call Search or Library Folders widget."
                             : "Select a call from Gong Call Search to view details."}
-                    </div>
+                    </Caption2>
                 )
             )}
 
             {errorMsg && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={errorMsg}
+                />
             )}
         </div>
     );
 }
 
-function renderField(label, value) {
+function renderField(label, value, valueClassName = "") {
     if (!value) return null;
     return (
         <div>
-            <span className="text-gray-500 font-medium">{label}: </span>
-            <span className="text-gray-300">{String(value)}</span>
+            <Caption2 className="font-medium">{label}: </Caption2>
+            <span className={valueClassName}>{String(value)}</span>
         </div>
     );
 }

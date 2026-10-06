@@ -1,10 +1,23 @@
+import { useContext } from "react";
+import {
+    AlertBanner,
+    Caption2,
+    Skeleton,
+    Tag2,
+    ThemeContext,
+} from "@trops/dash-react";
+
 export function CallSummary({ summary, loading }) {
+    const { currentTheme } = useContext(ThemeContext);
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
+
     if (loading) {
         return (
-            <div className="space-y-2 animate-pulse">
-                <div className="h-3 bg-gray-700 rounded w-3/4" />
-                <div className="h-3 bg-gray-700 rounded w-1/2" />
-                <div className="h-3 bg-gray-700 rounded w-2/3" />
+            <div className="space-y-2">
+                <Skeleton height="h-3" width="w-3/4" rounded="rounded" />
+                <Skeleton height="h-3" width="w-1/2" rounded="rounded" />
+                <Skeleton height="h-3" width="w-2/3" rounded="rounded" />
             </div>
         );
     }
@@ -14,7 +27,9 @@ export function CallSummary({ summary, loading }) {
     // gongio-mcp returns markdown text, not structured JSON
     if (typeof summary === "string") {
         return (
-            <pre className="whitespace-pre-wrap text-gray-300 overflow-auto max-h-[60vh] text-xs leading-relaxed">
+            <pre
+                className={`whitespace-pre-wrap overflow-auto max-h-96 text-xs leading-relaxed ${bodyText}`}
+            >
                 {summary}
             </pre>
         );
@@ -22,9 +37,11 @@ export function CallSummary({ summary, loading }) {
 
     if (summary.error) {
         return (
-            <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                {summary.error}
-            </div>
+            <AlertBanner
+                variant="error"
+                size="compact"
+                message={summary.error}
+            />
         );
     }
 
@@ -32,10 +49,12 @@ export function CallSummary({ summary, loading }) {
         <div className="space-y-3 text-xs">
             {summary.keyPoints?.length > 0 && (
                 <div>
-                    <div className="text-gray-400 font-medium mb-1">
+                    <Caption2 block className="font-medium mb-1">
                         Key Points
-                    </div>
-                    <ul className="list-disc list-inside space-y-0.5 text-gray-300">
+                    </Caption2>
+                    <ul
+                        className={`list-disc list-inside space-y-0.5 ${bodyText}`}
+                    >
                         {summary.keyPoints.map((point, i) => (
                             <li key={i}>{point}</li>
                         ))}
@@ -45,15 +64,17 @@ export function CallSummary({ summary, loading }) {
 
             {summary.topics?.length > 0 && (
                 <div>
-                    <div className="text-gray-400 font-medium mb-1">Topics</div>
+                    <Caption2 block className="font-medium mb-1">
+                        Topics
+                    </Caption2>
                     <div className="flex flex-wrap gap-1">
                         {summary.topics.map((topic, i) => (
-                            <span
+                            <Tag2
                                 key={i}
-                                className="px-1.5 py-0.5 bg-gray-700 rounded text-[10px] text-gray-300"
-                            >
-                                {topic}
-                            </span>
+                                text={topic}
+                                padding="px-1.5 py-0.5"
+                                border={false}
+                            />
                         ))}
                     </div>
                 </div>
@@ -61,14 +82,16 @@ export function CallSummary({ summary, loading }) {
 
             {summary.actionItems?.length > 0 && (
                 <div>
-                    <div className="text-gray-400 font-medium mb-1">
+                    <Caption2 block className="font-medium mb-1">
                         Action Items
-                    </div>
-                    <ul className="space-y-0.5 text-gray-300">
+                    </Caption2>
+                    <ul className={`space-y-0.5 ${bodyText}`}>
                         {summary.actionItems.map((item, i) => (
                             <li key={i}>
                                 {item.owner && (
-                                    <span className="text-emerald-400 font-medium">
+                                    <span
+                                        className={`font-medium ${accentText}`}
+                                    >
                                         {item.owner}:{" "}
                                     </span>
                                 )}
@@ -82,7 +105,9 @@ export function CallSummary({ summary, loading }) {
             {!summary.keyPoints?.length &&
                 !summary.topics?.length &&
                 !summary.actionItems?.length && (
-                    <pre className="whitespace-pre-wrap text-gray-300 overflow-auto max-h-48">
+                    <pre
+                        className={`whitespace-pre-wrap overflow-auto max-h-48 ${bodyText}`}
+                    >
                         {typeof summary === "string"
                             ? summary
                             : JSON.stringify(summary, null, 2)}
