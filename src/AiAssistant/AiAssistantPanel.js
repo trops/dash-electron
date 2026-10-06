@@ -9,7 +9,12 @@
  * the Dash MCP server so the assistant can manage dashboards.
  */
 import React, { useState, useContext, useEffect, useCallback } from "react";
-import { FontAwesomeIcon } from "@trops/dash-react";
+import {
+    AlertBanner,
+    Button3,
+    FontAwesomeIcon,
+    ThemeContext,
+} from "@trops/dash-react";
 import { ChatCore, AppContext } from "@trops/dash-core";
 
 const DEFAULT_SYSTEM_PROMPT = `You are the Dash AI Assistant — a helpful assistant built into the Dash desktop application. You help users manage dashboards, configure widgets, set up providers, and troubleshoot issues.
@@ -98,34 +103,27 @@ const McpStatusChip = () => {
 
     const isRunning = !!mcpStatus?.running;
 
+    // Status colours follow the light/dark theme (AlertBanner).
     return (
         <div className="mx-2 my-2 shrink-0">
-            <div
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs border ${
-                    isRunning
-                        ? "bg-green-900/20 border-green-700/40 text-green-400"
-                        : "bg-amber-900/20 border-amber-700/40 text-amber-300"
-                }`}
+            <AlertBanner
+                variant={isRunning ? "success" : "warning"}
+                size="compact"
+                animate={false}
             >
-                <span
-                    className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${
-                        isRunning ? "bg-green-400" : "bg-amber-400"
-                    }`}
-                />
-                <span className="flex-1">
-                    {isRunning
-                        ? "Dash tools ready"
-                        : "Dash MCP server not running"}
-                </span>
-                {!isRunning && (
-                    <button
-                        onClick={handleStartServer}
-                        className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[10px] font-medium transition-colors"
-                    >
-                        Start
-                    </button>
-                )}
-            </div>
+                <div className="flex items-center gap-2">
+                    <span className="flex-1">
+                        {isRunning
+                            ? "Dash tools ready"
+                            : "Dash MCP server not running"}
+                    </span>
+                    {!isRunning && (
+                        <Button3 size="sm" onClick={handleStartServer}>
+                            Start
+                        </Button3>
+                    )}
+                </div>
+            </AlertBanner>
         </div>
     );
 };
@@ -147,8 +145,14 @@ export const AiAssistantPanel = ({
     const [width, setWidth] = useState(384);
     const isDragging = React.useRef(false);
     const appContext = useContext(AppContext);
+    const { currentTheme } = useContext(ThemeContext) || {};
+    const t = (key) => currentTheme?.[key] || "";
     const bgDark = "chrome-glass";
-    const borderColor = "border-neutral-800";
+    const borderColor = t("border-primary-dark");
+    // Icon buttons: theme text, dimmed until hovered.
+    const iconButton = `rounded transition-colors opacity-70 hover:opacity-100 ${t(
+        "text-primary-medium"
+    )} ${t("hover-bg-primary-dark")}`;
 
     const settings = appContext?.settings || {};
     const providers = appContext?.providers || {};
@@ -259,7 +263,7 @@ export const AiAssistantPanel = ({
             >
                 <button
                     onClick={() => setCollapsed(false)}
-                    className="mt-3 p-2 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-gray-200"
+                    className={`mt-3 p-2 ${iconButton}`}
                     title="Open AI Assistant"
                 >
                     <FontAwesomeIcon
@@ -279,7 +283,9 @@ export const AiAssistantPanel = ({
             {/* Resize handle */}
             <div
                 onMouseDown={handleMouseDown}
-                className="w-1 cursor-col-resize hover:bg-gray-500/30 active:bg-gray-500/50 transition-colors shrink-0"
+                className={`w-1 cursor-col-resize transition-colors shrink-0 ${t(
+                    "hover-bg-primary-dark"
+                )}`}
             />
 
             {/* Panel content */}
@@ -290,7 +296,11 @@ export const AiAssistantPanel = ({
                 <div
                     className={`flex items-center justify-between px-3 py-1.5 border-b ${borderColor} shrink-0`}
                 >
-                    <div className="flex items-center gap-2 text-gray-400">
+                    <div
+                        className={`flex items-center gap-2 opacity-70 ${t(
+                            "text-primary-medium"
+                        )}`}
+                    >
                         <FontAwesomeIcon
                             icon="wand-magic-sparkles"
                             className="h-3 w-3"
@@ -302,7 +312,7 @@ export const AiAssistantPanel = ({
                     <div className="flex items-center gap-1">
                         <button
                             onClick={() => setCollapsed(true)}
-                            className="p-1 rounded hover:bg-white/10 transition-colors text-gray-500 hover:text-gray-300"
+                            className={`p-1 ${iconButton}`}
                             title="Collapse"
                         >
                             <FontAwesomeIcon
