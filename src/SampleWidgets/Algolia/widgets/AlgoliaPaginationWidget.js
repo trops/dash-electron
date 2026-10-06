@@ -7,7 +7,15 @@
  * @package Algolia
  */
 import { useState, useEffect } from "react";
-import { Panel, SubHeading2, Button } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    AlertBanner,
+    Caption2,
+    InputText,
+    useStatusTokens,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -25,6 +33,7 @@ function AlgoliaPaginationContent({ title }) {
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
     const { listen, listeners } = useWidgetEvents();
+    const status = useStatusTokens();
 
     const [selectedIndex, setSelectedIndex] = useState("");
     const { settings, loading, saving, error, updateSettings } =
@@ -82,10 +91,11 @@ function AlgoliaPaginationContent({ title }) {
         return (
             <div className="flex flex-col gap-3 h-full text-sm">
                 <SubHeading2 title={title} padding={false} />
-                <div className="p-3 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia credential provider not configured. Add an Algolia
-                    provider with your App ID and API Key.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia credential provider not configured. Add an Algolia provider with your App ID and API Key."
+                />
             </div>
         );
     }
@@ -99,19 +109,17 @@ function AlgoliaPaginationContent({ title }) {
                 onSelect={setSelectedIndex}
             />
             {!selectedIndex && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     Select an index to configure pagination settings.
-                </div>
+                </Caption2>
             )}
             {loading && (
-                <div className="text-xs text-gray-400 italic">
+                <Caption2 block className="italic">
                     Loading settings...
-                </div>
+                </Caption2>
             )}
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
             {settings && selectedIndex && (
                 <div className="flex flex-col gap-4">
@@ -121,13 +129,16 @@ function AlgoliaPaginationContent({ title }) {
                             description={SETTINGS_META.hitsPerPage.description}
                             docUrl={SETTINGS_META.hitsPerPage.docUrl}
                         />
-                        <input
+                        <InputText
                             type="number"
                             min={1}
                             max={1000}
                             value={hitsPerPage}
                             onChange={handleChange(setHitsPerPage)}
-                            className="w-32 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            className="w-32"
+                            height="h-7"
+                            padding="px-2 py-1"
+                            inputClassName="text-xs"
                         />
                     </div>
                     <div className="flex flex-col gap-2">
@@ -138,12 +149,15 @@ function AlgoliaPaginationContent({ title }) {
                             }
                             docUrl={SETTINGS_META.paginationLimitedTo.docUrl}
                         />
-                        <input
+                        <InputText
                             type="number"
                             min={0}
                             value={paginationLimitedTo}
                             onChange={handleChange(setPaginationLimitedTo)}
-                            className="w-32 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            className="w-32"
+                            height="h-7"
+                            padding="px-2 py-1"
+                            inputClassName="text-xs"
                         />
                     </div>
                     <div className="flex flex-col gap-2">
@@ -154,13 +168,16 @@ function AlgoliaPaginationContent({ title }) {
                             }
                             docUrl={SETTINGS_META.maxValuesPerFacet.docUrl}
                         />
-                        <input
+                        <InputText
                             type="number"
                             min={1}
                             max={1000}
                             value={maxValuesPerFacet}
                             onChange={handleChange(setMaxValuesPerFacet)}
-                            className="w-32 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            className="w-32"
+                            height="h-7"
+                            padding="px-2 py-1"
+                            inputClassName="text-xs"
                         />
                     </div>
                     <div className="flex items-center gap-2">
@@ -172,7 +189,7 @@ function AlgoliaPaginationContent({ title }) {
                             {saving ? "Saving..." : "Save"}
                         </Button>
                         {saveSuccess && (
-                            <span className="text-xs text-green-400">
+                            <span className={`text-xs ${status.success.icon}`}>
                                 Saved!
                             </span>
                         )}

@@ -66,6 +66,7 @@ Update both PRD and technical docs when:
 
 ## Existing PRDs
 
+-   **[Widget Theme Compliance](./prd/widget-theme-compliance.md)** - Status: Draft - 2026-10-05
 -   **[Gong Multi-Widget Decomposition](./prd/gong-multi-widget-decomposition.md)** - Status: Draft - 2026-03-26
     **Framework PRDs have moved to @trops/dash-core.** See `dash-core/docs/requirements/prd/` for:
     CommandPalette Navigation, LayoutBuilder Hybrid, Dashboard Marketplace, MCP Providers,

@@ -114,7 +114,9 @@ const CHECKS = {
     4: (code) => {
         if (!hasDataFetchSurface(code)) return { pass: null, matches: [] };
         return {
-            pass: /<Alert\b|<Alert2\b|<Alert3\b|<ErrorMessage\b/.test(code),
+            pass: /<Alert\b|<Alert2\b|<Alert3\b|<AlertBanner\b|<ErrorMessage\b/.test(
+                code
+            ),
             matches: [],
         };
     },
@@ -202,7 +204,7 @@ const CHECKS = {
         if (!hasDataFetchSurface(code)) return { pass: null, matches: [] };
         const hasEmptyPrim = /<EmptyState\b/.test(code);
         const hasLoadingPrim = /\bSkeleton(\.Text|\.Card)?\b/.test(code);
-        const hasErrorPrim = /<Alert\d?\b/.test(code);
+        const hasErrorPrim = /<Alert(?:\d|Banner)?\b/.test(code);
         return {
             pass: hasEmptyPrim && hasLoadingPrim && hasErrorPrim,
             matches: [],

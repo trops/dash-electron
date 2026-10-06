@@ -7,8 +7,18 @@
  *
  * @package Algolia
  */
-import { useState, useEffect, useCallback } from "react";
-import { Panel, SubHeading2, SubHeading3, Button2 } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    SubHeading3,
+    Button2,
+    AlertBanner,
+    Caption2,
+    InputText,
+    SelectInput,
+    ThemeContext,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -32,6 +42,7 @@ function AlgoliaDirectSearchContent({ title, defaultIndex, hitsPerPage = 10 }) {
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
     const { listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
 
     // Listen for indexSelected events from IndexSelector widget
     useEffect(() => {
@@ -141,13 +152,22 @@ function AlgoliaDirectSearchContent({ title, defaultIndex, hitsPerPage = 10 }) {
         return (
             <div className="flex flex-col gap-3 h-full text-sm">
                 <SubHeading2 title={title} padding={false} />
-                <div className="p-3 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia credential provider not configured. Add an Algolia
-                    provider with your App ID and API Key.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia credential provider not configured. Add an Algolia provider with your App ID and API Key."
+                />
             </div>
         );
     }
+
+    // Theme tokens: result rows sit one step above the Panel surface; the
+    // objectID uses the secondary channel as its accent.
+    const rowClass = currentTheme?.["bg-primary-dark"] || "";
+    const rowHover = currentTheme?.["hover-bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
+    const borderClass = currentTheme?.["border-primary-dark"] || "";
 
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
@@ -156,32 +176,32 @@ function AlgoliaDirectSearchContent({ title, defaultIndex, hitsPerPage = 10 }) {
             {/* Index Selector */}
             <div className="space-y-1">
                 <SubHeading3 title="Index" padding={false} />
-                <select
+                <SelectInput
                     value={selectedIndex}
-                    onChange={(e) => handleIndexChange(e.target.value)}
+                    onChange={(value) => handleIndexChange(value)}
                     disabled={loadingIndices || indices.length === 0}
-                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-teal-500 disabled:opacity-50"
-                >
-                    <option value="">
-                        {loadingIndices
+                    placeholder={
+                        loadingIndices
                             ? "Loading indices..."
                             : indices.length === 0
                             ? "No indices available"
-                            : "Select an index"}
-                    </option>
-                    {indices.map((idx, i) => (
-                        <option key={idx.name + i} value={idx.name}>
-                            {idx.name} ({(idx.entries || 0).toLocaleString()})
-                        </option>
-                    ))}
-                </select>
+                            : "Select an index"
+                    }
+                    options={indices.map((idx) => ({
+                        value: idx.name,
+                        label: `${idx.name} (${(
+                            idx.entries || 0
+                        ).toLocaleString()})`,
+                    }))}
+                    inputClassName="text-xs"
+                />
             </div>
 
             {/* Search Bar */}
             <div className="space-y-1">
                 <SubHeading3 title="Search" padding={false} />
                 <div className="relative">
-                    <input
+                    <InputText
                         type="text"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
@@ -191,12 +211,16 @@ function AlgoliaDirectSearchContent({ title, defaultIndex, hitsPerPage = 10 }) {
                                 : "Select an index first"
                         }
                         disabled={!selectedIndex}
-                        className={`w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-teal-500 disabled:opacity-50 transition-opacity ${
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName={`text-xs disabled:opacity-50 transition-opacity ${
                             loading ? "opacity-70" : ""
                         }`}
                     />
                     {loading && (
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-teal-400 animate-pulse">
+                        <span
+                            className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs animate-pulse ${accentText}`}
+                        >
                             searching...
                         </span>
                     )}
@@ -204,36 +228,34 @@ function AlgoliaDirectSearchContent({ title, defaultIndex, hitsPerPage = 10 }) {
             </div>
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Results */}
             {results && (
                 <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs text-gray-400">
-                        <span>
+                    <div className="flex items-center justify-between">
+                        <Caption2>
                             {nbHits.toLocaleString()} result
                             {nbHits !== 1 ? "s" : ""}
                             {results.processingTimeMS != null && (
-                                <span className="text-gray-600 ml-1">
+                                <span className="opacity-75 ml-1">
                                     ({results.processingTimeMS}ms)
                                 </span>
                             )}
-                        </span>
+                        </Caption2>
                         {nbPages > 1 && (
-                            <span>
+                            <Caption2>
                                 Page {currentPage + 1} of {nbPages}
-                            </span>
+                            </Caption2>
                         )}
                     </div>
 
-                    <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+                    <div className="space-y-1 max-h-96 overflow-y-auto">
                         {hits.length === 0 ? (
-                            <div className="text-xs text-gray-600 italic p-2">
+                            <Caption2 block className="italic p-2">
                                 No results found.
-                            </div>
+                            </Caption2>
                         ) : (
                             hits.map((hit, i) => {
                                 const oid = hit.objectID || hit.id || i;
@@ -253,7 +275,7 @@ function AlgoliaDirectSearchContent({ title, defaultIndex, hitsPerPage = 10 }) {
                                 return (
                                     <div
                                         key={oid + "-" + i}
-                                        className="bg-white/5 rounded overflow-hidden"
+                                        className={`rounded overflow-hidden ${rowClass}`}
                                     >
                                         <button
                                             onClick={() => {
@@ -261,31 +283,43 @@ function AlgoliaDirectSearchContent({ title, defaultIndex, hitsPerPage = 10 }) {
                                                     isExpanded ? null : oid
                                                 );
                                             }}
-                                            className="w-full text-left px-2 py-1.5 text-xs hover:bg-white/5 transition-colors"
+                                            className={`w-full text-left px-2 py-1.5 text-xs transition-colors ${rowHover}`}
                                         >
                                             <div className="flex items-center gap-2">
-                                                <span className="text-teal-400 font-mono text-[10px] shrink-0">
+                                                <span
+                                                    className={`font-mono text-xs shrink-0 ${accentText}`}
+                                                >
                                                     {oid}
                                                 </span>
-                                                <span className="text-gray-200 truncate">
+                                                <span
+                                                    className={`truncate ${bodyText}`}
+                                                >
                                                     {displayTitle}
                                                 </span>
                                             </div>
                                             {displaySubtitle && (
-                                                <div className="text-gray-500 truncate mt-0.5">
+                                                <Caption2
+                                                    block
+                                                    className="truncate mt-0.5"
+                                                >
                                                     {displaySubtitle}
-                                                </div>
+                                                </Caption2>
                                             )}
                                         </button>
                                         {isExpanded && (
-                                            <div className="px-2 pb-2 border-t border-gray-700">
-                                                <pre className="text-[10px] text-gray-400 whitespace-pre-wrap overflow-auto max-h-48 mt-1">
+                                            <div
+                                                className={`px-2 pb-2 border-t ${borderClass}`}
+                                            >
+                                                <Caption2
+                                                    block
+                                                    className="font-mono whitespace-pre-wrap overflow-auto max-h-48 mt-1"
+                                                >
                                                     {JSON.stringify(
                                                         hit,
                                                         null,
                                                         2
                                                     )}
-                                                </pre>
+                                                </Caption2>
                                             </div>
                                         )}
                                     </div>
@@ -304,9 +338,9 @@ function AlgoliaDirectSearchContent({ title, defaultIndex, hitsPerPage = 10 }) {
                             >
                                 Prev
                             </Button2>
-                            <span className="text-xs text-gray-500">
+                            <Caption2>
                                 {currentPage + 1} / {nbPages}
-                            </span>
+                            </Caption2>
                             <Button2
                                 onClick={() => handleSearch(currentPage + 1)}
                                 disabled={currentPage >= nbPages - 1 || loading}

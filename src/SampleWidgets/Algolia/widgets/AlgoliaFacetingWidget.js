@@ -7,8 +7,19 @@
  *
  * @package Algolia
  */
-import { useState, useEffect } from "react";
-import { Panel, SubHeading2, Button, Button2 } from "@trops/dash-react";
+import { useState, useEffect, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    Button2,
+    AlertBanner,
+    Caption2,
+    InputText,
+    SelectInput,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -48,6 +59,8 @@ function AlgoliaFacetingContent({ title }) {
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
     const { listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
 
     const [selectedIndex, setSelectedIndex] = useState("");
     const { settings, loading, saving, error, updateSettings } =
@@ -122,13 +135,17 @@ function AlgoliaFacetingContent({ title }) {
         return (
             <div className="flex flex-col gap-3 h-full text-sm">
                 <SubHeading2 title={title} padding={false} />
-                <div className="p-3 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia credential provider not configured. Add an Algolia
-                    provider with your App ID and API Key.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia credential provider not configured. Add an Algolia provider with your App ID and API Key."
+                />
             </div>
         );
     }
+
+    const rowClass = currentTheme?.["bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
 
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
@@ -139,19 +156,17 @@ function AlgoliaFacetingContent({ title }) {
                 onSelect={setSelectedIndex}
             />
             {!selectedIndex && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     Select an index to configure faceting attributes.
-                </div>
+                </Caption2>
             )}
             {loading && (
-                <div className="text-xs text-gray-400 italic">
+                <Caption2 block className="italic">
                     Loading settings...
-                </div>
+                </Caption2>
             )}
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
             {settings && selectedIndex && (
                 <div className="flex flex-col gap-4">
@@ -163,35 +178,33 @@ function AlgoliaFacetingContent({ title }) {
                         docUrl={SETTINGS_META.attributesForFaceting.docUrl}
                     />
                     {facets.length === 0 && (
-                        <div className="text-xs text-gray-500 italic">
+                        <Caption2 block className="italic">
                             No faceting attributes configured.
-                        </div>
+                        </Caption2>
                     )}
                     <div className="flex flex-col gap-1">
                         {facets.map((f) => (
                             <div
                                 key={f.attr}
-                                className="flex items-center gap-2 p-1.5 bg-gray-800/50 rounded"
+                                className={`flex items-center gap-2 p-1.5 rounded ${rowClass}`}
                             >
-                                <span className="flex-1 text-xs text-gray-200 font-mono">
+                                <span
+                                    className={`flex-1 text-xs font-mono ${bodyText}`}
+                                >
                                     {f.attr}
                                 </span>
-                                <select
+                                <SelectInput
                                     value={f.modifier}
-                                    onChange={(e) =>
-                                        changeModifier(f.attr, e.target.value)
+                                    onChange={(value) =>
+                                        changeModifier(f.attr, value)
                                     }
-                                    className="bg-gray-700 border border-gray-600 rounded px-1.5 py-0.5 text-xs text-gray-200 focus:outline-none"
-                                >
-                                    {FACET_MODIFIERS.map((m) => (
-                                        <option key={m.value} value={m.value}>
-                                            {m.label}
-                                        </option>
-                                    ))}
-                                </select>
+                                    placeholder="Modifier"
+                                    options={FACET_MODIFIERS}
+                                    inputClassName="text-xs"
+                                />
                                 <button
                                     onClick={() => removeFacet(f.attr)}
-                                    className="text-gray-400 hover:text-red-400 text-xs px-1"
+                                    className={`text-xs px-1 ${bodyText} ${status.error.hoverText}`}
                                 >
                                     &times;
                                 </button>
@@ -199,25 +212,24 @@ function AlgoliaFacetingContent({ title }) {
                         ))}
                     </div>
                     <div className="flex gap-2">
-                        <input
+                        <InputText
                             type="text"
                             value={newAttr}
                             onChange={(e) => setNewAttr(e.target.value)}
                             onKeyDown={(e) => e.key === "Enter" && addFacet()}
                             placeholder="Attribute name"
-                            className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            className="flex-1"
+                            height="h-7"
+                            padding="px-2 py-1"
+                            inputClassName="text-xs"
                         />
-                        <select
+                        <SelectInput
                             value={newModifier}
-                            onChange={(e) => setNewModifier(e.target.value)}
-                            className="bg-gray-700 border border-gray-600 rounded px-1.5 py-1 text-xs text-gray-200 focus:outline-none"
-                        >
-                            {FACET_MODIFIERS.map((m) => (
-                                <option key={m.value} value={m.value}>
-                                    {m.label}
-                                </option>
-                            ))}
-                        </select>
+                            onChange={(value) => setNewModifier(value)}
+                            placeholder="Modifier"
+                            options={FACET_MODIFIERS}
+                            inputClassName="text-xs"
+                        />
                         <Button2 onClick={addFacet} size="sm">
                             Add
                         </Button2>
@@ -231,7 +243,7 @@ function AlgoliaFacetingContent({ title }) {
                             {saving ? "Saving..." : "Save"}
                         </Button>
                         {saveSuccess && (
-                            <span className="text-xs text-green-400">
+                            <span className={`text-xs ${status.success.icon}`}>
                                 Saved!
                             </span>
                         )}

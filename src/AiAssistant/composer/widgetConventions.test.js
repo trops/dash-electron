@@ -458,6 +458,102 @@ describe("EXEMPLAR_WIDGETS lint", () => {
     });
 });
 
+/**
+ * Theme compliance for every sample widget (PRD:
+ * docs/requirements/prd/widget-theme-compliance.md).
+ *
+ * Stricter than COLOR_TAILWIND_REGEX: also catches white/black,
+ * opacity modifiers (`bg-white/5`), any variant prefix (`focus:`,
+ * `disabled:`), and ring/divide/placeholder/gradient utilities — all
+ * of which render dark-only colors on a light theme.
+ *
+ * Packages not yet converted are listed in THEME_PENDING_PACKAGES;
+ * each conversion PR removes its package. When the list is empty the
+ * rule applies to every sample widget.
+ */
+const SAMPLE_WIDGET_COLOR_REGEX =
+    /(?<![\w-])(?:[a-z-]+:)*(?:bg|text|border|ring|divide|placeholder|from|via|to)-(?:gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|white|black)(?:-(?:50|100|200|300|400|500|600|700|800|900|950))?(?:\/\d+)?\b/g;
+
+const THEME_PENDING_PACKAGES = [
+    "AlgoliaSETools",
+    "AlgoliaSearch",
+    "Chat",
+    "Clock",
+    "DashSamples",
+    "Filesystem",
+    "GitHub",
+    "Gmail",
+    "Gong",
+    "GoogleCalendar",
+    "GoogleDrive",
+    "Notion",
+    "Slack",
+];
+
+function listSampleWidgetSources(dir) {
+    const out = [];
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            if (entry.name === "node_modules" || entry.name === "dist") {
+                continue;
+            }
+            out.push(...listSampleWidgetSources(full));
+        } else if (
+            /\.jsx?$/.test(entry.name) &&
+            !/\.(test|stories|dash)\.jsx?$/.test(entry.name)
+        ) {
+            out.push(full);
+        }
+    }
+    return out;
+}
+
+describe("Sample widget theme compliance", () => {
+    const repoRoot = path.resolve(__dirname, "..", "..", "..");
+    const samplesRoot = path.join(repoRoot, "src", "SampleWidgets");
+    const packages = fs
+        .readdirSync(samplesRoot, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name);
+
+    test("every pending package still exists", () => {
+        for (const pkg of THEME_PENDING_PACKAGES) {
+            expect(packages).toContain(pkg);
+        }
+    });
+
+    test.each(packages.filter((p) => !THEME_PENDING_PACKAGES.includes(p)))(
+        "%s contains zero hardcoded color classes",
+        (pkg) => {
+            const offenders = [];
+            for (const file of listSampleWidgetSources(
+                path.join(samplesRoot, pkg)
+            )) {
+                const stripped = fs
+                    .readFileSync(file, "utf8")
+                    .replace(/\/\*[\s\S]*?\*\//g, "")
+                    .replace(/\/\/[^\n]*/g, "");
+                const matches = stripped.match(SAMPLE_WIDGET_COLOR_REGEX);
+                if (matches) {
+                    offenders.push(
+                        `${path.relative(repoRoot, file)}: ${matches
+                            .slice(0, 5)
+                            .join(", ")}`
+                    );
+                }
+            }
+            if (offenders.length > 0) {
+                throw new Error(
+                    `Hardcoded color classes in ${pkg} — use a dash-react ` +
+                        `primitive, a ThemeContext token, or ` +
+                        `useStatusTokens() instead:\n${offenders.join("\n")}`
+                );
+            }
+        }
+    );
+});
+
 describe("ACCEPTANCE_CHECKLIST", () => {
     test("has at least 10 concrete items — the user's bar is high", () => {
         expect(ACCEPTANCE_CHECKLIST.length).toBeGreaterThanOrEqual(10);

@@ -7,8 +7,17 @@
  *
  * @package Algolia
  */
-import { useState, useEffect, useRef } from "react";
-import { Panel, SubHeading2, Button, Button3 } from "@trops/dash-react";
+import { useState, useEffect, useRef, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    Button3,
+    AlertBanner,
+    Caption2,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -40,6 +49,8 @@ function AlgoliaRankingFormulaContent({ title }) {
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
     const { listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
 
     const [selectedIndex, setSelectedIndex] = useState("");
     const { settings, loading, saving, error, updateSettings } =
@@ -122,13 +133,17 @@ function AlgoliaRankingFormulaContent({ title }) {
         return (
             <div className="flex flex-col gap-3 h-full text-sm">
                 <SubHeading2 title={title} padding={false} />
-                <div className="p-3 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia credential provider not configured. Add an Algolia
-                    provider with your App ID and API Key.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia credential provider not configured. Add an Algolia provider with your App ID and API Key."
+                />
             </div>
         );
     }
+
+    const rowClass = currentTheme?.["bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
 
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
@@ -139,19 +154,17 @@ function AlgoliaRankingFormulaContent({ title }) {
                 onSelect={setSelectedIndex}
             />
             {!selectedIndex && (
-                <div className="text-xs text-gray-500 italic">
+                <Caption2 block className="italic">
                     Select an index to configure the ranking formula.
-                </div>
+                </Caption2>
             )}
             {loading && (
-                <div className="text-xs text-gray-400 italic">
+                <Caption2 block className="italic">
                     Loading settings...
-                </div>
+                </Caption2>
             )}
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
             {settings && selectedIndex && (
                 <div className="flex flex-col gap-4">
@@ -169,20 +182,20 @@ function AlgoliaRankingFormulaContent({ title }) {
                                 onDragEnter={() => handleDragEnter(i)}
                                 onDragEnd={handleDragEnd}
                                 onDragOver={(e) => e.preventDefault()}
-                                className="flex items-center gap-2 p-1.5 bg-gray-800/50 rounded cursor-grab active:cursor-grabbing"
+                                className={`flex items-center gap-2 p-1.5 rounded cursor-grab active:cursor-grabbing ${rowClass}`}
                             >
-                                <span className="text-gray-500 text-xs select-none">
+                                <Caption2 className="select-none">
                                     &#x2630;
-                                </span>
-                                <span className="text-xs text-gray-400 w-4">
-                                    {i + 1}.
-                                </span>
-                                <span className="text-xs text-gray-200 font-semibold w-20">
+                                </Caption2>
+                                <Caption2 className="w-4">{i + 1}.</Caption2>
+                                <span
+                                    className={`text-xs font-semibold w-20 ${bodyText}`}
+                                >
                                     {criterion}
                                 </span>
-                                <span className="text-xs text-gray-500">
+                                <Caption2>
                                     {RANKING_CRITERIA[criterion] || ""}
-                                </span>
+                                </Caption2>
                             </div>
                         ))}
                     </div>
@@ -202,7 +215,7 @@ function AlgoliaRankingFormulaContent({ title }) {
                             Reset to Default
                         </Button3>
                         {saveSuccess && (
-                            <span className="text-xs text-green-400">
+                            <span className={`text-xs ${status.success.icon}`}>
                                 Saved!
                             </span>
                         )}

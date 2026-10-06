@@ -13,6 +13,14 @@ import {
     SubHeading3,
     Button,
     Button2,
+    Button3,
+    AlertBanner,
+    Caption2,
+    InputText,
+    SelectInput,
+    StatusBadge,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import { Widget, useMcpProvider, DashboardContext } from "@trops/dash-core";
 
@@ -28,6 +36,8 @@ function AlgoliaSearchContent({
     const { isConnected, isConnecting, error, tools, callTool, status } =
         useMcpProvider("algolia");
     const { widgetApi } = useContext(DashboardContext);
+    const { currentTheme } = useContext(ThemeContext);
+    const statusTokens = useStatusTokens();
 
     const [selectedIndex, setSelectedIndex] = useState(defaultIndex || "");
     const [query, setQuery] = useState("");
@@ -150,63 +160,71 @@ function AlgoliaSearchContent({
     const nbHits = results?.nbHits ?? hits.length;
     const nbPages = results?.nbPages ?? 1;
 
+    // Theme tokens: record rows / debug panel sit one step above the Panel
+    // surface; object IDs and debug section labels use the accent channel.
+    const surfaceClass = currentTheme?.["bg-primary-dark"] || "";
+    const borderClass = currentTheme?.["border-primary-dark"] || "";
+    const hoverClass = currentTheme?.["hover-bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
+    const debugLabelClass = "text-xs font-semibold mb-0.5";
+    const debugBodyClass =
+        "whitespace-pre-wrap overflow-auto max-h-40 font-mono";
+
+    const connectionState = isConnected
+        ? "success"
+        : isConnecting
+        ? "pending"
+        : error
+        ? "error"
+        : "neutral";
+
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
             <SubHeading2 title={title} padding={false} />
 
             {/* Connection Status */}
             <div className="flex items-center gap-2 text-xs">
-                <span
-                    className={`inline-block w-2 h-2 rounded-full ${
-                        isConnected
-                            ? "bg-green-500"
-                            : isConnecting
-                            ? "bg-yellow-500 animate-pulse"
-                            : error
-                            ? "bg-red-500"
-                            : "bg-gray-500"
-                    }`}
-                />
-                <span className="text-gray-400 font-mono">{status}</span>
-                <span className="text-gray-600">({tools.length} tools)</span>
+                <StatusBadge state={connectionState} label={status} compact />
+                <Caption2>({tools.length} tools)</Caption2>
             </div>
 
             {(error || errorMsg) && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error || errorMsg}
-                </div>
+                <AlertBanner
+                    variant="error"
+                    size="compact"
+                    message={error || errorMsg}
+                />
             )}
 
             {/* Index Selector */}
             <div className="space-y-1">
                 <SubHeading3 title="Index" padding={false} />
-                <select
+                <SelectInput
                     value={selectedIndex}
-                    onChange={(e) => handleIndexChange(e.target.value)}
+                    onChange={(value) => handleIndexChange(value)}
                     disabled={!isConnected || indices.length === 0}
-                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
-                >
-                    <option value="">
-                        {indices.length === 0
+                    placeholder={
+                        indices.length === 0
                             ? "No indices available"
-                            : "Select an index"}
-                    </option>
-                    {indices.map((name, i) => (
-                        <option key={name + i} value={name}>
-                            {name}
-                        </option>
-                    ))}
-                </select>
+                            : "Select an index"
+                    }
+                    options={indices.map((name) => ({
+                        value: name,
+                        label: name,
+                    }))}
+                    inputClassName="text-xs"
+                />
             </div>
 
             {/* Search Bar */}
             <div className="space-y-1">
                 <SubHeading3 title="Search" padding={false} />
                 <div className="flex gap-2">
-                    <input
+                    <InputText
                         type="text"
                         value={query}
-                        onChange={(e) => setQuery(e.target.value)}
+                        onChange={(value) => setQuery(value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSearch(0)}
                         placeholder={
                             selectedIndex
@@ -214,7 +232,10 @@ function AlgoliaSearchContent({
                                 : "Select an index first"
                         }
                         disabled={!selectedIndex || !isConnected}
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+                        className="flex-1"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs"
                     />
                     <Button
                         onClick={() => handleSearch(0)}
@@ -229,57 +250,68 @@ function AlgoliaSearchContent({
             {/* Debug Toggle */}
             {debugData && (
                 <div className="space-y-1">
-                    <button
+                    <Button3
+                        title={showDebug ? "Hide Debug" : "Debug"}
                         onClick={() => setShowDebug((v) => !v)}
-                        className="px-2 py-0.5 text-[10px] rounded bg-gray-700 hover:bg-gray-600 text-gray-400 hover:text-gray-200 transition-colors"
-                    >
-                        {showDebug ? "Hide Debug" : "Debug"}
-                    </button>
+                        size="sm"
+                    />
                     {showDebug && (
-                        <div className="bg-gray-900/80 border border-gray-700 rounded p-2 space-y-2 max-h-[50vh] overflow-y-auto">
+                        <div
+                            className={`border rounded p-2 space-y-2 max-h-96 overflow-y-auto ${surfaceClass} ${borderClass}`}
+                        >
                             {debugData.toolSchema && (
                                 <div>
-                                    <div className="text-[10px] font-semibold text-yellow-400 mb-0.5">
+                                    <div
+                                        className={`${debugLabelClass} ${statusTokens.warning.icon}`}
+                                    >
                                         Tool Schema
                                     </div>
-                                    <pre className="text-[10px] text-gray-400 whitespace-pre-wrap overflow-auto max-h-40 font-mono">
+                                    <Caption2 block className={debugBodyClass}>
                                         {debugData.toolSchema}
-                                    </pre>
+                                    </Caption2>
                                 </div>
                             )}
                             {debugData.sentParams && (
-                                <div className="border-t border-gray-700 pt-2">
-                                    <div className="text-[10px] font-semibold text-yellow-400 mb-0.5">
+                                <div className={`border-t pt-2 ${borderClass}`}>
+                                    <div
+                                        className={`${debugLabelClass} ${statusTokens.warning.icon}`}
+                                    >
                                         Sent Params
                                     </div>
-                                    <pre className="text-[10px] text-gray-400 whitespace-pre-wrap overflow-auto max-h-40 font-mono">
+                                    <Caption2 block className={debugBodyClass}>
                                         {debugData.sentParams}
-                                    </pre>
+                                    </Caption2>
                                 </div>
                             )}
-                            <div className="border-t border-gray-700 pt-2">
-                                <div className="text-[10px] font-semibold text-indigo-400 mb-0.5">
+                            <div className={`border-t pt-2 ${borderClass}`}>
+                                <div
+                                    className={`${debugLabelClass} ${accentText}`}
+                                >
                                     Raw MCP Response
                                 </div>
-                                <pre className="text-[10px] text-gray-400 whitespace-pre-wrap overflow-auto max-h-40 font-mono">
+                                <Caption2 block className={debugBodyClass}>
                                     {debugData.raw}
-                                </pre>
+                                </Caption2>
                             </div>
-                            <div className="border-t border-gray-700 pt-2">
-                                <div className="text-[10px] font-semibold text-indigo-400 mb-0.5">
+                            <div className={`border-t pt-2 ${borderClass}`}>
+                                <div
+                                    className={`${debugLabelClass} ${accentText}`}
+                                >
                                     Extracted Text
                                 </div>
-                                <pre className="text-[10px] text-gray-400 whitespace-pre-wrap overflow-auto max-h-40 font-mono">
+                                <Caption2 block className={debugBodyClass}>
                                     {debugData.extracted}
-                                </pre>
+                                </Caption2>
                             </div>
-                            <div className="border-t border-gray-700 pt-2">
-                                <div className="text-[10px] font-semibold text-indigo-400 mb-0.5">
+                            <div className={`border-t pt-2 ${borderClass}`}>
+                                <div
+                                    className={`${debugLabelClass} ${accentText}`}
+                                >
                                     Parsed JSON
                                 </div>
-                                <pre className="text-[10px] text-gray-400 whitespace-pre-wrap overflow-auto max-h-40 font-mono">
+                                <Caption2 block className={debugBodyClass}>
                                     {debugData.parsed}
-                                </pre>
+                                </Caption2>
                             </div>
                         </div>
                     )}
@@ -289,7 +321,10 @@ function AlgoliaSearchContent({
             {/* Results */}
             {results && (
                 <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs text-gray-400">
+                    <Caption2
+                        block
+                        className="flex items-center justify-between"
+                    >
                         <span>
                             {nbHits.toLocaleString()} result
                             {nbHits !== 1 ? "s" : ""}
@@ -299,13 +334,13 @@ function AlgoliaSearchContent({
                                 Page {currentPage + 1} of {nbPages}
                             </span>
                         )}
-                    </div>
+                    </Caption2>
 
-                    <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+                    <div className="space-y-1 max-h-96 overflow-y-auto">
                         {hits.length === 0 ? (
-                            <div className="text-xs text-gray-600 italic p-2">
+                            <Caption2 block className="italic p-2">
                                 No results found.
-                            </div>
+                            </Caption2>
                         ) : (
                             hits.map((hit, i) => {
                                 const oid = hit.objectID || hit.id || i;
@@ -325,37 +360,49 @@ function AlgoliaSearchContent({
                                 return (
                                     <div
                                         key={oid + "-" + i}
-                                        className="bg-white/5 rounded overflow-hidden"
+                                        className={`rounded overflow-hidden ${surfaceClass}`}
                                     >
                                         <button
                                             onClick={() =>
                                                 handleRecordClick(hit)
                                             }
-                                            className="w-full text-left px-2 py-1.5 text-xs hover:bg-white/5 transition-colors"
+                                            className={`w-full text-left px-2 py-1.5 text-xs transition-colors ${hoverClass}`}
                                         >
                                             <div className="flex items-center gap-2">
-                                                <span className="text-indigo-400 font-mono text-[10px] shrink-0">
+                                                <span
+                                                    className={`font-mono text-xs shrink-0 ${accentText}`}
+                                                >
                                                     {oid}
                                                 </span>
-                                                <span className="text-gray-200 truncate">
+                                                <span
+                                                    className={`truncate ${bodyText}`}
+                                                >
                                                     {displayTitle}
                                                 </span>
                                             </div>
                                             {displaySubtitle && (
-                                                <div className="text-gray-500 truncate mt-0.5">
+                                                <Caption2
+                                                    block
+                                                    className="truncate mt-0.5"
+                                                >
                                                     {displaySubtitle}
-                                                </div>
+                                                </Caption2>
                                             )}
                                         </button>
                                         {isExpanded && (
-                                            <div className="px-2 pb-2 border-t border-gray-700">
-                                                <pre className="text-[10px] text-gray-400 whitespace-pre-wrap overflow-auto max-h-48 mt-1">
+                                            <div
+                                                className={`px-2 pb-2 border-t ${borderClass}`}
+                                            >
+                                                <Caption2
+                                                    block
+                                                    className="whitespace-pre-wrap overflow-auto max-h-48 mt-1 font-mono"
+                                                >
                                                     {JSON.stringify(
                                                         hit,
                                                         null,
                                                         2
                                                     )}
-                                                </pre>
+                                                </Caption2>
                                             </div>
                                         )}
                                     </div>
@@ -374,9 +421,9 @@ function AlgoliaSearchContent({
                             >
                                 Prev
                             </Button2>
-                            <span className="text-xs text-gray-500">
+                            <Caption2>
                                 {currentPage + 1} / {nbPages}
-                            </span>
+                            </Caption2>
                             <Button2
                                 onClick={() => handleSearch(currentPage + 1)}
                                 disabled={currentPage >= nbPages - 1 || loading}

@@ -97,13 +97,14 @@ export const PRIMITIVE_CONVENTIONS = {
         forbidden: ["bg-green-9", "bg-red-9", "bg-yellow-9", "bg-amber-9"],
     },
     errorRegion: {
-        primitives: ["Alert", "Alert2"],
-        defaultChoice: "Alert2",
+        primitives: ["AlertBanner", "Alert", "Alert2"],
+        defaultChoice: "AlertBanner",
         rule:
             "Visible error regions (the in-widget banner shown when a " +
-            "provider call fails) use Alert/Alert2 with a title + " +
-            'message. NEVER hand-roll `<div className="bg-red-900/30 ' +
-            'border-red-700 text-red-300">`.',
+            'provider call fails) use <AlertBanner variant="error" ' +
+            'size="compact" message={error} /> — its colors follow the ' +
+            "light/dark theme. NEVER hand-roll " +
+            '`<div className="bg-red-900/30 border-red-700 text-red-300">`.',
         forbidden: ["bg-red-9"],
     },
     emptyState: {

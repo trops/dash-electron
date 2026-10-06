@@ -8,7 +8,7 @@
  *
  * @package Algolia
  */
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext } from "react";
 import {
     Panel,
     SubHeading2,
@@ -16,6 +16,14 @@ import {
     Button,
     Button2,
     Button3,
+    AlertBanner,
+    Caption2,
+    Checkbox,
+    InputText,
+    SelectInput,
+    ProgressBar2,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -45,6 +53,8 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
     const { listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
 
     // Listen for indexSelected events from IndexSelector widget
     useEffect(() => {
@@ -233,13 +243,16 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
         return (
             <div className="flex flex-col gap-3 h-full text-sm">
                 <SubHeading2 title={title} padding={false} />
-                <div className="p-3 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia credential provider not configured. Add an Algolia
-                    provider with your App ID and API Key.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia credential provider not configured. Add an Algolia provider with your App ID and API Key."
+                />
             </div>
         );
     }
+
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
 
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
@@ -248,39 +261,42 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
             {/* Index Selector */}
             <div className="space-y-1">
                 <SubHeading3 title="Target Index" padding={false} />
-                <select
+                <SelectInput
                     value={selectedIndex}
-                    onChange={(e) => setSelectedIndex(e.target.value)}
+                    onChange={(value) => setSelectedIndex(value)}
                     disabled={
                         loadingIndices || indices.length === 0 || isWorking
                     }
-                    className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-rose-500 disabled:opacity-50"
-                >
-                    <option value="">
-                        {loadingIndices
+                    placeholder={
+                        loadingIndices
                             ? "Loading indices..."
                             : indices.length === 0
                             ? "No indices available"
-                            : "Select target index"}
-                    </option>
-                    {indices.map((idx, i) => (
-                        <option key={idx.name + i} value={idx.name}>
-                            {idx.name} ({(idx.entries || 0).toLocaleString()})
-                        </option>
-                    ))}
-                </select>
+                            : "Select target index"
+                    }
+                    options={indices.map((idx) => ({
+                        value: idx.name,
+                        label: `${idx.name} (${(
+                            idx.entries || 0
+                        ).toLocaleString()})`,
+                    }))}
+                    inputClassName="text-xs"
+                />
             </div>
 
             {/* Source File */}
             <div className="space-y-1">
                 <SubHeading3 title="Source JSON File" padding={false} />
                 <div className="flex gap-2">
-                    <input
+                    <InputText
                         type="text"
                         value={sourceFile}
                         readOnly
                         placeholder="No file selected"
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500"
+                        className="flex-1"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs"
                     />
                     <Button2
                         onClick={chooseSourceFile}
@@ -296,7 +312,7 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
             <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                     <SubHeading3 title="Batch Size" padding={false} />
-                    <input
+                    <InputText
                         type="number"
                         value={batchSize}
                         onChange={(e) =>
@@ -305,25 +321,20 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
                             )
                         }
                         disabled={isWorking}
-                        className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-rose-500 disabled:opacity-50"
+                        height="h-7"
+                        padding="px-2 py-1"
+                        inputClassName="text-xs"
                     />
                 </div>
                 <div className="space-y-1">
                     <SubHeading3 title="Create if Missing" padding={false} />
-                    <label className="flex items-center gap-2 py-1 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={createIfNotExists}
-                            onChange={(e) =>
-                                setCreateIfNotExists(e.target.checked)
-                            }
-                            disabled={isWorking}
-                            className="rounded"
-                        />
-                        <span className="text-xs text-gray-300">
-                            Create new records
-                        </span>
-                    </label>
+                    <Checkbox
+                        label="Create new records"
+                        checked={createIfNotExists}
+                        onChange={(checked) => setCreateIfNotExists(checked)}
+                        disabled={isWorking}
+                        className="py-1 cursor-pointer"
+                    />
                 </div>
             </div>
 
@@ -340,26 +351,23 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
             )}
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Progress: Batching */}
             {stage === "batching" && (
                 <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                        <span className="text-xs text-gray-300">
+                        <div
+                            className={`w-2 h-2 rounded-full animate-pulse ${
+                                currentTheme?.["bg-secondary-medium"] || ""
+                            }`}
+                        />
+                        <span className={`text-xs ${bodyText}`}>
                             Creating batches... (batch #{batchProgress})
                         </span>
                     </div>
-                    <div className="w-full bg-gray-700 rounded-full h-1.5">
-                        <div
-                            className="bg-rose-500 h-1.5 rounded-full transition-all animate-pulse"
-                            style={{ width: "50%" }}
-                        />
-                    </div>
+                    <ProgressBar2 value={50} size="sm" animated />
                 </div>
             )}
 
@@ -367,38 +375,45 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
             {stage === "uploading" && (
                 <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                        <span className="text-xs text-gray-300">
+                        <div
+                            className={`w-2 h-2 rounded-full animate-pulse ${status.warning.solidBg}`}
+                        />
+                        <span className={`text-xs ${bodyText}`}>
                             Uploading batches to Algolia...
                         </span>
                     </div>
                     {uploadProgress && (
-                        <div className="text-[10px] text-gray-500 font-mono truncate">
+                        <Caption2 block className="font-mono truncate">
                             {uploadProgress}
-                        </div>
+                        </Caption2>
                     )}
-                    <div className="w-full bg-gray-700 rounded-full h-1.5">
-                        <div
-                            className="bg-orange-500 h-1.5 rounded-full transition-all animate-pulse"
-                            style={{ width: "75%" }}
-                        />
-                    </div>
+                    <ProgressBar2
+                        value={75}
+                        size="sm"
+                        animated
+                        fillColor={status.warning.solidBg}
+                    />
                 </div>
             )}
 
             {/* Complete */}
             {stage === "complete" && (
                 <div className="space-y-2">
-                    <div className="p-2 bg-green-900/30 border border-green-700 rounded text-green-300 text-xs">
-                        Upload complete! {uploadedFiles.length} batch
-                        {uploadedFiles.length !== 1 ? "es" : ""} processed.
-                    </div>
+                    <AlertBanner
+                        variant="success"
+                        size="compact"
+                        message={`Upload complete! ${
+                            uploadedFiles.length
+                        } batch${
+                            uploadedFiles.length !== 1 ? "es" : ""
+                        } processed.`}
+                    />
                     {uploadedFiles.length > 0 && (
-                        <div className="text-[10px] text-gray-500 max-h-20 overflow-y-auto">
+                        <Caption2 block className="max-h-20 overflow-y-auto">
                             {uploadedFiles.map((f, i) => (
                                 <div key={i}>{f.file || JSON.stringify(f)}</div>
                             ))}
-                        </div>
+                        </Caption2>
                     )}
                     <Button3 onClick={reset} size="sm">
                         Reset

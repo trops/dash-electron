@@ -186,7 +186,9 @@ not hand-roll the equivalent with raw Tailwind.**
 | Action button (tertiary, dismissive)                    | `Button3`                                       | Light/ghost styling.                                                          |
 | Status pill (open/closed/pending/success/error/warning) | `StatusBadge`                                   | `state` prop drives the color. `compact` mode for the connection-dot pattern. |
 | Categorical label                                       | `Tag` / `Tag2` / `Tag3`                         |                                                                               |
-| Error region                                            | `Alert` / `Alert2`                              | Themed banner with title + message + optional onClose.                        |
+| Error / warning / success / info message                | `AlertBanner`                                   | `variant` + `size="compact"` in widgets. Light/dark-aware status colors.      |
+| Neutral themed callout                                  | `Alert` / `Alert2`                              | Uses theme primary colors — not for errors.                                   |
+| Status-colored text or dot outside a primitive          | `useStatusTokens()`                             | `status.error.icon`, `status.success.solidBg`, … — light/dark-aware.          |
 | Empty list / no-results state                           | `EmptyState`                                    | `title` + `description` + optional `children` (e.g. a Button).                |
 | In-flight loading list                                  | `Skeleton.Text`                                 | `lines={N}` for repeated rows.                                                |
 | In-flight loading card                                  | `Skeleton.Card`                                 |                                                                               |
@@ -226,7 +228,7 @@ flags violations. Common violations and their fixes:
 | ------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
 | `<button className="bg-purple-600 hover:bg-purple-500 ...">Refresh</button>`   | `<Button2 title="Refresh" onClick={...} size="sm" />`             |
 | `<span className="bg-green-900/50 text-green-400 ...">open</span>`             | `<StatusBadge state="open" label="open" />`                       |
-| `<div className="bg-red-900/30 border-red-700 text-red-300 ...">{error}</div>` | `<Alert2 title="Failed to load" message={error} />`               |
+| `<div className="bg-red-900/30 border-red-700 text-red-300 ...">{error}</div>` | `<AlertBanner variant="error" size="compact" message={error} />`  |
 | `<p className="text-gray-600 italic">No results</p>`                           | `<EmptyState title="No results" description="..." />`             |
 | `<input className="bg-gray-800 border-gray-600 text-gray-200 ...">`            | `<InputText value={x} onChange={fn} placeholder="..." />`         |
 | `<div className="text-gray-500 font-mono">{status}</div>` (status dot pattern) | `<StatusBadge state={mapStatus(state)} label={status} compact />` |
