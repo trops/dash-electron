@@ -199,6 +199,38 @@ test("validate: optional field missing is OK", () => {
     assert.strictEqual(r.ok, true);
 });
 
+// Algolia treats an empty query as "match all records". Widgets that
+// sample an index (AttributeExplorer, ConfigRecommender) send
+// `query: ""`, which the generic non-empty "string?" rule rejected.
+test("validate: empty search query accepted for search/browse/rules", () => {
+    const base = {
+        dashboardAppId: "a",
+        providerName: "p",
+        indexName: "products",
+    };
+    for (const [channel, extra] of [
+        ["algolia-search", {}],
+        ["algolia-browse-objects", { toFilename: os.tmpdir() }],
+        ["algolia-search-rules", { providerHash: "hash-1" }],
+    ]) {
+        const r = validate(
+            SCHEMAS[channel],
+            { ...base, ...extra, query: "" },
+            channel
+        );
+        assert.strictEqual(r.ok, true, `${channel} should accept ""`);
+    }
+});
+
+test("check: searchQuery accepts any string, rejects non-strings", () => {
+    assert.strictEqual(check("searchQuery?", "").ok, true);
+    assert.strictEqual(check("searchQuery?", "red shoes").ok, true);
+    assert.strictEqual(check("searchQuery?", undefined).ok, true);
+    assert.strictEqual(check("searchQuery?", 42).ok, false);
+    assert.strictEqual(check("searchQuery?", { q: "x" }).ok, false);
+    assert.strictEqual(check("searchQuery", undefined).ok, false);
+});
+
 test("SCHEMAS: every algolia handler has a schema", () => {
     const expected = [
         "algolia-list-indices",
