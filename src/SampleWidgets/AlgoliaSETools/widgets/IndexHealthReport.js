@@ -9,7 +9,14 @@
  * @package AlgoliaSETools
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, Button } from "@trops/dash-react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    AlertBanner,
+    Caption2,
+    SelectInput,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -116,31 +123,32 @@ function IndexHealthReportContent({ title }) {
             <SubHeading2 title={title} />
 
             {!hasCredentials && (
-                <div className="p-2 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia provider not configured. Add an Algolia credential
-                    provider in Settings &gt; Providers.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia provider not configured. Add an Algolia credential provider in Settings > Providers."
+                />
             )}
 
             {hasCredentials && (
-                <div className="flex items-center gap-2">
-                    <select
+                <div className="flex flex-wrap items-center gap-2">
+                    <SelectInput
                         value={selectedIndex}
-                        onChange={(e) => setSelectedIndex(e.target.value)}
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"
-                    >
-                        <option value="">
-                            {loadingIndices
+                        onChange={(value) => setSelectedIndex(value)}
+                        options={indices.map((idx) => ({
+                            value: idx.name,
+                            label: `${idx.name} (${(
+                                idx.entries || 0
+                            ).toLocaleString()} records)`,
+                        }))}
+                        placeholder={
+                            loadingIndices
                                 ? "Loading indices..."
-                                : "Select an index"}
-                        </option>
-                        {indices.map((idx) => (
-                            <option key={idx.name} value={idx.name}>
-                                {idx.name} (
-                                {(idx.entries || 0).toLocaleString()} records)
-                            </option>
-                        ))}
-                    </select>
+                                : "Select an index"
+                        }
+                        className="flex-1 min-w-0"
+                        inputClassName="text-xs"
+                    />
                     <Button
                         size="sm"
                         onClick={handleAnalyze}
@@ -152,9 +160,7 @@ function IndexHealthReportContent({ title }) {
             )}
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {report && (
@@ -166,10 +172,10 @@ function IndexHealthReportContent({ title }) {
             )}
 
             {!report && !loadingSettings && !error && hasCredentials && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     Select an index and click Analyze to generate a health
                     report.
-                </div>
+                </Caption2>
             )}
         </div>
     );

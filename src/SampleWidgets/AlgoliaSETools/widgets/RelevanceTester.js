@@ -7,13 +7,20 @@
  *
  * @package AlgoliaSETools
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
 import {
     Panel,
     SubHeading2,
     Button,
     Button3,
     SectionLabel,
+    AlertBanner,
+    Caption2,
+    InputText,
+    SelectInput,
+    StatusBadge,
+    ThemeContext,
+    useStatusTokens,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -23,27 +30,13 @@ import {
 } from "@trops/dash-core";
 import { scoreRelevance } from "../utils/relevanceScorer";
 
-const STATUS_STYLES = {
-    perfect: {
-        bg: "bg-green-900/30",
-        border: "border-green-700",
-        badge: "bg-green-600",
-    },
-    close: {
-        bg: "bg-yellow-900/20",
-        border: "border-yellow-700",
-        badge: "bg-yellow-600",
-    },
-    displaced: {
-        bg: "bg-red-900/20",
-        border: "border-red-700",
-        badge: "bg-red-600",
-    },
-    unexpected: {
-        bg: "bg-gray-800/30",
-        border: "border-gray-700",
-        badge: "bg-gray-600",
-    },
+// Maps a relevance hit status to a status-token channel (light/dark aware)
+// and a StatusBadge state for the position-delta badge.
+const STATUS_CHANNEL = {
+    perfect: { channel: "success", badge: "success" },
+    close: { channel: "warning", badge: "warning" },
+    displaced: { channel: "error", badge: "error" },
+    unexpected: { channel: null, badge: "neutral" },
 };
 
 function RelevanceTesterContent({ title }) {
@@ -52,6 +45,8 @@ function RelevanceTesterContent({ title }) {
     const hasCredentials = hasProvider("algolia");
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
 
     const [indices, setIndices] = useState([]);
     const [loadingIndices, setLoadingIndices] = useState(false);
@@ -172,44 +167,70 @@ function RelevanceTesterContent({ title }) {
         setRelevanceResult(null);
     }, []);
 
+    // Theme tokens: result rows sit one step above the Panel surface.
+    const rowClass = currentTheme?.["bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const borderClass = currentTheme?.["border-primary-dark"] || "";
+
+    const rowStyle = (detail, isExpected) => {
+        if (detail) {
+            const ch = STATUS_CHANNEL[detail.status]?.channel;
+            if (ch) return `${status[ch].bg} ${status[ch].border}`;
+            return `${rowClass} ${borderClass}`;
+        }
+        if (isExpected) return `${status.info.bg} ${status.info.border}`;
+        return `${rowClass} ${borderClass}`;
+    };
+
+    const precision = relevanceResult?.metrics?.precisionAtN ?? 0;
+    const precisionClass =
+        precision >= 80
+            ? status.success.icon
+            : precision >= 50
+            ? status.warning.icon
+            : status.error.icon;
+
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
             <SubHeading2 title={title} />
 
             {!hasCredentials && (
-                <div className="p-2 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia provider not configured. Add an Algolia credential
-                    provider in Settings &gt; Providers.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia provider not configured. Add an Algolia credential provider in Settings > Providers."
+                />
             )}
 
             {hasCredentials && (
                 <div className="space-y-2">
-                    <select
+                    <SelectInput
                         value={selectedIndex}
-                        onChange={(e) => setSelectedIndex(e.target.value)}
-                        className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"
-                    >
-                        <option value="">
-                            {loadingIndices ? "Loading..." : "Select an index"}
-                        </option>
-                        {indices.map((idx) => (
-                            <option key={idx.name} value={idx.name}>
-                                {idx.name} (
-                                {(idx.entries || 0).toLocaleString()})
-                            </option>
-                        ))}
-                    </select>
-                    <div className="flex gap-2">
-                        <input
+                        onChange={(value) => setSelectedIndex(value)}
+                        placeholder={
+                            loadingIndices ? "Loading..." : "Select an index"
+                        }
+                        options={indices.map((idx) => ({
+                            value: idx.name,
+                            label: `${idx.name} (${(
+                                idx.entries || 0
+                            ).toLocaleString()})`,
+                        }))}
+                        inputClassName="text-xs"
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                        <InputText
                             type="text"
                             value={query}
-                            onChange={(e) => setQuery(e.target.value)}
+                            onChange={(value) => setQuery(value)}
                             onKeyDown={(e) =>
                                 e.key === "Enter" && handleSearch()
                             }
                             placeholder="Search query..."
-                            className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                            height="h-7"
+                            padding="px-2 py-1"
+                            inputClassName="text-xs"
+                            className="flex-1 min-w-0"
                         />
                         <Button
                             size="sm"
@@ -223,29 +244,21 @@ function RelevanceTesterContent({ title }) {
             )}
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Relevance Score */}
             {relevanceResult && (
-                <div className="flex items-center gap-3 p-2 bg-gray-800/50 rounded text-xs">
-                    <span
-                        className={`text-lg font-bold ${
-                            relevanceResult.metrics.precisionAtN >= 80
-                                ? "text-green-400"
-                                : relevanceResult.metrics.precisionAtN >= 50
-                                ? "text-yellow-400"
-                                : "text-red-400"
-                        }`}
-                    >
+                <div
+                    className={`flex items-center gap-3 p-2 rounded text-xs ${rowClass}`}
+                >
+                    <span className={`text-lg font-bold ${precisionClass}`}>
                         {relevanceResult.metrics.precisionAtN}%
                     </span>
-                    <div className="flex-1 text-gray-400 space-y-0.5">
+                    <Caption2 block className="flex-1 space-y-0.5">
                         <div>
                             Precision@{relevanceResult.metrics.totalExpected}:{" "}
-                            <span className="text-gray-300">
+                            <span className={bodyText}>
                                 {relevanceResult.metrics.foundInTopN}/
                                 {relevanceResult.metrics.totalExpected}
                             </span>
@@ -261,7 +274,7 @@ function RelevanceTesterContent({ title }) {
                                 </>
                             )}
                         </div>
-                    </div>
+                    </Caption2>
                     <Button3 size="xs" onClick={clearExpected}>
                         Clear
                     </Button3>
@@ -270,11 +283,11 @@ function RelevanceTesterContent({ title }) {
 
             {/* Expected IDs indicator */}
             {expectedIds.length > 0 && !relevanceResult && (
-                <div className="text-[10px] text-gray-500">
+                <Caption2 block>
                     {expectedIds.length} expected result
                     {expectedIds.length !== 1 ? "s" : ""} marked. Run a search
                     to score.
-                </div>
+                </Caption2>
             )}
 
             {/* Results */}
@@ -284,41 +297,38 @@ function RelevanceTesterContent({ title }) {
                         <SectionLabel as="span">
                             Results ({hits.length})
                         </SectionLabel>
-                        <span className="text-[10px] text-gray-600">
+                        <Caption2>
                             Click star to mark as expected result
-                        </span>
+                        </Caption2>
                     </div>
                     {hits.map((hit, idx) => {
                         const id = hit.objectID;
                         const isExpected = expectedIds.includes(id);
                         const detail = relevanceResult?.hitDetails?.[idx];
-                        const style = detail
-                            ? STATUS_STYLES[detail.status]
-                            : STATUS_STYLES.unexpected;
+                        const badgeState =
+                            (detail && STATUS_CHANNEL[detail.status]?.badge) ||
+                            "neutral";
 
                         return (
                             <div
                                 key={id || idx}
-                                className={`flex items-start gap-2 px-2 py-1.5 rounded border ${
-                                    detail
-                                        ? `${style.bg} ${style.border}`
-                                        : isExpected
-                                        ? "bg-blue-900/20 border-blue-700"
-                                        : "bg-gray-800/30 border-gray-700/50"
-                                }`}
+                                className={`flex items-start gap-2 px-2 py-1.5 rounded border ${rowStyle(
+                                    detail,
+                                    isExpected
+                                )}`}
                             >
                                 {/* Position */}
-                                <span className="text-gray-500 font-mono text-xs w-6 text-right shrink-0 mt-0.5">
+                                <Caption2 className="font-mono w-6 text-right shrink-0 mt-0.5">
                                     #{idx + 1}
-                                </span>
+                                </Caption2>
 
                                 {/* Star toggle */}
                                 <button
                                     onClick={() => toggleExpected(id)}
                                     className={`shrink-0 mt-0.5 text-sm ${
                                         isExpected
-                                            ? "text-yellow-400"
-                                            : "text-gray-600 hover:text-yellow-400"
+                                            ? status.warning.icon
+                                            : `opacity-50 hover:opacity-100 ${bodyText}`
                                     }`}
                                     title={
                                         isExpected
@@ -331,37 +341,44 @@ function RelevanceTesterContent({ title }) {
 
                                 {/* Content */}
                                 <div className="flex-1 min-w-0">
-                                    <div className="text-xs text-gray-300 truncate">
+                                    <div
+                                        className={`text-xs truncate ${bodyText}`}
+                                    >
                                         {hit.title ||
                                             hit.name ||
                                             hit.label ||
                                             hit.objectID}
                                     </div>
                                     {(hit.description || hit.content) && (
-                                        <div className="text-[10px] text-gray-500 truncate">
+                                        <Caption2 block className="truncate">
                                             {(
                                                 hit.description ||
                                                 hit.content ||
                                                 ""
                                             ).slice(0, 120)}
-                                        </div>
+                                        </Caption2>
                                     )}
-                                    <div className="text-[10px] text-gray-600 font-mono">
+                                    <Caption2
+                                        block
+                                        className="font-mono opacity-75"
+                                    >
                                         {id}
-                                    </div>
+                                    </Caption2>
                                 </div>
 
                                 {/* Position delta badge */}
                                 {detail && detail.isExpected && (
-                                    <span
-                                        className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] text-white ${style.badge}`}
-                                    >
-                                        {detail.status === "perfect"
-                                            ? "exact"
-                                            : detail.positionDelta > 0
-                                            ? `+${detail.positionDelta}`
-                                            : String(detail.positionDelta)}
-                                    </span>
+                                    <StatusBadge
+                                        state={badgeState}
+                                        className="shrink-0"
+                                        label={
+                                            detail.status === "perfect"
+                                                ? "exact"
+                                                : detail.positionDelta > 0
+                                                ? `+${detail.positionDelta}`
+                                                : String(detail.positionDelta)
+                                        }
+                                    />
                                 )}
                             </div>
                         );
@@ -370,10 +387,10 @@ function RelevanceTesterContent({ title }) {
             )}
 
             {hits.length === 0 && !searching && !error && hasCredentials && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     Select an index, enter a query, and search. Star the results
                     you expect at the top to measure relevance quality.
-                </div>
+                </Caption2>
             )}
         </div>
     );

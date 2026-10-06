@@ -10,8 +10,16 @@
  *
  * @package AlgoliaSETools
  */
-import { useState, useEffect, useCallback } from "react";
-import { Panel, SubHeading2 } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    AlertBanner,
+    Caption2,
+    SelectInput,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -45,6 +53,8 @@ function IndexSelectorContent({ title }) {
     const hasCredentials = hasProvider("algolia");
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
 
     const [indices, setIndices] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -101,67 +111,74 @@ function IndexSelectorContent({ title }) {
     );
 
     const selectedMeta = indices.find((i) => i.name === selectedIndex);
+    const valueText = currentTheme?.["text-primary-medium"] || "";
 
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
             <SubHeading2 title={title} />
 
             {!hasCredentials && (
-                <div className="p-2 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia provider not configured. Add an Algolia credential
-                    provider in Settings &gt; Providers.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia provider not configured. Add an Algolia credential provider in Settings > Providers."
+                />
             )}
 
             {hasCredentials && (
-                <select
+                <SelectInput
                     value={selectedIndex}
-                    onChange={(e) => handleSelect(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"
-                >
-                    <option value="">
-                        {loading
+                    onChange={(value) => handleSelect(value)}
+                    placeholder={
+                        loading
                             ? "Loading indices..."
-                            : "Select an index to broadcast"}
-                    </option>
-                    {indices.map((idx) => (
-                        <option key={idx.name} value={idx.name}>
-                            {idx.name} ({(idx.entries || 0).toLocaleString()}{" "}
-                            records)
-                        </option>
-                    ))}
-                </select>
+                            : "Select an index to broadcast"
+                    }
+                    options={indices.map((idx) => ({
+                        value: idx.name,
+                        label: `${idx.name} (${(
+                            idx.entries || 0
+                        ).toLocaleString()} records)`,
+                    }))}
+                    className="w-full"
+                    inputClassName="text-xs"
+                />
             )}
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Selected index metadata */}
             {selectedMeta && (
-                <div className="p-2 bg-gray-800/50 rounded space-y-1 text-xs">
-                    <div className="text-gray-300 font-medium">
+                <div
+                    className={`p-2 rounded space-y-1 text-xs ${
+                        currentTheme?.["bg-primary-dark"] || ""
+                    }`}
+                >
+                    <div className={`font-medium ${valueText}`}>
                         {selectedMeta.name}
                     </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-gray-500">
+                    <Caption2
+                        block
+                        className="grid grid-cols-2 gap-x-4 gap-y-0.5"
+                    >
                         <span>
                             Records:{" "}
-                            <span className="text-gray-300">
+                            <span className={valueText}>
                                 {(selectedMeta.entries || 0).toLocaleString()}
                             </span>
                         </span>
                         <span>
                             Size:{" "}
-                            <span className="text-gray-300">
+                            <span className={valueText}>
                                 {formatBytes(selectedMeta.dataSize)}
                             </span>
                         </span>
                         {selectedMeta.updatedAt && (
                             <span>
                                 Updated:{" "}
-                                <span className="text-gray-300">
+                                <span className={valueText}>
                                     {formatDate(selectedMeta.updatedAt)}
                                 </span>
                             </span>
@@ -169,23 +186,23 @@ function IndexSelectorContent({ title }) {
                         {selectedMeta.lastBuildTimeS != null && (
                             <span>
                                 Build:{" "}
-                                <span className="text-gray-300">
+                                <span className={valueText}>
                                     {selectedMeta.lastBuildTimeS}s
                                 </span>
                             </span>
                         )}
-                    </div>
-                    <div className="text-[10px] text-green-400 mt-1">
+                    </Caption2>
+                    <div className={`text-xs mt-1 ${status.success.icon}`}>
                         indexSelected event published
                     </div>
                 </div>
             )}
 
             {!selectedIndex && !loading && !error && hasCredentials && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     Select an index to broadcast the selection to other widgets
                     in this dashboard.
-                </div>
+                </Caption2>
             )}
         </div>
     );

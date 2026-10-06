@@ -2,29 +2,28 @@
  * HealthScorecard
  *
  * Renders the index health report as a scorecard with colored status indicators.
+ * Status colors come from useStatusTokens() so they follow light/dark themes.
  */
 
-import { SectionLabel } from "@trops/dash-react";
+import { useContext } from "react";
+import {
+    SectionLabel,
+    Caption2,
+    ProgressBar2,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 
-const STATUS_STYLES = {
-    pass: {
-        dot: "bg-green-500",
-        text: "text-green-400",
-        label: "Pass",
-    },
-    warn: {
-        dot: "bg-yellow-500",
-        text: "text-yellow-400",
-        label: "Warning",
-    },
-    fail: {
-        dot: "bg-red-500",
-        text: "text-red-400",
-        label: "Fail",
-    },
+const STATUS_META = {
+    pass: { tone: "success", label: "Pass" },
+    warn: { tone: "warning", label: "Warning" },
+    fail: { tone: "error", label: "Fail" },
 };
 
 export function HealthScorecard({ score, maxScore, checks }) {
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
+
     const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
     const passCount = checks.filter((c) => c.status === "pass").length;
     const warnCount = checks.filter((c) => c.status === "warn").length;
@@ -38,50 +37,41 @@ export function HealthScorecard({ score, maxScore, checks }) {
         categories[cat].push(check);
     }
 
+    // Theme tokens: score tile and check rows sit one step above the Panel.
+    const surface = currentTheme?.["bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const accentText = currentTheme?.["text-secondary-medium"] || "";
+
+    const overall =
+        pct >= 80 ? status.success : pct >= 50 ? status.warning : status.error;
+
     return (
         <div className="space-y-3">
             {/* Overall Score */}
-            <div className="flex items-center gap-3 p-3 bg-gray-800/50 rounded">
+            <div className={`flex items-center gap-3 p-3 rounded ${surface}`}>
                 <div className="flex flex-col items-center">
-                    <span
-                        className={`text-2xl font-bold ${
-                            pct >= 80
-                                ? "text-green-400"
-                                : pct >= 50
-                                ? "text-yellow-400"
-                                : "text-red-400"
-                        }`}
-                    >
+                    <span className={`text-2xl font-bold ${overall.icon}`}>
                         {pct}%
                     </span>
-                    <span className="text-[10px] text-gray-500 uppercase">
-                        Health
-                    </span>
+                    <Caption2 className="uppercase">Health</Caption2>
                 </div>
                 <div className="flex-1">
-                    <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                        <div
-                            className={`h-full rounded-full ${
-                                pct >= 80
-                                    ? "bg-green-500"
-                                    : pct >= 50
-                                    ? "bg-yellow-500"
-                                    : "bg-red-500"
-                            }`}
-                            style={{ width: `${pct}%` }}
-                        />
-                    </div>
-                    <div className="flex gap-3 mt-1 text-[10px]">
-                        <span className="text-green-400">
+                    <ProgressBar2
+                        value={pct}
+                        size="sm"
+                        fillColor={overall.solidBg}
+                    />
+                    <div className="flex flex-wrap gap-3 mt-1 text-xs">
+                        <span className={status.success.icon}>
                             {passCount} passed
                         </span>
                         {warnCount > 0 && (
-                            <span className="text-yellow-400">
+                            <span className={status.warning.icon}>
                                 {warnCount} warning{warnCount !== 1 ? "s" : ""}
                             </span>
                         )}
                         {failCount > 0 && (
-                            <span className="text-red-400">
+                            <span className={status.error.icon}>
                                 {failCount} failed
                             </span>
                         )}
@@ -94,30 +84,33 @@ export function HealthScorecard({ score, maxScore, checks }) {
                 <div key={category} className="space-y-1">
                     <SectionLabel className="px-1">{category}</SectionLabel>
                     {catChecks.map((check, i) => {
-                        const style = STATUS_STYLES[check.status];
+                        const meta = STATUS_META[check.status];
+                        const tone = status[meta.tone];
                         return (
                             <div
                                 key={i}
-                                className="px-2 py-1.5 bg-gray-800/30 rounded"
+                                className={`px-2 py-1.5 rounded ${surface}`}
                             >
                                 <div className="flex items-center gap-2">
                                     <span
-                                        className={`inline-block w-2 h-2 rounded-full ${style.dot}`}
+                                        className={`inline-block w-2 h-2 rounded-full ${tone.solidBg}`}
                                     />
-                                    <span className="text-xs text-gray-300 font-medium flex-1">
+                                    <span
+                                        className={`text-xs font-medium flex-1 ${bodyText}`}
+                                    >
                                         {check.name}
                                     </span>
-                                    <span
-                                        className={`text-[10px] ${style.text}`}
-                                    >
-                                        {style.label}
+                                    <span className={`text-xs ${tone.icon}`}>
+                                        {meta.label}
                                     </span>
                                 </div>
-                                <div className="text-[11px] text-gray-400 pl-4 mt-0.5">
+                                <Caption2 block className="pl-4 mt-0.5">
                                     {check.detail}
-                                </div>
+                                </Caption2>
                                 {check.recommendation && (
-                                    <div className="text-[11px] text-blue-400 pl-4 mt-0.5">
+                                    <div
+                                        className={`text-xs pl-4 mt-0.5 ${accentText}`}
+                                    >
                                         Rec: {check.recommendation}
                                     </div>
                                 )}

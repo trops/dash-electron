@@ -7,8 +7,17 @@
  *
  * @package AlgoliaSETools
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, Button } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    AlertBanner,
+    Caption2,
+    SelectInput,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -18,10 +27,11 @@ import {
 import { analyzeRecords } from "../utils/attributeAnalyzer";
 import { generateRecommendations } from "../utils/configRecommender";
 
+// Maps recommendation priority to a status-token family (light/dark aware).
 const PRIORITY_STYLES = {
-    high: { dot: "bg-red-500", text: "text-red-400", label: "High" },
-    medium: { dot: "bg-yellow-500", text: "text-yellow-400", label: "Med" },
-    low: { dot: "bg-blue-500", text: "text-blue-400", label: "Low" },
+    high: { status: "error", label: "High" },
+    medium: { status: "warning", label: "Med" },
+    low: { status: "info", label: "Low" },
 };
 
 function ConfigRecommenderContent({ title, sampleSize = "100" }) {
@@ -30,6 +40,8 @@ function ConfigRecommenderContent({ title, sampleSize = "100" }) {
     const hasCredentials = hasProvider("algolia");
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
 
     const [indices, setIndices] = useState([]);
     const [loadingIndices, setLoadingIndices] = useState(false);
@@ -128,36 +140,39 @@ function ConfigRecommenderContent({ title, sampleSize = "100" }) {
         }
     }, [selectedIndex, handleAnalyze]);
 
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
             <SubHeading2 title={title} />
 
             {!hasCredentials && (
-                <div className="p-2 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia provider not configured. Add an Algolia credential
-                    provider in Settings &gt; Providers.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia provider not configured. Add an Algolia credential provider in Settings > Providers."
+                />
             )}
 
             {hasCredentials && (
-                <div className="flex items-center gap-2">
-                    <select
+                <div className="flex flex-wrap items-center gap-2">
+                    <SelectInput
                         value={selectedIndex}
-                        onChange={(e) => setSelectedIndex(e.target.value)}
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"
-                    >
-                        <option value="">
-                            {loadingIndices
+                        onChange={(value) => setSelectedIndex(value)}
+                        placeholder={
+                            loadingIndices
                                 ? "Loading indices..."
-                                : "Select an index"}
-                        </option>
-                        {indices.map((idx) => (
-                            <option key={idx.name} value={idx.name}>
-                                {idx.name} (
-                                {(idx.entries || 0).toLocaleString()})
-                            </option>
-                        ))}
-                    </select>
+                                : "Select an index"
+                        }
+                        options={indices.map((idx) => ({
+                            value: idx.name,
+                            label: `${idx.name} (${(
+                                idx.entries || 0
+                            ).toLocaleString()})`,
+                        }))}
+                        className="flex-1 min-w-0"
+                        inputClassName="text-xs"
+                    />
                     <Button
                         size="sm"
                         onClick={handleAnalyze}
@@ -169,52 +184,63 @@ function ConfigRecommenderContent({ title, sampleSize = "100" }) {
             )}
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {recommendations && recommendations.length === 0 && (
-                <div className="p-3 bg-green-900/20 border border-green-700 rounded text-green-300 text-xs">
-                    No recommendations — this index looks well configured.
-                </div>
+                <AlertBanner
+                    variant="success"
+                    size="compact"
+                    message="No recommendations — this index looks well configured."
+                />
             )}
 
             {recommendations && recommendations.length > 0 && (
                 <div className="space-y-2">
-                    <span className="text-xs text-gray-500">
+                    <Caption2>
                         {recommendations.length} recommendation
                         {recommendations.length !== 1 ? "s" : ""}
-                    </span>
+                    </Caption2>
                     {recommendations.map((r, i) => {
                         const style =
                             PRIORITY_STYLES[r.priority] || PRIORITY_STYLES.low;
+                        const tone = status[style.status] || status.info;
                         return (
                             <div
                                 key={i}
-                                className="p-2 bg-gray-800/30 rounded space-y-1"
+                                className={`p-2 rounded space-y-1 ${
+                                    currentTheme?.["bg-primary-dark"] || ""
+                                }`}
                             >
                                 <div className="flex items-center gap-2">
                                     <span
-                                        className={`inline-block w-2 h-2 rounded-full ${style.dot}`}
+                                        className={`inline-block w-2 h-2 rounded-full ${tone.solidBg}`}
                                     />
-                                    <span className="text-xs text-gray-300 font-medium flex-1">
+                                    <span
+                                        className={`text-xs font-medium flex-1 ${bodyText}`}
+                                    >
                                         {r.title}
                                     </span>
-                                    <span
-                                        className={`text-[10px] ${style.text}`}
-                                    >
+                                    <span className={`text-xs ${tone.icon}`}>
                                         {style.label}
                                     </span>
-                                    <span className="text-[10px] text-gray-600">
-                                        {r.category}
-                                    </span>
+                                    <Caption2>{r.category}</Caption2>
                                 </div>
-                                <div className="text-[11px] text-gray-400 pl-4">
+                                <div className={`text-xs pl-4 ${bodyText}`}>
                                     {r.detail}
                                 </div>
                                 {r.suggestion && (
-                                    <div className="text-[11px] text-emerald-400 pl-4 font-mono bg-gray-900/50 rounded px-2 py-1 mt-1">
+                                    <div
+                                        className={`text-xs font-mono rounded border px-2 py-1 mt-1 ml-4 ${
+                                            currentTheme?.[
+                                                "text-secondary-medium"
+                                            ] || ""
+                                        } ${
+                                            currentTheme?.[
+                                                "border-primary-dark"
+                                            ] || ""
+                                        }`}
+                                    >
                                         {r.suggestion}
                                     </div>
                                 )}
@@ -225,10 +251,10 @@ function ConfigRecommenderContent({ title, sampleSize = "100" }) {
             )}
 
             {!recommendations && !analyzing && !error && hasCredentials && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     Select an index to get specific configuration
                     recommendations based on your data and current settings.
-                </div>
+                </Caption2>
             )}
         </div>
     );

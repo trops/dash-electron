@@ -6,8 +6,17 @@
  *
  * @package AlgoliaSETools
  */
-import { useState, useEffect, useCallback } from "react";
-import { Panel, SubHeading2, Button } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    AlertBanner,
+    Caption2,
+    SelectInput,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -20,6 +29,8 @@ import { SettingsDiffTable } from "./components/SettingsDiffTable";
 function IndexComparatorContent({ title }) {
     const { hasProvider, getProvider } = useWidgetProviders();
     const { listen, listeners } = useWidgetEvents();
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
     const hasCredentials = hasProvider("algolia");
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
@@ -105,60 +116,60 @@ function IndexComparatorContent({ title }) {
         }
     }, [pc, indexA, indexB]);
 
-    const indexOptions = indices.map((idx) => (
-        <option key={idx.name} value={idx.name}>
-            {idx.name} ({(idx.entries || 0).toLocaleString()})
-        </option>
-    ));
+    const indexOptions = indices.map((idx) => ({
+        value: idx.name,
+        label: `${idx.name} (${(idx.entries || 0).toLocaleString()})`,
+    }));
+    const indexPlaceholder = loadingIndices ? "Loading..." : "Select index";
+
+    // Index A / Index B are color-coded with the theme's secondary and
+    // tertiary accents (matches the SettingsDiffTable column headers).
+    const accentA = currentTheme?.["text-secondary-medium"] || "";
+    const accentB = currentTheme?.["text-tertiary-medium"] || "";
 
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
             <SubHeading2 title={title} />
 
             {!hasCredentials && (
-                <div className="p-2 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia provider not configured. Add an Algolia credential
-                    provider in Settings &gt; Providers.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia provider not configured. Add an Algolia credential provider in Settings > Providers."
+                />
             )}
 
             {hasCredentials && (
                 <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                        <div className="flex-1">
-                            <label className="text-[10px] text-blue-400 uppercase tracking-wide block mb-0.5">
+                        <div className="flex-1 min-w-0">
+                            <label
+                                className={`text-xs uppercase tracking-wide block mb-0.5 ${accentA}`}
+                            >
                                 Index A
                             </label>
-                            <select
+                            <SelectInput
                                 value={indexA}
-                                onChange={(e) => setIndexA(e.target.value)}
-                                className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"
-                            >
-                                <option value="">
-                                    {loadingIndices
-                                        ? "Loading..."
-                                        : "Select index"}
-                                </option>
-                                {indexOptions}
-                            </select>
+                                onChange={(value) => setIndexA(value)}
+                                options={indexOptions}
+                                placeholder={indexPlaceholder}
+                                inputClassName="text-xs"
+                            />
                         </div>
-                        <span className="text-gray-600 text-xs mt-4">vs</span>
-                        <div className="flex-1">
-                            <label className="text-[10px] text-emerald-400 uppercase tracking-wide block mb-0.5">
+                        <Caption2 className="mt-4">vs</Caption2>
+                        <div className="flex-1 min-w-0">
+                            <label
+                                className={`text-xs uppercase tracking-wide block mb-0.5 ${accentB}`}
+                            >
                                 Index B
                             </label>
-                            <select
+                            <SelectInput
                                 value={indexB}
-                                onChange={(e) => setIndexB(e.target.value)}
-                                className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-emerald-500"
-                            >
-                                <option value="">
-                                    {loadingIndices
-                                        ? "Loading..."
-                                        : "Select index"}
-                                </option>
-                                {indexOptions}
-                            </select>
+                                onChange={(value) => setIndexB(value)}
+                                options={indexOptions}
+                                placeholder={indexPlaceholder}
+                                inputClassName="text-xs"
+                            />
                         </div>
                     </div>
                     <Button
@@ -171,7 +182,7 @@ function IndexComparatorContent({ title }) {
                         {comparing ? "Comparing..." : "Compare"}
                     </Button>
                     {indexA && indexB && indexA === indexB && (
-                        <span className="text-[10px] text-yellow-500">
+                        <span className={`text-xs ${status.warning.icon}`}>
                             Select two different indices to compare.
                         </span>
                     )}
@@ -179,9 +190,7 @@ function IndexComparatorContent({ title }) {
             )}
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {diffResult && (
@@ -196,10 +205,10 @@ function IndexComparatorContent({ title }) {
             )}
 
             {!diffResult && !comparing && !error && hasCredentials && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     Select two indices and click Compare to see a side-by-side
                     settings diff.
-                </div>
+                </Caption2>
             )}
         </div>
     );

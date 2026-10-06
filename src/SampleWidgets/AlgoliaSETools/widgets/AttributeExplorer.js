@@ -7,8 +7,17 @@
  *
  * @package AlgoliaSETools
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, Button } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    AlertBanner,
+    Caption2,
+    SelectInput,
+    ThemeContext,
+    useStatusTokens,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -17,14 +26,18 @@ import {
 } from "@trops/dash-core";
 import { analyzeRecords } from "../utils/attributeAnalyzer";
 
-const TYPE_COLORS = {
-    string: "text-green-400",
-    number: "text-blue-400",
-    boolean: "text-yellow-400",
-    array: "text-purple-400",
-    object: "text-orange-400",
-    null: "text-gray-500",
-};
+// Per-type text color, built from theme + status tokens so it follows
+// light/dark themes.
+function getTypeColors(currentTheme, status) {
+    return {
+        string: status.success.icon,
+        number: status.info.icon,
+        boolean: status.warning.icon,
+        array: currentTheme?.["text-secondary-medium"] || "",
+        object: currentTheme?.["text-tertiary-medium"] || "",
+        null: "opacity-60",
+    };
+}
 
 function AttributeExplorerContent({ title, sampleSize = "100" }) {
     const { hasProvider, getProvider } = useWidgetProviders();
@@ -32,6 +45,8 @@ function AttributeExplorerContent({ title, sampleSize = "100" }) {
     const hasCredentials = hasProvider("algolia");
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
+    const { currentTheme } = useContext(ThemeContext);
+    const status = useStatusTokens();
 
     const [indices, setIndices] = useState([]);
     const [loadingIndices, setLoadingIndices] = useState(false);
@@ -134,36 +149,43 @@ function AttributeExplorerContent({ title, sampleSize = "100" }) {
         }
     }, [selectedIndex, handleScan]);
 
+    const typeColors = getTypeColors(currentTheme, status);
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const borderColor = currentTheme?.["border-primary-dark"] || "";
+    const surface = currentTheme?.["bg-primary-dark"] || "";
+    const thClass = `px-2 py-1.5 font-medium border-b ${borderColor}`;
+
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
             <SubHeading2 title={title} />
 
             {!hasCredentials && (
-                <div className="p-2 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia provider not configured. Add an Algolia credential
-                    provider in Settings &gt; Providers.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia provider not configured. Add an Algolia credential provider in Settings > Providers."
+                />
             )}
 
             {hasCredentials && (
-                <div className="flex items-center gap-2">
-                    <select
+                <div className="flex flex-wrap items-center gap-2">
+                    <SelectInput
                         value={selectedIndex}
-                        onChange={(e) => setSelectedIndex(e.target.value)}
-                        className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"
-                    >
-                        <option value="">
-                            {loadingIndices
+                        onChange={(value) => setSelectedIndex(value)}
+                        placeholder={
+                            loadingIndices
                                 ? "Loading indices..."
-                                : "Select an index"}
-                        </option>
-                        {indices.map((idx) => (
-                            <option key={idx.name} value={idx.name}>
-                                {idx.name} (
-                                {(idx.entries || 0).toLocaleString()})
-                            </option>
-                        ))}
-                    </select>
+                                : "Select an index"
+                        }
+                        options={indices.map((idx) => ({
+                            value: idx.name,
+                            label: `${idx.name} (${(
+                                idx.entries || 0
+                            ).toLocaleString()})`,
+                        }))}
+                        className="flex-1 min-w-0"
+                        inputClassName="text-xs"
+                    />
                     <Button
                         size="sm"
                         onClick={handleScan}
@@ -175,39 +197,47 @@ function AttributeExplorerContent({ title, sampleSize = "100" }) {
             )}
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {analysis && (
                 <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span>
-                            {analysis.attributes.length} attributes found from{" "}
-                            {analysis.totalRecords} sampled records
-                        </span>
-                    </div>
+                    <Caption2 block>
+                        {analysis.attributes.length} attributes found from{" "}
+                        {analysis.totalRecords} sampled records
+                    </Caption2>
 
-                    <div className="border border-gray-700 rounded overflow-hidden">
+                    <div
+                        className={`border rounded overflow-hidden ${borderColor}`}
+                    >
                         <div className="overflow-x-auto">
                             <table className="w-full text-xs border-collapse">
                                 <thead>
-                                    <tr className="bg-gray-800">
-                                        <th className="px-2 py-1.5 text-left text-gray-400 font-medium border-b border-gray-700">
-                                            Attribute
+                                    <tr className={surface}>
+                                        <th className={`${thClass} text-left`}>
+                                            <Caption2 className="font-medium">
+                                                Attribute
+                                            </Caption2>
                                         </th>
-                                        <th className="px-2 py-1.5 text-left text-gray-400 font-medium border-b border-gray-700">
-                                            Type
+                                        <th className={`${thClass} text-left`}>
+                                            <Caption2 className="font-medium">
+                                                Type
+                                            </Caption2>
                                         </th>
-                                        <th className="px-2 py-1.5 text-right text-gray-400 font-medium border-b border-gray-700">
-                                            Fill %
+                                        <th className={`${thClass} text-right`}>
+                                            <Caption2 className="font-medium">
+                                                Fill %
+                                            </Caption2>
                                         </th>
-                                        <th className="px-2 py-1.5 text-right text-gray-400 font-medium border-b border-gray-700">
-                                            Unique
+                                        <th className={`${thClass} text-right`}>
+                                            <Caption2 className="font-medium">
+                                                Unique
+                                            </Caption2>
                                         </th>
-                                        <th className="px-2 py-1.5 text-left text-gray-400 font-medium border-b border-gray-700">
-                                            Sample
+                                        <th className={`${thClass} text-left`}>
+                                            <Caption2 className="font-medium">
+                                                Sample
+                                            </Caption2>
                                         </th>
                                     </tr>
                                 </thead>
@@ -215,7 +245,11 @@ function AttributeExplorerContent({ title, sampleSize = "100" }) {
                                     {analysis.attributes.map((attr) => (
                                         <tr
                                             key={attr.name}
-                                            className="border-b border-gray-800 hover:bg-white/5 cursor-pointer"
+                                            className={`border-b cursor-pointer ${borderColor} ${
+                                                currentTheme?.[
+                                                    "hover-bg-primary-dark"
+                                                ] || ""
+                                            }`}
                                             onClick={() =>
                                                 setExpandedAttr(
                                                     expandedAttr === attr.name
@@ -224,19 +258,27 @@ function AttributeExplorerContent({ title, sampleSize = "100" }) {
                                                 )
                                             }
                                         >
-                                            <td className="px-2 py-1.5 text-gray-300 font-mono">
+                                            <td
+                                                className={`px-2 py-1.5 font-mono ${bodyText}`}
+                                            >
                                                 {attr.name}
                                                 {attr.isObjectID && (
-                                                    <span className="ml-1 text-[10px] text-blue-400">
+                                                    <span
+                                                        className={`ml-1 text-xs ${
+                                                            currentTheme?.[
+                                                                "text-secondary-medium"
+                                                            ] || ""
+                                                        }`}
+                                                    >
                                                         PK
                                                     </span>
                                                 )}
                                             </td>
                                             <td
                                                 className={`px-2 py-1.5 font-mono ${
-                                                    TYPE_COLORS[
+                                                    typeColors[
                                                         attr.primaryType
-                                                    ] || "text-gray-400"
+                                                    ] || bodyText
                                                 }`}
                                             >
                                                 {attr.primaryType}
@@ -245,24 +287,30 @@ function AttributeExplorerContent({ title, sampleSize = "100" }) {
                                                 <span
                                                     className={
                                                         attr.fillRate >= 90
-                                                            ? "text-green-400"
+                                                            ? status.success
+                                                                  .icon
                                                             : attr.fillRate >=
                                                               50
-                                                            ? "text-yellow-400"
-                                                            : "text-red-400"
+                                                            ? status.warning
+                                                                  .icon
+                                                            : status.error.icon
                                                     }
                                                 >
                                                     {attr.fillRate}%
                                                 </span>
                                             </td>
-                                            <td className="px-2 py-1.5 text-right text-gray-400">
+                                            <td
+                                                className={`px-2 py-1.5 text-right ${bodyText}`}
+                                            >
                                                 {attr.cardinality}
                                                 {attr.cardinalityNote && "+"}
                                             </td>
-                                            <td className="px-2 py-1.5 text-gray-500 truncate max-w-[200px]">
-                                                {attr.sampleValues
-                                                    .slice(0, 2)
-                                                    .join(", ")}
+                                            <td className="px-2 py-1.5 truncate max-w-xs">
+                                                <Caption2>
+                                                    {attr.sampleValues
+                                                        .slice(0, 2)
+                                                        .join(", ")}
+                                                </Caption2>
                                             </td>
                                         </tr>
                                     ))}
@@ -273,7 +321,9 @@ function AttributeExplorerContent({ title, sampleSize = "100" }) {
 
                     {/* Expanded Detail */}
                     {expandedAttr && (
-                        <div className="p-2 bg-gray-800/50 rounded text-xs space-y-1">
+                        <div
+                            className={`p-2 rounded text-xs space-y-1 ${surface}`}
+                        >
                             {(() => {
                                 const attr = analysis.attributes.find(
                                     (a) => a.name === expandedAttr
@@ -281,16 +331,18 @@ function AttributeExplorerContent({ title, sampleSize = "100" }) {
                                 if (!attr) return null;
                                 return (
                                     <>
-                                        <div className="text-gray-300 font-medium">
+                                        <div
+                                            className={`font-medium ${bodyText}`}
+                                        >
                                             {attr.name}
                                         </div>
-                                        <div className="text-gray-500">
+                                        <Caption2 block>
                                             Present: {attr.presentCount} | Null:{" "}
                                             {attr.nullCount} | Empty:{" "}
                                             {attr.emptyCount} | Missing:{" "}
                                             {attr.missingCount}
-                                        </div>
-                                        <div className="text-gray-500">
+                                        </Caption2>
+                                        <Caption2 block>
                                             Types:{" "}
                                             {attr.types
                                                 .map(
@@ -298,9 +350,11 @@ function AttributeExplorerContent({ title, sampleSize = "100" }) {
                                                         `${t.type}(${t.count})`
                                                 )
                                                 .join(", ")}
-                                        </div>
+                                        </Caption2>
                                         {attr.sampleValues.length > 0 && (
-                                            <div className="text-gray-400 font-mono">
+                                            <div
+                                                className={`font-mono ${bodyText}`}
+                                            >
                                                 Samples:{" "}
                                                 {attr.sampleValues.join(" | ")}
                                             </div>
@@ -314,10 +368,10 @@ function AttributeExplorerContent({ title, sampleSize = "100" }) {
             )}
 
             {!analysis && !scanning && !error && hasCredentials && (
-                <div className="text-xs text-gray-600 italic">
+                <Caption2 block className="italic">
                     Select an index and click Scan to discover attribute types,
                     fill rates, and cardinality.
-                </div>
+                </Caption2>
             )}
         </div>
     );

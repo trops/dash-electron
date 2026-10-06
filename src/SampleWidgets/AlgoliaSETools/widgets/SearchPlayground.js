@@ -7,8 +7,18 @@
  *
  * @package AlgoliaSETools
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Panel, SubHeading2, Button } from "@trops/dash-react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import {
+    Panel,
+    SubHeading2,
+    Button,
+    AlertBanner,
+    Caption2,
+    Checkbox,
+    InputText,
+    SelectInput,
+    ThemeContext,
+} from "@trops/dash-react";
 import {
     Widget,
     useWidgetProviders,
@@ -22,6 +32,7 @@ function SearchPlaygroundContent({ title }) {
     const hasCredentials = hasProvider("algolia");
     const provider = hasCredentials ? getProvider("algolia") : null;
     const pc = useProviderClient(provider);
+    const { currentTheme } = useContext(ThemeContext);
 
     const [indices, setIndices] = useState([]);
     const [loadingIndices, setLoadingIndices] = useState(false);
@@ -145,44 +156,52 @@ function SearchPlaygroundContent({ title }) {
         return hr.value || null;
     };
 
+    // Theme tokens: result rows sit one step above the Panel surface.
+    const rowClass = currentTheme?.["bg-primary-dark"] || "";
+    const bodyText = currentTheme?.["text-primary-medium"] || "";
+    const borderClass = currentTheme?.["border-primary-dark"] || "";
+
     return (
         <div className="flex flex-col gap-3 h-full text-sm overflow-y-auto">
             <SubHeading2 title={title} />
 
             {!hasCredentials && (
-                <div className="p-2 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-300 text-xs">
-                    Algolia provider not configured.
-                </div>
+                <AlertBanner
+                    variant="warning"
+                    size="compact"
+                    message="Algolia provider not configured."
+                />
             )}
 
             {hasCredentials && (
                 <>
                     {/* Index + Query */}
                     <div className="space-y-2">
-                        <select
+                        <SelectInput
                             value={selectedIndex}
-                            onChange={(e) => setSelectedIndex(e.target.value)}
-                            className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"
-                        >
-                            <option value="">
-                                {loadingIndices ? "Loading..." : "Select index"}
-                            </option>
-                            {indices.map((idx) => (
-                                <option key={idx.name} value={idx.name}>
-                                    {idx.name}
-                                </option>
-                            ))}
-                        </select>
-                        <div className="flex gap-2">
-                            <input
+                            onChange={(value) => setSelectedIndex(value)}
+                            placeholder={
+                                loadingIndices ? "Loading..." : "Select index"
+                            }
+                            options={indices.map((idx) => ({
+                                value: idx.name,
+                                label: idx.name,
+                            }))}
+                            inputClassName="text-xs"
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                            <InputText
                                 type="text"
                                 value={query}
-                                onChange={(e) => setQuery(e.target.value)}
+                                onChange={(value) => setQuery(value)}
                                 onKeyDown={(e) =>
                                     e.key === "Enter" && handleSearch()
                                 }
                                 placeholder="Search query..."
-                                className="flex-1 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                                height="h-7"
+                                padding="px-2 py-1"
+                                inputClassName="text-xs"
+                                className="flex-1 min-w-0"
                             />
                             <Button
                                 size="sm"
@@ -199,101 +218,93 @@ function SearchPlaygroundContent({ title }) {
                     {/* Parameter Toggles */}
                     <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>
-                            <label className="text-[10px] text-gray-500 block mb-0.5">
+                            <Caption2 block className="mb-0.5">
                                 Typo Tolerance
-                            </label>
-                            <select
+                            </Caption2>
+                            <SelectInput
                                 value={typoTolerance}
-                                onChange={(e) =>
-                                    setTypoTolerance(e.target.value)
-                                }
-                                className="w-full px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-xs text-gray-300"
-                            >
-                                <option value="true">Enabled</option>
-                                <option value="false">Disabled</option>
-                                <option value="min">Min (1 typo)</option>
-                                <option value="strict">Strict</option>
-                            </select>
+                                onChange={(value) => setTypoTolerance(value)}
+                                options={[
+                                    { value: "true", label: "Enabled" },
+                                    { value: "false", label: "Disabled" },
+                                    { value: "min", label: "Min (1 typo)" },
+                                    { value: "strict", label: "Strict" },
+                                ]}
+                                inputClassName="text-xs px-1.5 py-0.5"
+                            />
                         </div>
                         <div>
-                            <label className="text-[10px] text-gray-500 block mb-0.5">
+                            <Caption2 block className="mb-0.5">
                                 Hits / Page
-                            </label>
-                            <select
+                            </Caption2>
+                            <SelectInput
                                 value={hitsPerPage}
-                                onChange={(e) =>
-                                    setHitsPerPage(Number(e.target.value))
+                                onChange={(value) =>
+                                    setHitsPerPage(Number(value))
                                 }
-                                className="w-full px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-xs text-gray-300"
-                            >
-                                <option value={5}>5</option>
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                                <option value={50}>50</option>
-                            </select>
+                                options={[5, 10, 20, 50].map((n) => ({
+                                    value: n,
+                                    label: String(n),
+                                }))}
+                                inputClassName="text-xs px-1.5 py-0.5"
+                            />
                         </div>
                         <div>
-                            <label className="text-[10px] text-gray-500 block mb-0.5">
+                            <Caption2 block className="mb-0.5">
                                 Distinct
-                            </label>
-                            <select
+                            </Caption2>
+                            <SelectInput
                                 value={distinct}
-                                onChange={(e) =>
-                                    setDistinct(Number(e.target.value))
-                                }
-                                className="w-full px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-xs text-gray-300"
-                            >
-                                <option value={0}>Off</option>
-                                <option value={1}>1 per group</option>
-                                <option value={2}>2 per group</option>
-                                <option value={3}>3 per group</option>
-                            </select>
+                                onChange={(value) => setDistinct(Number(value))}
+                                options={[
+                                    { value: 0, label: "Off" },
+                                    { value: 1, label: "1 per group" },
+                                    { value: 2, label: "2 per group" },
+                                    { value: 3, label: "3 per group" },
+                                ]}
+                                inputClassName="text-xs px-1.5 py-0.5"
+                            />
                         </div>
                         <div className="flex items-end">
-                            <label className="flex items-center gap-1.5 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={showHighlights}
-                                    onChange={(e) =>
-                                        setShowHighlights(e.target.checked)
-                                    }
-                                    className="rounded"
-                                />
-                                <span className="text-[10px] text-gray-500">
-                                    Show highlights
-                                </span>
-                            </label>
+                            <Checkbox
+                                checked={showHighlights}
+                                onChange={(checked) =>
+                                    setShowHighlights(checked)
+                                }
+                                label="Show highlights"
+                                className="cursor-pointer"
+                            />
                         </div>
                     </div>
 
                     {/* Filters */}
                     <div>
-                        <label className="text-[10px] text-gray-500 block mb-0.5">
+                        <Caption2 block className="mb-0.5">
                             Filters (Algolia filter syntax)
-                        </label>
-                        <input
+                        </Caption2>
+                        <InputText
                             type="text"
                             value={filters}
-                            onChange={(e) => setFilters(e.target.value)}
+                            onChange={(value) => setFilters(value)}
                             placeholder='e.g., brand:"Nike" AND price < 100'
-                            className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 placeholder-gray-600 font-mono focus:outline-none focus:border-blue-500"
+                            height="h-7"
+                            padding="px-2 py-1"
+                            inputClassName="text-xs font-mono"
                         />
                     </div>
                 </>
             )}
 
             {error && (
-                <div className="p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-xs">
-                    {error}
-                </div>
+                <AlertBanner variant="error" size="compact" message={error} />
             )}
 
             {/* Stats */}
             {hits.length > 0 && (
-                <div className="text-[10px] text-gray-500">
+                <Caption2 block>
                     {nbHits.toLocaleString()} results
                     {queryTime != null && <> in {queryTime}ms</>}
-                </div>
+                </Caption2>
             )}
 
             {/* Results */}
@@ -310,28 +321,33 @@ function SearchPlaygroundContent({ title }) {
                         return (
                             <div
                                 key={hit.objectID || idx}
-                                className="px-2 py-1.5 bg-gray-800/30 border border-gray-700/50 rounded text-xs"
+                                className={`px-2 py-1.5 border rounded text-xs ${rowClass} ${borderClass}`}
                             >
                                 <div className="flex items-start gap-2">
-                                    <span className="text-gray-600 font-mono shrink-0">
+                                    <Caption2 className="font-mono shrink-0">
                                         #{idx + 1}
-                                    </span>
+                                    </Caption2>
                                     <div className="flex-1 min-w-0">
                                         {highlightedTitle ? (
                                             <div
-                                                className="text-gray-200 truncate"
+                                                className={`truncate ${bodyText}`}
                                                 dangerouslySetInnerHTML={{
                                                     __html: highlightedTitle,
                                                 }}
                                             />
                                         ) : (
-                                            <div className="text-gray-200 truncate">
+                                            <div
+                                                className={`truncate ${bodyText}`}
+                                            >
                                                 {titleField}
                                             </div>
                                         )}
-                                        <div className="text-[10px] text-gray-600 font-mono truncate">
+                                        <Caption2
+                                            block
+                                            className="font-mono truncate opacity-75"
+                                        >
                                             {hit.objectID}
-                                        </div>
+                                        </Caption2>
                                     </div>
                                 </div>
                             </div>
