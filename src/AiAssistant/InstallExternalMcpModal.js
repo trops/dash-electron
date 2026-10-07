@@ -191,8 +191,9 @@ export const InstallExternalMcpModal = () => {
                             Install MCP server: {server.name}
                         </div>
                         <div className="text-xs text-gray-400 mt-0.5">
-                            The AI assistant requested adding this MCP provider
-                            so it can build your widget.
+                            {mode === "ai-tool"
+                                ? "The AI assistant requested adding this MCP provider so it can build your widget."
+                                : "Add this MCP provider to Dash? Check what will run below before installing."}
                         </div>
                     </div>
                 </div>
