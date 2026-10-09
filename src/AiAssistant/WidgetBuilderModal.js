@@ -5581,7 +5581,9 @@ ${
                                         <div
                                             className={`w-48 border-r ${borderColor} shrink-0 overflow-auto py-1`}
                                         >
-                                            <div className="px-2 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                                            <div
+                                                className={`px-2 py-1 text-[10px] font-semibold ${bt.muted} uppercase tracking-wider`}
+                                            >
                                                 Files
                                             </div>
                                             <button
@@ -5590,8 +5592,8 @@ ${
                                                 }
                                                 className={`w-full text-left px-3 py-1.5 text-xs font-mono truncate transition-colors ${
                                                     activeFile === "component"
-                                                        ? "bg-indigo-600/15 text-indigo-300"
-                                                        : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
+                                                        ? `${bt.tint} ${bt.accent}`
+                                                        : `${bt.muted} ${bt.hoverSurface} hover:opacity-100`
                                                 }`}
                                             >
                                                 <FontAwesomeIcon
@@ -5606,8 +5608,8 @@ ${
                                                 }
                                                 className={`w-full text-left px-3 py-1.5 text-xs font-mono truncate transition-colors ${
                                                     activeFile === "config"
-                                                        ? "bg-indigo-600/15 text-indigo-300"
-                                                        : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
+                                                        ? `${bt.tint} ${bt.accent}`
+                                                        : `${bt.muted} ${bt.hoverSurface} hover:opacity-100`
                                                 }`}
                                             >
                                                 <FontAwesomeIcon
@@ -5623,27 +5625,29 @@ ${
                                             <div
                                                 className={`flex items-center gap-1 px-3 py-1.5 border-b ${borderColor} shrink-0 text-xs`}
                                             >
-                                                <span className="text-gray-600">
+                                                <span className={`${bt.muted}`}>
                                                     @ai-built
                                                 </span>
-                                                <span className="text-gray-700">
+                                                <span className={`${bt.muted}`}>
                                                     /
                                                 </span>
-                                                <span className="text-gray-600">
+                                                <span className={`${bt.muted}`}>
                                                     {(
                                                         widgetName || "widget"
                                                     ).toLowerCase()}
                                                 </span>
-                                                <span className="text-gray-700">
+                                                <span className={`${bt.muted}`}>
                                                     /
                                                 </span>
-                                                <span className="text-gray-600">
+                                                <span className={`${bt.muted}`}>
                                                     widgets
                                                 </span>
-                                                <span className="text-gray-700">
+                                                <span className={`${bt.muted}`}>
                                                     /
                                                 </span>
-                                                <span className="text-gray-300 font-medium">
+                                                <span
+                                                    className={`${bt.text} font-medium`}
+                                                >
                                                     {widgetName || "Widget"}
                                                     {activeFile === "config"
                                                         ? ".dash.js"
@@ -5678,7 +5682,9 @@ ${
                                             <div
                                                 className={`flex items-center justify-between px-3 py-2 border-t ${borderColor} shrink-0`}
                                             >
-                                                <span className="text-[10px] text-gray-600">
+                                                <span
+                                                    className={`text-[10px] ${bt.muted}`}
+                                                >
                                                     {hasUnsavedEdits
                                                         ? "Unsaved changes"
                                                         : ""}
@@ -5689,7 +5695,7 @@ ${
                                                             onClick={
                                                                 handleCancelEdits
                                                             }
-                                                            className="px-3 py-1 rounded text-xs text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
+                                                            className={`px-3 py-1 rounded text-xs ${bt.muted} hover:opacity-100 ${bt.hoverSurface} transition-colors`}
                                                         >
                                                             Cancel
                                                         </button>
@@ -5697,13 +5703,15 @@ ${
                                                             onClick={
                                                                 handleSaveEdits
                                                             }
-                                                            className="px-3 py-1 rounded text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
+                                                            className={`px-3 py-1 rounded text-xs ${bt.primaryFill} font-medium transition-colors`}
                                                         >
                                                             Save &amp; Compile
                                                         </button>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-[10px] text-gray-600">
+                                                    <span
+                                                        className={`text-[10px] ${bt.muted}`}
+                                                    >
                                                         JavaScript
                                                     </span>
                                                 )}
@@ -5811,15 +5819,23 @@ ${
                                         className="px-4 py-4 overflow-y-auto flex flex-col gap-3"
                                         data-testid="build-mode-acceptance-scorecard"
                                     >
-                                        <div className="text-sm text-gray-300 leading-relaxed">
-                                            <div className="font-medium text-gray-100">
+                                        <div
+                                            className={`text-sm ${bt.text} leading-relaxed`}
+                                        >
+                                            <div
+                                                className={`font-medium ${bt.text}`}
+                                            >
                                                 Scoring{" "}
-                                                <code className="px-1.5 py-0.5 rounded bg-gray-800 text-indigo-300 font-mono text-xs">
+                                                <code
+                                                    className={`px-1.5 py-0.5 rounded ${bt.surface} ${bt.accent} font-mono text-xs`}
+                                                >
                                                     {widgetName ||
                                                         "current widget"}
                                                 </code>
                                             </div>
-                                            <div className="text-xs text-gray-400 mt-1">
+                                            <div
+                                                className={`text-xs ${bt.muted} mt-1`}
+                                            >
                                                 The scorecard runs over whatever
                                                 widget code is currently in the
                                                 editor — your draft, a remixed
@@ -5835,7 +5851,7 @@ ${
                                                     onClick={() =>
                                                         setActiveTab("code")
                                                     }
-                                                    className="underline text-indigo-300 hover:text-indigo-200"
+                                                    className={`underline ${bt.accent} hover:opacity-80`}
                                                 >
                                                     Code
                                                 </button>{" "}

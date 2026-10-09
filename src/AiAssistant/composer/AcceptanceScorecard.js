@@ -30,6 +30,7 @@ import {
     ACCEPTANCE_CHECKLIST,
     COLOR_TAILWIND_REGEX,
 } from "./widgetConventions";
+import { useBuilderTheme } from "../useBuilderTheme";
 
 /**
  * A widget has a "data-fetch surface" when its source talks to a
@@ -272,27 +273,28 @@ function groupRowsByStatus(rows) {
 }
 
 function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
+    const bt = useBuilderTheme();
     const expandable = row.pass === false && row.matches.length > 0;
     const isOpen = expanded === row.index;
     const marker = row.pass === true ? "✓" : row.pass === false ? "✗" : "·";
     const markerTone =
         row.pass === true
-            ? "text-emerald-400"
+            ? `${bt.status.success.icon}`
             : row.pass === false
-            ? "text-rose-400"
-            : "text-gray-500";
+            ? `${bt.status.error.icon}`
+            : `${bt.muted}`;
     const rowBg =
         row.pass === false
-            ? "bg-rose-950/30 border border-rose-900/40"
+            ? `${bt.status.error.bg} border ${bt.status.error.border}`
             : row.pass === true
             ? ""
             : "";
     const textTone =
         row.pass === false
-            ? "text-gray-100"
+            ? `${bt.text}`
             : row.pass === true
-            ? "text-gray-300"
-            : "text-gray-400";
+            ? `${bt.text}`
+            : `${bt.muted}`;
     // Only failing rows get a "Send to AI" affordance — there's
     // nothing to fix on a passing or n/a row. The button is rendered
     // when the host wires an onSendToAi handler; without one, the
@@ -327,7 +329,9 @@ function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
                         {row.item}
                     </span>
                     {expandable && (
-                        <span className="text-xs text-rose-300 shrink-0">
+                        <span
+                            className={`text-xs ${bt.status.error.icon} shrink-0`}
+                        >
                             {isOpen ? "Hide" : "Details"}
                         </span>
                     )}
@@ -337,7 +341,7 @@ function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
                         type="button"
                         data-testid={`acceptance-scorecard-row-${row.index}-send-to-ai`}
                         onClick={() => onSendToAi(row)}
-                        className="shrink-0 my-1 mr-1.5 px-2 py-1 rounded text-xs font-medium bg-indigo-700 hover:bg-indigo-600 text-indigo-50 transition-colors"
+                        className={`shrink-0 my-1 mr-1.5 px-2 py-1 rounded text-xs font-medium ${bt.primaryFill} ${bt.accent} transition-colors`}
                         title="Ask the AI to fix this rule"
                     >
                         Ask AI
@@ -346,13 +350,13 @@ function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
             </div>
             {expandable && isOpen && (
                 <ul
-                    className="ml-9 mb-1.5 mr-2 flex flex-col gap-0.5 font-mono text-xs text-rose-200"
+                    className={`ml-9 mb-1.5 mr-2 flex flex-col gap-0.5 font-mono text-xs ${bt.status.error.text}`}
                     data-testid={`acceptance-scorecard-matches-${row.index}`}
                 >
                     {row.matches.map((m, i) => (
                         <li
                             key={i}
-                            className="bg-rose-900/30 px-2 py-0.5 rounded"
+                            className={`${bt.status.error.bg} px-2 py-0.5 rounded`}
                         >
                             {m}
                         </li>
@@ -364,6 +368,7 @@ function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
 }
 
 export function AcceptanceScorecard({ code, onSendToAi = null }) {
+    const bt = useBuilderTheme();
     const rows = useMemo(() => evaluateScorecard(code || ""), [code]);
     const [expanded, setExpanded] = useState(null);
 
@@ -372,7 +377,10 @@ export function AcceptanceScorecard({ code, onSendToAi = null }) {
     const failCount = failed.length;
     const naCount = na.length;
     const totalChecked = passCount + failCount;
-    const headlineTone = failCount === 0 ? "text-emerald-300" : "text-rose-300";
+    const headlineTone =
+        failCount === 0
+            ? `${bt.status.success.icon}`
+            : `${bt.status.error.icon}`;
     const headline =
         failCount === 0
             ? totalChecked === 0
@@ -389,13 +397,15 @@ export function AcceptanceScorecard({ code, onSendToAi = null }) {
                 <span className={`text-base font-semibold ${headlineTone}`}>
                     {headline}
                 </span>
-                <span className="text-sm text-gray-400">
+                <span className={`text-sm ${bt.muted}`}>
                     {passCount} pass · {failCount} fail · {naCount} n/a
                 </span>
             </div>
             {failed.length > 0 && (
                 <section className="flex flex-col gap-1.5">
-                    <h4 className="text-xs uppercase tracking-wide text-rose-400/80 font-semibold">
+                    <h4
+                        className={`text-xs uppercase tracking-wide ${bt.status.error.icon} font-semibold`}
+                    >
                         Failing
                     </h4>
                     <ul className="flex flex-col gap-1.5">
@@ -413,7 +423,9 @@ export function AcceptanceScorecard({ code, onSendToAi = null }) {
             )}
             {passed.length > 0 && (
                 <section className="flex flex-col gap-1">
-                    <h4 className="text-xs uppercase tracking-wide text-emerald-400/70 font-semibold">
+                    <h4
+                        className={`text-xs uppercase tracking-wide ${bt.status.success.icon} font-semibold`}
+                    >
                         Passing
                     </h4>
                     <ul className="flex flex-col">
@@ -430,7 +442,9 @@ export function AcceptanceScorecard({ code, onSendToAi = null }) {
             )}
             {na.length > 0 && (
                 <section className="flex flex-col gap-1">
-                    <h4 className="text-xs uppercase tracking-wide text-gray-500 font-semibold">
+                    <h4
+                        className={`text-xs uppercase tracking-wide ${bt.muted} font-semibold`}
+                    >
                         Not statically checkable
                     </h4>
                     <ul className="flex flex-col">

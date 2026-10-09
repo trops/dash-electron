@@ -19,6 +19,7 @@
  *     template's shape; if not, the scorecard's conditional gate
  *     needs extending (rare)
  */
+jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
 import { SAMPLE_LAYOUTS } from "./composerSampleLayouts";
 import { emitGridWidgetCode } from "./gridEmitter";
 import { evaluateScorecard } from "./AcceptanceScorecard";

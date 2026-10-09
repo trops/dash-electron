@@ -7,19 +7,20 @@
  * lets the user clear or filter to errors only.
  */
 import React, { useMemo, useState } from "react";
+import { useBuilderTheme } from "./useBuilderTheme";
 
-function severityClasses(sev) {
+function severityClasses(sev, bt) {
     switch (sev) {
         case "error":
-            return "text-red-300 border-l-2 border-red-500";
+            return `${bt.status.error.icon} border-l-2 ${bt.status.error.border}`;
         case "warn":
-            return "text-amber-300 border-l-2 border-amber-500";
+            return `${bt.status.warning.icon} border-l-2 ${bt.status.warning.border}`;
         case "info":
-            return "text-sky-300 border-l-2 border-sky-500";
+            return `${bt.status.info.icon} border-l-2 ${bt.status.info.border}`;
         case "debug":
-            return "text-gray-400 border-l-2 border-gray-500";
+            return `${bt.muted} border-l-2 ${bt.border}`;
         default:
-            return "text-gray-200 border-l-2 border-gray-700";
+            return `${bt.text} border-l-2 ${bt.border}`;
     }
 }
 
@@ -52,6 +53,7 @@ export const WidgetConsolePane = ({
     onClear,
     onSendErrorToAI,
 }) => {
+    const bt = useBuilderTheme();
     const [errorsOnly, setErrorsOnly] = useState(false);
     const filtered = useMemo(
         () =>
@@ -60,23 +62,27 @@ export const WidgetConsolePane = ({
     );
 
     return (
-        <div className="flex flex-col h-full bg-gray-950 text-gray-200">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 shrink-0">
+        <div className={`flex flex-col h-full ${bt.surface} ${bt.text}`}>
+            <div
+                className={`flex items-center justify-between px-3 py-2 border-b ${bt.border} shrink-0`}
+            >
                 <div className="flex items-center gap-3 text-xs">
-                    <span className="text-gray-400">
+                    <span className={`${bt.muted}`}>
                         {events.length} event{events.length === 1 ? "" : "s"}
                         {errorsOnly && events.length > 0 ? (
                             <>
                                 {" "}
                                 ·{" "}
-                                <span className="text-red-300">
+                                <span className={`${bt.status.error.icon}`}>
                                     {filtered.length} error
                                     {filtered.length === 1 ? "" : "s"}
                                 </span>
                             </>
                         ) : null}
                     </span>
-                    <label className="flex items-center gap-1.5 text-gray-400 cursor-pointer hover:text-gray-200">
+                    <label
+                        className={`flex items-center gap-1.5 ${bt.muted} cursor-pointer hover:opacity-100`}
+                    >
                         <input
                             type="checkbox"
                             checked={errorsOnly}
@@ -88,14 +94,16 @@ export const WidgetConsolePane = ({
                 </div>
                 <button
                     onClick={onClear}
-                    className="px-2 py-1 text-xs rounded bg-gray-800 hover:bg-gray-700 text-gray-200 transition-colors"
+                    className={`px-2 py-1 text-xs rounded ${bt.surface} ${bt.hoverSurface} ${bt.text} transition-colors`}
                     data-testid="console-clear"
                 >
                     Clear
                 </button>
             </div>
             {filtered.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center text-gray-500 text-xs">
+                <div
+                    className={`flex-1 flex items-center justify-center ${bt.muted} text-xs`}
+                >
                     {events.length === 0
                         ? "No console output yet — interact with the preview to see logs."
                         : "No errors. Toggle off 'Errors only' to see all output."}
@@ -106,19 +114,22 @@ export const WidgetConsolePane = ({
                         <div
                             key={idx}
                             className={`px-3 py-1.5 ${severityClasses(
-                                evt.severity
-                            )} hover:bg-gray-900`}
+                                evt.severity,
+                                bt
+                            )} ${bt.hoverSurface}`}
                             data-testid="console-row"
                         >
                             <div className="flex items-baseline gap-2">
-                                <span className="text-gray-500 flex-shrink-0">
+                                <span className={`${bt.muted} flex-shrink-0`}>
                                     {formatTime(evt.timestamp)}
                                 </span>
                                 <span className="uppercase text-[10px] font-semibold flex-shrink-0">
                                     {evt.severity}
                                 </span>
                                 {evt.source && evt.source !== "console" && (
-                                    <span className="text-[10px] text-gray-500 flex-shrink-0">
+                                    <span
+                                        className={`text-[10px] ${bt.muted} flex-shrink-0`}
+                                    >
                                         ({evt.source})
                                     </span>
                                 )}
@@ -135,7 +146,7 @@ export const WidgetConsolePane = ({
                                         <button
                                             type="button"
                                             onClick={() => onSendErrorToAI(evt)}
-                                            className="flex-shrink-0 text-[10px] text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                                            className={`flex-shrink-0 text-[10px] ${bt.accent} hover:opacity-80 underline cursor-pointer`}
                                             data-testid="console-send-to-ai"
                                             title="Push this error into the chat as a fix request"
                                         >
