@@ -110,6 +110,7 @@ export const DASH_REACT_COMPONENTS = new Set([
     "ProgressBar2",
     "ProgressBar3",
     "RadioGroup",
+    "ResizeHandle",
     "RichText",
     "SearchInput",
     "SectionLabel",

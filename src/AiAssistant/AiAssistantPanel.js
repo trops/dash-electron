@@ -13,7 +13,9 @@ import {
     AlertBanner,
     Button3,
     FontAwesomeIcon,
+    ResizeHandle,
     ThemeContext,
+    useResizableWidth,
 } from "@trops/dash-react";
 import { ChatCore, AppContext } from "@trops/dash-core";
 
@@ -142,8 +144,14 @@ export const AiAssistantPanel = ({
         if (onCollapsedChange) onCollapsedChange(next);
         else setCollapsedInternal(next);
     };
-    const [width, setWidth] = useState(384);
-    const isDragging = React.useRef(false);
+    // Drag the panel's left edge to resize it; the width is remembered.
+    const { width, handleProps } = useResizableWidth({
+        defaultWidth: 384,
+        min: 320,
+        max: 700,
+        edge: "left",
+        storageKey: "dash:assistant:width",
+    });
     const appContext = useContext(AppContext);
     const { currentTheme } = useContext(ThemeContext) || {};
     const t = (key) => currentTheme?.[key] || "";
@@ -220,40 +228,6 @@ export const AiAssistantPanel = ({
     );
     const apiKey = anthropicEntry?.[1]?.credentials?.apiKey || null;
 
-    // Resize handler
-    const handleMouseDown = useCallback(
-        (e) => {
-            e.preventDefault();
-            isDragging.current = true;
-            const startX = e.clientX;
-            const startWidth = width;
-
-            const handleMouseMove = (e) => {
-                if (!isDragging.current) return;
-                const delta = startX - e.clientX;
-                const newWidth = Math.min(
-                    Math.max(startWidth + delta, 320),
-                    700
-                );
-                setWidth(newWidth);
-            };
-
-            const handleMouseUp = () => {
-                isDragging.current = false;
-                document.removeEventListener("mousemove", handleMouseMove);
-                document.removeEventListener("mouseup", handleMouseUp);
-                document.body.style.cursor = "";
-                document.body.style.userSelect = "";
-            };
-
-            document.addEventListener("mousemove", handleMouseMove);
-            document.addEventListener("mouseup", handleMouseUp);
-            document.body.style.cursor = "col-resize";
-            document.body.style.userSelect = "none";
-        },
-        [width]
-    );
-
     if (collapsed) {
         // When docked, AssistantDock renders the shared rail + toggle button.
         if (docked) return null;
@@ -280,13 +254,7 @@ export const AiAssistantPanel = ({
             className="flex flex-row shrink-0 h-screen"
             style={{ width: `${width}px` }}
         >
-            {/* Resize handle */}
-            <div
-                onMouseDown={handleMouseDown}
-                className={`w-1 cursor-col-resize transition-colors shrink-0 ${t(
-                    "hover-bg-primary-dark"
-                )}`}
-            />
+            <ResizeHandle {...handleProps} ariaLabel="Resize AI Assistant" />
 
             {/* Panel content */}
             <div
