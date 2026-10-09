@@ -5865,7 +5865,9 @@ ${
                             registry for existing widgets, not build a
                             new one) so it sits outside the toggle as
                             its own button with different styling. */}
-                            <div className="flex items-center justify-between gap-2 px-3 pt-2 shrink-0">
+                            <div
+                                className={`flex items-center justify-between gap-2 px-3 py-2 border-b shrink-0 ${borderColor}`}
+                            >
                                 <div className="flex items-center gap-2 min-w-0">
                                     <div
                                         className={`flex items-center gap-1 ${bt.surface} rounded-md border ${bt.border} p-0.5`}
