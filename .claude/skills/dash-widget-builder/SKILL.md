@@ -794,6 +794,52 @@ events: ["itemSelected", "queryChanged"],
 The framework reads bare names; the object form (`{ name, description }`) is
 wrong and breaks downstream tooling.
 
+### Listening to bots
+
+A dashboard's bots publish on the same bus, so a widget can react when a bot
+finishes — show its latest answer, refresh after it writes data, flag a
+failure. The widget needs nothing bot-specific: declare a handler in
+`eventHandlers` and the user wires it to a bot in the widget's
+**Configure › Listeners** (or Dashboard Config › Listeners), under
+"Bots on this dashboard". Never hardcode a bot's id or event name.
+
+Bot events are named `bot:<ref>[<botId>].<event>`:
+
+| Event                        | When                  | Payload fields (after unwrapping)                                               |
+| ---------------------------- | --------------------- | ------------------------------------------------------------------------------- |
+| `completed`                  | a run finished        | `botId`, `ref`, `botName`, `trigger`, `output`                                  |
+| `failed`                     | a run failed          | `botId`, `ref`, `botName`, `trigger`, `error`                                   |
+| `tool.<providerType>.<tool>` | a tool call succeeded | `botId`, `ref`, `botName`, `provider`, `providerType`, `tool`, `args`, `result` |
+
+-   `output` is the bot's final answer as text (Markdown possible); `error`
+    is a readable message. Both, and a tool's `result`, are capped at 8 KB.
+-   `trigger` is how the run started: `"manual"`, `"schedule"` or `"event"`.
+-   Team leads never publish — only regular bots appear as sources.
+
+Same envelope rule as widget events — unwrap first:
+
+```jsx
+const { listen, listeners } = useWidgetEvents();
+const onBotRef = useRef(null);
+onBotRef.current = (envelope) => {
+    const payload = envelope?.message || envelope;
+    if (payload.error) {
+        setStatus(`${payload.botName} failed: ${payload.error}`);
+    } else {
+        setLatest({ from: payload.botName, text: payload.output || "" });
+    }
+};
+useEffect(() => {
+    listen(listeners, {
+        onBotUpdate: (envelope) => onBotRef.current(envelope),
+    });
+}, [listen, listeners]);
+```
+
+```js
+eventHandlers: ["onBotUpdate"],
+```
+
 ### Tell the user
 
 When you add events, list them at the end of your chat response — one line
