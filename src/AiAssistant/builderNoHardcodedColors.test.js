@@ -33,16 +33,27 @@ describe("Widget Builder — no hard-coded palette colours", () => {
         ]);
     });
 
-    test.each(["WidgetDraftsList.js"])("%s has none", (file) => {
-        expect(hardcoded(file)).toEqual([]);
-    });
+    test.each(["WidgetDraftsList.js", "ChatProviderGate.js"])(
+        "%s has none",
+        (file) => {
+            expect(hardcoded(file)).toEqual([]);
+        }
+    );
 
     test("WidgetBuilderModal.js stays under its ceiling", () => {
-        // Slice A (frame, tabs, toolbar, footers). Lower this as slices
-        // B–D convert the rest; never raise it.
-        const CEILING = 189;
+        // Slices A–B done (frame, Build panel, preview pane). Lower this as
+        // slices C–D convert the rest; never raise it.
+        const CEILING = 33;
         expect(hardcoded("WidgetBuilderModal.js").length).toBeLessThanOrEqual(
             CEILING
         );
+    });
+
+    test("QuickStartPane.js keeps only its prompt-text examples", () => {
+        // buildSystemPrompt tells the AI which class pills NOT to emit
+        // ("text-gray-600 italic" etc.) — text, not UI.
+        expect(
+            hardcoded("composer/QuickStartPane.js").length
+        ).toBeLessThanOrEqual(6);
     });
 });

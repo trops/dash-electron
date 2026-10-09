@@ -40,6 +40,7 @@ import {
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
 import { ChatProviderGate } from "./ChatProviderGate";
 import { WidgetDraftsList, firstUserMessageExcerpt } from "./WidgetDraftsList";
+import { builderTheme, useBuilderTheme } from "./useBuilderTheme";
 import { WidgetConsolePane } from "./WidgetConsolePane";
 import { ComposerPane } from "./composer/ComposerPane";
 import { ComposerPaneV2 } from "./composer/ComposerPaneV2";
@@ -102,6 +103,7 @@ function PreviewProviderPicker({
     onChange,
     justChanged,
 }) {
+    const bt = useBuilderTheme();
     const declarations = React.useMemo(
         () => extractProviderDeclarations(configCode || ""),
         [configCode]
@@ -124,7 +126,9 @@ function PreviewProviderPicker({
     if (declarations.length === 0) return null;
 
     return (
-        <div className="px-4 pt-2 pb-3 border-b border-gray-800/60 shrink-0 space-y-2">
+        <div
+            className={`px-4 pt-2 pb-3 border-b ${bt.border} shrink-0 space-y-2`}
+        >
             {declarations.map((decl) => {
                 const options = compatibleByType[decl.type] || [];
                 const current = selection?.[decl.type] || "";
@@ -134,7 +138,7 @@ function PreviewProviderPicker({
                         key={decl.type}
                         className="flex items-center gap-2 text-xs"
                     >
-                        <span className="text-gray-400 shrink-0">
+                        <span className={`${bt.muted} shrink-0`}>
                             {label} provider:
                         </span>
                         {options.length === 0 ? (
@@ -171,7 +175,7 @@ function PreviewProviderPicker({
                                         );
                                     }
                                 }}
-                                className="text-[11px] px-2 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-700/40 transition-colors"
+                                className={`text-[11px] px-2 py-1 rounded ${bt.tint} ${bt.hoverTint} ${bt.accent} border ${bt.accentBorder} transition-colors`}
                             >
                                 + Add new {label} provider
                             </button>
@@ -188,7 +192,7 @@ function PreviewProviderPicker({
                                         e.target.value
                                     )
                                 }
-                                className="flex-1 max-w-xs px-2 py-1 bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
+                                className={`flex-1 max-w-xs px-2 py-1 ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
                                 data-testid={`preview-provider-select-${decl.type}`}
                             >
                                 <option value="">— Select a provider —</option>
@@ -201,7 +205,7 @@ function PreviewProviderPicker({
                         )}
                         {justChanged?.type === decl.type && (
                             <span
-                                className="text-xs text-green-300 flex items-center gap-1"
+                                className={`text-xs ${bt.status.success.icon} flex items-center gap-1`}
                                 data-testid="provider-just-changed"
                             >
                                 <FontAwesomeIcon
@@ -245,6 +249,7 @@ function PreviewTestInputsForm({
     onChange,
     onReset,
 }) {
+    const bt = useBuilderTheme();
     const fields = userConfig
         ? Object.entries(userConfig).filter(
               ([, spec]) => spec && typeof spec === "object"
@@ -348,12 +353,18 @@ function PreviewTestInputsForm({
     };
 
     return (
-        <div className="px-4 pt-2 pb-3 border-b border-gray-800/60 shrink-0 space-y-2">
+        <div
+            className={`px-4 pt-2 pb-3 border-b ${bt.border} shrink-0 space-y-2`}
+        >
             <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                <span
+                    className={`text-[10px] uppercase tracking-wider ${bt.muted}`}
+                >
                     Test inputs
                     {isDirtyLocal && (
-                        <span className="ml-2 text-amber-400 normal-case tracking-normal">
+                        <span
+                            className={`ml-2 ${bt.status.warning.icon} normal-case tracking-normal`}
+                        >
                             • unapplied changes
                         </span>
                     )}
@@ -363,7 +374,7 @@ function PreviewTestInputsForm({
                         <button
                             type="button"
                             onClick={onReset}
-                            className="text-[10px] text-gray-500 hover:text-gray-300 underline"
+                            className={`text-[10px] ${bt.muted} hover:opacity-100 underline`}
                         >
                             Reset to defaults
                         </button>
@@ -375,8 +386,8 @@ function PreviewTestInputsForm({
                         data-testid="preview-test-inputs-apply"
                         className={
                             isDirtyLocal
-                                ? "text-[11px] px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white"
-                                : "text-[11px] px-2 py-1 rounded bg-gray-700/40 text-gray-500 cursor-not-allowed"
+                                ? `text-[11px] px-2 py-1 rounded ${bt.primaryFill}`
+                                : `text-[11px] px-2 py-1 rounded ${bt.raised} ${bt.muted} cursor-not-allowed`
                         }
                     >
                         Apply to preview
@@ -391,8 +402,7 @@ function PreviewTestInputsForm({
                     const common = {
                         value: v == null ? "" : v,
                         onChange: (e) => setLocal(fieldName, e.target.value),
-                        className:
-                            "flex-1 max-w-md px-2 py-1 bg-gray-800/70 border border-gray-700/50 rounded text-xs text-gray-200 focus:border-indigo-500/50 focus:outline-none",
+                        className: `flex-1 max-w-md px-2 py-1 ${bt.surface} border ${bt.border} rounded text-xs ${bt.text} focus:outline-none`,
                         "data-testid": `preview-test-input-${fieldName}`,
                     };
                     let input;
@@ -472,7 +482,7 @@ function PreviewTestInputsForm({
                             className="flex items-center gap-2 text-xs"
                         >
                             <span
-                                className="text-gray-400 shrink-0"
+                                className={`${bt.muted} shrink-0`}
                                 style={{ minWidth: "8rem" }}
                             >
                                 {label}:
@@ -1592,6 +1602,7 @@ ${
         "border-primary-medium"
     )} ${tk("text-primary-light")} border rounded focus:outline-none`;
     const status = getStatusColors(chatThemeCtx?.themeVariant || "dark");
+    const bt = builderTheme(chatThemeCtx);
     // Same classes dash-react's <Button> uses, so primary actions read
     // right in every theme.
     const primaryButton = `dr-btn dr-btn-primary rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -3835,7 +3846,7 @@ ${
                                             (e) => e.severity === "error"
                                         ) && (
                                             <span
-                                                className={`ml-1 px-1 rounded text-xs ${status.error.solidBg} text-white`}
+                                                className={`ml-1 px-1 rounded text-xs ${status.error.solidBg} ${bt.onSolid}`}
                                                 title="Error in widget output"
                                             >
                                                 {
@@ -3875,7 +3886,7 @@ ${
                                             Scorecard
                                             {scorecardFailCount > 0 && (
                                                 <span
-                                                    className={`ml-1 px-1 rounded text-xs ${status.error.solidBg} text-white`}
+                                                    className={`ml-1 px-1 rounded text-xs ${status.error.solidBg} ${bt.onSolid}`}
                                                     title={`${scorecardFailCount} cohesion rule${
                                                         scorecardFailCount === 1
                                                             ? ""
@@ -4099,17 +4110,23 @@ ${
                                         !previewError &&
                                         !isCompiling && (
                                             <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                                                <div className="w-16 h-16 rounded-2xl bg-amber-900/30 border border-amber-700/30 flex items-center justify-center">
+                                                <div
+                                                    className={`w-16 h-16 rounded-2xl ${bt.status.warning.bg} border ${bt.status.warning.border} flex items-center justify-center`}
+                                                >
                                                     <FontAwesomeIcon
                                                         icon="exclamation-triangle"
-                                                        className="h-7 w-7 text-amber-400/60"
+                                                        className={`h-7 w-7 ${bt.status.warning.icon}`}
                                                     />
                                                 </div>
                                                 <div className="space-y-2 max-w-md">
-                                                    <p className="text-sm font-medium text-gray-300">
+                                                    <p
+                                                        className={`text-sm font-medium ${bt.text}`}
+                                                    >
                                                         Can't load widget source
                                                     </p>
-                                                    <p className="text-xs text-gray-500">
+                                                    <p
+                                                        className={`text-xs ${bt.muted}`}
+                                                    >
                                                         {effectiveEditContext.originalComponentName
                                                             ? `"${effectiveEditContext.originalComponentName}" `
                                                             : "This widget "}
@@ -4121,20 +4138,26 @@ ${
                                                         widget below.
                                                     </p>
                                                     {effectiveEditContext.originalPackage && (
-                                                        <p className="text-[10px] text-gray-600 font-mono">
+                                                        <p
+                                                            className={`text-[10px] ${bt.muted} font-mono`}
+                                                        >
                                                             package:{" "}
                                                             {
                                                                 effectiveEditContext.originalPackage
                                                             }
                                                         </p>
                                                     )}
-                                                    <p className="text-[10px] text-gray-600 font-mono break-words">
+                                                    <p
+                                                        className={`text-[10px] ${bt.muted} font-mono break-words`}
+                                                    >
                                                         reason:{" "}
                                                         {
                                                             effectiveEditContext.sourceError
                                                         }
                                                     </p>
-                                                    <p className="text-xs text-gray-600 mt-2">
+                                                    <p
+                                                        className={`text-xs ${bt.muted} mt-2`}
+                                                    >
                                                         You can still describe a
                                                         new widget from scratch
                                                         using the chat.
@@ -4156,9 +4179,13 @@ ${
                                             if (hasDiscoverActivity) {
                                                 return (
                                                     <div className="flex flex-col h-full">
-                                                        <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-800/60">
+                                                        <div
+                                                            className={`flex items-center justify-between gap-2 pb-3 border-b ${bt.border}`}
+                                                        >
                                                             <div className="flex items-baseline gap-2 min-w-0">
-                                                                <span className="text-sm font-semibold text-gray-200">
+                                                                <span
+                                                                    className={`text-sm font-semibold ${bt.text}`}
+                                                                >
                                                                     {discoverSearching
                                                                         ? "Searching registry..."
                                                                         : `${
@@ -4171,7 +4198,9 @@ ${
                                                                           }`}
                                                                 </span>
                                                                 {lastDiscoverQueryRef.current && (
-                                                                    <span className="text-xs text-gray-500 truncate">
+                                                                    <span
+                                                                        className={`text-xs ${bt.muted} truncate`}
+                                                                    >
                                                                         for “
                                                                         {
                                                                             lastDiscoverQueryRef.current
@@ -4180,7 +4209,9 @@ ${
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            <span className="text-[10px] uppercase tracking-wide text-gray-500 shrink-0">
+                                                            <span
+                                                                className={`text-[10px] uppercase tracking-wide ${bt.muted} shrink-0`}
+                                                            >
                                                                 Click a widget
                                                                 to preview
                                                             </span>
@@ -4194,8 +4225,12 @@ ${
                                                     with one click. */}
                                                         {registryChecked &&
                                                             !registryUsername && (
-                                                                <div className="mt-2 flex items-center gap-3 px-3 py-2 rounded-lg bg-amber-900/15 border border-amber-700/30">
-                                                                    <p className="flex-1 text-xs text-amber-200 leading-snug">
+                                                                <div
+                                                                    className={`mt-2 flex items-center gap-3 px-3 py-2 rounded-lg ${bt.status.warning.bg} border ${bt.status.warning.border}`}
+                                                                >
+                                                                    <p
+                                                                        className={`flex-1 text-xs ${bt.status.warning.text} leading-snug`}
+                                                                    >
                                                                         You're
                                                                         browsing
                                                                         as a
@@ -4215,7 +4250,7 @@ ${
                                                                         onClick={
                                                                             handleSignInForPreview
                                                                         }
-                                                                        className="px-3 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 transition-colors"
+                                                                        className={`px-3 py-1 text-xs rounded ${bt.primaryFill} shrink-0 transition-colors`}
                                                                     >
                                                                         Sign in
                                                                     </button>
@@ -4224,7 +4259,9 @@ ${
                                                         {!discoverSearching &&
                                                             discoverResults.length ===
                                                                 0 && (
-                                                                <div className="flex-1 flex items-center justify-center text-center text-sm text-gray-500 px-6">
+                                                                <div
+                                                                    className={`flex-1 flex items-center justify-center text-center text-sm ${bt.muted} px-6`}
+                                                                >
                                                                     No registry
                                                                     widgets
                                                                     matched “
@@ -4260,20 +4297,26 @@ ${
                                                                                         pkg
                                                                                     )
                                                                                 }
-                                                                                className="group text-left rounded-lg border border-gray-700/60 bg-gray-800/40 hover:bg-gray-800/80 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-950/50 p-4 transition-all cursor-pointer"
+                                                                                className={`group text-left rounded-lg border ${bt.border} ${bt.surface} ${bt.hoverSurface} ${bt.hoverAccentBorder} hover:shadow-lg hover:shadow-indigo-950/50 p-4 transition-all cursor-pointer`}
                                                                             >
                                                                                 <div className="flex items-start justify-between gap-2 mb-1.5">
-                                                                                    <div className="font-semibold text-sm text-gray-200 truncate group-hover:text-indigo-200">
+                                                                                    <div
+                                                                                        className={`font-semibold text-sm ${bt.text} truncate hover:opacity-80`}
+                                                                                    >
                                                                                         {pkg.displayName ||
                                                                                             pkg.name}
                                                                                     </div>
                                                                                     {pkg.installed && (
-                                                                                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide bg-green-900/40 text-green-300 border border-green-700/40">
+                                                                                        <span
+                                                                                            className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide ${bt.status.success.bg} ${bt.status.success.icon} border ${bt.status.success.border}`}
+                                                                                        >
                                                                                             Installed
                                                                                         </span>
                                                                                     )}
                                                                                 </div>
-                                                                                <div className="text-[11px] text-gray-500 truncate font-mono mb-2">
+                                                                                <div
+                                                                                    className={`text-[11px] ${bt.muted} truncate font-mono mb-2`}
+                                                                                >
                                                                                     {pkg.scope
                                                                                         ? `@${pkg.scope.replace(
                                                                                               /^@/,
@@ -4287,7 +4330,7 @@ ${
                                                                                 </div>
                                                                                 {pkg.description && (
                                                                                     <div
-                                                                                        className="text-xs text-gray-400 overflow-hidden leading-relaxed"
+                                                                                        className={`text-xs ${bt.muted} overflow-hidden leading-relaxed`}
                                                                                         style={{
                                                                                             display:
                                                                                                 "-webkit-box",
@@ -4301,7 +4344,9 @@ ${
                                                                                         }
                                                                                     </div>
                                                                                 )}
-                                                                                <div className="mt-3 text-[10px] uppercase tracking-wide text-indigo-400/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                <div
+                                                                                    className={`mt-3 text-[10px] uppercase tracking-wide ${bt.accent} opacity-0 group-hover:opacity-100 transition-opacity`}
+                                                                                >
                                                                                     Click
                                                                                     to
                                                                                     preview
@@ -4318,20 +4363,26 @@ ${
                                             }
                                             return (
                                                 <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                                                    <div className="w-16 h-16 rounded-2xl bg-gray-800/80 border border-gray-700/30 flex items-center justify-center">
+                                                    <div
+                                                        className={`w-16 h-16 rounded-2xl ${bt.surface} border ${bt.border} flex items-center justify-center`}
+                                                    >
                                                         <FontAwesomeIcon
                                                             icon="wand-magic-sparkles"
-                                                            className="h-7 w-7 text-indigo-400/40"
+                                                            className={`h-7 w-7 ${bt.accent}`}
                                                         />
                                                     </div>
                                                     <div className="space-y-2 max-w-sm">
-                                                        <p className="text-sm font-medium text-gray-300">
+                                                        <p
+                                                            className={`text-sm font-medium ${bt.text}`}
+                                                        >
                                                             {chatMode ===
                                                             "discover"
                                                                 ? "Search the registry"
                                                                 : "Describe your widget"}
                                                         </p>
-                                                        <p className="text-xs text-gray-500">
+                                                        <p
+                                                            className={`text-xs ${bt.muted}`}
+                                                        >
                                                             {chatMode ===
                                                             "discover"
                                                                 ? "Tell the AI what kind of widget you're looking for and registry matches will appear here."
@@ -4348,15 +4399,21 @@ ${
                                             previewError
                                         ) && (
                                             <div className="flex flex-col items-center justify-center h-full space-y-4">
-                                                <div className="w-full max-w-lg rounded-lg border border-amber-700/30 bg-amber-900/10 p-4 space-y-3">
-                                                    <div className="flex items-center gap-2 text-amber-300 text-sm font-medium">
+                                                <div
+                                                    className={`w-full max-w-lg rounded-lg border ${bt.status.warning.border} ${bt.status.warning.bg} p-4 space-y-3`}
+                                                >
+                                                    <div
+                                                        className={`flex items-center gap-2 ${bt.status.warning.icon} text-sm font-medium`}
+                                                    >
                                                         <FontAwesomeIcon
                                                             icon="lock"
                                                             className="h-4 w-4"
                                                         />
                                                         Sign in to preview
                                                     </div>
-                                                    <p className="text-xs text-amber-100/80 leading-relaxed">
+                                                    <p
+                                                        className={`text-xs ${bt.status.warning.text} leading-relaxed`}
+                                                    >
                                                         The registry requires
                                                         sign-in to download this
                                                         package. Click below to
@@ -4365,35 +4422,41 @@ ${
                                                     </p>
                                                     {signInFlow ? (
                                                         <div className="space-y-2">
-                                                            <p className="text-xs text-amber-100/90">
+                                                            <p
+                                                                className={`text-xs ${bt.status.warning.text}`}
+                                                            >
                                                                 A browser tab
                                                                 should have
                                                                 opened. Verify
                                                                 the code there
                                                                 matches:
                                                             </p>
-                                                            <div className="font-mono text-lg tracking-widest text-amber-200 bg-black/30 rounded px-3 py-2 text-center select-all">
+                                                            <div
+                                                                className={`font-mono text-lg tracking-widest ${bt.status.warning.text} ${bt.surface} rounded px-3 py-2 text-center select-all`}
+                                                            >
                                                                 {signInFlow.userCode ||
                                                                     "—"}
                                                             </div>
-                                                            <div className="flex items-center gap-2 text-[11px] text-amber-200/70">
+                                                            <div
+                                                                className={`flex items-center gap-2 text-[11px] ${bt.status.warning.text}`}
+                                                            >
                                                                 <span className="inline-flex gap-0.5">
                                                                     <span
-                                                                        className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-bounce"
+                                                                        className={`w-1.5 h-1.5 rounded-full ${bt.status.warning.solidBg} animate-bounce`}
                                                                         style={{
                                                                             animationDelay:
                                                                                 "0ms",
                                                                         }}
                                                                     />
                                                                     <span
-                                                                        className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-bounce"
+                                                                        className={`w-1.5 h-1.5 rounded-full ${bt.status.warning.solidBg} animate-bounce`}
                                                                         style={{
                                                                             animationDelay:
                                                                                 "150ms",
                                                                         }}
                                                                     />
                                                                     <span
-                                                                        className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-bounce"
+                                                                        className={`w-1.5 h-1.5 rounded-full ${bt.status.warning.solidBg} animate-bounce`}
                                                                         style={{
                                                                             animationDelay:
                                                                                 "300ms",
@@ -4413,7 +4476,7 @@ ${
                                                                             signInFlow.verificationUrlComplete
                                                                         )
                                                                     }
-                                                                    className="text-xs text-indigo-300 hover:text-indigo-200 underline"
+                                                                    className={`text-xs ${bt.accent} hover:opacity-80 underline`}
                                                                 >
                                                                     Reopen
                                                                     sign-in page
@@ -4426,7 +4489,7 @@ ${
                                                             onClick={
                                                                 handleSignInForPreview
                                                             }
-                                                            className="px-3 py-1.5 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+                                                            className={`px-3 py-1.5 text-xs rounded ${bt.primaryFill} transition-colors`}
                                                         >
                                                             Sign in
                                                         </button>
@@ -4441,8 +4504,12 @@ ${
                                             previewError
                                         ) && (
                                             <div className="flex flex-col items-center justify-center h-full space-y-4">
-                                                <div className="w-full max-w-lg rounded-lg border border-red-700/30 bg-red-900/10 p-4 space-y-2">
-                                                    <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
+                                                <div
+                                                    className={`w-full max-w-lg rounded-lg border ${bt.status.error.border} ${bt.status.error.bg} p-4 space-y-2`}
+                                                >
+                                                    <div
+                                                        className={`flex items-center gap-2 ${bt.status.error.icon} text-sm font-medium`}
+                                                    >
                                                         <FontAwesomeIcon
                                                             icon="exclamation-circle"
                                                             className="h-4 w-4"
@@ -4452,7 +4519,9 @@ ${
                                                             ? "Widget compiler unavailable"
                                                             : "Compilation Error"}
                                                     </div>
-                                                    <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto max-h-32">
+                                                    <pre
+                                                        className={`text-xs ${bt.status.error.icon} ${bt.surface} rounded p-2 overflow-auto max-h-32`}
+                                                    >
                                                         {previewError}
                                                     </pre>
                                                     {/* Slice 17b: pretty-print esbuild's
@@ -4477,9 +4546,11 @@ ${
                                                                             key={
                                                                                 idx
                                                                             }
-                                                                            className="bg-black/30 rounded p-2 space-y-1"
+                                                                            className={`${bt.surface} rounded p-2 space-y-1`}
                                                                         >
-                                                                            <div className="text-red-300 font-medium">
+                                                                            <div
+                                                                                className={`${bt.status.error.icon} font-medium`}
+                                                                            >
                                                                                 {e
                                                                                     .location
                                                                                     ?.file &&
@@ -4518,7 +4589,9 @@ ${
                                                                             {e
                                                                                 .location
                                                                                 ?.lineText && (
-                                                                                <pre className="text-[11px] text-red-200/70 bg-black/30 rounded px-2 py-1 overflow-x-auto whitespace-pre">
+                                                                                <pre
+                                                                                    className={`text-[11px] ${bt.status.error.text} ${bt.surface} rounded px-2 py-1 overflow-x-auto whitespace-pre`}
+                                                                                >
                                                                                     {
                                                                                         e
                                                                                             .location
@@ -4542,7 +4615,9 @@ ${
                                                     {/Could not resolve "|cannot find module/i.test(
                                                         previewError || ""
                                                     ) && (
-                                                        <div className="text-xs text-amber-300/90 bg-amber-900/10 border border-amber-700/30 rounded p-2">
+                                                        <div
+                                                            className={`text-xs ${bt.status.warning.icon} ${bt.status.warning.bg} border ${bt.status.warning.border} rounded p-2`}
+                                                        >
                                                             This widget
                                                             references files
                                                             that weren't
@@ -4561,8 +4636,12 @@ ${
                                                         </div>
                                                     )}
                                                     {previewErrorMeta?.diagnostics && (
-                                                        <details className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto">
-                                                            <summary className="cursor-pointer text-red-400 select-none">
+                                                        <details
+                                                            className={`text-xs ${bt.status.error.icon} ${bt.surface} rounded p-2 overflow-auto`}
+                                                        >
+                                                            <summary
+                                                                className={`cursor-pointer ${bt.status.error.icon} select-none`}
+                                                            >
                                                                 Diagnostics —
                                                                 share this if
                                                                 you report a bug
@@ -4589,7 +4668,7 @@ ${
                                                                         /* noop */
                                                                     }
                                                                 }}
-                                                                className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                                                                className={`mt-2 text-xs ${bt.accent} hover:opacity-80 underline cursor-pointer`}
                                                             >
                                                                 Copy diagnostics
                                                             </button>
@@ -4632,7 +4711,7 @@ ${
                                                                 /* ignore */
                                                             }
                                                         }}
-                                                        className="text-xs text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                                                        className={`text-xs ${bt.accent} hover:opacity-80 underline cursor-pointer`}
                                                     >
                                                         Send error to AI
                                                     </button>
@@ -4724,37 +4803,55 @@ ${
                                             {previewLooksEmpty &&
                                                 chatMode !== "compose" &&
                                                 hasActedThisSession && (
-                                                    <div className="mx-4 mt-2 px-3 py-2 rounded-md border border-amber-700/40 bg-amber-900/20 text-xs text-amber-200 space-y-1">
-                                                        <div className="font-semibold text-amber-300">
+                                                    <div
+                                                        className={`mx-4 mt-2 px-3 py-2 rounded-md border ${bt.status.warning.border} ${bt.status.warning.bg} text-xs ${bt.status.warning.text} space-y-1`}
+                                                    >
+                                                        <div
+                                                            className={`font-semibold ${bt.status.warning.icon}`}
+                                                        >
                                                             Widget rendered with
                                                             no visible content
                                                         </div>
-                                                        <div className="text-amber-200/80">
+                                                        <div
+                                                            className={`${bt.status.warning.text}`}
+                                                        >
                                                             Most common cause:
                                                             wrong prop names on
                                                             dash-react
                                                             components. Use{" "}
-                                                            <code className="bg-black/30 px-1 rounded">
+                                                            <code
+                                                                className={`${bt.surface} px-1 rounded`}
+                                                            >
                                                                 title
                                                             </code>{" "}
                                                             on{" "}
-                                                            <code className="bg-black/30 px-1 rounded">
+                                                            <code
+                                                                className={`${bt.surface} px-1 rounded`}
+                                                            >
                                                                 Heading
                                                             </code>
                                                             /
-                                                            <code className="bg-black/30 px-1 rounded">
+                                                            <code
+                                                                className={`${bt.surface} px-1 rounded`}
+                                                            >
                                                                 Button
                                                             </code>
                                                             /
-                                                            <code className="bg-black/30 px-1 rounded">
+                                                            <code
+                                                                className={`${bt.surface} px-1 rounded`}
+                                                            >
                                                                 EmptyState
                                                             </code>{" "}
                                                             (not{" "}
-                                                            <code className="bg-black/30 px-1 rounded">
+                                                            <code
+                                                                className={`${bt.surface} px-1 rounded`}
+                                                            >
                                                                 text
                                                             </code>{" "}
                                                             or{" "}
-                                                            <code className="bg-black/30 px-1 rounded">
+                                                            <code
+                                                                className={`${bt.surface} px-1 rounded`}
+                                                            >
                                                                 message
                                                             </code>
                                                             ). Click "Send to AI
@@ -4803,7 +4900,7 @@ ${
                                                                     /* ignore */
                                                                 }
                                                             }}
-                                                            className="mt-1 px-2 py-1 text-xs rounded border border-amber-600/50 bg-amber-700/30 hover:bg-amber-700/50 text-amber-100"
+                                                            className={`mt-1 px-2 py-1 text-xs rounded border ${bt.status.warning.border} ${bt.status.warning.bg} ${bt.status.warning.hoverBg} ${bt.status.warning.text}`}
                                                         >
                                                             Send to AI to fix
                                                         </button>
@@ -4816,13 +4913,12 @@ ${
                                                         previewThemeCtx
                                                             ?.currentTheme?.[
                                                             "border-primary-dark"
-                                                        ] ||
-                                                        "border-gray-700/30"
+                                                        ] || `${bt.border}`
                                                     } ${
                                                         previewThemeCtx
                                                             ?.currentTheme?.[
                                                             "bg-primary-dark"
-                                                        ] || "bg-gray-800/30"
+                                                        ] || `${bt.surface}`
                                                     }`}
                                                 >
                                                     {/* Slice 17c — iframe-isolated preview is the
@@ -5373,22 +5469,30 @@ ${
                                     {/* Installed success */}
                                     {installStatus?.success && (
                                         <div className="flex flex-col items-center justify-center h-full gap-4">
-                                            <div className="w-12 h-12 rounded-xl bg-green-600/20 flex items-center justify-center">
+                                            <div
+                                                className={`w-12 h-12 rounded-xl ${bt.status.success.bg} flex items-center justify-center`}
+                                            >
                                                 <FontAwesomeIcon
                                                     icon="check-circle"
-                                                    className="h-6 w-6 text-green-400"
+                                                    className={`h-6 w-6 ${bt.status.success.icon}`}
                                                 />
                                             </div>
                                             <div className="text-center space-y-1">
-                                                <p className="text-base font-semibold text-green-300">
+                                                <p
+                                                    className={`text-base font-semibold ${bt.status.success.icon}`}
+                                                >
                                                     {!isRemixMode
                                                         ? "Widget Installed!"
                                                         : editMode === "update"
                                                         ? "Widget Updated!"
                                                         : "Widget Remixed!"}
                                                 </p>
-                                                <p className="text-sm text-gray-400">
-                                                    <span className="font-mono text-gray-300">
+                                                <p
+                                                    className={`text-sm ${bt.muted}`}
+                                                >
+                                                    <span
+                                                        className={`font-mono ${bt.text}`}
+                                                    >
                                                         {
                                                             installStatus.widgetName
                                                         }
@@ -5407,7 +5511,7 @@ ${
                                                     onClick={() =>
                                                         setIsOpen(false)
                                                     }
-                                                    className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+                                                    className={`px-5 py-2 rounded-lg ${bt.primaryFill} text-sm font-medium transition-colors`}
                                                 >
                                                     Done
                                                 </button>
@@ -5429,7 +5533,7 @@ ${
                                                             );
                                                         }
                                                     }}
-                                                    className="px-5 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
+                                                    className={`px-5 py-2 rounded-lg ${bt.raised} ${bt.hoverSurface} ${bt.text} text-sm font-medium transition-colors`}
                                                 >
                                                     {browsingPackage
                                                         ? "Browse More"
@@ -5443,10 +5547,14 @@ ${
                                     {installStatus?.error && (
                                         <div className="flex flex-col items-center justify-center h-full gap-4">
                                             <div className="text-center space-y-2">
-                                                <p className="text-red-400 font-medium">
+                                                <p
+                                                    className={`${bt.status.error.icon} font-medium`}
+                                                >
                                                     Installation failed
                                                 </p>
-                                                <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 max-w-md overflow-auto">
+                                                <pre
+                                                    className={`text-xs ${bt.status.error.icon} ${bt.surface} rounded p-2 max-w-md overflow-auto`}
+                                                >
                                                     {installStatus.error}
                                                 </pre>
                                             </div>
@@ -5454,7 +5562,7 @@ ${
                                                 onClick={() =>
                                                     setInstallStatus(null)
                                                 }
-                                                className="px-5 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
+                                                className={`px-5 py-2 rounded-lg ${bt.raised} ${bt.hoverSurface} ${bt.text} text-sm font-medium transition-colors`}
                                             >
                                                 Try Again
                                             </button>
@@ -5759,14 +5867,16 @@ ${
                             its own button with different styling. */}
                             <div className="flex items-center justify-between gap-2 px-3 pt-2 shrink-0">
                                 <div className="flex items-center gap-2 min-w-0">
-                                    <div className="flex items-center gap-1 bg-gray-800/50 rounded-md border border-gray-700/50 p-0.5">
+                                    <div
+                                        className={`flex items-center gap-1 ${bt.surface} rounded-md border ${bt.border} p-0.5`}
+                                    >
                                         <button
                                             type="button"
                                             onClick={() => setChatMode("build")}
                                             className={`px-3 py-1 text-xs rounded transition-colors ${
                                                 chatMode === "build"
-                                                    ? "bg-indigo-600/30 text-indigo-300 font-medium"
-                                                    : "text-gray-500 hover:text-gray-300"
+                                                    ? `${bt.tint} ${bt.accent} font-medium`
+                                                    : `${bt.muted} hover:opacity-100`
                                             }`}
                                             title="Generate a custom widget from scratch with AI"
                                         >
@@ -5786,8 +5896,8 @@ ${
                                             }
                                             className={`px-3 py-1 text-xs rounded transition-colors ${
                                                 chatMode === "compose"
-                                                    ? "bg-indigo-600/30 text-indigo-300 font-medium"
-                                                    : "text-gray-500 hover:text-gray-300"
+                                                    ? `${bt.tint} ${bt.accent} font-medium`
+                                                    : `${bt.muted} hover:opacity-100`
                                             }`}
                                             title="Build a widget by picking components and wiring data slots — no AI prompt needed"
                                             data-testid="chat-mode-compose"
@@ -5795,7 +5905,9 @@ ${
                                             Compose
                                         </button>
                                     </div>
-                                    <span className="text-[11px] text-gray-500 truncate">
+                                    <span
+                                        className={`text-[11px] ${bt.muted} truncate`}
+                                    >
                                         {chatMode === "compose"
                                             ? "Pick components, wire data slots — no prompt needed"
                                             : chatMode === "discover"
@@ -5814,8 +5926,8 @@ ${
                                     }
                                     className={`flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border transition-colors shrink-0 ${
                                         chatMode === "discover"
-                                            ? "bg-amber-600/20 border-amber-700/50 text-amber-200"
-                                            : "border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600"
+                                            ? `${bt.status.warning.bg} ${bt.status.warning.border} ${bt.status.warning.text}`
+                                            : `${bt.border} ${bt.muted} hover:opacity-100`
                                     }`}
                                     title={
                                         chatMode === "discover"
@@ -5958,8 +6070,12 @@ ${
                                 re-open the gate. */}
                                 {chatMode === "build" &&
                                     selectedProviderForBuild !== null && (
-                                        <div className="flex flex-row items-center justify-between gap-2 px-3 py-1.5 text-xs border-b border-white/10 bg-indigo-900/10">
-                                            <div className="flex flex-row items-center gap-2 text-indigo-300">
+                                        <div
+                                            className={`flex flex-row items-center justify-between gap-2 px-3 py-1.5 text-xs border-b ${bt.border} ${bt.tint}`}
+                                        >
+                                            <div
+                                                className={`flex flex-row items-center gap-2 ${bt.accent}`}
+                                            >
                                                 <FontAwesomeIcon
                                                     icon="bolt"
                                                     className="h-3 w-3"
@@ -5985,7 +6101,7 @@ ${
                                                         null
                                                     )
                                                 }
-                                                className="text-indigo-300 hover:text-indigo-100 underline cursor-pointer"
+                                                className={`${bt.accent} hover:opacity-80 underline cursor-pointer`}
                                                 title="Pick a different provider"
                                             >
                                                 Change

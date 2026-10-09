@@ -10,6 +10,7 @@
  *   - the tree → grid converter produces a non-empty grid
  */
 
+jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
 import React from "react";
 import { render, fireEvent, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";

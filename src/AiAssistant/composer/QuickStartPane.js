@@ -13,6 +13,7 @@ import {
 } from "./gridLayout";
 import { INTENTS, getSampleLayoutsForIntent } from "./composerSampleLayouts";
 import { useWirableTypes } from "./wirableTypes";
+import { useBuilderTheme } from "../useBuilderTheme";
 
 // Stable empty-object reference for the providers default. Without
 // this, omitting the prop creates a fresh `{}` per render — and
@@ -53,6 +54,7 @@ export function QuickStartPane({
     backend = "claude-code",
     providers = EMPTY_PROVIDERS,
 }) {
+    const bt = useBuilderTheme();
     // null = step 1 (pick intent). Set to an intent id ("search", etc)
     // to advance to step 2 (tailored starters + AI prompt).
     const [intent, setIntent] = useState(null);
@@ -122,7 +124,7 @@ export function QuickStartPane({
             // model anchored on "this widget uses Algolia / Slack /
             // …" instead of asking for clarification.
             const wrappedUserMessage = providerChoice
-                ? `[Widget must use the "${providerChoice.name}" provider — ` +
+                ? `[Widget must use the "${providerChoice.name}" provider —` +
                   `interpret ambiguous terms in that context.]\n\n` +
                   description
                 : description;
@@ -231,12 +233,12 @@ export function QuickStartPane({
 
             {/* Escape hatch — drop into the palette on the seed cell.
                 Always visible so the user can bail at any step. */}
-            <div className="border-t border-white/10 pt-3">
+            <div className={`border-t ${bt.border} pt-3`}>
                 <button
                     type="button"
                     onClick={() => seedCellId && onRequestPalette(seedCellId)}
                     disabled={!seedCellId}
-                    className="w-full px-3 py-3 text-sm rounded border border-dashed border-gray-700 text-gray-400 hover:text-indigo-300 hover:border-indigo-500 disabled:opacity-30"
+                    className={`w-full px-3 py-3 text-sm rounded border border-dashed ${bt.border} ${bt.muted} hover:opacity-80 ${bt.hoverAccentBorder} disabled:opacity-30`}
                     data-testid="composer-quick-start-scratch"
                 >
                     Or start blank — pick a single component
@@ -247,17 +249,20 @@ export function QuickStartPane({
 }
 
 function ProviderPicker({ intentObj, wirable, onPick, onBack }) {
+    const bt = useBuilderTheme();
     return (
         <div data-testid="composer-quick-start-providers" className="space-y-3">
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <div className="text-xs uppercase tracking-wide text-gray-500">
+                    <div
+                        className={`text-xs uppercase tracking-wide ${bt.muted}`}
+                    >
                         Quick start
                     </div>
-                    <h2 className="text-base text-gray-100 mt-0.5">
+                    <h2 className={`text-base ${bt.text} mt-0.5`}>
                         {intentObj.icon} Pick a service
                     </h2>
-                    <div className="text-xs text-gray-400 mt-0.5">
+                    <div className={`text-xs ${bt.muted} mt-0.5`}>
                         The widget will be scaffolded around this provider's
                         common tools. You'll wire specific methods after.
                     </div>
@@ -265,28 +270,32 @@ function ProviderPicker({ intentObj, wirable, onPick, onBack }) {
                 <button
                     type="button"
                     onClick={onBack}
-                    className="text-sm text-indigo-400 hover:text-indigo-200 shrink-0"
+                    className={`text-sm ${bt.accent} hover:opacity-80 shrink-0`}
                     data-testid="composer-quick-start-back"
                 >
                     ← Change
                 </button>
             </div>
             {wirable.status === "loading" && wirable.types.length === 0 ? (
-                <div className="text-sm px-3 py-3 rounded border border-dashed border-gray-700 bg-gray-900/50 text-gray-500">
+                <div
+                    className={`text-sm px-3 py-3 rounded border border-dashed ${bt.border} ${bt.surface} ${bt.muted}`}
+                >
                     Loading provider catalog…
                 </div>
             ) : wirable.types.length === 0 ? (
-                <div className="text-sm px-3 py-3 rounded border border-dashed border-gray-700 bg-gray-900/50 text-gray-500">
+                <div
+                    className={`text-sm px-3 py-3 rounded border border-dashed ${bt.border} ${bt.surface} ${bt.muted}`}
+                >
                     No provider types available.
                     {wirable.error && (
-                        <span className="block text-red-400 mt-1">
+                        <span className={`block ${bt.status.error.icon} mt-1`}>
                             {wirable.error}
                         </span>
                     )}
                 </div>
             ) : (
                 <div
-                    className="rounded border border-gray-700 bg-gray-900/50 p-1 max-h-96 overflow-y-auto"
+                    className={`rounded border ${bt.border} ${bt.surface} p-1 max-h-96 overflow-y-auto`}
                     data-testid="composer-quick-start-providers-list"
                 >
                     {wirable.types.map((t) => (
@@ -294,22 +303,28 @@ function ProviderPicker({ intentObj, wirable, onPick, onBack }) {
                             key={`${t.kind}:${t.id}`}
                             type="button"
                             onClick={() => onPick(t)}
-                            className="block w-full text-left text-sm px-2 py-1.5 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200"
+                            className={`block w-full text-left text-sm px-2 py-1.5 rounded ${bt.hoverTint} ${bt.text} hover:opacity-80`}
                             data-testid={`composer-quick-start-provider-${t.id}-${t.kind}`}
                         >
                             <div className="flex items-center justify-between gap-2">
                                 <span className="truncate">{t.name}</span>
-                                <span className="text-xs text-gray-500 shrink-0">
+                                <span
+                                    className={`text-xs ${bt.muted} shrink-0`}
+                                >
                                     {t.kind}
                                     {t.hasConfiguredInstance && (
-                                        <span className="ml-1 text-emerald-400">
+                                        <span
+                                            className={`ml-1 ${bt.status.success.icon}`}
+                                        >
                                             ✓ configured
                                         </span>
                                     )}
                                 </span>
                             </div>
                             {t.description && (
-                                <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                                <div
+                                    className={`text-xs ${bt.muted} mt-0.5 line-clamp-2`}
+                                >
                                     {t.description}
                                 </div>
                             )}
@@ -322,12 +337,13 @@ function ProviderPicker({ intentObj, wirable, onPick, onBack }) {
 }
 
 function IntentPicker({ onPick }) {
+    const bt = useBuilderTheme();
     return (
         <div data-testid="composer-quick-start-intents">
-            <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+            <div className={`text-xs uppercase tracking-wide ${bt.muted} mb-2`}>
                 Quick start
             </div>
-            <h2 className="text-base text-gray-100 mb-3">
+            <h2 className={`text-base ${bt.text} mb-3`}>
                 What kind of widget do you want?
             </h2>
             <div className="grid grid-cols-2 gap-3">
@@ -336,12 +352,12 @@ function IntentPicker({ onPick }) {
                         key={it.id}
                         type="button"
                         onClick={() => onPick(it.id)}
-                        className="text-left rounded border border-gray-700 bg-gray-900/50 hover:border-indigo-500 hover:bg-indigo-900/20 p-3 space-y-1"
+                        className={`text-left rounded border ${bt.border} ${bt.surface} ${bt.hoverAccentBorder} ${bt.hoverTint} p-3 space-y-1`}
                         data-testid={`composer-quick-start-intent-${it.id}`}
                     >
                         <div className="text-2xl leading-none">{it.icon}</div>
-                        <div className="text-sm text-gray-100">{it.label}</div>
-                        <div className="text-xs text-gray-500">
+                        <div className={`text-sm ${bt.text}`}>{it.label}</div>
+                        <div className={`text-xs ${bt.muted}`}>
                             {it.tagline}
                         </div>
                     </button>
@@ -368,6 +384,7 @@ function IntentDetail({
     pickSuggestion,
     resetAi,
 }) {
+    const bt = useBuilderTheme();
     // When the user is in the provider branch and has picked a
     // provider, show that provider in the header instead of the
     // generic intent label/tagline.
@@ -385,20 +402,22 @@ function IntentDetail({
         >
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <div className="text-xs uppercase tracking-wide text-gray-500">
+                    <div
+                        className={`text-xs uppercase tracking-wide ${bt.muted}`}
+                    >
                         Quick start
                     </div>
-                    <h2 className="text-base text-gray-100 mt-0.5">
+                    <h2 className={`text-base ${bt.text} mt-0.5`}>
                         {headerLabel}
                     </h2>
-                    <div className="text-xs text-gray-400 mt-0.5">
+                    <div className={`text-xs ${bt.muted} mt-0.5`}>
                         {headerTagline}
                     </div>
                 </div>
                 <button
                     type="button"
                     onClick={onBack}
-                    className="text-sm text-indigo-400 hover:text-indigo-200 shrink-0"
+                    className={`text-sm ${bt.accent} hover:opacity-80 shrink-0`}
                     data-testid="composer-quick-start-back"
                 >
                     ← Change
@@ -407,7 +426,9 @@ function IntentDetail({
 
             {samples.length > 0 && (
                 <div data-testid="composer-quick-start-samples">
-                    <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+                    <div
+                        className={`text-xs uppercase tracking-wide ${bt.muted} mb-2`}
+                    >
                         Starter layouts
                     </div>
                     <div className="space-y-2">
@@ -416,16 +437,18 @@ function IntentDetail({
                                 key={layout.id}
                                 type="button"
                                 onClick={() => onApplySample(layout)}
-                                className="block w-full text-left rounded border border-gray-700 bg-gray-900/50 hover:border-indigo-500 hover:bg-indigo-900/20 p-3 space-y-1"
+                                className={`block w-full text-left rounded border ${bt.border} ${bt.surface} ${bt.hoverAccentBorder} ${bt.hoverTint} p-3 space-y-1`}
                                 data-testid={`composer-quick-start-sample-${layout.id}`}
                             >
-                                <div className="text-sm text-gray-100">
+                                <div className={`text-sm ${bt.text}`}>
                                     {layout.label}
                                 </div>
-                                <div className="text-xs text-gray-400">
+                                <div className={`text-xs ${bt.muted}`}>
                                     {layout.description}
                                 </div>
-                                <div className="text-xs text-gray-500 font-mono whitespace-pre pt-2 border-t border-gray-800">
+                                <div
+                                    className={`text-xs ${bt.muted} font-mono whitespace-pre pt-2 border-t ${bt.border}`}
+                                >
                                     {layout.outline}
                                 </div>
                             </button>
@@ -462,16 +485,17 @@ function AiForm({
     pickSuggestion,
     resetAi,
 }) {
+    const bt = useBuilderTheme();
     return (
         <div
-            className="rounded border border-indigo-700/40 bg-indigo-900/10 p-3 space-y-2"
+            className={`rounded border ${bt.accentBorder} ${bt.tint} p-3 space-y-2`}
             data-testid="composer-quick-start-ai"
         >
             {!aiOpen ? (
                 <button
                     type="button"
                     onClick={() => setAiOpen(true)}
-                    className="w-full px-3 py-2 text-sm rounded text-indigo-200 hover:bg-indigo-800/30"
+                    className={`w-full px-3 py-2 text-sm rounded ${bt.accent} ${bt.hoverTint}`}
                     data-testid="composer-quick-start-ai-open"
                 >
                     ✦ Or describe what you want — scaffold it with AI
@@ -479,13 +503,15 @@ function AiForm({
             ) : (
                 <>
                     <div className="flex items-center justify-between">
-                        <div className="text-xs uppercase tracking-wide text-indigo-200">
+                        <div
+                            className={`text-xs uppercase tracking-wide ${bt.accent}`}
+                        >
                             Describe the widget
                         </div>
                         <button
                             type="button"
                             onClick={resetAi}
-                            className="text-xs text-gray-400 hover:text-gray-200"
+                            className={`text-xs ${bt.muted} hover:opacity-100`}
                             data-testid="composer-quick-start-ai-close"
                         >
                             Cancel
@@ -496,7 +522,7 @@ function AiForm({
                         onChange={(e) => setDescription(e.target.value)}
                         placeholder="e.g., Search Algolia indices, show matching docs in a list"
                         rows={3}
-                        className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                        className={`w-full px-3 py-2 text-sm ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
                         data-testid="composer-quick-start-ai-input"
                     />
                     <button
@@ -506,14 +532,14 @@ function AiForm({
                             status === "loading" ||
                             description.trim().length === 0
                         }
-                        className="w-full px-3 py-2 text-sm font-medium rounded bg-indigo-700 hover:bg-indigo-600 disabled:bg-gray-700 disabled:text-gray-500 text-white"
+                        className={`w-full px-3 py-2 text-sm font-medium rounded ${bt.primaryFill}`}
                         data-testid="composer-quick-start-ai-submit"
                     >
                         {status === "loading" ? "Asking…" : "Scaffold with AI"}
                     </button>
                     {status === "error" && error && (
                         <div
-                            className="text-xs text-red-400"
+                            className={`text-xs ${bt.status.error.icon}`}
                             data-testid="composer-quick-start-ai-error"
                         >
                             {error}
@@ -524,7 +550,7 @@ function AiForm({
                             className="space-y-2"
                             data-testid="composer-quick-start-ai-results"
                         >
-                            <div className="text-xs text-gray-400">
+                            <div className={`text-xs ${bt.muted}`}>
                                 Pick a suggestion to apply:
                             </div>
                             {suggestions.map((s, i) => (
@@ -532,13 +558,15 @@ function AiForm({
                                     key={i}
                                     type="button"
                                     onClick={() => pickSuggestion(s)}
-                                    className="block w-full text-left px-3 py-2 rounded border border-gray-700 bg-gray-900/50 hover:border-indigo-500 hover:bg-indigo-900/30"
+                                    className={`block w-full text-left px-3 py-2 rounded border ${bt.border} ${bt.surface} ${bt.hoverAccentBorder} ${bt.hoverTint}`}
                                     data-testid={`composer-quick-start-ai-pick-${i}`}
                                 >
-                                    <div className="text-sm text-gray-200">
+                                    <div className={`text-sm ${bt.text}`}>
                                         {s.label}
                                     </div>
-                                    <div className="text-xs text-gray-500 mt-1 font-mono whitespace-pre">
+                                    <div
+                                        className={`text-xs ${bt.muted} mt-1 font-mono whitespace-pre`}
+                                    >
                                         {summarizeTree(s.root)}
                                     </div>
                                 </button>
@@ -608,12 +636,12 @@ function placeNode(g, cellId, node) {
 function buildProviderHint(providerChoice) {
     if (!providerChoice) return null;
     return (
-        `The user wants this widget to use the ` +
-        `"${providerChoice.name}" provider (${providerChoice.kind}). ` +
-        `Suggest 2-3 layouts that surface common ${providerChoice.name} ` +
-        `interactions (search / list / detail / compose, whichever fit). ` +
-        `The composer wires the actual provider methods in a later ` +
-        `stage — DO NOT include data-fetching props; just pick the ` +
+        `The user wants this widget to use the` +
+        `"${providerChoice.name}" provider (${providerChoice.kind}).` +
+        `Suggest 2-3 layouts that surface common ${providerChoice.name}` +
+        `interactions (search / list / detail / compose, whichever fit).` +
+        `The composer wires the actual provider methods in a later` +
+        `stage — DO NOT include data-fetching props; just pick the` +
         `components a ${providerChoice.name} widget would naturally use.`
     );
 }
