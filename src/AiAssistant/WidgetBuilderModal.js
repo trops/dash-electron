@@ -1386,9 +1386,8 @@ ${
     // the dogfood phase — once G3 flips the default, the tree state
     // gets migrated and the old fields go away.
     const [composerGrid, setComposerGrid] = useState(null);
-    // composerInitialGrid will be wired into G3's draft restore path.
-    // For G2, fresh sessions only.
-    // eslint-disable-next-line no-unused-vars
+    // Seeds the V2 pane when a Compose draft is resumed (remounted via
+    // composerSessionKey).
     const [composerInitialGrid, setComposerInitialGrid] = useState(null);
     const composerGridRef = useRef(null);
     useEffect(() => {
@@ -1785,6 +1784,8 @@ ${
             // emitted code).
             chatMode: chatModeRef.current || "build",
             composerTree: composerTreeRef.current || null,
+            // The V2 Compose grid — what resume hands back to the pane.
+            composerGrid: composerGridRef.current || null,
         };
         // Pass files alongside so the main process materializes them
         // under @ai-built/<name>-draft-<id>/ and stamps packageDir
@@ -2777,6 +2778,11 @@ ${
                 setComposerTree(full.composerTree);
                 setComposerSessionKey((k) => k + 1);
             }
+            if (full.composerGrid) {
+                setComposerInitialGrid(full.composerGrid);
+                setComposerGrid(full.composerGrid);
+                setComposerSessionKey((k) => k + 1);
+            }
             if (full.chatMode) setChatMode(full.chatMode);
             setInstallStatus(null);
             setViewMode("builder");
@@ -3666,6 +3672,8 @@ ${
                                 // session doesn't inherit the tree from
                                 // whatever was last loaded.
                                 setComposerInitialTree(null);
+                                setComposerInitialGrid(null);
+                                setComposerGrid(null);
                                 setComposerTree(null);
                                 setComposerSessionKey((k) => k + 1);
                                 setViewMode("builder");
@@ -3752,6 +3760,11 @@ ${
                                 if (full.composerTree) {
                                     setComposerInitialTree(full.composerTree);
                                     setComposerTree(full.composerTree);
+                                    setComposerSessionKey((k) => k + 1);
+                                }
+                                if (full.composerGrid) {
+                                    setComposerInitialGrid(full.composerGrid);
+                                    setComposerGrid(full.composerGrid);
                                     setComposerSessionKey((k) => k + 1);
                                 }
                                 if (full.chatMode) {
