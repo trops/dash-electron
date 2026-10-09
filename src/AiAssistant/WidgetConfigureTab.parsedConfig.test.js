@@ -29,6 +29,7 @@ jest.mock("@trops/dash-react", () => {
     };
 });
 
+jest.mock("./useBuilderTheme", () => require("./builderThemeStub"));
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";

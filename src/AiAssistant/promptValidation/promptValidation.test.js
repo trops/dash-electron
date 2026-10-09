@@ -29,6 +29,7 @@
  * user can read it and decide what to tune in the system prompt.
  */
 
+jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
 const fs = require("fs");
 const path = require("path");
 

@@ -13,6 +13,7 @@ import React, {
 } from "react";
 import { FontAwesomeIcon, ThemeContext } from "@trops/dash-react";
 import { normalizeEventName, normalizeHandlerName } from "./widgetEventNames";
+import { useBuilderTheme } from "./useBuilderTheme";
 
 const PROVIDER_TYPES = [
     "algolia",
@@ -97,23 +98,26 @@ function serializeConfig(componentName, data) {
 
 // Section header with optional add button
 function SectionHeader({ title, icon, onAdd, borderColor }) {
+    const bt = useBuilderTheme();
     return (
         <div
             className={`flex items-center justify-between py-2 px-1 border-b ${
-                borderColor || "border-gray-700"
+                borderColor || `${bt.border}`
             }`}
         >
-            <div className="flex items-center gap-2 text-xs font-semibold text-gray-300 uppercase tracking-wider">
+            <div
+                className={`flex items-center gap-2 text-xs font-semibold ${bt.text} uppercase tracking-wider`}
+            >
                 <FontAwesomeIcon
                     icon={icon}
-                    className="h-3 w-3 text-gray-500"
+                    className={`h-3 w-3 ${bt.muted}`}
                 />
                 {title}
             </div>
             {onAdd && (
                 <button
                     onClick={onAdd}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-indigo-400 hover:text-indigo-300 hover:bg-indigo-600/10 transition-colors"
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] ${bt.accent} hover:opacity-80 ${bt.hoverTint} transition-colors`}
                 >
                     <FontAwesomeIcon icon="plus" className="h-2 w-2" />
                     Add
@@ -125,15 +129,16 @@ function SectionHeader({ title, icon, onAdd, borderColor }) {
 
 // Removable item wrapper
 function RemovableItem({ children, onRemove, borderColor }) {
+    const bt = useBuilderTheme();
     return (
         <div
             className={`relative border ${
-                borderColor || "border-gray-700/50"
+                borderColor || `${bt.border}`
             } rounded-lg p-3 mt-2 group`}
         >
             <button
                 onClick={onRemove}
-                className="absolute top-2 right-2 text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                className={`absolute top-2 right-2 ${bt.muted} transition-colors opacity-0 group-hover:opacity-100`}
             >
                 <FontAwesomeIcon icon="times" className="h-3 w-3" />
             </button>
@@ -144,9 +149,12 @@ function RemovableItem({ children, onRemove, borderColor }) {
 
 // Small form field
 function Field({ label, children, className = "" }) {
+    const bt = useBuilderTheme();
     return (
         <div className={`mb-2 ${className}`}>
-            <label className="block text-[10px] text-gray-500 mb-0.5 uppercase tracking-wider">
+            <label
+                className={`block text-[10px] ${bt.muted} mb-0.5 uppercase tracking-wider`}
+            >
                 {label}
             </label>
             {children}
@@ -156,24 +164,26 @@ function Field({ label, children, className = "" }) {
 
 // Compact text input matching dark theme
 function SmallInput({ value, onChange, placeholder, type = "text" }) {
+    const bt = useBuilderTheme();
     return (
         <input
             type={type}
             value={value || ""}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className="w-full px-2 py-1 text-xs bg-gray-800/50 border border-gray-700/50 rounded text-gray-200 placeholder-gray-600 focus:border-indigo-500/50 focus:outline-none"
+            className={`w-full px-2 py-1 text-xs ${bt.surface} border ${bt.border} rounded ${bt.text} placeholder-gray-600 focus:outline-none`}
         />
     );
 }
 
 // Compact select
 function SmallSelect({ value, onChange, options }) {
+    const bt = useBuilderTheme();
     return (
         <select
             value={value || ""}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full px-2 py-1 text-xs bg-gray-800/50 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
+            className={`w-full px-2 py-1 text-xs ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
         >
             {options.map((opt) => (
                 <option key={opt.value ?? opt} value={opt.value ?? opt}>
@@ -186,15 +196,16 @@ function SmallSelect({ value, onChange, options }) {
 
 // Compact toggle
 function SmallToggle({ checked, onChange, label }) {
+    const bt = useBuilderTheme();
     return (
         <label className="flex items-center gap-2 cursor-pointer">
             <input
                 type="checkbox"
                 checked={checked || false}
                 onChange={(e) => onChange(e.target.checked)}
-                className="rounded border-gray-600 bg-gray-800 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 h-3 w-3"
+                className={`rounded ${bt.border} ${bt.surface} ${bt.accent} focus:ring-offset-0 h-3 w-3`}
             />
-            <span className="text-[10px] text-gray-400">{label}</span>
+            <span className={`text-[10px] ${bt.muted}`}>{label}</span>
         </label>
     );
 }
@@ -206,11 +217,10 @@ export const WidgetConfigureTab = ({
     borderColor,
     parsedConfig,
 }) => {
+    const bt = useBuilderTheme();
     const { currentTheme } = useContext(ThemeContext);
     const bc =
-        borderColor ||
-        currentTheme?.["border-primary-dark"] ||
-        "border-gray-700";
+        borderColor || currentTheme?.["border-primary-dark"] || `${bt.border}`;
 
     // Form state
     const [form, setForm] = useState({
@@ -550,7 +560,7 @@ export const WidgetConfigureTab = ({
                         borderColor={bc}
                     />
                     {form.providers.length === 0 && (
-                        <p className="text-[10px] text-gray-600 mt-2 italic">
+                        <p className={`text-[10px] ${bt.muted} mt-2 italic`}>
                             No providers configured. Add one if your widget
                             connects to an external service.
                         </p>
@@ -632,7 +642,7 @@ export const WidgetConfigureTab = ({
                         borderColor={bc}
                     />
                     {form.events.length === 0 && (
-                        <p className="text-[10px] text-gray-600 mt-2 italic">
+                        <p className={`text-[10px] ${bt.muted} mt-2 italic`}>
                             No events. Add events your widget publishes for
                             other widgets to listen to.
                         </p>
@@ -653,7 +663,7 @@ export const WidgetConfigureTab = ({
                                         />
                                         <button
                                             onClick={() => removeEvent(idx)}
-                                            className="text-gray-600 hover:text-red-400 shrink-0"
+                                            className={`${bt.muted} shrink-0`}
                                         >
                                             <FontAwesomeIcon
                                                 icon="times"
@@ -662,7 +672,9 @@ export const WidgetConfigureTab = ({
                                         </button>
                                     </div>
                                     {showHint && (
-                                        <p className="text-[10px] text-amber-400 mt-0.5 ml-1">
+                                        <p
+                                            className={`text-[10px] ${bt.status.warning.icon} mt-0.5 ml-1`}
+                                        >
                                             Will save as:{" "}
                                             <span className="font-mono">
                                                 {normalized}
@@ -684,7 +696,7 @@ export const WidgetConfigureTab = ({
                         borderColor={bc}
                     />
                     {form.eventHandlers.length === 0 && (
-                        <p className="text-[10px] text-gray-600 mt-2 italic">
+                        <p className={`text-[10px] ${bt.muted} mt-2 italic`}>
                             No handlers. Add handlers to listen for events from
                             other widgets.
                         </p>
@@ -706,7 +718,7 @@ export const WidgetConfigureTab = ({
                                         />
                                         <button
                                             onClick={() => removeHandler(idx)}
-                                            className="text-gray-600 hover:text-red-400 shrink-0"
+                                            className={`${bt.muted} shrink-0`}
                                         >
                                             <FontAwesomeIcon
                                                 icon="times"
@@ -715,7 +727,9 @@ export const WidgetConfigureTab = ({
                                         </button>
                                     </div>
                                     {showHint && (
-                                        <p className="text-[10px] text-amber-400 mt-0.5 ml-1">
+                                        <p
+                                            className={`text-[10px] ${bt.status.warning.icon} mt-0.5 ml-1`}
+                                        >
                                             Will save as:{" "}
                                             <span className="font-mono">
                                                 {normalized}
@@ -737,7 +751,7 @@ export const WidgetConfigureTab = ({
                         borderColor={bc}
                     />
                     {(form.scheduledTasks || []).length === 0 && (
-                        <p className="text-[10px] text-gray-600 mt-2 italic">
+                        <p className={`text-[10px] ${bt.muted} mt-2 italic`}>
                             No scheduled tasks. Add named handlers the framework
                             can run on a schedule (Settings → Schedule sets the
                             cadence).
@@ -773,7 +787,7 @@ export const WidgetConfigureTab = ({
                                             onClick={() =>
                                                 removeScheduledTaskRow(idx)
                                             }
-                                            className="text-gray-600 hover:text-red-400 shrink-0"
+                                            className={`${bt.muted} shrink-0`}
                                         >
                                             <FontAwesomeIcon
                                                 icon="times"
@@ -782,7 +796,9 @@ export const WidgetConfigureTab = ({
                                         </button>
                                     </div>
                                     {showHint && (
-                                        <p className="text-[10px] text-amber-400 ml-1">
+                                        <p
+                                            className={`text-[10px] ${bt.status.warning.icon} ml-1`}
+                                        >
                                             Will save as:{" "}
                                             <span className="font-mono">
                                                 {normalized}
@@ -834,7 +850,7 @@ export const WidgetConfigureTab = ({
                         borderColor={bc}
                     />
                     {Object.keys(form.userConfig).length === 0 && (
-                        <p className="text-[10px] text-gray-600 mt-2 italic">
+                        <p className={`text-[10px] ${bt.muted} mt-2 italic`}>
                             No config fields. Add fields that users can
                             customize when placing this widget.
                         </p>
@@ -935,7 +951,9 @@ export const WidgetConfigureTab = ({
                                     {fieldConfig.type === "select" && (
                                         <div>
                                             <div className="flex items-center justify-between">
-                                                <span className="text-[10px] text-gray-500 uppercase tracking-wider">
+                                                <span
+                                                    className={`text-[10px] ${bt.muted} uppercase tracking-wider`}
+                                                >
                                                     Options
                                                 </span>
                                                 <button
@@ -955,7 +973,7 @@ export const WidgetConfigureTab = ({
                                                             ]
                                                         );
                                                     }}
-                                                    className="text-[10px] text-indigo-400 hover:text-indigo-300"
+                                                    className={`text-[10px] ${bt.accent} hover:opacity-80`}
                                                 >
                                                     + Add Option
                                                 </button>
@@ -1024,7 +1042,7 @@ export const WidgetConfigureTab = ({
                                                                     opts
                                                                 );
                                                             }}
-                                                            className="text-gray-600 hover:text-red-400 shrink-0"
+                                                            className={`${bt.muted} shrink-0`}
                                                         >
                                                             <FontAwesomeIcon
                                                                 icon="times"
@@ -1047,18 +1065,18 @@ export const WidgetConfigureTab = ({
             <div
                 className={`flex items-center justify-between px-3 py-2 border-t ${bc} shrink-0`}
             >
-                <span className="text-[10px] text-gray-600">
+                <span className={`text-[10px] ${bt.muted}`}>
                     {dirty ? "Unsaved changes" : ""}
                 </span>
                 {dirty ? (
                     <button
                         onClick={handleSave}
-                        className="px-3 py-1 rounded text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
+                        className={`px-3 py-1 rounded text-xs ${bt.primaryFill} font-medium transition-colors`}
                     >
                         Save &amp; Compile
                     </button>
                 ) : (
-                    <span className="text-[10px] text-gray-600">
+                    <span className={`text-[10px] ${bt.muted}`}>
                         Widget Configuration
                     </span>
                 )}

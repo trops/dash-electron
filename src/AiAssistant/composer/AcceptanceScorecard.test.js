@@ -5,6 +5,7 @@
  * pin the right items as ✗ given a known-bad widget code, and ✓ given
  * a known-good one. Smoke-tests the React rendering too.
  */
+jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";

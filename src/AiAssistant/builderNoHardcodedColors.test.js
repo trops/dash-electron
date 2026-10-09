@@ -4,8 +4,7 @@
  * classes (`text-gray-400`, `bg-indigo-600`, `bg-black/30`), which only read
  * correctly on a dark background.
  *
- * Converted files must stay at zero. The modal is being converted in slices,
- * so it has a ceiling that each slice lowers; it may only go down.
+ * Every builder UI file must stay at zero.
  */
 const fs = require("fs");
 const path = require("path");
@@ -34,7 +33,11 @@ describe("Widget Builder — no hard-coded palette colours", () => {
     });
 
     test.each([
+        "WidgetBuilderModal.js",
         "WidgetDraftsList.js",
+        "WidgetConfigureTab.js",
+        "WidgetConsolePane.js",
+        "composer/AcceptanceScorecard.js",
         "ChatProviderGate.js",
         "composer/ComposerPaneV2.js",
         "composer/GridEditor.js",
@@ -44,15 +47,6 @@ describe("Widget Builder — no hard-coded palette colours", () => {
         "composer/WirePicker.js",
     ])("%s has none", (file) => {
         expect(hardcoded(file)).toEqual([]);
-    });
-
-    test("WidgetBuilderModal.js stays under its ceiling", () => {
-        // Slices A–C done. Lower this as slice D converts the Code /
-        // Configure / Console / Scorecard tabs; never raise it.
-        const CEILING = 33;
-        expect(hardcoded("WidgetBuilderModal.js").length).toBeLessThanOrEqual(
-            CEILING
-        );
     });
 
     test("QuickStartPane.js keeps only its prompt-text examples", () => {
