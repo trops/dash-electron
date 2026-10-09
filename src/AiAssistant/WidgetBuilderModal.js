@@ -36,7 +36,7 @@ import {
 } from "@trops/dash-core";
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
 import { ChatProviderGate } from "./ChatProviderGate";
-import { WidgetDraftsList } from "./WidgetDraftsList";
+import { WidgetDraftsList, firstUserMessageExcerpt } from "./WidgetDraftsList";
 import { WidgetConsolePane } from "./WidgetConsolePane";
 import { ComposerPane } from "./composer/ComposerPane";
 import { ComposerPaneV2 } from "./composer/ComposerPaneV2";
@@ -916,6 +916,12 @@ export const WidgetBuilderModal = ({
             (window.__dashThemeContext || window.__dashAppThemeContext)) ||
         null;
     const [previewTheme, setPreviewTheme] = useState(readBroadcastTheme);
+    // The chat (ChatCore bubbles) follows the APP theme. This modal is
+    // mounted outside the theme provider, so without this the bubbles had
+    // no background and dim text.
+    const readAppTheme = () =>
+        (typeof window !== "undefined" && window.__dashAppThemeContext) || null;
+    const [appTheme, setAppTheme] = useState(readAppTheme);
     const [previewApp, setPreviewApp] = useState(
         () => window.__dashAppContext || null
     );
@@ -923,6 +929,8 @@ export const WidgetBuilderModal = ({
         const themeHandler = () => {
             const next = readBroadcastTheme();
             if (next) setPreviewTheme({ ...next });
+            const app = readAppTheme();
+            if (app) setAppTheme({ ...app });
         };
         const appHandler = () => setPreviewApp({ ...window.__dashAppContext });
         window.addEventListener("dash:theme-changed", themeHandler);
@@ -933,6 +941,7 @@ export const WidgetBuilderModal = ({
         };
     }, []);
     const previewThemeCtx = previewTheme || localThemeCtx;
+    const chatThemeCtx = appTheme || localThemeCtx;
     const previewAppCtx = previewApp || null;
     const currentTheme = localThemeCtx?.currentTheme;
     if (false && previewAppCtx) {
@@ -1338,9 +1347,9 @@ ${
 
     // Chat-pane mode ("build" = AI generates widgets, "discover" = AI
     // searches the registry, "compose" = stepwise composer with no
-    // chat). Resets to "compose" each time the modal opens — it's
-    // the more reliable surface today; Build remains one click away.
-    const [chatMode, setChatMode] = useState("compose");
+    // chat). Resets to "build" (the AI chat) each time the modal opens;
+    // Compose remains one click away.
+    const [chatMode, setChatMode] = useState("build");
     // Mirror of chatMode in a ref so the chat-messages poller (which
     // stays mounted across mode changes) can read the current mode
     // without resubscribing on every flip. Required so the
@@ -1601,13 +1610,11 @@ ${
         registryUsername,
     });
 
-    // Reset the chat mode toggle to "compose" each time the modal
-    // reopens. Compose is the more reliable surface today (build
-    // depends on the AI emitting compilable code first try); the
-    // user can flip to Build via the tab strip if they want chat.
+    // Reset the chat mode toggle to "build" (the AI chat) each time the
+    // modal reopens; the user can flip to Compose via the tab strip.
     useEffect(() => {
         if (isOpen) {
-            setChatMode("compose");
+            setChatMode("build");
             setDiscoverResults([]);
             lastDiscoverQueryRef.current = "";
         }
@@ -1702,10 +1709,7 @@ ${
             extractWidgetName(detectedCode.componentCode) || null;
         const draftName =
             componentName ||
-            (chatHistory
-                .find((m) => m && (m.role === "user" || m.author === "user"))
-                ?.content?.slice?.(0, 60) ??
-                "") ||
+            firstUserMessageExcerpt(chatHistory).slice(0, 60) ||
             "Untitled draft";
         // Build the files[] payload for the main process to
         // materialize on disk. Synthesize a 2-entry array if the AI's
@@ -1966,7 +1970,8 @@ ${
                 if (!query) {
                     for (let i = msgs.length - 1; i >= 0; i--) {
                         const m = msgs[i];
-                        if (m?.role !== "user") continue;
+                        // Skip hidden ones (the automatic greeting).
+                        if (m?.role !== "user" || m.hidden) continue;
                         const t =
                             typeof m.content === "string"
                                 ? m.content
@@ -4420,8 +4425,13 @@ ${
                                                     )}
                                                 {/* Slice 17b: heuristic hint for the
                                                     common "AI emitted utility imports
-                                                    but no File: markers" failure. */}
-                                                {/Could not resolve|cannot find module/i.test(
+                                                    but no File: markers" failure.
+                                                    Only for real import errors
+                                                    (esbuild: Could not resolve
+                                                    "./x") — not the "Could not
+                                                    resolve widget component"
+                                                    message. */}
+                                                {/Could not resolve "|cannot find module/i.test(
                                                     previewError || ""
                                                 ) && (
                                                     <div className="text-xs text-amber-300/90 bg-amber-900/10 border border-amber-700/30 rounded p-2">
@@ -5089,6 +5099,17 @@ ${
                                                               )?.toLowerCase()}`}
                                                     </span>
                                                     <div className="flex items-center gap-3 shrink-0">
+                                                        {/* Say why Install is
+                                                            greyed out. */}
+                                                        {!selectedCategory && (
+                                                            <span
+                                                                data-testid="install-category-hint"
+                                                                className="text-xs text-gray-400"
+                                                            >
+                                                                Pick a category
+                                                                to install
+                                                            </span>
+                                                        )}
                                                         <select
                                                             value={
                                                                 selectedCategory ||
@@ -5636,6 +5657,7 @@ ${
                                     // docs for the failure mode this
                                     // prevents.
                                     editContext={effectiveEditContext}
+                                    currentDraftId={draftSessionIdRef.current}
                                     onEmit={(code) => {
                                         setDetectedCode({
                                             componentCode: code.componentCode,
@@ -5752,101 +5774,106 @@ ${
                                 (chatMode !== "build" ||
                                     selectedProviderForBuild !== null ||
                                     detectedCode?.componentCode) && (
-                                    <ChatCore
-                                        title=""
-                                        model={model}
-                                        // Lock the modal's CLI invocation: replace
-                                        // Claude Code's default system prompt
-                                        // (which advertises tools + auto-loads
-                                        // project skills by description match)
-                                        // with ours, and disable all built-in
-                                        // tools. Without this, the
-                                        // dash-widget-builder skill auto-loads
-                                        // here and the AI uses Bash/Read/Glob
-                                        // despite the prompt forbidding them.
-                                        // Replace Claude Code's default preamble
-                                        // with the modal's terse skill-pointer
-                                        // prompt — the dash-widget-builder skill
-                                        // (auto-loaded from .claude/skills/) does
-                                        // the heavy lifting; the default preamble
-                                        // would otherwise override our concise
-                                        // first-response guidance.
-                                        replaceSystemPrompt={true}
-                                        // Skip auto-wiring the dash MCP — the
-                                        // widget builder doesn't need
-                                        // dashboard-management tools while
-                                        // generating a widget. (No effect on
-                                        // CLI argv as of slice 19B; gates the
-                                        // dash MCP plumbing only.)
-                                        disableTools={true}
-                                        systemPrompt={(() => {
-                                            if (chatMode === "discover") {
-                                                return DISCOVER_SYSTEM_PROMPT;
+                                    <ThemeContext.Provider value={chatThemeCtx}>
+                                        <ChatCore
+                                            title=""
+                                            model={model}
+                                            // Lock the modal's CLI invocation: replace
+                                            // Claude Code's default system prompt
+                                            // (which advertises tools + auto-loads
+                                            // project skills by description match)
+                                            // with ours, and disable all built-in
+                                            // tools. Without this, the
+                                            // dash-widget-builder skill auto-loads
+                                            // here and the AI uses Bash/Read/Glob
+                                            // despite the prompt forbidding them.
+                                            // Replace Claude Code's default preamble
+                                            // with the modal's terse skill-pointer
+                                            // prompt — the dash-widget-builder skill
+                                            // (auto-loaded from .claude/skills/) does
+                                            // the heavy lifting; the default preamble
+                                            // would otherwise override our concise
+                                            // first-response guidance.
+                                            replaceSystemPrompt={true}
+                                            // Skip auto-wiring the dash MCP — the
+                                            // widget builder doesn't need
+                                            // dashboard-management tools while
+                                            // generating a widget. (No effect on
+                                            // CLI argv as of slice 19B; gates the
+                                            // dash MCP plumbing only.)
+                                            disableTools={true}
+                                            systemPrompt={(() => {
+                                                if (chatMode === "discover") {
+                                                    return DISCOVER_SYSTEM_PROMPT;
+                                                }
+                                                const base = buildSystemPrompt({
+                                                    builtInCatalog,
+                                                    knownExternalCatalog,
+                                                    installedProviders:
+                                                        providers,
+                                                    selectedProvider:
+                                                        selectedProviderForBuild,
+                                                });
+                                                // Edit mode: append the existing
+                                                // widget source so the AI sees what
+                                                // it's modifying. The new
+                                                // buildSystemPrompt handles
+                                                // first-response style for build
+                                                // mode; edit mode needs its own
+                                                // first-response wording (confirm by
+                                                // name, ask what to change) so it
+                                                // appends here.
+                                                if (
+                                                    effectiveEditContext?.componentCode
+                                                ) {
+                                                    return `${base}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
+                                                        effectiveEditContext.componentCode
+                                                    }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
+                                                        effectiveEditContext.configCode ||
+                                                        ""
+                                                    }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above. CRITICAL: PRESERVE every existing \`userConfig\` field EXACTLY as written — including its \`defaultValue\`, \`displayName\`, \`instructions\`, and \`required\` — unless the user explicitly asks to change that specific field. Never drop or blank out a \`userConfig\` \`defaultValue\` the user authored.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
+                                                }
+                                                // Hand-off path: user
+                                                // composed a widget in
+                                                // Compose mode, then
+                                                // switched to Build to
+                                                // ask AI for tweaks.
+                                                // detectedCode is
+                                                // populated but there's
+                                                // no editContext (this
+                                                // isn't an install they
+                                                // came back to edit).
+                                                // Treat the composed code
+                                                // as the starting point
+                                                // so the AI iterates
+                                                // instead of generating
+                                                // from scratch.
+                                                if (
+                                                    detectedCode?.componentCode
+                                                ) {
+                                                    return `${base}\n\nThe user started this widget in Compose mode and now wants AI help to refine it. Here is the CURRENT source they composed:\n\nComponent (jsx):\n\`\`\`jsx\n${
+                                                        detectedCode.componentCode
+                                                    }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
+                                                        detectedCode.configCode ||
+                                                        ""
+                                                    }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above. CRITICAL: PRESERVE every existing \`userConfig\` field EXACTLY as written — including its \`defaultValue\`, \`displayName\`, \`instructions\`, and \`required\` — unless the user explicitly asks to change that specific field. Never drop or blank out a \`userConfig\` \`defaultValue\` the user authored. Do NOT throw away what they composed unless they explicitly ask you to start over.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences acknowledging what they've built so far and asking what they'd like to change. No lists, no bullet points, under 30 words.`;
+                                                }
+                                                return base;
+                                            })()}
+                                            maxToolRounds="10"
+                                            apiKey={apiKey}
+                                            backend={preferredBackend}
+                                            persistKey="dash-widget-builder"
+                                            hideToolsBanner={true}
+                                            initialMessage={
+                                                chatMode === "discover"
+                                                    ? "Tell me what kind of widget you're looking for."
+                                                    : effectiveEditContext?.componentCode
+                                                    ? "Hello, let's make some edits to this widget."
+                                                    : "Hi, I'd like to build a new widget."
                                             }
-                                            const base = buildSystemPrompt({
-                                                builtInCatalog,
-                                                knownExternalCatalog,
-                                                installedProviders: providers,
-                                                selectedProvider:
-                                                    selectedProviderForBuild,
-                                            });
-                                            // Edit mode: append the existing
-                                            // widget source so the AI sees what
-                                            // it's modifying. The new
-                                            // buildSystemPrompt handles
-                                            // first-response style for build
-                                            // mode; edit mode needs its own
-                                            // first-response wording (confirm by
-                                            // name, ask what to change) so it
-                                            // appends here.
-                                            if (
-                                                effectiveEditContext?.componentCode
-                                            ) {
-                                                return `${base}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
-                                                    effectiveEditContext.componentCode
-                                                }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
-                                                    effectiveEditContext.configCode ||
-                                                    ""
-                                                }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above. CRITICAL: PRESERVE every existing \`userConfig\` field EXACTLY as written — including its \`defaultValue\`, \`displayName\`, \`instructions\`, and \`required\` — unless the user explicitly asks to change that specific field. Never drop or blank out a \`userConfig\` \`defaultValue\` the user authored.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
-                                            }
-                                            // Hand-off path: user
-                                            // composed a widget in
-                                            // Compose mode, then
-                                            // switched to Build to
-                                            // ask AI for tweaks.
-                                            // detectedCode is
-                                            // populated but there's
-                                            // no editContext (this
-                                            // isn't an install they
-                                            // came back to edit).
-                                            // Treat the composed code
-                                            // as the starting point
-                                            // so the AI iterates
-                                            // instead of generating
-                                            // from scratch.
-                                            if (detectedCode?.componentCode) {
-                                                return `${base}\n\nThe user started this widget in Compose mode and now wants AI help to refine it. Here is the CURRENT source they composed:\n\nComponent (jsx):\n\`\`\`jsx\n${
-                                                    detectedCode.componentCode
-                                                }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
-                                                    detectedCode.configCode ||
-                                                    ""
-                                                }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above. CRITICAL: PRESERVE every existing \`userConfig\` field EXACTLY as written — including its \`defaultValue\`, \`displayName\`, \`instructions\`, and \`required\` — unless the user explicitly asks to change that specific field. Never drop or blank out a \`userConfig\` \`defaultValue\` the user authored. Do NOT throw away what they composed unless they explicitly ask you to start over.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences acknowledging what they've built so far and asking what they'd like to change. No lists, no bullet points, under 30 words.`;
-                                            }
-                                            return base;
-                                        })()}
-                                        maxToolRounds="10"
-                                        apiKey={apiKey}
-                                        backend={preferredBackend}
-                                        persistKey="dash-widget-builder"
-                                        hideToolsBanner={true}
-                                        initialMessage={
-                                            chatMode === "discover"
-                                                ? "Tell me what kind of widget you're looking for."
-                                                : effectiveEditContext?.componentCode
-                                                ? "Hello, let's make some edits to this widget."
-                                                : "Hi, I'd like to build a new widget."
-                                        }
-                                    />
+                                        />
+                                    </ThemeContext.Provider>
                                 )}
                         </div>
                     </div>
