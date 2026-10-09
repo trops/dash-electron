@@ -55,4 +55,15 @@ describe("WidgetBuilderModal — polish", () => {
     test("draft fallback name skips hidden messages", () => {
         expect(source).toMatch(/firstUserMessageExcerpt\(chatHistory\)/);
     });
+
+    test("Compose (V2) drafts save and restore their grid", () => {
+        // Saved with the draft…
+        expect(source).toMatch(/composerGrid: composerGridRef\.current/);
+        // …and restored on both resume paths (drafts list + resumeDraftId).
+        expect(
+            source.match(/setComposerInitialGrid\(full\.composerGrid\)/g) || []
+        ).toHaveLength(2);
+        // "Build new widget" starts from an empty grid.
+        expect(source).toMatch(/setComposerInitialGrid\(null\)/);
+    });
 });
