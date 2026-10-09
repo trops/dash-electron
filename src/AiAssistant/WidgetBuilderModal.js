@@ -24,6 +24,9 @@ import {
     FontAwesomeIcon,
     ThemeContext,
     CodeEditorVS,
+    getStatusColors,
+    getStylesForItem,
+    themeObjects,
 } from "@trops/dash-react";
 import {
     ChatCore,
@@ -909,7 +912,7 @@ export const WidgetBuilderModal = ({
     //                       workspace is open — e.g. modal launched
     //                       from Settings → Widgets)
     //   - previewAppCtx   → providers/settings for MCP provider access
-    //   - currentTheme    → null (modal chrome uses fixed dark colors)
+    //   - currentTheme    → the APP theme for the builder's own chrome
     const localThemeCtx = useContext(ThemeContext);
     const readBroadcastTheme = () =>
         (typeof window !== "undefined" &&
@@ -943,7 +946,7 @@ export const WidgetBuilderModal = ({
     const previewThemeCtx = previewTheme || localThemeCtx;
     const chatThemeCtx = appTheme || localThemeCtx;
     const previewAppCtx = previewApp || null;
-    const currentTheme = localThemeCtx?.currentTheme;
+    const currentTheme = chatThemeCtx?.currentTheme;
     if (false && previewAppCtx) {
         console.log("[WidgetBuilder] AppContext bridge:", {
             hasProviders: !!previewAppCtx.providers,
@@ -1574,9 +1577,36 @@ ${
             (p.providerClass || "credential") === "credential"
     );
     const apiKey = anthropicEntry?.[1]?.credentials?.apiKey || null;
-    const bgDark = currentTheme?.["bg-primary-dark"] || "bg-gray-900";
-    const borderColor =
-        currentTheme?.["border-primary-dark"] || "border-gray-700";
+    // The builder's chrome follows the APP theme (chatThemeCtx).
+    const tk = (key) => currentTheme?.[key] || "";
+    const bgDark = tk("bg-primary-dark");
+    const borderColor = tk("border-primary-dark");
+    const chromeText = tk("text-primary-light");
+    const chromeMuted = `${tk("text-primary-medium")} opacity-70`;
+    const accentText = tk("text-secondary-medium");
+    const tabActive = `${tk("bg-primary-medium")} ${tk("text-primary-light")}`;
+    const tabIdle = `${tk(
+        "text-primary-medium"
+    )} opacity-70 hover:opacity-100 ${tk("hover-bg-primary-medium")}`;
+    const fieldClass = `${tk("bg-primary-very-dark")} ${tk(
+        "border-primary-medium"
+    )} ${tk("text-primary-light")} border rounded focus:outline-none`;
+    const status = getStatusColors(chatThemeCtx?.themeVariant || "dark");
+    // Same classes dash-react's <Button> uses, so primary actions read
+    // right in every theme.
+    const primaryButton = `dr-btn dr-btn-primary rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
+        getStylesForItem(
+            themeObjects.BUTTON,
+            currentTheme || {},
+            { scrollable: false, grow: false, space: false },
+            null,
+            "md"
+        ).string
+    }`;
+    const secondaryButton = `px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${tk(
+        "bg-primary-medium"
+    )} ${tk("hover-bg-primary-light")} ${chromeText}`;
+    const codeChip = `px-1 rounded font-mono ${tk("bg-primary-very-dark")}`;
 
     const widgetName = extractWidgetName(detectedCode.componentCode);
 
@@ -3458,33 +3488,39 @@ ${
         widgetName?.replace(/([A-Z])/g, " $1").trim() || "Widget";
 
     return (
-        <Modal
-            isOpen={isOpen}
-            setIsOpen={setIsOpen}
-            width="w-11/12"
-            height="h-5/6"
-        >
-            {/* e2e anchor — `data-testid="widget-builder-modal"` lets the
+        <ThemeContext.Provider value={chatThemeCtx}>
+            <Modal
+                isOpen={isOpen}
+                setIsOpen={setIsOpen}
+                width="w-11/12"
+                height="h-5/6"
+            >
+                {/* e2e anchor — `data-testid="widget-builder-modal"` lets the
                 Playwright spec wait for the modal to be in the DOM after
                 dispatching `dash:open-widget-builder`. Bound to a wrapper
                 div instead of `<Modal>` because dash-react's Modal does
                 not forward arbitrary HTML attributes to its root. */}
-            <div data-testid="widget-builder-modal" className="contents"></div>
-            {/* Header */}
-            <div
-                className={`flex items-center justify-between px-4 py-3 border-b ${borderColor} ${bgDark} shrink-0`}
-            >
-                <div className="flex items-center gap-2 min-w-0">
-                    <FontAwesomeIcon
-                        icon="wand-magic-sparkles"
-                        className="h-4 w-4 text-indigo-400 shrink-0"
-                    />
-                    <span className="text-base font-semibold text-gray-100 shrink-0">
-                        {isRemixMode
-                            ? "Edit Widget with AI"
-                            : "Build Widget with AI"}
-                    </span>
-                    {/* Widget identity subtitle — shown only in edit
+                <div
+                    data-testid="widget-builder-modal"
+                    className="contents"
+                ></div>
+                {/* Header */}
+                <div
+                    className={`flex items-center justify-between px-4 py-3 border-b ${borderColor} ${bgDark} shrink-0`}
+                >
+                    <div className="flex items-center gap-2 min-w-0">
+                        <FontAwesomeIcon
+                            icon="wand-magic-sparkles"
+                            className={`h-4 w-4 shrink-0 ${accentText}`}
+                        />
+                        <span
+                            className={`text-base font-semibold shrink-0 ${chromeText}`}
+                        >
+                            {isRemixMode
+                                ? "Edit Widget with AI"
+                                : "Build Widget with AI"}
+                        </span>
+                        {/* Widget identity subtitle — shown only in edit
                         mode so the user can see which widget they're
                         editing without having to look at the footer's
                         "Installs to …" line. originalComponentName
@@ -3492,938 +3528,1010 @@ ${
                         (e.g. "ai-built.composedwidget3.ComposedWidget3"),
                         which is the canonical identifier the user
                         recognizes from their dashboard layout. */}
-                    {isRemixMode &&
-                        effectiveEditContext?.originalComponentName && (
-                            <>
-                                <span className="text-gray-500 shrink-0">
-                                    —
-                                </span>
-                                <code
-                                    className="text-xs text-indigo-300 font-mono truncate"
-                                    title={
-                                        effectiveEditContext.originalComponentName
-                                    }
-                                >
-                                    {effectiveEditContext.originalComponentName}
-                                </code>
-                            </>
-                        )}
+                        {isRemixMode &&
+                            effectiveEditContext?.originalComponentName && (
+                                <>
+                                    <span className={`shrink-0 ${chromeMuted}`}>
+                                        —
+                                    </span>
+                                    <code
+                                        className={`text-xs font-mono truncate ${accentText}`}
+                                        title={
+                                            effectiveEditContext.originalComponentName
+                                        }
+                                    >
+                                        {
+                                            effectiveEditContext.originalComponentName
+                                        }
+                                    </code>
+                                </>
+                            )}
+                    </div>
+                    <button
+                        onClick={() => setIsOpen(false)}
+                        className={`p-1.5 rounded transition-colors ${chromeMuted} ${tk(
+                            "hover-bg-primary-medium"
+                        )}`}
+                    >
+                        <FontAwesomeIcon icon="times" className="h-4 w-4" />
+                    </button>
                 </div>
-                <button
-                    onClick={() => setIsOpen(false)}
-                    className="p-1.5 rounded hover:bg-white/10 transition-colors text-gray-400"
-                >
-                    <FontAwesomeIcon icon="times" className="h-4 w-4" />
-                </button>
-            </div>
 
-            {/* Health-check banner — only renders when something is
+                {/* Health-check banner — only renders when something is
                 actually broken. Kept above the split pane so it's
                 visible regardless of which tab the user is on. */}
-            {healthCheckIssues.length > 0 && (
-                <div className="flex flex-col gap-1 px-4 py-2 bg-amber-900/20 border-b border-amber-700/30 shrink-0">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-amber-300">
-                        <FontAwesomeIcon
-                            icon="triangle-exclamation"
-                            className="h-3 w-3"
-                        />
-                        AI Assistant setup issue
-                        {healthCheckIssues.length > 1
-                            ? ` (${healthCheckIssues.length})`
-                            : ""}
-                    </div>
-                    {healthCheckIssues.map((issue, idx) => (
+                {healthCheckIssues.length > 0 && (
+                    <div
+                        className={`flex flex-col gap-1 px-4 py-2 border-b shrink-0 ${status.warning.bg} ${status.warning.border}`}
+                    >
                         <div
-                            key={idx}
-                            className="text-xs text-amber-200/80 pl-5"
+                            className={`flex items-center gap-2 text-xs font-semibold ${status.warning.strongText}`}
                         >
-                            <span className="font-medium">{issue.label}:</span>{" "}
-                            {issue.detail}
+                            <FontAwesomeIcon
+                                icon="triangle-exclamation"
+                                className="h-3 w-3"
+                            />
+                            AI Assistant setup issue
+                            {healthCheckIssues.length > 1
+                                ? ` (${healthCheckIssues.length})`
+                                : ""}
                         </div>
-                    ))}
-                </div>
-            )}
+                        {healthCheckIssues.map((issue, idx) => (
+                            <div
+                                key={idx}
+                                className={`text-xs pl-5 ${status.warning.text}`}
+                            >
+                                <span className="font-medium">
+                                    {issue.label}:
+                                </span>{" "}
+                                {issue.detail}
+                            </div>
+                        ))}
+                    </div>
+                )}
 
-            {/* Loading sentinel — viewMode is null while the async drafts
+                {/* Loading sentinel — viewMode is null while the async drafts
                 check resolves on open. Without this, the previous viewMode's
                 content briefly flashes before the gate decides between
                 "drafts" and "builder". */}
-            {viewMode === null && (
-                <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-gray-400">
-                    Loading…
-                </div>
-            )}
+                {viewMode === null && (
+                    <div
+                        className={`flex-1 min-h-0 flex items-center justify-center text-sm ${chromeMuted}`}
+                    >
+                        Loading…
+                    </div>
+                )}
 
-            {/* Drafts entry view — shown on open when the user has
+                {/* Drafts entry view — shown on open when the user has
                 unfinished widgets from prior sessions. Resume restores
                 state into the builder; Build New jumps straight in. */}
-            {viewMode === "drafts" && (
-                <div className="flex-1 min-h-0 overflow-hidden">
-                    <WidgetDraftsList
-                        onInstalled={(scopedRegistryId, componentName) => {
-                            // Hand off to the modal's normal post-install
-                            // flow so the dashboard picks up the new
-                            // widget. Same callback the modal's "Install"
-                            // button uses after a fresh AI build.
-                            if (typeof onInstalled === "function") {
-                                onInstalled(scopedRegistryId, componentName);
-                            }
-                            setIsOpen(false);
-                        }}
-                        onOpenedInEditor={() => {
-                            // Editor handoff is a clean break — close
-                            // the modal so the in-pane editor doesn't
-                            // get out of sync with whatever the user
-                            // does in VS Code. They can reopen and
-                            // Install from the drafts list later.
-                            setIsOpen(false);
-                        }}
-                        onStartNew={() => {
-                            draftSessionIdRef.current = null;
-                            resumedDraftRef.current = null;
-                            // Clear ChatCore's persisted history so the
-                            // new build starts fresh.
-                            try {
-                                localStorage.setItem(
-                                    "dash-widget-builder",
-                                    JSON.stringify({ messages: [] })
-                                );
-                            } catch {
-                                /* ignore */
-                            }
-                            setDetectedCode({
-                                componentCode: null,
-                                configCode: null,
-                                files: [],
-                            });
-                            setPreviewComponent(null);
-                            setPreviewError(null);
-                            setInstallStatus(null);
-                            setSelectedProviderForBuild(null);
-                            // Reset compose-mode state so a fresh
-                            // session doesn't inherit the tree from
-                            // whatever was last loaded.
-                            setComposerInitialTree(null);
-                            setComposerTree(null);
-                            setComposerSessionKey((k) => k + 1);
-                            setViewMode("builder");
-                        }}
-                        onResume={async (draft) => {
-                            // For v2 (disk-backed) drafts the list row
-                            // doesn't carry componentCode/configCode —
-                            // fetch the full draft via drafts.get which
-                            // folds disk-read code into the response.
-                            // Falls back to the row data for legacy v1
-                            // drafts that still have JSON-stored code.
-                            let full = draft;
-                            try {
-                                const fetched =
-                                    await window.mainApi?.drafts?.get?.(
-                                        draft.id
+                {viewMode === "drafts" && (
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                        <WidgetDraftsList
+                            onInstalled={(scopedRegistryId, componentName) => {
+                                // Hand off to the modal's normal post-install
+                                // flow so the dashboard picks up the new
+                                // widget. Same callback the modal's "Install"
+                                // button uses after a fresh AI build.
+                                if (typeof onInstalled === "function") {
+                                    onInstalled(
+                                        scopedRegistryId,
+                                        componentName
                                     );
-                                if (fetched) full = fetched;
-                            } catch {
-                                /* ignore — use list-row fallback */
-                            }
-                            // Reuse the draft id so subsequent saves
-                            // update this row instead of creating a new
-                            // one.
-                            resumedDraftRef.current = full;
-                            draftSessionIdRef.current = full.id;
-                            // Restore chat history into ChatCore's
-                            // persistKey so the conversation reappears.
-                            try {
-                                localStorage.setItem(
-                                    "dash-widget-builder",
-                                    JSON.stringify({
-                                        messages: Array.isArray(
-                                            full.chatHistory
-                                        )
-                                            ? full.chatHistory
-                                            : [],
-                                    })
-                                );
-                            } catch {
-                                /* ignore */
-                            }
-                            // Restore the latest code so the preview +
-                            // editor pick up where the user left off.
-                            const restoredCode = {
-                                componentCode: full.componentCode || null,
-                                configCode: full.configCode || null,
-                                files: Array.isArray(full.files)
-                                    ? full.files
-                                    : [],
-                            };
-                            setDetectedCode(restoredCode);
-                            // Compile the restored code so the Preview
-                            // tab actually renders instead of showing
-                            // the empty placeholder from modal open.
-                            // Mirrors the remix/editContext useEffect
-                            // a few hundred lines up — drafts went
-                            // through setDetectedCode but never
-                            // through the compile pipeline, so the
-                            // preview stayed blank until the user
-                            // typed a new message (chat) or edited
-                            // the code tab manually.
-                            if (restoredCode.componentCode) {
-                                compilePreview(restoredCode).catch(() => {});
-                            }
-                            // Restore the picked provider so the chat
-                            // gate doesn't reappear and the post-process
-                            // auto-correct stays consistent.
-                            if (full.pickedProvider !== undefined) {
-                                setSelectedProviderForBuild(
-                                    full.pickedProvider
-                                );
-                            }
-                            // Restore compose mode + the saved
-                            // composer tree so the user picks up
-                            // exactly where they left off (palette,
-                            // selected node, wires, field maps).
-                            // composerSessionKey bump forces the
-                            // pane to remount with the new initial
-                            // tree — useState wouldn't otherwise pick
-                            // up the change after the first mount.
-                            if (full.composerTree) {
-                                setComposerInitialTree(full.composerTree);
-                                setComposerTree(full.composerTree);
+                                }
+                                setIsOpen(false);
+                            }}
+                            onOpenedInEditor={() => {
+                                // Editor handoff is a clean break — close
+                                // the modal so the in-pane editor doesn't
+                                // get out of sync with whatever the user
+                                // does in VS Code. They can reopen and
+                                // Install from the drafts list later.
+                                setIsOpen(false);
+                            }}
+                            onStartNew={() => {
+                                draftSessionIdRef.current = null;
+                                resumedDraftRef.current = null;
+                                // Clear ChatCore's persisted history so the
+                                // new build starts fresh.
+                                try {
+                                    localStorage.setItem(
+                                        "dash-widget-builder",
+                                        JSON.stringify({ messages: [] })
+                                    );
+                                } catch {
+                                    /* ignore */
+                                }
+                                setDetectedCode({
+                                    componentCode: null,
+                                    configCode: null,
+                                    files: [],
+                                });
+                                setPreviewComponent(null);
+                                setPreviewError(null);
+                                setInstallStatus(null);
+                                setSelectedProviderForBuild(null);
+                                // Reset compose-mode state so a fresh
+                                // session doesn't inherit the tree from
+                                // whatever was last loaded.
+                                setComposerInitialTree(null);
+                                setComposerTree(null);
                                 setComposerSessionKey((k) => k + 1);
-                            }
-                            if (full.chatMode) {
-                                setChatMode(full.chatMode);
-                            }
-                            setInstallStatus(null);
-                            setViewMode("builder");
-                        }}
-                    />
-                </div>
-            )}
+                                setViewMode("builder");
+                            }}
+                            onResume={async (draft) => {
+                                // For v2 (disk-backed) drafts the list row
+                                // doesn't carry componentCode/configCode —
+                                // fetch the full draft via drafts.get which
+                                // folds disk-read code into the response.
+                                // Falls back to the row data for legacy v1
+                                // drafts that still have JSON-stored code.
+                                let full = draft;
+                                try {
+                                    const fetched =
+                                        await window.mainApi?.drafts?.get?.(
+                                            draft.id
+                                        );
+                                    if (fetched) full = fetched;
+                                } catch {
+                                    /* ignore — use list-row fallback */
+                                }
+                                // Reuse the draft id so subsequent saves
+                                // update this row instead of creating a new
+                                // one.
+                                resumedDraftRef.current = full;
+                                draftSessionIdRef.current = full.id;
+                                // Restore chat history into ChatCore's
+                                // persistKey so the conversation reappears.
+                                try {
+                                    localStorage.setItem(
+                                        "dash-widget-builder",
+                                        JSON.stringify({
+                                            messages: Array.isArray(
+                                                full.chatHistory
+                                            )
+                                                ? full.chatHistory
+                                                : [],
+                                        })
+                                    );
+                                } catch {
+                                    /* ignore */
+                                }
+                                // Restore the latest code so the preview +
+                                // editor pick up where the user left off.
+                                const restoredCode = {
+                                    componentCode: full.componentCode || null,
+                                    configCode: full.configCode || null,
+                                    files: Array.isArray(full.files)
+                                        ? full.files
+                                        : [],
+                                };
+                                setDetectedCode(restoredCode);
+                                // Compile the restored code so the Preview
+                                // tab actually renders instead of showing
+                                // the empty placeholder from modal open.
+                                // Mirrors the remix/editContext useEffect
+                                // a few hundred lines up — drafts went
+                                // through setDetectedCode but never
+                                // through the compile pipeline, so the
+                                // preview stayed blank until the user
+                                // typed a new message (chat) or edited
+                                // the code tab manually.
+                                if (restoredCode.componentCode) {
+                                    compilePreview(restoredCode).catch(
+                                        () => {}
+                                    );
+                                }
+                                // Restore the picked provider so the chat
+                                // gate doesn't reappear and the post-process
+                                // auto-correct stays consistent.
+                                if (full.pickedProvider !== undefined) {
+                                    setSelectedProviderForBuild(
+                                        full.pickedProvider
+                                    );
+                                }
+                                // Restore compose mode + the saved
+                                // composer tree so the user picks up
+                                // exactly where they left off (palette,
+                                // selected node, wires, field maps).
+                                // composerSessionKey bump forces the
+                                // pane to remount with the new initial
+                                // tree — useState wouldn't otherwise pick
+                                // up the change after the first mount.
+                                if (full.composerTree) {
+                                    setComposerInitialTree(full.composerTree);
+                                    setComposerTree(full.composerTree);
+                                    setComposerSessionKey((k) => k + 1);
+                                }
+                                if (full.chatMode) {
+                                    setChatMode(full.chatMode);
+                                }
+                                setInstallStatus(null);
+                                setViewMode("builder");
+                            }}
+                        />
+                    </div>
+                )}
 
-            {/* Split pane */}
-            {viewMode === "builder" && (
-                <div className={`flex flex-row flex-1 min-h-0 ${bgDark}`}>
-                    {/* Left: Live Preview (2/3) */}
-                    <div className="flex flex-col flex-[2] min-w-0 min-h-0 overflow-hidden">
-                        {/* Tab bar */}
-                        <div
-                            className={`flex items-center justify-between px-2 py-1.5 border-b ${borderColor} shrink-0`}
-                        >
-                            <div className="flex items-center gap-1">
-                                <button
-                                    onClick={() => setActiveTab("preview")}
-                                    className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
-                                        activeTab === "preview"
-                                            ? "bg-indigo-600/20 text-indigo-300"
-                                            : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
-                                    }`}
-                                >
-                                    <FontAwesomeIcon
-                                        icon="eye"
-                                        className="h-2.5 w-2.5"
-                                    />
-                                    Preview
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab("code")}
-                                    disabled={!detectedCode.componentCode}
-                                    className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
-                                        activeTab === "code"
-                                            ? "bg-indigo-600/20 text-indigo-300"
-                                            : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
-                                    } ${
-                                        !detectedCode.componentCode
-                                            ? "opacity-30 cursor-not-allowed"
-                                            : ""
-                                    }`}
-                                >
-                                    <FontAwesomeIcon
-                                        icon="code"
-                                        className="h-2.5 w-2.5"
-                                    />
-                                    Code
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab("configure")}
-                                    disabled={!detectedCode.componentCode}
-                                    className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
-                                        activeTab === "configure"
-                                            ? "bg-indigo-600/20 text-indigo-300"
-                                            : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
-                                    } ${
-                                        !detectedCode.componentCode
-                                            ? "opacity-30 cursor-not-allowed"
-                                            : ""
-                                    }`}
-                                >
-                                    <FontAwesomeIcon
-                                        icon="cog"
-                                        className="h-2.5 w-2.5"
-                                    />
-                                    Configure
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab("console")}
-                                    className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
-                                        activeTab === "console"
-                                            ? "bg-indigo-600/20 text-indigo-300"
-                                            : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
-                                    }`}
-                                    data-testid="tab-console"
-                                >
-                                    <FontAwesomeIcon
-                                        icon="terminal"
-                                        className="h-2.5 w-2.5"
-                                    />
-                                    Console
-                                    {consoleEvents.some(
-                                        (e) => e.severity === "error"
-                                    ) && (
-                                        <span
-                                            className="ml-1 px-1 rounded bg-red-700 text-red-100 text-[10px]"
-                                            title="Error in widget output"
-                                        >
-                                            {
-                                                consoleEvents.filter(
-                                                    (e) =>
-                                                        e.severity === "error"
-                                                ).length
-                                            }
-                                        </span>
-                                    )}
-                                </button>
-                                {chatMode === "build" && (
+                {/* Split pane */}
+                {viewMode === "builder" && (
+                    <div className={`flex flex-row flex-1 min-h-0 ${bgDark}`}>
+                        {/* Left: Live Preview (2/3) */}
+                        <div className="flex flex-col flex-[2] min-w-0 min-h-0 overflow-hidden">
+                            {/* Tab bar */}
+                            <div
+                                className={`flex items-center justify-between px-2 py-1.5 border-b ${borderColor} shrink-0`}
+                            >
+                                <div className="flex items-center gap-1">
                                     <button
-                                        onClick={() =>
-                                            setActiveTab("scorecard")
-                                        }
+                                        onClick={() => setActiveTab("preview")}
+                                        className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
+                                            activeTab === "preview"
+                                                ? tabActive
+                                                : tabIdle
+                                        }`}
+                                    >
+                                        <FontAwesomeIcon
+                                            icon="eye"
+                                            className="h-2.5 w-2.5"
+                                        />
+                                        Preview
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab("code")}
                                         disabled={!detectedCode.componentCode}
                                         className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
-                                            activeTab === "scorecard"
-                                                ? "bg-indigo-600/20 text-indigo-300"
-                                                : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
+                                            activeTab === "code"
+                                                ? tabActive
+                                                : tabIdle
                                         } ${
                                             !detectedCode.componentCode
                                                 ? "opacity-30 cursor-not-allowed"
                                                 : ""
                                         }`}
-                                        data-testid="tab-scorecard"
-                                        title="Cohesion-rule checklist for the generated widget"
                                     >
                                         <FontAwesomeIcon
-                                            icon="circle-check"
+                                            icon="code"
                                             className="h-2.5 w-2.5"
                                         />
-                                        Scorecard
-                                        {scorecardFailCount > 0 && (
+                                        Code
+                                    </button>
+                                    <button
+                                        onClick={() =>
+                                            setActiveTab("configure")
+                                        }
+                                        disabled={!detectedCode.componentCode}
+                                        className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
+                                            activeTab === "configure"
+                                                ? tabActive
+                                                : tabIdle
+                                        } ${
+                                            !detectedCode.componentCode
+                                                ? "opacity-30 cursor-not-allowed"
+                                                : ""
+                                        }`}
+                                    >
+                                        <FontAwesomeIcon
+                                            icon="cog"
+                                            className="h-2.5 w-2.5"
+                                        />
+                                        Configure
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab("console")}
+                                        className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
+                                            activeTab === "console"
+                                                ? tabActive
+                                                : tabIdle
+                                        }`}
+                                        data-testid="tab-console"
+                                    >
+                                        <FontAwesomeIcon
+                                            icon="terminal"
+                                            className="h-2.5 w-2.5"
+                                        />
+                                        Console
+                                        {consoleEvents.some(
+                                            (e) => e.severity === "error"
+                                        ) && (
                                             <span
-                                                className="ml-1 px-1 rounded bg-rose-700 text-rose-100 text-[10px]"
-                                                title={`${scorecardFailCount} cohesion rule${
-                                                    scorecardFailCount === 1
-                                                        ? ""
-                                                        : "s"
-                                                } failing`}
+                                                className={`ml-1 px-1 rounded text-xs ${status.error.solidBg} text-white`}
+                                                title="Error in widget output"
                                             >
-                                                {scorecardFailCount}
+                                                {
+                                                    consoleEvents.filter(
+                                                        (e) =>
+                                                            e.severity ===
+                                                            "error"
+                                                    ).length
+                                                }
                                             </span>
                                         )}
                                     </button>
-                                )}
-                            </div>
-                            {isCompiling && (
-                                <div className="flex items-center gap-1.5 text-xs text-indigo-400">
-                                    <span className="inline-flex gap-0.5">
-                                        <span
-                                            className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce"
-                                            style={{ animationDelay: "0ms" }}
-                                        />
-                                        <span
-                                            className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce"
-                                            style={{ animationDelay: "150ms" }}
-                                        />
-                                        <span
-                                            className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce"
-                                            style={{ animationDelay: "300ms" }}
-                                        />
-                                    </span>
-                                    Compiling...
+                                    {chatMode === "build" && (
+                                        <button
+                                            onClick={() =>
+                                                setActiveTab("scorecard")
+                                            }
+                                            disabled={
+                                                !detectedCode.componentCode
+                                            }
+                                            className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
+                                                activeTab === "scorecard"
+                                                    ? tabActive
+                                                    : tabIdle
+                                            } ${
+                                                !detectedCode.componentCode
+                                                    ? "opacity-30 cursor-not-allowed"
+                                                    : ""
+                                            }`}
+                                            data-testid="tab-scorecard"
+                                            title="Cohesion-rule checklist for the generated widget"
+                                        >
+                                            <FontAwesomeIcon
+                                                icon="circle-check"
+                                                className="h-2.5 w-2.5"
+                                            />
+                                            Scorecard
+                                            {scorecardFailCount > 0 && (
+                                                <span
+                                                    className={`ml-1 px-1 rounded text-xs ${status.error.solidBg} text-white`}
+                                                    title={`${scorecardFailCount} cohesion rule${
+                                                        scorecardFailCount === 1
+                                                            ? ""
+                                                            : "s"
+                                                    } failing`}
+                                                >
+                                                    {scorecardFailCount}
+                                                </span>
+                                            )}
+                                        </button>
+                                    )}
                                 </div>
-                            )}
-                            {installStatus?.success && (
-                                <span className="text-xs text-green-400 flex items-center gap-1">
-                                    <FontAwesomeIcon
-                                        icon="check-circle"
-                                        className="h-3 w-3"
-                                    />
-                                    {isRemixMode
-                                        ? "Remixed as"
-                                        : "Installed as"}{" "}
-                                    {installStatus.widgetName}
-                                </span>
-                            )}
-                            {/* Slice 17b: provider auto-correct surface.
+                                {isCompiling && (
+                                    <div
+                                        className={`flex items-center gap-1.5 text-xs ${accentText}`}
+                                    >
+                                        <span className="inline-flex gap-0.5">
+                                            <span
+                                                className={`w-1.5 h-1.5 rounded-full animate-bounce ${tk(
+                                                    "bg-secondary-medium"
+                                                )}`}
+                                                style={{
+                                                    animationDelay: "0ms",
+                                                }}
+                                            />
+                                            <span
+                                                className={`w-1.5 h-1.5 rounded-full animate-bounce ${tk(
+                                                    "bg-secondary-medium"
+                                                )}`}
+                                                style={{
+                                                    animationDelay: "150ms",
+                                                }}
+                                            />
+                                            <span
+                                                className={`w-1.5 h-1.5 rounded-full animate-bounce ${tk(
+                                                    "bg-secondary-medium"
+                                                )}`}
+                                                style={{
+                                                    animationDelay: "300ms",
+                                                }}
+                                            />
+                                        </span>
+                                        Compiling...
+                                    </div>
+                                )}
+                                {installStatus?.success && (
+                                    <span
+                                        className={`text-xs flex items-center gap-1 ${status.success.icon}`}
+                                    >
+                                        <FontAwesomeIcon
+                                            icon="check-circle"
+                                            className="h-3 w-3"
+                                        />
+                                        {isRemixMode
+                                            ? "Remixed as"
+                                            : "Installed as"}{" "}
+                                        {installStatus.widgetName}
+                                    </span>
+                                )}
+                                {/* Slice 17b: provider auto-correct surface.
                                 Main process snaps the AI's declared
                                 providerClass to whatever the user has
                                 installed; this banner explains why the
                                 preview's providers section may differ
                                 from what the AI emitted. */}
-                            {providerCorrection && !previewError && (
-                                <span
-                                    className="text-xs text-amber-300 flex items-center gap-1"
-                                    title={providerCorrection.reason || ""}
-                                >
-                                    <FontAwesomeIcon
-                                        icon="wrench"
-                                        className="h-3 w-3"
-                                    />
-                                    Provider config auto-corrected to match your
-                                    installed provider
-                                </span>
-                            )}
-                            {/* Right-side draft toolbar — Open in Editor +
+                                {providerCorrection && !previewError && (
+                                    <span
+                                        className={`text-xs flex items-center gap-1 ${status.warning.icon}`}
+                                        title={providerCorrection.reason || ""}
+                                    >
+                                        <FontAwesomeIcon
+                                            icon="wrench"
+                                            className="h-3 w-3"
+                                        />
+                                        Provider config auto-corrected to match
+                                        your installed provider
+                                    </span>
+                                )}
+                                {/* Right-side draft toolbar — Open in Editor +
                                 Save Draft + save status. Visible once
                                 the AI has emitted code AND we're in
                                 build mode (not remix). Lives in the
                                 tab bar row so the user can act on
                                 their in-flight draft without leaving
                                 the modal to find the drafts list. */}
-                            {detectedCode.componentCode &&
-                                !effectiveEditContext &&
-                                draftSessionIdRef.current && (
-                                    <div className="ml-auto flex items-center gap-2">
-                                        {editorOpenError && (
-                                            <span className="text-xs text-red-300 max-w-xs truncate">
-                                                {editorOpenError}
+                                {detectedCode.componentCode &&
+                                    !effectiveEditContext &&
+                                    draftSessionIdRef.current && (
+                                        <div className="ml-auto flex items-center gap-2">
+                                            {editorOpenError && (
+                                                <span
+                                                    className={`text-xs max-w-xs truncate ${status.error.icon}`}
+                                                >
+                                                    {editorOpenError}
+                                                </span>
+                                            )}
+                                            <span
+                                                className={`text-xs ${chromeMuted}`}
+                                            >
+                                                {draftSaveState === "saving"
+                                                    ? "Saving draft…"
+                                                    : draftSaveState === "error"
+                                                    ? "Save failed"
+                                                    : draftLastSavedAt
+                                                    ? `Draft saved ${Math.max(
+                                                          0,
+                                                          Math.round(
+                                                              (Date.now() -
+                                                                  draftLastSavedAt) /
+                                                                  1000
+                                                          )
+                                                      )}s ago`
+                                                    : ""}
                                             </span>
-                                        )}
-                                        <span className="text-xs text-gray-400">
-                                            {draftSaveState === "saving"
-                                                ? "Saving draft…"
-                                                : draftSaveState === "error"
-                                                ? "Save failed"
-                                                : draftLastSavedAt
-                                                ? `Draft saved ${Math.max(
-                                                      0,
-                                                      Math.round(
-                                                          (Date.now() -
-                                                              draftLastSavedAt) /
-                                                              1000
-                                                      )
-                                                  )}s ago`
-                                                : ""}
-                                        </span>
-                                        <button
-                                            onClick={() => {
-                                                // Re-fire the auto-save
-                                                // effect by re-setting
-                                                // detectedCode to its
-                                                // current value. The
-                                                // useEffect deps include
-                                                // componentCode/configCode/
-                                                // files (by reference) so a
-                                                // new object identity is
-                                                // enough to retrigger.
-                                                setDetectedCode((prev) => ({
-                                                    ...prev,
-                                                }));
-                                            }}
-                                            disabled={
-                                                draftSaveState === "saving"
-                                            }
-                                            className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors ${
-                                                draftSaveState === "saving"
-                                                    ? "bg-blue-900 text-blue-300 cursor-wait"
-                                                    : "bg-blue-700 hover:bg-blue-600 text-blue-100"
-                                            }`}
-                                            title="Force a draft save now"
-                                            data-testid="builder-save-draft"
-                                        >
-                                            <FontAwesomeIcon
-                                                icon="save"
-                                                className="h-2.5 w-2.5"
-                                            />
-                                            Save Draft
-                                        </button>
-                                        <button
-                                            onClick={async () => {
-                                                const id =
-                                                    draftSessionIdRef.current;
-                                                if (!id) return;
-                                                setOpeningEditor(true);
-                                                setEditorOpenError(null);
-                                                try {
-                                                    const result =
-                                                        await window.mainApi?.drafts?.openInEditor?.(
-                                                            id
-                                                        );
-                                                    if (!result?.success) {
-                                                        setEditorOpenError(
-                                                            result?.error ||
-                                                                "Couldn't open the editor"
-                                                        );
-                                                    } else {
-                                                        // Clean break — user
-                                                        // is now editing in
-                                                        // VS Code. The
-                                                        // in-pane editor
-                                                        // would drift, so
-                                                        // close.
-                                                        setIsOpen(false);
-                                                    }
-                                                } catch (err) {
-                                                    setEditorOpenError(
-                                                        err?.message ||
-                                                            String(err)
-                                                    );
-                                                } finally {
-                                                    setOpeningEditor(false);
+                                            <button
+                                                onClick={() => {
+                                                    // Re-fire the auto-save
+                                                    // effect by re-setting
+                                                    // detectedCode to its
+                                                    // current value. The
+                                                    // useEffect deps include
+                                                    // componentCode/configCode/
+                                                    // files (by reference) so a
+                                                    // new object identity is
+                                                    // enough to retrigger.
+                                                    setDetectedCode((prev) => ({
+                                                        ...prev,
+                                                    }));
+                                                }}
+                                                disabled={
+                                                    draftSaveState === "saving"
                                                 }
-                                            }}
-                                            disabled={openingEditor}
-                                            className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors ${
-                                                openingEditor
-                                                    ? "bg-indigo-900 text-indigo-300 cursor-wait"
-                                                    : "bg-indigo-700 hover:bg-indigo-600 text-indigo-100"
-                                            }`}
-                                            title="Open this widget's package directory in your editor (VS Code if installed)"
-                                            data-testid="builder-open-editor"
-                                        >
-                                            <FontAwesomeIcon
-                                                icon="up-right-from-square"
-                                                className="h-2.5 w-2.5"
-                                            />
-                                            {openingEditor
-                                                ? "Opening…"
-                                                : "Open in editor"}
-                                        </button>
-                                    </div>
-                                )}
-                        </div>
-
-                        {/* Preview content (visible when Preview tab is active) */}
-                        {activeTab === "preview" && (
-                            <div className="flex-1 overflow-auto p-4">
-                                {/* Source unavailable error (widget needs re-publish) */}
-                                {effectiveEditContext?.sourceError &&
-                                    !previewComponent &&
-                                    !previewError &&
-                                    !isCompiling && (
-                                        <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                                            <div className="w-16 h-16 rounded-2xl bg-amber-900/30 border border-amber-700/30 flex items-center justify-center">
+                                                className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                                    draftSaveState === "saving"
+                                                        ? `${tk(
+                                                              "bg-primary-medium"
+                                                          )} ${chromeMuted} cursor-wait`
+                                                        : `${tk(
+                                                              "bg-primary-medium"
+                                                          )} ${tk(
+                                                              "hover-bg-primary-light"
+                                                          )} ${chromeText}`
+                                                }`}
+                                                title="Force a draft save now"
+                                                data-testid="builder-save-draft"
+                                            >
                                                 <FontAwesomeIcon
-                                                    icon="exclamation-triangle"
-                                                    className="h-7 w-7 text-amber-400/60"
+                                                    icon="save"
+                                                    className="h-2.5 w-2.5"
                                                 />
-                                            </div>
-                                            <div className="space-y-2 max-w-md">
-                                                <p className="text-sm font-medium text-gray-300">
-                                                    Can't load widget source
-                                                </p>
-                                                <p className="text-xs text-gray-500">
-                                                    {effectiveEditContext.originalComponentName
-                                                        ? `"${effectiveEditContext.originalComponentName}" `
-                                                        : "This widget "}
-                                                    source couldn't be read. Try
-                                                    re-publishing the widget
-                                                    package with source files
-                                                    included, or generate a
-                                                    fresh widget below.
-                                                </p>
-                                                {effectiveEditContext.originalPackage && (
-                                                    <p className="text-[10px] text-gray-600 font-mono">
-                                                        package:{" "}
-                                                        {
-                                                            effectiveEditContext.originalPackage
+                                                Save Draft
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    const id =
+                                                        draftSessionIdRef.current;
+                                                    if (!id) return;
+                                                    setOpeningEditor(true);
+                                                    setEditorOpenError(null);
+                                                    try {
+                                                        const result =
+                                                            await window.mainApi?.drafts?.openInEditor?.(
+                                                                id
+                                                            );
+                                                        if (!result?.success) {
+                                                            setEditorOpenError(
+                                                                result?.error ||
+                                                                    "Couldn't open the editor"
+                                                            );
+                                                        } else {
+                                                            // Clean break — user
+                                                            // is now editing in
+                                                            // VS Code. The
+                                                            // in-pane editor
+                                                            // would drift, so
+                                                            // close.
+                                                            setIsOpen(false);
                                                         }
-                                                    </p>
-                                                )}
-                                                <p className="text-[10px] text-gray-600 font-mono break-words">
-                                                    reason:{" "}
-                                                    {
-                                                        effectiveEditContext.sourceError
+                                                    } catch (err) {
+                                                        setEditorOpenError(
+                                                            err?.message ||
+                                                                String(err)
+                                                        );
+                                                    } finally {
+                                                        setOpeningEditor(false);
                                                     }
-                                                </p>
-                                                <p className="text-xs text-gray-600 mt-2">
-                                                    You can still describe a new
-                                                    widget from scratch using
-                                                    the chat.
-                                                </p>
-                                            </div>
+                                                }}
+                                                disabled={openingEditor}
+                                                className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors ${
+                                                    openingEditor
+                                                        ? `${tk(
+                                                              "bg-secondary-dark"
+                                                          )} ${chromeMuted} cursor-wait`
+                                                        : `${tk(
+                                                              "bg-secondary-dark"
+                                                          )} ${tk(
+                                                              "hover-bg-secondary-medium"
+                                                          )} ${chromeText}`
+                                                }`}
+                                                title="Open this widget's package directory in your editor (VS Code if installed)"
+                                                data-testid="builder-open-editor"
+                                            >
+                                                <FontAwesomeIcon
+                                                    icon="up-right-from-square"
+                                                    className="h-2.5 w-2.5"
+                                                />
+                                                {openingEditor
+                                                    ? "Opening…"
+                                                    : "Open in editor"}
+                                            </button>
                                         </div>
                                     )}
-                                {/* Empty state: Discover cards grid OR
+                            </div>
+
+                            {/* Preview content (visible when Preview tab is active) */}
+                            {activeTab === "preview" && (
+                                <div className="flex-1 overflow-auto p-4">
+                                    {/* Source unavailable error (widget needs re-publish) */}
+                                    {effectiveEditContext?.sourceError &&
+                                        !previewComponent &&
+                                        !previewError &&
+                                        !isCompiling && (
+                                            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+                                                <div className="w-16 h-16 rounded-2xl bg-amber-900/30 border border-amber-700/30 flex items-center justify-center">
+                                                    <FontAwesomeIcon
+                                                        icon="exclamation-triangle"
+                                                        className="h-7 w-7 text-amber-400/60"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2 max-w-md">
+                                                    <p className="text-sm font-medium text-gray-300">
+                                                        Can't load widget source
+                                                    </p>
+                                                    <p className="text-xs text-gray-500">
+                                                        {effectiveEditContext.originalComponentName
+                                                            ? `"${effectiveEditContext.originalComponentName}" `
+                                                            : "This widget "}
+                                                        source couldn't be read.
+                                                        Try re-publishing the
+                                                        widget package with
+                                                        source files included,
+                                                        or generate a fresh
+                                                        widget below.
+                                                    </p>
+                                                    {effectiveEditContext.originalPackage && (
+                                                        <p className="text-[10px] text-gray-600 font-mono">
+                                                            package:{" "}
+                                                            {
+                                                                effectiveEditContext.originalPackage
+                                                            }
+                                                        </p>
+                                                    )}
+                                                    <p className="text-[10px] text-gray-600 font-mono break-words">
+                                                        reason:{" "}
+                                                        {
+                                                            effectiveEditContext.sourceError
+                                                        }
+                                                    </p>
+                                                    <p className="text-xs text-gray-600 mt-2">
+                                                        You can still describe a
+                                                        new widget from scratch
+                                                        using the chat.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    {/* Empty state: Discover cards grid OR
                                 "Describe your widget" prompt for Build mode. */}
-                                {!previewComponent &&
-                                    !previewError &&
-                                    !isCompiling &&
-                                    !effectiveEditContext?.sourceError &&
-                                    (() => {
-                                        const hasDiscoverActivity =
-                                            discoverSearching ||
-                                            discoverResults.length > 0 ||
-                                            !!lastDiscoverQueryRef.current;
-                                        if (hasDiscoverActivity) {
-                                            return (
-                                                <div className="flex flex-col h-full">
-                                                    <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-800/60">
-                                                        <div className="flex items-baseline gap-2 min-w-0">
-                                                            <span className="text-sm font-semibold text-gray-200">
-                                                                {discoverSearching
-                                                                    ? "Searching registry..."
-                                                                    : `${
-                                                                          discoverResults.length
-                                                                      } match${
-                                                                          discoverResults.length ===
-                                                                          1
-                                                                              ? ""
-                                                                              : "es"
-                                                                      }`}
-                                                            </span>
-                                                            {lastDiscoverQueryRef.current && (
-                                                                <span className="text-xs text-gray-500 truncate">
-                                                                    for “
-                                                                    {
-                                                                        lastDiscoverQueryRef.current
-                                                                    }
-                                                                    ”
+                                    {!previewComponent &&
+                                        !previewError &&
+                                        !isCompiling &&
+                                        !effectiveEditContext?.sourceError &&
+                                        (() => {
+                                            const hasDiscoverActivity =
+                                                discoverSearching ||
+                                                discoverResults.length > 0 ||
+                                                !!lastDiscoverQueryRef.current;
+                                            if (hasDiscoverActivity) {
+                                                return (
+                                                    <div className="flex flex-col h-full">
+                                                        <div className="flex items-center justify-between gap-2 pb-3 border-b border-gray-800/60">
+                                                            <div className="flex items-baseline gap-2 min-w-0">
+                                                                <span className="text-sm font-semibold text-gray-200">
+                                                                    {discoverSearching
+                                                                        ? "Searching registry..."
+                                                                        : `${
+                                                                              discoverResults.length
+                                                                          } match${
+                                                                              discoverResults.length ===
+                                                                              1
+                                                                                  ? ""
+                                                                                  : "es"
+                                                                          }`}
                                                                 </span>
-                                                            )}
+                                                                {lastDiscoverQueryRef.current && (
+                                                                    <span className="text-xs text-gray-500 truncate">
+                                                                        for “
+                                                                        {
+                                                                            lastDiscoverQueryRef.current
+                                                                        }
+                                                                        ”
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <span className="text-[10px] uppercase tracking-wide text-gray-500 shrink-0">
+                                                                Click a widget
+                                                                to preview
+                                                            </span>
                                                         </div>
-                                                        <span className="text-[10px] uppercase tracking-wide text-gray-500 shrink-0">
-                                                            Click a widget to
-                                                            preview
-                                                        </span>
-                                                    </div>
-                                                    {/* Sign-in nudge: the
+                                                        {/* Sign-in nudge: the
                                                     registry only returns
                                                     public packages to
                                                     anonymous users, so
                                                     missing private/entitled
                                                     widgets can be surfaced
                                                     with one click. */}
-                                                    {registryChecked &&
-                                                        !registryUsername && (
-                                                            <div className="mt-2 flex items-center gap-3 px-3 py-2 rounded-lg bg-amber-900/15 border border-amber-700/30">
-                                                                <p className="flex-1 text-xs text-amber-200 leading-snug">
-                                                                    You're
-                                                                    browsing as
-                                                                    a guest —
-                                                                    sign in to
-                                                                    also see
-                                                                    private
-                                                                    widgets you
-                                                                    own or have
-                                                                    access to.
-                                                                </p>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={
-                                                                        handleSignInForPreview
+                                                        {registryChecked &&
+                                                            !registryUsername && (
+                                                                <div className="mt-2 flex items-center gap-3 px-3 py-2 rounded-lg bg-amber-900/15 border border-amber-700/30">
+                                                                    <p className="flex-1 text-xs text-amber-200 leading-snug">
+                                                                        You're
+                                                                        browsing
+                                                                        as a
+                                                                        guest —
+                                                                        sign in
+                                                                        to also
+                                                                        see
+                                                                        private
+                                                                        widgets
+                                                                        you own
+                                                                        or have
+                                                                        access
+                                                                        to.
+                                                                    </p>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={
+                                                                            handleSignInForPreview
+                                                                        }
+                                                                        className="px-3 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 transition-colors"
+                                                                    >
+                                                                        Sign in
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        {!discoverSearching &&
+                                                            discoverResults.length ===
+                                                                0 && (
+                                                                <div className="flex-1 flex items-center justify-center text-center text-sm text-gray-500 px-6">
+                                                                    No registry
+                                                                    widgets
+                                                                    matched “
+                                                                    {
+                                                                        lastDiscoverQueryRef.current
                                                                     }
-                                                                    className="px-3 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 transition-colors"
-                                                                >
-                                                                    Sign in
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    {!discoverSearching &&
-                                                        discoverResults.length ===
+                                                                    ”. Try
+                                                                    different
+                                                                    keywords, or
+                                                                    switch to
+                                                                    Build mode
+                                                                    to generate
+                                                                    one.
+                                                                </div>
+                                                            )}
+                                                        {discoverResults.length >
                                                             0 && (
-                                                            <div className="flex-1 flex items-center justify-center text-center text-sm text-gray-500 px-6">
-                                                                No registry
-                                                                widgets matched
-                                                                “
-                                                                {
-                                                                    lastDiscoverQueryRef.current
-                                                                }
-                                                                ”. Try different
-                                                                keywords, or
-                                                                switch to Build
-                                                                mode to generate
-                                                                one.
-                                                            </div>
-                                                        )}
-                                                    {discoverResults.length >
-                                                        0 && (
-                                                        <div className="flex-1 overflow-auto pt-3">
-                                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                                {discoverResults.map(
-                                                                    (pkg) => (
-                                                                        <button
-                                                                            key={`${
-                                                                                pkg.scope ||
-                                                                                ""
-                                                                            }/${
-                                                                                pkg.name
-                                                                            }`}
-                                                                            onClick={() =>
-                                                                                handleSelectRegistryPackage(
-                                                                                    pkg
-                                                                                )
-                                                                            }
-                                                                            className="group text-left rounded-lg border border-gray-700/60 bg-gray-800/40 hover:bg-gray-800/80 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-950/50 p-4 transition-all cursor-pointer"
-                                                                        >
-                                                                            <div className="flex items-start justify-between gap-2 mb-1.5">
-                                                                                <div className="font-semibold text-sm text-gray-200 truncate group-hover:text-indigo-200">
-                                                                                    {pkg.displayName ||
-                                                                                        pkg.name}
+                                                            <div className="flex-1 overflow-auto pt-3">
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                                    {discoverResults.map(
+                                                                        (
+                                                                            pkg
+                                                                        ) => (
+                                                                            <button
+                                                                                key={`${
+                                                                                    pkg.scope ||
+                                                                                    ""
+                                                                                }/${
+                                                                                    pkg.name
+                                                                                }`}
+                                                                                onClick={() =>
+                                                                                    handleSelectRegistryPackage(
+                                                                                        pkg
+                                                                                    )
+                                                                                }
+                                                                                className="group text-left rounded-lg border border-gray-700/60 bg-gray-800/40 hover:bg-gray-800/80 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-950/50 p-4 transition-all cursor-pointer"
+                                                                            >
+                                                                                <div className="flex items-start justify-between gap-2 mb-1.5">
+                                                                                    <div className="font-semibold text-sm text-gray-200 truncate group-hover:text-indigo-200">
+                                                                                        {pkg.displayName ||
+                                                                                            pkg.name}
+                                                                                    </div>
+                                                                                    {pkg.installed && (
+                                                                                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide bg-green-900/40 text-green-300 border border-green-700/40">
+                                                                                            Installed
+                                                                                        </span>
+                                                                                    )}
                                                                                 </div>
-                                                                                {pkg.installed && (
-                                                                                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide bg-green-900/40 text-green-300 border border-green-700/40">
-                                                                                        Installed
-                                                                                    </span>
+                                                                                <div className="text-[11px] text-gray-500 truncate font-mono mb-2">
+                                                                                    {pkg.scope
+                                                                                        ? `@${pkg.scope.replace(
+                                                                                              /^@/,
+                                                                                              ""
+                                                                                          )}/${
+                                                                                              pkg.package ||
+                                                                                              pkg.name
+                                                                                          }`
+                                                                                        : pkg.package ||
+                                                                                          pkg.name}
+                                                                                </div>
+                                                                                {pkg.description && (
+                                                                                    <div
+                                                                                        className="text-xs text-gray-400 overflow-hidden leading-relaxed"
+                                                                                        style={{
+                                                                                            display:
+                                                                                                "-webkit-box",
+                                                                                            WebkitLineClamp: 3,
+                                                                                            WebkitBoxOrient:
+                                                                                                "vertical",
+                                                                                        }}
+                                                                                    >
+                                                                                        {
+                                                                                            pkg.description
+                                                                                        }
+                                                                                    </div>
                                                                                 )}
-                                                                            </div>
-                                                                            <div className="text-[11px] text-gray-500 truncate font-mono mb-2">
-                                                                                {pkg.scope
-                                                                                    ? `@${pkg.scope.replace(
-                                                                                          /^@/,
-                                                                                          ""
-                                                                                      )}/${
-                                                                                          pkg.package ||
-                                                                                          pkg.name
-                                                                                      }`
-                                                                                    : pkg.package ||
-                                                                                      pkg.name}
-                                                                            </div>
-                                                                            {pkg.description && (
-                                                                                <div
-                                                                                    className="text-xs text-gray-400 overflow-hidden leading-relaxed"
-                                                                                    style={{
-                                                                                        display:
-                                                                                            "-webkit-box",
-                                                                                        WebkitLineClamp: 3,
-                                                                                        WebkitBoxOrient:
-                                                                                            "vertical",
-                                                                                    }}
-                                                                                >
-                                                                                    {
-                                                                                        pkg.description
-                                                                                    }
+                                                                                <div className="mt-3 text-[10px] uppercase tracking-wide text-indigo-400/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                                    Click
+                                                                                    to
+                                                                                    preview
+                                                                                    →
                                                                                 </div>
-                                                                            )}
-                                                                            <div className="mt-3 text-[10px] uppercase tracking-wide text-indigo-400/60 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                                Click
-                                                                                to
-                                                                                preview
-                                                                                →
-                                                                            </div>
-                                                                        </button>
-                                                                    )
-                                                                )}
+                                                                            </button>
+                                                                        )
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        }
-                                        return (
-                                            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                                                <div className="w-16 h-16 rounded-2xl bg-gray-800/80 border border-gray-700/30 flex items-center justify-center">
-                                                    <FontAwesomeIcon
-                                                        icon="wand-magic-sparkles"
-                                                        className="h-7 w-7 text-indigo-400/40"
-                                                    />
-                                                </div>
-                                                <div className="space-y-2 max-w-sm">
-                                                    <p className="text-sm font-medium text-gray-300">
-                                                        {chatMode === "discover"
-                                                            ? "Search the registry"
-                                                            : "Describe your widget"}
-                                                    </p>
-                                                    <p className="text-xs text-gray-500">
-                                                        {chatMode === "discover"
-                                                            ? "Tell the AI what kind of widget you're looking for and registry matches will appear here."
-                                                            : "The AI will generate code and a live preview will appear here automatically."}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        );
-                                    })()}
-
-                                {/* Auth-gated preview: friendlier than a red error */}
-                                {previewError &&
-                                    /authentic|unauth|401|sign.?in/i.test(
-                                        previewError
-                                    ) && (
-                                        <div className="flex flex-col items-center justify-center h-full space-y-4">
-                                            <div className="w-full max-w-lg rounded-lg border border-amber-700/30 bg-amber-900/10 p-4 space-y-3">
-                                                <div className="flex items-center gap-2 text-amber-300 text-sm font-medium">
-                                                    <FontAwesomeIcon
-                                                        icon="lock"
-                                                        className="h-4 w-4"
-                                                    />
-                                                    Sign in to preview
-                                                </div>
-                                                <p className="text-xs text-amber-100/80 leading-relaxed">
-                                                    The registry requires
-                                                    sign-in to download this
-                                                    package. Click below to open
-                                                    the sign-in page in your
-                                                    browser.
-                                                </p>
-                                                {signInFlow ? (
-                                                    <div className="space-y-2">
-                                                        <p className="text-xs text-amber-100/90">
-                                                            A browser tab should
-                                                            have opened. Verify
-                                                            the code there
-                                                            matches:
-                                                        </p>
-                                                        <div className="font-mono text-lg tracking-widest text-amber-200 bg-black/30 rounded px-3 py-2 text-center select-all">
-                                                            {signInFlow.userCode ||
-                                                                "—"}
-                                                        </div>
-                                                        <div className="flex items-center gap-2 text-[11px] text-amber-200/70">
-                                                            <span className="inline-flex gap-0.5">
-                                                                <span
-                                                                    className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-bounce"
-                                                                    style={{
-                                                                        animationDelay:
-                                                                            "0ms",
-                                                                    }}
-                                                                />
-                                                                <span
-                                                                    className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-bounce"
-                                                                    style={{
-                                                                        animationDelay:
-                                                                            "150ms",
-                                                                    }}
-                                                                />
-                                                                <span
-                                                                    className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-bounce"
-                                                                    style={{
-                                                                        animationDelay:
-                                                                            "300ms",
-                                                                    }}
-                                                                />
-                                                            </span>
-                                                            Waiting for sign-in…
-                                                            we'll retry
-                                                            automatically.
-                                                        </div>
-                                                        {signInFlow.verificationUrlComplete && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    window.mainApi?.shell?.openExternal?.(
-                                                                        signInFlow.verificationUrlComplete
-                                                                    )
-                                                                }
-                                                                className="text-xs text-indigo-300 hover:text-indigo-200 underline"
-                                                            >
-                                                                Reopen sign-in
-                                                                page
-                                                            </button>
                                                         )}
                                                     </div>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={
-                                                            handleSignInForPreview
-                                                        }
-                                                        className="px-3 py-1.5 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
-                                                    >
-                                                        Sign in
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                {/* Compile error (non-auth) */}
-                                {previewError &&
-                                    !/authentic|unauth|401|sign.?in/i.test(
-                                        previewError
-                                    ) && (
-                                        <div className="flex flex-col items-center justify-center h-full space-y-4">
-                                            <div className="w-full max-w-lg rounded-lg border border-red-700/30 bg-red-900/10 p-4 space-y-2">
-                                                <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
-                                                    <FontAwesomeIcon
-                                                        icon="exclamation-circle"
-                                                        className="h-4 w-4"
-                                                    />
-                                                    {previewErrorMeta?.code ===
-                                                    "ESBUILD_SPAWN_FAILED"
-                                                        ? "Widget compiler unavailable"
-                                                        : "Compilation Error"}
+                                                );
+                                            }
+                                            return (
+                                                <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+                                                    <div className="w-16 h-16 rounded-2xl bg-gray-800/80 border border-gray-700/30 flex items-center justify-center">
+                                                        <FontAwesomeIcon
+                                                            icon="wand-magic-sparkles"
+                                                            className="h-7 w-7 text-indigo-400/40"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2 max-w-sm">
+                                                        <p className="text-sm font-medium text-gray-300">
+                                                            {chatMode ===
+                                                            "discover"
+                                                                ? "Search the registry"
+                                                                : "Describe your widget"}
+                                                        </p>
+                                                        <p className="text-xs text-gray-500">
+                                                            {chatMode ===
+                                                            "discover"
+                                                                ? "Tell the AI what kind of widget you're looking for and registry matches will appear here."
+                                                                : "The AI will generate code and a live preview will appear here automatically."}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto max-h-32">
-                                                    {previewError}
-                                                </pre>
-                                                {/* Slice 17b: pretty-print esbuild's
+                                            );
+                                        })()}
+
+                                    {/* Auth-gated preview: friendlier than a red error */}
+                                    {previewError &&
+                                        /authentic|unauth|401|sign.?in/i.test(
+                                            previewError
+                                        ) && (
+                                            <div className="flex flex-col items-center justify-center h-full space-y-4">
+                                                <div className="w-full max-w-lg rounded-lg border border-amber-700/30 bg-amber-900/10 p-4 space-y-3">
+                                                    <div className="flex items-center gap-2 text-amber-300 text-sm font-medium">
+                                                        <FontAwesomeIcon
+                                                            icon="lock"
+                                                            className="h-4 w-4"
+                                                        />
+                                                        Sign in to preview
+                                                    </div>
+                                                    <p className="text-xs text-amber-100/80 leading-relaxed">
+                                                        The registry requires
+                                                        sign-in to download this
+                                                        package. Click below to
+                                                        open the sign-in page in
+                                                        your browser.
+                                                    </p>
+                                                    {signInFlow ? (
+                                                        <div className="space-y-2">
+                                                            <p className="text-xs text-amber-100/90">
+                                                                A browser tab
+                                                                should have
+                                                                opened. Verify
+                                                                the code there
+                                                                matches:
+                                                            </p>
+                                                            <div className="font-mono text-lg tracking-widest text-amber-200 bg-black/30 rounded px-3 py-2 text-center select-all">
+                                                                {signInFlow.userCode ||
+                                                                    "—"}
+                                                            </div>
+                                                            <div className="flex items-center gap-2 text-[11px] text-amber-200/70">
+                                                                <span className="inline-flex gap-0.5">
+                                                                    <span
+                                                                        className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-bounce"
+                                                                        style={{
+                                                                            animationDelay:
+                                                                                "0ms",
+                                                                        }}
+                                                                    />
+                                                                    <span
+                                                                        className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-bounce"
+                                                                        style={{
+                                                                            animationDelay:
+                                                                                "150ms",
+                                                                        }}
+                                                                    />
+                                                                    <span
+                                                                        className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-bounce"
+                                                                        style={{
+                                                                            animationDelay:
+                                                                                "300ms",
+                                                                        }}
+                                                                    />
+                                                                </span>
+                                                                Waiting for
+                                                                sign-in… we'll
+                                                                retry
+                                                                automatically.
+                                                            </div>
+                                                            {signInFlow.verificationUrlComplete && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        window.mainApi?.shell?.openExternal?.(
+                                                                            signInFlow.verificationUrlComplete
+                                                                        )
+                                                                    }
+                                                                    className="text-xs text-indigo-300 hover:text-indigo-200 underline"
+                                                                >
+                                                                    Reopen
+                                                                    sign-in page
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={
+                                                                handleSignInForPreview
+                                                            }
+                                                            className="px-3 py-1.5 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+                                                        >
+                                                            Sign in
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                    {/* Compile error (non-auth) */}
+                                    {previewError &&
+                                        !/authentic|unauth|401|sign.?in/i.test(
+                                            previewError
+                                        ) && (
+                                            <div className="flex flex-col items-center justify-center h-full space-y-4">
+                                                <div className="w-full max-w-lg rounded-lg border border-red-700/30 bg-red-900/10 p-4 space-y-2">
+                                                    <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
+                                                        <FontAwesomeIcon
+                                                            icon="exclamation-circle"
+                                                            className="h-4 w-4"
+                                                        />
+                                                        {previewErrorMeta?.code ===
+                                                        "ESBUILD_SPAWN_FAILED"
+                                                            ? "Widget compiler unavailable"
+                                                            : "Compilation Error"}
+                                                    </div>
+                                                    <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto max-h-32">
+                                                        {previewError}
+                                                    </pre>
+                                                    {/* Slice 17b: pretty-print esbuild's
                                                     structured errors so users see line
                                                     numbers + the offending source line
                                                     instead of bare "SyntaxError: ...". */}
-                                                {Array.isArray(
-                                                    previewErrorMeta
-                                                        ?.diagnostics?.esbuild
-                                                ) &&
-                                                    previewErrorMeta.diagnostics
-                                                        .esbuild.length > 0 && (
-                                                        <div className="text-xs space-y-2">
-                                                            {previewErrorMeta.diagnostics.esbuild.map(
-                                                                (e, idx) => (
-                                                                    <div
-                                                                        key={
-                                                                            idx
-                                                                        }
-                                                                        className="bg-black/30 rounded p-2 space-y-1"
-                                                                    >
-                                                                        <div className="text-red-300 font-medium">
-                                                                            {e
-                                                                                .location
-                                                                                ?.file &&
-                                                                                e.location.file
-                                                                                    .split(
-                                                                                        "/"
-                                                                                    )
-                                                                                    .pop()}
-                                                                            {e
-                                                                                .location
-                                                                                ?.line
-                                                                                ? `:${
-                                                                                      e
-                                                                                          .location
-                                                                                          .line
-                                                                                  }${
-                                                                                      e
-                                                                                          .location
-                                                                                          .column
-                                                                                          ? ":" +
-                                                                                            e
-                                                                                                .location
-                                                                                                .column
-                                                                                          : ""
-                                                                                  }`
-                                                                                : ""}
-                                                                            {e
-                                                                                .location
-                                                                                ?.line
-                                                                                ? "  "
-                                                                                : ""}
-                                                                            {
-                                                                                e.text
+                                                    {Array.isArray(
+                                                        previewErrorMeta
+                                                            ?.diagnostics
+                                                            ?.esbuild
+                                                    ) &&
+                                                        previewErrorMeta
+                                                            .diagnostics.esbuild
+                                                            .length > 0 && (
+                                                            <div className="text-xs space-y-2">
+                                                                {previewErrorMeta.diagnostics.esbuild.map(
+                                                                    (
+                                                                        e,
+                                                                        idx
+                                                                    ) => (
+                                                                        <div
+                                                                            key={
+                                                                                idx
                                                                             }
-                                                                        </div>
-                                                                        {e
-                                                                            .location
-                                                                            ?.lineText && (
-                                                                            <pre className="text-[11px] text-red-200/70 bg-black/30 rounded px-2 py-1 overflow-x-auto whitespace-pre">
+                                                                            className="bg-black/30 rounded p-2 space-y-1"
+                                                                        >
+                                                                            <div className="text-red-300 font-medium">
+                                                                                {e
+                                                                                    .location
+                                                                                    ?.file &&
+                                                                                    e.location.file
+                                                                                        .split(
+                                                                                            "/"
+                                                                                        )
+                                                                                        .pop()}
+                                                                                {e
+                                                                                    .location
+                                                                                    ?.line
+                                                                                    ? `:${
+                                                                                          e
+                                                                                              .location
+                                                                                              .line
+                                                                                      }${
+                                                                                          e
+                                                                                              .location
+                                                                                              .column
+                                                                                              ? ":" +
+                                                                                                e
+                                                                                                    .location
+                                                                                                    .column
+                                                                                              : ""
+                                                                                      }`
+                                                                                    : ""}
+                                                                                {e
+                                                                                    .location
+                                                                                    ?.line
+                                                                                    ? "  "
+                                                                                    : ""}
                                                                                 {
-                                                                                    e
-                                                                                        .location
-                                                                                        .lineText
+                                                                                    e.text
                                                                                 }
-                                                                            </pre>
-                                                                        )}
-                                                                    </div>
-                                                                )
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                {/* Slice 17b: heuristic hint for the
+                                                                            </div>
+                                                                            {e
+                                                                                .location
+                                                                                ?.lineText && (
+                                                                                <pre className="text-[11px] text-red-200/70 bg-black/30 rounded px-2 py-1 overflow-x-auto whitespace-pre">
+                                                                                    {
+                                                                                        e
+                                                                                            .location
+                                                                                            .lineText
+                                                                                    }
+                                                                                </pre>
+                                                                            )}
+                                                                        </div>
+                                                                    )
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    {/* Slice 17b: heuristic hint for the
                                                     common "AI emitted utility imports
                                                     but no File: markers" failure.
                                                     Only for real import errors
@@ -4431,138 +4539,148 @@ ${
                                                     "./x") — not the "Could not
                                                     resolve widget component"
                                                     message. */}
-                                                {/Could not resolve "|cannot find module/i.test(
-                                                    previewError || ""
-                                                ) && (
-                                                    <div className="text-xs text-amber-300/90 bg-amber-900/10 border border-amber-700/30 rounded p-2">
-                                                        This widget references
-                                                        files that weren't
-                                                        included in the AI's
-                                                        response. Ask the AI to
-                                                        emit every imported file
-                                                        as a separate{" "}
-                                                        <code>File:</code>{" "}
-                                                        marker (e.g.{" "}
-                                                        <code>
-                                                            File:
-                                                            widgets/utils.js
-                                                        </code>
-                                                        ).
-                                                    </div>
-                                                )}
-                                                {previewErrorMeta?.diagnostics && (
-                                                    <details className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto">
-                                                        <summary className="cursor-pointer text-red-400 select-none">
-                                                            Diagnostics — share
-                                                            this if you report a
-                                                            bug
-                                                        </summary>
-                                                        <pre className="mt-2 whitespace-pre-wrap break-all">
-                                                            {JSON.stringify(
-                                                                previewErrorMeta.diagnostics,
-                                                                null,
-                                                                2
-                                                            )}
-                                                        </pre>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                try {
-                                                                    navigator.clipboard.writeText(
-                                                                        `${previewError}\n\n${JSON.stringify(
-                                                                            previewErrorMeta.diagnostics,
-                                                                            null,
-                                                                            2
-                                                                        )}`
-                                                                    );
-                                                                } catch {
-                                                                    /* noop */
-                                                                }
-                                                            }}
-                                                            className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
-                                                        >
-                                                            Copy diagnostics
-                                                        </button>
-                                                    </details>
-                                                )}
-                                                <button
-                                                    onClick={() => {
-                                                        // Slice 19H: dispatch the
-                                                        // dash:chat-core-send window
-                                                        // CustomEvent so the ChatCore
-                                                        // bound to this modal actually
-                                                        // sends the message. The
-                                                        // previous localStorage-write
-                                                        // approach silently dropped
-                                                        // the message because ChatCore
-                                                        // only reads localStorage at
-                                                        // mount. Use the validator's
-                                                        // specific correction message
-                                                        // when present (slice 17b.12);
-                                                        // otherwise fall back to the
-                                                        // generic compile-error prompt.
-                                                        const content =
-                                                            previewErrorMeta?.correction
-                                                                ? previewErrorMeta.correction
-                                                                : `Fix this compilation error:\n\n${previewError}\n\nPlease output both the corrected jsx component code block and the javascript config code block.`;
-                                                        try {
-                                                            window.dispatchEvent(
-                                                                new CustomEvent(
-                                                                    "dash:chat-core-send",
-                                                                    {
-                                                                        detail: {
-                                                                            persistKey:
-                                                                                "dash-widget-builder",
-                                                                            content,
-                                                                        },
+                                                    {/Could not resolve "|cannot find module/i.test(
+                                                        previewError || ""
+                                                    ) && (
+                                                        <div className="text-xs text-amber-300/90 bg-amber-900/10 border border-amber-700/30 rounded p-2">
+                                                            This widget
+                                                            references files
+                                                            that weren't
+                                                            included in the AI's
+                                                            response. Ask the AI
+                                                            to emit every
+                                                            imported file as a
+                                                            separate{" "}
+                                                            <code>File:</code>{" "}
+                                                            marker (e.g.{" "}
+                                                            <code>
+                                                                File:
+                                                                widgets/utils.js
+                                                            </code>
+                                                            ).
+                                                        </div>
+                                                    )}
+                                                    {previewErrorMeta?.diagnostics && (
+                                                        <details className="text-xs text-red-300/70 bg-black/20 rounded p-2 overflow-auto">
+                                                            <summary className="cursor-pointer text-red-400 select-none">
+                                                                Diagnostics —
+                                                                share this if
+                                                                you report a bug
+                                                            </summary>
+                                                            <pre className="mt-2 whitespace-pre-wrap break-all">
+                                                                {JSON.stringify(
+                                                                    previewErrorMeta.diagnostics,
+                                                                    null,
+                                                                    2
+                                                                )}
+                                                            </pre>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    try {
+                                                                        navigator.clipboard.writeText(
+                                                                            `${previewError}\n\n${JSON.stringify(
+                                                                                previewErrorMeta.diagnostics,
+                                                                                null,
+                                                                                2
+                                                                            )}`
+                                                                        );
+                                                                    } catch {
+                                                                        /* noop */
                                                                     }
-                                                                )
-                                                            );
-                                                        } catch (_) {
-                                                            /* ignore */
-                                                        }
-                                                    }}
-                                                    className="text-xs text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
-                                                >
-                                                    Send error to AI
-                                                </button>
+                                                                }}
+                                                                className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                                                            >
+                                                                Copy diagnostics
+                                                            </button>
+                                                        </details>
+                                                    )}
+                                                    <button
+                                                        onClick={() => {
+                                                            // Slice 19H: dispatch the
+                                                            // dash:chat-core-send window
+                                                            // CustomEvent so the ChatCore
+                                                            // bound to this modal actually
+                                                            // sends the message. The
+                                                            // previous localStorage-write
+                                                            // approach silently dropped
+                                                            // the message because ChatCore
+                                                            // only reads localStorage at
+                                                            // mount. Use the validator's
+                                                            // specific correction message
+                                                            // when present (slice 17b.12);
+                                                            // otherwise fall back to the
+                                                            // generic compile-error prompt.
+                                                            const content =
+                                                                previewErrorMeta?.correction
+                                                                    ? previewErrorMeta.correction
+                                                                    : `Fix this compilation error:\n\n${previewError}\n\nPlease output both the corrected jsx component code block and the javascript config code block.`;
+                                                            try {
+                                                                window.dispatchEvent(
+                                                                    new CustomEvent(
+                                                                        "dash:chat-core-send",
+                                                                        {
+                                                                            detail: {
+                                                                                persistKey:
+                                                                                    "dash-widget-builder",
+                                                                                content,
+                                                                            },
+                                                                        }
+                                                                    )
+                                                                );
+                                                            } catch (_) {
+                                                                /* ignore */
+                                                            }
+                                                        }}
+                                                        className="text-xs text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                                                    >
+                                                        Send error to AI
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
-                                {/* Live widget preview */}
-                                {PreviewComponent && !installStatus && (
-                                    <div className="flex flex-col h-full">
-                                        {/* Provider picker — shown when the
+                                    {/* Live widget preview */}
+                                    {PreviewComponent && !installStatus && (
+                                        <div className="flex flex-col h-full">
+                                            {/* Provider picker — shown when the
                                         widget declares providers. Without a
                                         selection the widget renders its own
                                         "not configured" empty state, same
                                         as on a real dashboard. */}
-                                        <PreviewProviderPicker
-                                            configCode={detectedCode.configCode}
-                                            appProviders={
-                                                (previewAppCtx || appContext)
-                                                    ?.providers
-                                            }
-                                            selection={previewProviderSelection}
-                                            justChanged={providerJustChanged}
-                                            onChange={(
-                                                next,
-                                                changedType,
-                                                changedValue
-                                            ) => {
-                                                setPreviewProviderSelection(
-                                                    next
-                                                );
-                                                if (changedType) {
-                                                    flagProviderChange(
-                                                        changedType,
-                                                        changedValue
-                                                    );
+                                            <PreviewProviderPicker
+                                                configCode={
+                                                    detectedCode.configCode
                                                 }
-                                            }}
-                                        />
-                                        {/* Test-inputs form (slice 17b.9) —
+                                                appProviders={
+                                                    (
+                                                        previewAppCtx ||
+                                                        appContext
+                                                    )?.providers
+                                                }
+                                                selection={
+                                                    previewProviderSelection
+                                                }
+                                                justChanged={
+                                                    providerJustChanged
+                                                }
+                                                onChange={(
+                                                    next,
+                                                    changedType,
+                                                    changedValue
+                                                ) => {
+                                                    setPreviewProviderSelection(
+                                                        next
+                                                    );
+                                                    if (changedType) {
+                                                        flagProviderChange(
+                                                            changedType,
+                                                            changedValue
+                                                        );
+                                                    }
+                                                }}
+                                            />
+                                            {/* Test-inputs form (slice 17b.9) —
                                         renders one row per userConfig field
                                         the AI declared, so the user can
                                         type values into the widget without
@@ -4571,25 +4689,25 @@ ${
                                         rules manager and watch the preview
                                         fetch real data). Empty when the
                                         widget declares no userConfig. */}
-                                        <PreviewTestInputsForm
-                                            userConfig={
-                                                previewParsedConfig?.userConfig
-                                            }
-                                            defaults={previewWidgetDefaults}
-                                            values={previewTestInputs}
-                                            onChange={(field, value) =>
-                                                setPreviewTestInputs(
-                                                    (prev) => ({
-                                                        ...prev,
-                                                        [field]: value,
-                                                    })
-                                                )
-                                            }
-                                            onReset={() =>
-                                                setPreviewTestInputs({})
-                                            }
-                                        />
-                                        {/* Empty-render banner — surfaces the
+                                            <PreviewTestInputsForm
+                                                userConfig={
+                                                    previewParsedConfig?.userConfig
+                                                }
+                                                defaults={previewWidgetDefaults}
+                                                values={previewTestInputs}
+                                                onChange={(field, value) =>
+                                                    setPreviewTestInputs(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            [field]: value,
+                                                        })
+                                                    )
+                                                }
+                                                onReset={() =>
+                                                    setPreviewTestInputs({})
+                                                }
+                                            />
+                                            {/* Empty-render banner — surfaces the
                                         common case where the widget mounted
                                         but produced no visible content (the
                                         AI used wrong dash-react prop names,
@@ -4603,108 +4721,111 @@ ${
                                         expected, not an error. The "Send
                                         to AI to fix" CTA also doesn't apply
                                         — compose doesn't go through chat. */}
-                                        {previewLooksEmpty &&
-                                            chatMode !== "compose" &&
-                                            hasActedThisSession && (
-                                                <div className="mx-4 mt-2 px-3 py-2 rounded-md border border-amber-700/40 bg-amber-900/20 text-xs text-amber-200 space-y-1">
-                                                    <div className="font-semibold text-amber-300">
-                                                        Widget rendered with no
-                                                        visible content
-                                                    </div>
-                                                    <div className="text-amber-200/80">
-                                                        Most common cause: wrong
-                                                        prop names on dash-react
-                                                        components. Use{" "}
-                                                        <code className="bg-black/30 px-1 rounded">
-                                                            title
-                                                        </code>{" "}
-                                                        on{" "}
-                                                        <code className="bg-black/30 px-1 rounded">
-                                                            Heading
-                                                        </code>
-                                                        /
-                                                        <code className="bg-black/30 px-1 rounded">
-                                                            Button
-                                                        </code>
-                                                        /
-                                                        <code className="bg-black/30 px-1 rounded">
-                                                            EmptyState
-                                                        </code>{" "}
-                                                        (not{" "}
-                                                        <code className="bg-black/30 px-1 rounded">
-                                                            text
-                                                        </code>{" "}
-                                                        or{" "}
-                                                        <code className="bg-black/30 px-1 rounded">
-                                                            message
-                                                        </code>
-                                                        ). Click "Send to AI to
-                                                        fix" and the chat will
-                                                        request a corrected
-                                                        version.
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            try {
-                                                                const raw =
-                                                                    localStorage.getItem(
-                                                                        "dash-widget-builder"
+                                            {previewLooksEmpty &&
+                                                chatMode !== "compose" &&
+                                                hasActedThisSession && (
+                                                    <div className="mx-4 mt-2 px-3 py-2 rounded-md border border-amber-700/40 bg-amber-900/20 text-xs text-amber-200 space-y-1">
+                                                        <div className="font-semibold text-amber-300">
+                                                            Widget rendered with
+                                                            no visible content
+                                                        </div>
+                                                        <div className="text-amber-200/80">
+                                                            Most common cause:
+                                                            wrong prop names on
+                                                            dash-react
+                                                            components. Use{" "}
+                                                            <code className="bg-black/30 px-1 rounded">
+                                                                title
+                                                            </code>{" "}
+                                                            on{" "}
+                                                            <code className="bg-black/30 px-1 rounded">
+                                                                Heading
+                                                            </code>
+                                                            /
+                                                            <code className="bg-black/30 px-1 rounded">
+                                                                Button
+                                                            </code>
+                                                            /
+                                                            <code className="bg-black/30 px-1 rounded">
+                                                                EmptyState
+                                                            </code>{" "}
+                                                            (not{" "}
+                                                            <code className="bg-black/30 px-1 rounded">
+                                                                text
+                                                            </code>{" "}
+                                                            or{" "}
+                                                            <code className="bg-black/30 px-1 rounded">
+                                                                message
+                                                            </code>
+                                                            ). Click "Send to AI
+                                                            to fix" and the chat
+                                                            will request a
+                                                            corrected version.
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                try {
+                                                                    const raw =
+                                                                        localStorage.getItem(
+                                                                            "dash-widget-builder"
+                                                                        );
+                                                                    const data =
+                                                                        raw
+                                                                            ? JSON.parse(
+                                                                                  raw
+                                                                              )
+                                                                            : {
+                                                                                  messages:
+                                                                                      [],
+                                                                              };
+                                                                    const msgs =
+                                                                        data?.messages ||
+                                                                        [];
+                                                                    msgs.push({
+                                                                        role: "user",
+                                                                        content: `The widget compiled and mounted but rendered no visible content (preview is black). This is almost always a dash-react prop-name mismatch. Please re-emit the component AND config code blocks with corrected prop names: \`<Heading title="...">\` (NOT text=), \`<Button title="...">\` (NOT text=), \`<EmptyState title="..." description="...">\` (NOT message=). Output BOTH the \`\`\`jsx component block and the \`\`\`javascript config block.`,
+                                                                    });
+                                                                    localStorage.setItem(
+                                                                        "dash-widget-builder",
+                                                                        JSON.stringify(
+                                                                            {
+                                                                                ...data,
+                                                                                messages:
+                                                                                    msgs,
+                                                                            }
+                                                                        )
                                                                     );
-                                                                const data = raw
-                                                                    ? JSON.parse(
-                                                                          raw
-                                                                      )
-                                                                    : {
-                                                                          messages:
-                                                                              [],
-                                                                      };
-                                                                const msgs =
-                                                                    data?.messages ||
-                                                                    [];
-                                                                msgs.push({
-                                                                    role: "user",
-                                                                    content: `The widget compiled and mounted but rendered no visible content (preview is black). This is almost always a dash-react prop-name mismatch. Please re-emit the component AND config code blocks with corrected prop names: \`<Heading title="...">\` (NOT text=), \`<Button title="...">\` (NOT text=), \`<EmptyState title="..." description="...">\` (NOT message=). Output BOTH the \`\`\`jsx component block and the \`\`\`javascript config block.`,
-                                                                });
-                                                                localStorage.setItem(
-                                                                    "dash-widget-builder",
-                                                                    JSON.stringify(
-                                                                        {
-                                                                            ...data,
-                                                                            messages:
-                                                                                msgs,
-                                                                        }
-                                                                    )
-                                                                );
-                                                                setPreviewLooksEmpty(
-                                                                    false
-                                                                );
-                                                            } catch {
-                                                                /* ignore */
-                                                            }
-                                                        }}
-                                                        className="mt-1 px-2 py-1 text-xs rounded border border-amber-600/50 bg-amber-700/30 hover:bg-amber-700/50 text-amber-100"
-                                                    >
-                                                        Send to AI to fix
-                                                    </button>
-                                                </div>
-                                            )}
-                                        {/* Widget preview — fills available space */}
-                                        <div className="flex-1 p-4 overflow-auto">
-                                            <div
-                                                className={`h-full rounded-lg border overflow-hidden shadow-lg ${
-                                                    previewThemeCtx
-                                                        ?.currentTheme?.[
-                                                        "border-primary-dark"
-                                                    ] || "border-gray-700/30"
-                                                } ${
-                                                    previewThemeCtx
-                                                        ?.currentTheme?.[
-                                                        "bg-primary-dark"
-                                                    ] || "bg-gray-800/30"
-                                                }`}
-                                            >
-                                                {/* Slice 17c — iframe-isolated preview is the
+                                                                    setPreviewLooksEmpty(
+                                                                        false
+                                                                    );
+                                                                } catch {
+                                                                    /* ignore */
+                                                                }
+                                                            }}
+                                                            className="mt-1 px-2 py-1 text-xs rounded border border-amber-600/50 bg-amber-700/30 hover:bg-amber-700/50 text-amber-100"
+                                                        >
+                                                            Send to AI to fix
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            {/* Widget preview — fills available space */}
+                                            <div className="flex-1 p-4 overflow-auto">
+                                                <div
+                                                    className={`h-full rounded-lg border overflow-hidden shadow-lg ${
+                                                        previewThemeCtx
+                                                            ?.currentTheme?.[
+                                                            "border-primary-dark"
+                                                        ] ||
+                                                        "border-gray-700/30"
+                                                    } ${
+                                                        previewThemeCtx
+                                                            ?.currentTheme?.[
+                                                            "bg-primary-dark"
+                                                        ] || "bg-gray-800/30"
+                                                    }`}
+                                                >
+                                                    {/* Slice 17c — iframe-isolated preview is the
                                                     only path now. Bundle source flows through
                                                     postMessage; module references go via direct
                                                     cross-window assignment (not serializable).
@@ -4717,243 +4838,277 @@ ${
                                                     async, commit-phase, CSS, globals, memory)
                                                     stay kernel-isolated from the host React
                                                     tree. */}
-                                                {previewBundleSource && (
-                                                    <PreviewIframe
-                                                        bundleSource={
-                                                            previewBundleSource
-                                                        }
-                                                        componentName={
-                                                            previewBundleComponentName
-                                                        }
-                                                        props={{
-                                                            title: displayName,
-                                                            ...previewWidgetDefaults,
-                                                            // Only let NON-empty
-                                                            // test inputs override
-                                                            // the userConfig
-                                                            // defaults — a blank
-                                                            // ("") test value must
-                                                            // not clobber a real
-                                                            // default at preview.
-                                                            ...Object.fromEntries(
-                                                                Object.entries(
-                                                                    previewTestInputs ||
-                                                                        {}
-                                                                ).filter(
-                                                                    ([, v]) =>
-                                                                        v !==
-                                                                            "" &&
-                                                                        v !==
-                                                                            undefined &&
-                                                                        v !==
-                                                                            null
-                                                                )
-                                                            ),
-                                                            ...(effectiveEditContext?.userPrefs ||
-                                                                {}),
-                                                        }}
-                                                        themeContext={
-                                                            previewThemeCtx
-                                                        }
-                                                        appContext={{
-                                                            providers:
-                                                                (
-                                                                    previewAppCtx ||
-                                                                    appContext
-                                                                )?.providers ||
-                                                                {},
-                                                            credentials:
-                                                                (
-                                                                    previewAppCtx ||
-                                                                    appContext
-                                                                )
-                                                                    ?.credentials ||
-                                                                null,
-                                                        }}
-                                                        widgetData={buildPreviewWidgetData(
-                                                            {
-                                                                editContext:
-                                                                    effectiveEditContext,
-                                                                previewConfigCode:
-                                                                    detectedCode.configCode,
-                                                                previewProviderSelection,
+                                                    {previewBundleSource && (
+                                                        <PreviewIframe
+                                                            bundleSource={
+                                                                previewBundleSource
                                                             }
-                                                        )}
-                                                        onError={
-                                                            handleIframePreviewError
-                                                        }
-                                                        onRenderStats={
-                                                            handleIframeRenderStats
-                                                        }
-                                                        onConsoleEvent={
-                                                            appendConsoleEvent
-                                                        }
-                                                        // Compose-mode
-                                                        // click-to-select.
-                                                        // Only active in
-                                                        // compose mode —
-                                                        // chat/build keep
-                                                        // the preview
-                                                        // passive so
-                                                        // installed-widget
-                                                        // interactions
-                                                        // (button clicks,
-                                                        // selections)
-                                                        // aren't
-                                                        // intercepted.
-                                                        selectable={
-                                                            chatMode ===
-                                                            "compose"
-                                                        }
-                                                        selectedNodeId={
-                                                            composerSelectedNodeId
-                                                        }
-                                                        onComposerNodeClick={({
-                                                            nodeId,
-                                                        }) =>
-                                                            setComposerSelectedNodeId(
-                                                                nodeId
-                                                            )
-                                                        }
-                                                    />
-                                                )}
-                                            </div>
-                                        </div>
-                                        {/* Registry-preview footer (shown when user is browsing a registry widget) */}
-                                        {browsingPackage && (
-                                            <div
-                                                className={`px-6 py-3 border-t ${borderColor} shrink-0 space-y-2`}
-                                            >
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <button
-                                                        type="button"
-                                                        onClick={
-                                                            handleBackToDiscover
-                                                        }
-                                                        className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
-                                                    >
-                                                        <FontAwesomeIcon
-                                                            icon="arrow-left"
-                                                            className="h-2.5 w-2.5"
+                                                            componentName={
+                                                                previewBundleComponentName
+                                                            }
+                                                            props={{
+                                                                title: displayName,
+                                                                ...previewWidgetDefaults,
+                                                                // Only let NON-empty
+                                                                // test inputs override
+                                                                // the userConfig
+                                                                // defaults — a blank
+                                                                // ("") test value must
+                                                                // not clobber a real
+                                                                // default at preview.
+                                                                ...Object.fromEntries(
+                                                                    Object.entries(
+                                                                        previewTestInputs ||
+                                                                            {}
+                                                                    ).filter(
+                                                                        ([
+                                                                            ,
+                                                                            v,
+                                                                        ]) =>
+                                                                            v !==
+                                                                                "" &&
+                                                                            v !==
+                                                                                undefined &&
+                                                                            v !==
+                                                                                null
+                                                                    )
+                                                                ),
+                                                                ...(effectiveEditContext?.userPrefs ||
+                                                                    {}),
+                                                            }}
+                                                            themeContext={
+                                                                previewThemeCtx
+                                                            }
+                                                            appContext={{
+                                                                providers:
+                                                                    (
+                                                                        previewAppCtx ||
+                                                                        appContext
+                                                                    )
+                                                                        ?.providers ||
+                                                                    {},
+                                                                credentials:
+                                                                    (
+                                                                        previewAppCtx ||
+                                                                        appContext
+                                                                    )
+                                                                        ?.credentials ||
+                                                                    null,
+                                                            }}
+                                                            widgetData={buildPreviewWidgetData(
+                                                                {
+                                                                    editContext:
+                                                                        effectiveEditContext,
+                                                                    previewConfigCode:
+                                                                        detectedCode.configCode,
+                                                                    previewProviderSelection,
+                                                                }
+                                                            )}
+                                                            onError={
+                                                                handleIframePreviewError
+                                                            }
+                                                            onRenderStats={
+                                                                handleIframeRenderStats
+                                                            }
+                                                            onConsoleEvent={
+                                                                appendConsoleEvent
+                                                            }
+                                                            // Compose-mode
+                                                            // click-to-select.
+                                                            // Only active in
+                                                            // compose mode —
+                                                            // chat/build keep
+                                                            // the preview
+                                                            // passive so
+                                                            // installed-widget
+                                                            // interactions
+                                                            // (button clicks,
+                                                            // selections)
+                                                            // aren't
+                                                            // intercepted.
+                                                            selectable={
+                                                                chatMode ===
+                                                                "compose"
+                                                            }
+                                                            selectedNodeId={
+                                                                composerSelectedNodeId
+                                                            }
+                                                            onComposerNodeClick={({
+                                                                nodeId,
+                                                            }) =>
+                                                                setComposerSelectedNodeId(
+                                                                    nodeId
+                                                                )
+                                                            }
                                                         />
-                                                        Back to Discover
-                                                    </button>
-                                                    <div className="text-xs text-gray-400 truncate flex-1 text-right font-mono">
-                                                        {browsingPackage.scope
-                                                            ? `@${browsingPackage.scope.replace(
-                                                                  /^@/,
-                                                                  ""
-                                                              )}/${
-                                                                  browsingPackage.packageName
-                                                              }`
-                                                            : browsingPackage.packageName}
-                                                    </div>
+                                                    )}
                                                 </div>
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <span className="text-xs text-gray-500 truncate">
-                                                        {browsingPackage.installed
-                                                            ? "Already installed in your widget library."
-                                                            : "Preview this widget, then install or remix."}
-                                                    </span>
-                                                    <div className="flex items-center gap-3 shrink-0">
+                                            </div>
+                                            {/* Registry-preview footer (shown when user is browsing a registry widget) */}
+                                            {browsingPackage && (
+                                                <div
+                                                    className={`px-6 py-3 border-t ${borderColor} shrink-0 space-y-2`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-3">
                                                         <button
                                                             type="button"
                                                             onClick={
-                                                                handleRemixRegistryPackage
+                                                                handleBackToDiscover
                                                             }
-                                                            disabled={
-                                                                !detectedCode?.componentCode
-                                                            }
-                                                            title="Fork this widget into @ai-built/ and edit it with AI"
-                                                            className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed text-gray-200 text-sm font-medium transition-colors"
+                                                            className={`text-xs flex items-center gap-1 hover:opacity-80 ${accentText}`}
                                                         >
-                                                            Remix
+                                                            <FontAwesomeIcon
+                                                                icon="arrow-left"
+                                                                className="h-2.5 w-2.5"
+                                                            />
+                                                            Back to Discover
                                                         </button>
-                                                        {browsingPackage.installed ? (
+                                                        <div
+                                                            className={`text-xs truncate flex-1 text-right font-mono ${chromeMuted}`}
+                                                        >
+                                                            {browsingPackage.scope
+                                                                ? `@${browsingPackage.scope.replace(
+                                                                      /^@/,
+                                                                      ""
+                                                                  )}/${
+                                                                      browsingPackage.packageName
+                                                                  }`
+                                                                : browsingPackage.packageName}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <span
+                                                            className={`text-xs truncate ${chromeMuted}`}
+                                                        >
+                                                            {browsingPackage.installed
+                                                                ? "Already installed in your widget library."
+                                                                : "Preview this widget, then install or remix."}
+                                                        </span>
+                                                        <div className="flex items-center gap-3 shrink-0">
                                                             <button
                                                                 type="button"
                                                                 onClick={
-                                                                    handleAddInstalledToDashboard
+                                                                    handleRemixRegistryPackage
                                                                 }
                                                                 disabled={
-                                                                    !cellContext
+                                                                    !detectedCode?.componentCode
                                                                 }
-                                                                title={
-                                                                    cellContext
-                                                                        ? "Place this widget in the dashboard cell you opened the builder from"
-                                                                        : "Open the builder from an empty grid cell to place widgets"
+                                                                title="Fork this widget into @ai-built/ and edit it with AI"
+                                                                className={
+                                                                    secondaryButton
                                                                 }
-                                                                className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
                                                             >
-                                                                Add to Dashboard
+                                                                Remix
                                                             </button>
-                                                        ) : (
-                                                            <button
-                                                                type="button"
-                                                                onClick={
-                                                                    handleInstallRegistryPackage
-                                                                }
-                                                                disabled={
-                                                                    registryInstalling
-                                                                }
-                                                                className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
-                                                            >
-                                                                {registryInstalling
-                                                                    ? "Installing..."
-                                                                    : cellContext
-                                                                    ? "Install + Add to Dashboard"
-                                                                    : "Install"}
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                {installStatus?.error && (
-                                                    <div className="text-xs text-red-400">
-                                                        {installStatus.error}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {/* Footer — mode toggle, name (remix), category + Install */}
-                                        {!browsingPackage && (
-                                            <div
-                                                className={`px-6 py-3 border-t ${borderColor} shrink-0`}
-                                            >
-                                                {isRemixMode && (
-                                                    <div className="mb-2 space-y-2">
-                                                        {/* Sign-in nudge for non-ai-built widgets when not authenticated */}
-                                                        {!isOwner &&
-                                                            registryChecked &&
-                                                            !registryUsername &&
-                                                            widgetScope !==
-                                                                "ai-built" && (
-                                                                <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-amber-900/15 border border-amber-700/30">
-                                                                    <p className="flex-1 text-xs text-amber-200 leading-snug">
-                                                                        Sign in
-                                                                        to the
-                                                                        registry
-                                                                        to
-                                                                        update
-                                                                        your own
-                                                                        widgets
-                                                                        in place
-                                                                        instead
-                                                                        of
-                                                                        duplicating.
-                                                                    </p>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={
-                                                                            handleSignInForPreview
-                                                                        }
-                                                                        className="px-3 py-1 text-xs rounded bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 transition-colors"
-                                                                    >
-                                                                        Sign in
-                                                                    </button>
-                                                                </div>
+                                                            {browsingPackage.installed ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={
+                                                                        handleAddInstalledToDashboard
+                                                                    }
+                                                                    disabled={
+                                                                        !cellContext
+                                                                    }
+                                                                    title={
+                                                                        cellContext
+                                                                            ? "Place this widget in the dashboard cell you opened the builder from"
+                                                                            : "Open the builder from an empty grid cell to place widgets"
+                                                                    }
+                                                                    className={
+                                                                        primaryButton
+                                                                    }
+                                                                >
+                                                                    Add to
+                                                                    Dashboard
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={
+                                                                        handleInstallRegistryPackage
+                                                                    }
+                                                                    disabled={
+                                                                        registryInstalling
+                                                                    }
+                                                                    className={
+                                                                        primaryButton
+                                                                    }
+                                                                >
+                                                                    {registryInstalling
+                                                                        ? "Installing..."
+                                                                        : cellContext
+                                                                        ? "Install + Add to Dashboard"
+                                                                        : "Install"}
+                                                                </button>
                                                             )}
-                                                        {/* Signed-in-but-not-the-owner hint. Surfaces
+                                                        </div>
+                                                    </div>
+                                                    {installStatus?.error && (
+                                                        <div
+                                                            className={`text-xs ${status.error.icon}`}
+                                                        >
+                                                            {
+                                                                installStatus.error
+                                                            }
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Footer — mode toggle, name (remix), category + Install */}
+                                            {!browsingPackage && (
+                                                <div
+                                                    className={`px-6 py-3 border-t ${borderColor} shrink-0`}
+                                                >
+                                                    {isRemixMode && (
+                                                        <div className="mb-2 space-y-2">
+                                                            {/* Sign-in nudge for non-ai-built widgets when not authenticated */}
+                                                            {!isOwner &&
+                                                                registryChecked &&
+                                                                !registryUsername &&
+                                                                widgetScope !==
+                                                                    "ai-built" && (
+                                                                    <div
+                                                                        className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${status.warning.bg} ${status.warning.border}`}
+                                                                    >
+                                                                        <p
+                                                                            className={`flex-1 text-xs leading-snug ${status.warning.text}`}
+                                                                        >
+                                                                            Sign
+                                                                            in
+                                                                            to
+                                                                            the
+                                                                            registry
+                                                                            to
+                                                                            update
+                                                                            your
+                                                                            own
+                                                                            widgets
+                                                                            in
+                                                                            place
+                                                                            instead
+                                                                            of
+                                                                            duplicating.
+                                                                        </p>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={
+                                                                                handleSignInForPreview
+                                                                            }
+                                                                            className={`px-3 py-1 text-xs rounded shrink-0 transition-colors ${tk(
+                                                                                "bg-secondary-medium"
+                                                                            )} ${tk(
+                                                                                "hover-bg-secondary-light"
+                                                                            )} ${tk(
+                                                                                "text-secondary-very-light"
+                                                                            )}`}
+                                                                        >
+                                                                            Sign
+                                                                            in
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            {/* Signed-in-but-not-the-owner hint. Surfaces
                                                             what's actually being compared so the user
                                                             can see why the Update toggle stays hidden
                                                             (mismatched username vs. scope) without us
@@ -4963,565 +5118,629 @@ ${
                                                             handled by the scope === username check;
                                                             this surfaces that gap so the user knows
                                                             their options. */}
-                                                        {!isOwner &&
-                                                            registryChecked &&
-                                                            registryUsername &&
-                                                            widgetScope &&
-                                                            widgetScope !==
-                                                                "ai-built" && (
-                                                                <div className="px-3 py-2 rounded-lg bg-amber-900/15 border border-amber-700/30">
-                                                                    <p className="text-xs text-amber-200 leading-snug">
-                                                                        Signed
-                                                                        in as{" "}
-                                                                        <code className="bg-black/30 px-1 rounded font-mono">
-                                                                            {
-                                                                                registryUsername
-                                                                            }
-                                                                        </code>{" "}
-                                                                        — this
-                                                                        widget
-                                                                        is under
-                                                                        scope{" "}
-                                                                        <code className="bg-black/30 px-1 rounded font-mono">
-                                                                            @
-                                                                            {
-                                                                                widgetScope
-                                                                            }
-                                                                        </code>
-                                                                        .
-                                                                        Update-in-place
-                                                                        is only
-                                                                        enabled
-                                                                        when the
-                                                                        signed-in
-                                                                        username
-                                                                        matches
-                                                                        the
-                                                                        scope.
-                                                                        Otherwise
-                                                                        use
-                                                                        Remix to
-                                                                        fork
-                                                                        into{" "}
-                                                                        <code className="bg-black/30 px-1 rounded font-mono">
-                                                                            @ai-built/
-                                                                        </code>
-                                                                        .
-                                                                    </p>
+                                                            {!isOwner &&
+                                                                registryChecked &&
+                                                                registryUsername &&
+                                                                widgetScope &&
+                                                                widgetScope !==
+                                                                    "ai-built" && (
+                                                                    <div
+                                                                        className={`px-3 py-2 rounded-lg border ${status.warning.bg} ${status.warning.border}`}
+                                                                    >
+                                                                        <p
+                                                                            className={`text-xs leading-snug ${status.warning.text}`}
+                                                                        >
+                                                                            Signed
+                                                                            in
+                                                                            as{" "}
+                                                                            <code
+                                                                                className={
+                                                                                    codeChip
+                                                                                }
+                                                                            >
+                                                                                {
+                                                                                    registryUsername
+                                                                                }
+                                                                            </code>{" "}
+                                                                            —
+                                                                            this
+                                                                            widget
+                                                                            is
+                                                                            under
+                                                                            scope{" "}
+                                                                            <code
+                                                                                className={
+                                                                                    codeChip
+                                                                                }
+                                                                            >
+                                                                                @
+                                                                                {
+                                                                                    widgetScope
+                                                                                }
+                                                                            </code>
+                                                                            .
+                                                                            Update-in-place
+                                                                            is
+                                                                            only
+                                                                            enabled
+                                                                            when
+                                                                            the
+                                                                            signed-in
+                                                                            username
+                                                                            matches
+                                                                            the
+                                                                            scope.
+                                                                            Otherwise
+                                                                            use
+                                                                            Remix
+                                                                            to
+                                                                            fork
+                                                                            into{" "}
+                                                                            <code
+                                                                                className={
+                                                                                    codeChip
+                                                                                }
+                                                                            >
+                                                                                @ai-built/
+                                                                            </code>
+                                                                            .
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                            {/* Update / Remix toggle — only when user is the owner */}
+                                                            {isOwner && (
+                                                                <div
+                                                                    className={`flex items-center gap-1 rounded-md border p-0.5 w-fit ${tk(
+                                                                        "bg-primary-very-dark"
+                                                                    )} ${borderColor}`}
+                                                                >
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            setEditMode(
+                                                                                "update"
+                                                                            )
+                                                                        }
+                                                                        className={`px-3 py-1 text-xs rounded transition-colors ${
+                                                                            editMode ===
+                                                                            "update"
+                                                                                ? `${tabActive} font-medium`
+                                                                                : tabIdle
+                                                                        }`}
+                                                                    >
+                                                                        Update
+                                                                        Original
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            setEditMode(
+                                                                                "remix"
+                                                                            )
+                                                                        }
+                                                                        className={`px-3 py-1 text-xs rounded transition-colors ${
+                                                                            editMode ===
+                                                                            "remix"
+                                                                                ? `${tabActive} font-medium`
+                                                                                : tabIdle
+                                                                        }`}
+                                                                    >
+                                                                        Remix as
+                                                                        New
+                                                                    </button>
                                                                 </div>
                                                             )}
-                                                        {/* Update / Remix toggle — only when user is the owner */}
-                                                        {isOwner && (
-                                                            <div className="flex items-center gap-1 bg-gray-800/50 rounded-md border border-gray-700/50 p-0.5 w-fit">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                        setEditMode(
-                                                                            "update"
-                                                                        )
+                                                            {editMode ===
+                                                                "remix" && (
+                                                                <input
+                                                                    type="text"
+                                                                    value={
+                                                                        remixName
                                                                     }
-                                                                    className={`px-3 py-1 text-xs rounded transition-colors ${
-                                                                        editMode ===
-                                                                        "update"
-                                                                            ? "bg-indigo-600/30 text-indigo-300 font-medium"
-                                                                            : "text-gray-500 hover:text-gray-300"
-                                                                    }`}
-                                                                >
-                                                                    Update
-                                                                    Original
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                        setEditMode(
-                                                                            "remix"
-                                                                        )
-                                                                    }
-                                                                    className={`px-3 py-1 text-xs rounded transition-colors ${
-                                                                        editMode ===
-                                                                        "remix"
-                                                                            ? "bg-indigo-600/30 text-indigo-300 font-medium"
-                                                                            : "text-gray-500 hover:text-gray-300"
-                                                                    }`}
-                                                                >
-                                                                    Remix as New
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                        {editMode ===
-                                                            "remix" && (
-                                                            <input
-                                                                type="text"
-                                                                value={
-                                                                    remixName
-                                                                }
-                                                                onChange={(
-                                                                    e
-                                                                ) => {
-                                                                    const raw =
-                                                                        e.target.value.replace(
-                                                                            /[^a-zA-Z0-9]/g,
-                                                                            ""
+                                                                    onChange={(
+                                                                        e
+                                                                    ) => {
+                                                                        const raw =
+                                                                            e.target.value.replace(
+                                                                                /[^a-zA-Z0-9]/g,
+                                                                                ""
+                                                                            );
+                                                                        setRemixName(
+                                                                            raw
+                                                                                .charAt(
+                                                                                    0
+                                                                                )
+                                                                                .toUpperCase() +
+                                                                                raw.slice(
+                                                                                    1
+                                                                                )
                                                                         );
-                                                                    setRemixName(
-                                                                        raw
-                                                                            .charAt(
-                                                                                0
-                                                                            )
-                                                                            .toUpperCase() +
-                                                                            raw.slice(
-                                                                                1
-                                                                            )
-                                                                    );
-                                                                }}
-                                                                placeholder="RemixWidgetName"
-                                                                className="w-full px-3 py-1.5 text-sm bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
-                                                                title="Name for the remixed widget (PascalCase)"
-                                                            />
-                                                        )}
-                                                    </div>
-                                                )}
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <span className="text-xs text-gray-500 truncate">
-                                                        {!isRemixMode
-                                                            ? `Installs to @ai-built/${widgetName?.toLowerCase()}`
-                                                            : editMode ===
-                                                              "update"
-                                                            ? `Updates ${
-                                                                  effectiveEditContext.originalPackage ||
-                                                                  `@ai-built/${widgetName?.toLowerCase()}`
-                                                              }`
-                                                            : `Remixes ${
-                                                                  effectiveEditContext.originalComponentName
-                                                              } → @ai-built/${(
-                                                                  remixName ||
-                                                                  widgetName
-                                                              )?.toLowerCase()}`}
-                                                    </span>
-                                                    <div className="flex items-center gap-3 shrink-0">
-                                                        {/* Say why Install is
-                                                            greyed out. */}
-                                                        {!selectedCategory && (
-                                                            <span
-                                                                data-testid="install-category-hint"
-                                                                className="text-xs text-gray-400"
-                                                            >
-                                                                Pick a category
-                                                                to install
-                                                            </span>
-                                                        )}
-                                                        <select
-                                                            value={
-                                                                selectedCategory ||
-                                                                ""
-                                                            }
-                                                            onChange={(e) =>
-                                                                setSelectedCategory(
-                                                                    e.target
-                                                                        .value ||
-                                                                        null
-                                                                )
-                                                            }
-                                                            className="px-2 py-1.5 text-xs bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
-                                                            title="Pick a category before installing"
-                                                        >
-                                                            <option
-                                                                value=""
-                                                                disabled
-                                                            >
-                                                                Pick a category…
-                                                            </option>
-                                                            {VALID_CATEGORIES.map(
-                                                                (c) => (
-                                                                    <option
-                                                                        key={c}
-                                                                        value={
-                                                                            c
-                                                                        }
-                                                                    >
-                                                                        {c}
-                                                                    </option>
-                                                                )
+                                                                    }}
+                                                                    placeholder="RemixWidgetName"
+                                                                    className={`w-full px-3 py-1.5 text-sm ${fieldClass}`}
+                                                                    title="Name for the remixed widget (PascalCase)"
+                                                                />
                                                             )}
-                                                        </select>
-                                                        <button
-                                                            onClick={
-                                                                handleInstall
-                                                            }
-                                                            disabled={
-                                                                !selectedCategory ||
-                                                                (isRemixMode &&
-                                                                    editMode ===
-                                                                        "remix" &&
-                                                                    !remixName)
-                                                            }
-                                                            className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
-                                                            title={
-                                                                !selectedCategory
-                                                                    ? "Pick a category first"
-                                                                    : editMode ===
-                                                                          "remix" &&
-                                                                      !remixName
-                                                                    ? "Enter a name for the remix"
-                                                                    : undefined
-                                                            }
+                                                        </div>
+                                                    )}
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <span
+                                                            className={`text-xs truncate ${chromeMuted}`}
                                                         >
                                                             {!isRemixMode
-                                                                ? "Install Widget"
+                                                                ? `Installs to @ai-built/${widgetName?.toLowerCase()}`
                                                                 : editMode ===
                                                                   "update"
-                                                                ? "Update Widget"
-                                                                : "Remix Widget"}
-                                                        </button>
+                                                                ? `Updates ${
+                                                                      effectiveEditContext.originalPackage ||
+                                                                      `@ai-built/${widgetName?.toLowerCase()}`
+                                                                  }`
+                                                                : `Remixes ${
+                                                                      effectiveEditContext.originalComponentName
+                                                                  } → @ai-built/${(
+                                                                      remixName ||
+                                                                      widgetName
+                                                                  )?.toLowerCase()}`}
+                                                        </span>
+                                                        <div className="flex items-center gap-3 shrink-0">
+                                                            {/* Say why Install is
+                                                            greyed out. */}
+                                                            {!selectedCategory && (
+                                                                <span
+                                                                    data-testid="install-category-hint"
+                                                                    className={`text-xs ${chromeMuted}`}
+                                                                >
+                                                                    Pick a
+                                                                    category to
+                                                                    install
+                                                                </span>
+                                                            )}
+                                                            <select
+                                                                value={
+                                                                    selectedCategory ||
+                                                                    ""
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setSelectedCategory(
+                                                                        e.target
+                                                                            .value ||
+                                                                            null
+                                                                    )
+                                                                }
+                                                                className={`px-2 py-1.5 text-xs ${fieldClass}`}
+                                                                title="Pick a category before installing"
+                                                            >
+                                                                <option
+                                                                    value=""
+                                                                    disabled
+                                                                >
+                                                                    Pick a
+                                                                    category…
+                                                                </option>
+                                                                {VALID_CATEGORIES.map(
+                                                                    (c) => (
+                                                                        <option
+                                                                            key={
+                                                                                c
+                                                                            }
+                                                                            value={
+                                                                                c
+                                                                            }
+                                                                        >
+                                                                            {c}
+                                                                        </option>
+                                                                    )
+                                                                )}
+                                                            </select>
+                                                            <button
+                                                                onClick={
+                                                                    handleInstall
+                                                                }
+                                                                disabled={
+                                                                    !selectedCategory ||
+                                                                    (isRemixMode &&
+                                                                        editMode ===
+                                                                            "remix" &&
+                                                                        !remixName)
+                                                                }
+                                                                className={
+                                                                    primaryButton
+                                                                }
+                                                                title={
+                                                                    !selectedCategory
+                                                                        ? "Pick a category first"
+                                                                        : editMode ===
+                                                                              "remix" &&
+                                                                          !remixName
+                                                                        ? "Enter a name for the remix"
+                                                                        : undefined
+                                                                }
+                                                            >
+                                                                {!isRemixMode
+                                                                    ? "Install Widget"
+                                                                    : editMode ===
+                                                                      "update"
+                                                                    ? "Update Widget"
+                                                                    : "Remix Widget"}
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                            )}
+                                        </div>
+                                    )}
 
-                                {/* Installed success */}
-                                {installStatus?.success && (
-                                    <div className="flex flex-col items-center justify-center h-full gap-4">
-                                        <div className="w-12 h-12 rounded-xl bg-green-600/20 flex items-center justify-center">
-                                            <FontAwesomeIcon
-                                                icon="check-circle"
-                                                className="h-6 w-6 text-green-400"
-                                            />
-                                        </div>
-                                        <div className="text-center space-y-1">
-                                            <p className="text-base font-semibold text-green-300">
-                                                {!isRemixMode
-                                                    ? "Widget Installed!"
-                                                    : editMode === "update"
-                                                    ? "Widget Updated!"
-                                                    : "Widget Remixed!"}
-                                            </p>
-                                            <p className="text-sm text-gray-400">
-                                                <span className="font-mono text-gray-300">
-                                                    {installStatus.widgetName}
-                                                </span>{" "}
-                                                {isRemixMode
-                                                    ? editMode === "update"
-                                                        ? "has been updated in place."
-                                                        : "has been swapped into your dashboard."
-                                                    : cellContext
-                                                    ? "is now in the widget selector."
-                                                    : "now appears in your Widgets list."}
-                                            </p>
-                                        </div>
-                                        <div className="flex gap-3">
-                                            <button
-                                                onClick={() => setIsOpen(false)}
-                                                className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
-                                            >
-                                                Done
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setInstallStatus(null);
-                                                    setPreviewComponent(null);
-                                                    setDetectedCode({
-                                                        componentCode: null,
-                                                        configCode: null,
-                                                    });
-                                                    lastCompiledCode.current =
-                                                        null;
-                                                    if (browsingPackage) {
-                                                        setBrowsingPackage(
+                                    {/* Installed success */}
+                                    {installStatus?.success && (
+                                        <div className="flex flex-col items-center justify-center h-full gap-4">
+                                            <div className="w-12 h-12 rounded-xl bg-green-600/20 flex items-center justify-center">
+                                                <FontAwesomeIcon
+                                                    icon="check-circle"
+                                                    className="h-6 w-6 text-green-400"
+                                                />
+                                            </div>
+                                            <div className="text-center space-y-1">
+                                                <p className="text-base font-semibold text-green-300">
+                                                    {!isRemixMode
+                                                        ? "Widget Installed!"
+                                                        : editMode === "update"
+                                                        ? "Widget Updated!"
+                                                        : "Widget Remixed!"}
+                                                </p>
+                                                <p className="text-sm text-gray-400">
+                                                    <span className="font-mono text-gray-300">
+                                                        {
+                                                            installStatus.widgetName
+                                                        }
+                                                    </span>{" "}
+                                                    {isRemixMode
+                                                        ? editMode === "update"
+                                                            ? "has been updated in place."
+                                                            : "has been swapped into your dashboard."
+                                                        : cellContext
+                                                        ? "is now in the widget selector."
+                                                        : "now appears in your Widgets list."}
+                                                </p>
+                                            </div>
+                                            <div className="flex gap-3">
+                                                <button
+                                                    onClick={() =>
+                                                        setIsOpen(false)
+                                                    }
+                                                    className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+                                                >
+                                                    Done
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setInstallStatus(null);
+                                                        setPreviewComponent(
                                                             null
                                                         );
-                                                    }
-                                                }}
-                                                className="px-5 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
-                                            >
-                                                {browsingPackage
-                                                    ? "Browse More"
-                                                    : "Build Another"}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Install error */}
-                                {installStatus?.error && (
-                                    <div className="flex flex-col items-center justify-center h-full gap-4">
-                                        <div className="text-center space-y-2">
-                                            <p className="text-red-400 font-medium">
-                                                Installation failed
-                                            </p>
-                                            <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 max-w-md overflow-auto">
-                                                {installStatus.error}
-                                            </pre>
-                                        </div>
-                                        <button
-                                            onClick={() =>
-                                                setInstallStatus(null)
-                                            }
-                                            className="px-5 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
-                                        >
-                                            Try Again
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Code editor (visible when Code tab is active) */}
-                        {activeTab === "code" && detectedCode.componentCode && (
-                            <div className="flex flex-1 min-h-0 overflow-hidden">
-                                {/* File explorer sidebar */}
-                                <div
-                                    className={`w-48 border-r ${borderColor} shrink-0 overflow-auto py-1`}
-                                >
-                                    <div className="px-2 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-                                        Files
-                                    </div>
-                                    <button
-                                        onClick={() =>
-                                            setActiveFile("component")
-                                        }
-                                        className={`w-full text-left px-3 py-1.5 text-xs font-mono truncate transition-colors ${
-                                            activeFile === "component"
-                                                ? "bg-indigo-600/15 text-indigo-300"
-                                                : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
-                                        }`}
-                                    >
-                                        <FontAwesomeIcon
-                                            icon="file-code"
-                                            className="h-2.5 w-2.5 mr-1.5"
-                                        />
-                                        {widgetName || "Widget"}.js
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveFile("config")}
-                                        className={`w-full text-left px-3 py-1.5 text-xs font-mono truncate transition-colors ${
-                                            activeFile === "config"
-                                                ? "bg-indigo-600/15 text-indigo-300"
-                                                : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
-                                        }`}
-                                    >
-                                        <FontAwesomeIcon
-                                            icon="cog"
-                                            className="h-2.5 w-2.5 mr-1.5"
-                                        />
-                                        {widgetName || "Widget"}.dash.js
-                                    </button>
-                                </div>
-                                {/* Editor pane with breadcrumb header */}
-                                <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
-                                    {/* Breadcrumb path */}
-                                    <div
-                                        className={`flex items-center gap-1 px-3 py-1.5 border-b ${borderColor} shrink-0 text-xs`}
-                                    >
-                                        <span className="text-gray-600">
-                                            @ai-built
-                                        </span>
-                                        <span className="text-gray-700">/</span>
-                                        <span className="text-gray-600">
-                                            {(
-                                                widgetName || "widget"
-                                            ).toLowerCase()}
-                                        </span>
-                                        <span className="text-gray-700">/</span>
-                                        <span className="text-gray-600">
-                                            widgets
-                                        </span>
-                                        <span className="text-gray-700">/</span>
-                                        <span className="text-gray-300 font-medium">
-                                            {widgetName || "Widget"}
-                                            {activeFile === "config"
-                                                ? ".dash.js"
-                                                : ".js"}
-                                        </span>
-                                    </div>
-                                    <div className="flex-1 min-h-0 overflow-hidden relative">
-                                        <div className="absolute inset-0">
-                                            <CodeEditorVS
-                                                key={activeFile}
-                                                code={
-                                                    editBuffer[activeFile] ??
-                                                    (activeFile === "component"
-                                                        ? detectedCode.componentCode
-                                                        : detectedCode.configCode ||
-                                                          "")
-                                                }
-                                                language="javascript"
-                                                onChange={handleCodeEdit}
-                                                readOnly={false}
-                                                minimapEnabled={false}
-                                                padding="p-0"
-                                            />
-                                        </div>
-                                    </div>
-                                    {/* Footer bar — always visible */}
-                                    <div
-                                        className={`flex items-center justify-between px-3 py-2 border-t ${borderColor} shrink-0`}
-                                    >
-                                        <span className="text-[10px] text-gray-600">
-                                            {hasUnsavedEdits
-                                                ? "Unsaved changes"
-                                                : ""}
-                                        </span>
-                                        {hasUnsavedEdits ? (
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={handleCancelEdits}
-                                                    className="px-3 py-1 rounded text-xs text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
+                                                        setDetectedCode({
+                                                            componentCode: null,
+                                                            configCode: null,
+                                                        });
+                                                        lastCompiledCode.current =
+                                                            null;
+                                                        if (browsingPackage) {
+                                                            setBrowsingPackage(
+                                                                null
+                                                            );
+                                                        }
+                                                    }}
+                                                    className="px-5 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
                                                 >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    onClick={handleSaveEdits}
-                                                    className="px-3 py-1 rounded text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
-                                                >
-                                                    Save &amp; Compile
+                                                    {browsingPackage
+                                                        ? "Browse More"
+                                                        : "Build Another"}
                                                 </button>
                                             </div>
-                                        ) : (
-                                            <span className="text-[10px] text-gray-600">
-                                                JavaScript
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                                        </div>
+                                    )}
 
-                        {/* Configure tab */}
-                        {activeTab === "configure" &&
-                            detectedCode.componentCode && (
-                                <WidgetConfigureTab
-                                    configCode={detectedCode.configCode || ""}
-                                    parsedConfig={previewParsedConfig}
-                                    componentName={widgetName}
-                                    borderColor={borderColor}
-                                    onSave={(newConfigCode, diff) => {
-                                        // Apply matching code transforms
-                                        // for any events/handlers added or
-                                        // removed in the Configure tab —
-                                        // this is what keeps the .dash.js
-                                        // declaration in sync with the
-                                        // widget's actual publishEvent /
-                                        // listen calls. Stubs for adds,
-                                        // surgical removes for deletes.
-                                        let nextComponentCode =
-                                            detectedCode.componentCode;
-                                        if (diff && nextComponentCode) {
-                                            for (const name of diff.eventsRemoved ||
-                                                []) {
-                                                nextComponentCode =
-                                                    transforms.removePublishEvent(
-                                                        nextComponentCode,
-                                                        name
-                                                    );
-                                            }
-                                            for (const name of diff.eventsAdded ||
-                                                []) {
-                                                nextComponentCode =
-                                                    transforms.addPublishEventStub(
-                                                        nextComponentCode,
-                                                        name,
-                                                        widgetName
-                                                    );
-                                            }
-                                            for (const name of diff.handlersRemoved ||
-                                                []) {
-                                                nextComponentCode =
-                                                    transforms.removeEventHandler(
-                                                        nextComponentCode,
-                                                        name
-                                                    );
-                                            }
-                                            for (const name of diff.handlersAdded ||
-                                                []) {
-                                                nextComponentCode =
-                                                    transforms.addEventHandlerStub(
-                                                        nextComponentCode,
-                                                        name,
-                                                        widgetName
-                                                    );
-                                            }
-                                            for (const key of diff.tasksRemoved ||
-                                                []) {
-                                                nextComponentCode =
-                                                    transforms.removeScheduledTask(
-                                                        nextComponentCode,
-                                                        key
-                                                    );
-                                            }
-                                            for (const key of diff.tasksAdded ||
-                                                []) {
-                                                nextComponentCode =
-                                                    transforms.addScheduledTaskStub(
-                                                        nextComponentCode,
-                                                        key,
-                                                        widgetName
-                                                    );
-                                            }
+                                    {/* Install error */}
+                                    {installStatus?.error && (
+                                        <div className="flex flex-col items-center justify-center h-full gap-4">
+                                            <div className="text-center space-y-2">
+                                                <p className="text-red-400 font-medium">
+                                                    Installation failed
+                                                </p>
+                                                <pre className="text-xs text-red-300/70 bg-black/20 rounded p-2 max-w-md overflow-auto">
+                                                    {installStatus.error}
+                                                </pre>
+                                            </div>
+                                            <button
+                                                onClick={() =>
+                                                    setInstallStatus(null)
+                                                }
+                                                className="px-5 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium transition-colors"
+                                            >
+                                                Try Again
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Code editor (visible when Code tab is active) */}
+                            {activeTab === "code" &&
+                                detectedCode.componentCode && (
+                                    <div className="flex flex-1 min-h-0 overflow-hidden">
+                                        {/* File explorer sidebar */}
+                                        <div
+                                            className={`w-48 border-r ${borderColor} shrink-0 overflow-auto py-1`}
+                                        >
+                                            <div className="px-2 py-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                                                Files
+                                            </div>
+                                            <button
+                                                onClick={() =>
+                                                    setActiveFile("component")
+                                                }
+                                                className={`w-full text-left px-3 py-1.5 text-xs font-mono truncate transition-colors ${
+                                                    activeFile === "component"
+                                                        ? "bg-indigo-600/15 text-indigo-300"
+                                                        : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
+                                                }`}
+                                            >
+                                                <FontAwesomeIcon
+                                                    icon="file-code"
+                                                    className="h-2.5 w-2.5 mr-1.5"
+                                                />
+                                                {widgetName || "Widget"}.js
+                                            </button>
+                                            <button
+                                                onClick={() =>
+                                                    setActiveFile("config")
+                                                }
+                                                className={`w-full text-left px-3 py-1.5 text-xs font-mono truncate transition-colors ${
+                                                    activeFile === "config"
+                                                        ? "bg-indigo-600/15 text-indigo-300"
+                                                        : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
+                                                }`}
+                                            >
+                                                <FontAwesomeIcon
+                                                    icon="cog"
+                                                    className="h-2.5 w-2.5 mr-1.5"
+                                                />
+                                                {widgetName || "Widget"}.dash.js
+                                            </button>
+                                        </div>
+                                        {/* Editor pane with breadcrumb header */}
+                                        <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
+                                            {/* Breadcrumb path */}
+                                            <div
+                                                className={`flex items-center gap-1 px-3 py-1.5 border-b ${borderColor} shrink-0 text-xs`}
+                                            >
+                                                <span className="text-gray-600">
+                                                    @ai-built
+                                                </span>
+                                                <span className="text-gray-700">
+                                                    /
+                                                </span>
+                                                <span className="text-gray-600">
+                                                    {(
+                                                        widgetName || "widget"
+                                                    ).toLowerCase()}
+                                                </span>
+                                                <span className="text-gray-700">
+                                                    /
+                                                </span>
+                                                <span className="text-gray-600">
+                                                    widgets
+                                                </span>
+                                                <span className="text-gray-700">
+                                                    /
+                                                </span>
+                                                <span className="text-gray-300 font-medium">
+                                                    {widgetName || "Widget"}
+                                                    {activeFile === "config"
+                                                        ? ".dash.js"
+                                                        : ".js"}
+                                                </span>
+                                            </div>
+                                            <div className="flex-1 min-h-0 overflow-hidden relative">
+                                                <div className="absolute inset-0">
+                                                    <CodeEditorVS
+                                                        key={activeFile}
+                                                        code={
+                                                            editBuffer[
+                                                                activeFile
+                                                            ] ??
+                                                            (activeFile ===
+                                                            "component"
+                                                                ? detectedCode.componentCode
+                                                                : detectedCode.configCode ||
+                                                                  "")
+                                                        }
+                                                        language="javascript"
+                                                        onChange={
+                                                            handleCodeEdit
+                                                        }
+                                                        readOnly={false}
+                                                        minimapEnabled={false}
+                                                        padding="p-0"
+                                                    />
+                                                </div>
+                                            </div>
+                                            {/* Footer bar — always visible */}
+                                            <div
+                                                className={`flex items-center justify-between px-3 py-2 border-t ${borderColor} shrink-0`}
+                                            >
+                                                <span className="text-[10px] text-gray-600">
+                                                    {hasUnsavedEdits
+                                                        ? "Unsaved changes"
+                                                        : ""}
+                                                </span>
+                                                {hasUnsavedEdits ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={
+                                                                handleCancelEdits
+                                                            }
+                                                            className="px-3 py-1 rounded text-xs text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            onClick={
+                                                                handleSaveEdits
+                                                            }
+                                                            className="px-3 py-1 rounded text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors"
+                                                        >
+                                                            Save &amp; Compile
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[10px] text-gray-600">
+                                                        JavaScript
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                            {/* Configure tab */}
+                            {activeTab === "configure" &&
+                                detectedCode.componentCode && (
+                                    <WidgetConfigureTab
+                                        configCode={
+                                            detectedCode.configCode || ""
                                         }
-                                        const updated = {
-                                            ...detectedCode,
-                                            componentCode: nextComponentCode,
-                                            configCode: newConfigCode,
-                                        };
-                                        setDetectedCode(updated);
-                                        lastCompiledCode.current = null;
-                                        compilePreview(updated);
-                                    }}
+                                        parsedConfig={previewParsedConfig}
+                                        componentName={widgetName}
+                                        borderColor={borderColor}
+                                        onSave={(newConfigCode, diff) => {
+                                            // Apply matching code transforms
+                                            // for any events/handlers added or
+                                            // removed in the Configure tab —
+                                            // this is what keeps the .dash.js
+                                            // declaration in sync with the
+                                            // widget's actual publishEvent /
+                                            // listen calls. Stubs for adds,
+                                            // surgical removes for deletes.
+                                            let nextComponentCode =
+                                                detectedCode.componentCode;
+                                            if (diff && nextComponentCode) {
+                                                for (const name of diff.eventsRemoved ||
+                                                    []) {
+                                                    nextComponentCode =
+                                                        transforms.removePublishEvent(
+                                                            nextComponentCode,
+                                                            name
+                                                        );
+                                                }
+                                                for (const name of diff.eventsAdded ||
+                                                    []) {
+                                                    nextComponentCode =
+                                                        transforms.addPublishEventStub(
+                                                            nextComponentCode,
+                                                            name,
+                                                            widgetName
+                                                        );
+                                                }
+                                                for (const name of diff.handlersRemoved ||
+                                                    []) {
+                                                    nextComponentCode =
+                                                        transforms.removeEventHandler(
+                                                            nextComponentCode,
+                                                            name
+                                                        );
+                                                }
+                                                for (const name of diff.handlersAdded ||
+                                                    []) {
+                                                    nextComponentCode =
+                                                        transforms.addEventHandlerStub(
+                                                            nextComponentCode,
+                                                            name,
+                                                            widgetName
+                                                        );
+                                                }
+                                                for (const key of diff.tasksRemoved ||
+                                                    []) {
+                                                    nextComponentCode =
+                                                        transforms.removeScheduledTask(
+                                                            nextComponentCode,
+                                                            key
+                                                        );
+                                                }
+                                                for (const key of diff.tasksAdded ||
+                                                    []) {
+                                                    nextComponentCode =
+                                                        transforms.addScheduledTaskStub(
+                                                            nextComponentCode,
+                                                            key,
+                                                            widgetName
+                                                        );
+                                                }
+                                            }
+                                            const updated = {
+                                                ...detectedCode,
+                                                componentCode:
+                                                    nextComponentCode,
+                                                configCode: newConfigCode,
+                                            };
+                                            setDetectedCode(updated);
+                                            lastCompiledCode.current = null;
+                                            compilePreview(updated);
+                                        }}
+                                    />
+                                )}
+                            {activeTab === "console" && (
+                                <WidgetConsolePane
+                                    events={consoleEvents}
+                                    onClear={clearConsoleEvents}
+                                    onSendErrorToAI={handleSendConsoleErrorToAI}
                                 />
                             )}
-                        {activeTab === "console" && (
-                            <WidgetConsolePane
-                                events={consoleEvents}
-                                onClear={clearConsoleEvents}
-                                onSendErrorToAI={handleSendConsoleErrorToAI}
-                            />
-                        )}
-                        {activeTab === "scorecard" &&
-                            detectedCode.componentCode && (
-                                <div
-                                    className="px-4 py-4 overflow-y-auto flex flex-col gap-3"
-                                    data-testid="build-mode-acceptance-scorecard"
-                                >
-                                    <div className="text-sm text-gray-300 leading-relaxed">
-                                        <div className="font-medium text-gray-100">
-                                            Scoring{" "}
-                                            <code className="px-1.5 py-0.5 rounded bg-gray-800 text-indigo-300 font-mono text-xs">
-                                                {widgetName || "current widget"}
-                                            </code>
+                            {activeTab === "scorecard" &&
+                                detectedCode.componentCode && (
+                                    <div
+                                        className="px-4 py-4 overflow-y-auto flex flex-col gap-3"
+                                        data-testid="build-mode-acceptance-scorecard"
+                                    >
+                                        <div className="text-sm text-gray-300 leading-relaxed">
+                                            <div className="font-medium text-gray-100">
+                                                Scoring{" "}
+                                                <code className="px-1.5 py-0.5 rounded bg-gray-800 text-indigo-300 font-mono text-xs">
+                                                    {widgetName ||
+                                                        "current widget"}
+                                                </code>
+                                            </div>
+                                            <div className="text-xs text-gray-400 mt-1">
+                                                The scorecard runs over whatever
+                                                widget code is currently in the
+                                                editor — your draft, a remixed
+                                                registry widget, or a fresh AI
+                                                generation. Drafts from before
+                                                the cohesion rubric existed will
+                                                show failures here; to fix them,
+                                                ask the AI in the chat panel to
+                                                regenerate, or edit directly in
+                                                the{" "}
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setActiveTab("code")
+                                                    }
+                                                    className="underline text-indigo-300 hover:text-indigo-200"
+                                                >
+                                                    Code
+                                                </button>{" "}
+                                                tab.
+                                            </div>
                                         </div>
-                                        <div className="text-xs text-gray-400 mt-1">
-                                            The scorecard runs over whatever
-                                            widget code is currently in the
-                                            editor — your draft, a remixed
-                                            registry widget, or a fresh AI
-                                            generation. Drafts from before the
-                                            cohesion rubric existed will show
-                                            failures here; to fix them, ask the
-                                            AI in the chat panel to regenerate,
-                                            or edit directly in the{" "}
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    setActiveTab("code")
-                                                }
-                                                className="underline text-indigo-300 hover:text-indigo-200"
-                                            >
-                                                Code
-                                            </button>{" "}
-                                            tab.
-                                        </div>
+                                        <AcceptanceScorecard
+                                            code={detectedCode.componentCode}
+                                            onSendToAi={handleScorecardSendToAi}
+                                        />
                                     </div>
-                                    <AcceptanceScorecard
-                                        code={detectedCode.componentCode}
-                                        onSendToAi={handleScorecardSendToAi}
-                                    />
-                                </div>
-                            )}
-                    </div>
+                                )}
+                        </div>
 
-                    {/* Right: Chat (1/3). `overflow-hidden` is
+                        {/* Right: Chat (1/3). `overflow-hidden` is
                         load-bearing: ComposerPaneV2 → QuickStartPane
                         renders a grid of intent cards whose intrinsic
                         min-content can exceed this panel's 1/3 share
@@ -5529,95 +5748,97 @@ ${
                         spills past the modal's right edge and the
                         second column ("View", "Custom") disappears
                         off-screen. */}
-                    <div
-                        className={`flex flex-col flex-1 min-w-0 overflow-hidden border-l ${borderColor}`}
-                    >
-                        {/* Build / Compose are the two CREATE paths,
+                        <div
+                            className={`flex flex-col flex-1 min-w-0 overflow-hidden border-l ${borderColor}`}
+                        >
+                            {/* Build / Compose are the two CREATE paths,
                             grouped in a segmented control. Discover is
                             a separate path entirely (search the
                             registry for existing widgets, not build a
                             new one) so it sits outside the toggle as
                             its own button with different styling. */}
-                        <div className="flex items-center justify-between gap-2 px-3 pt-2 shrink-0">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <div className="flex items-center gap-1 bg-gray-800/50 rounded-md border border-gray-700/50 p-0.5">
-                                    <button
-                                        type="button"
-                                        onClick={() => setChatMode("build")}
-                                        className={`px-3 py-1 text-xs rounded transition-colors ${
-                                            chatMode === "build"
-                                                ? "bg-indigo-600/30 text-indigo-300 font-medium"
-                                                : "text-gray-500 hover:text-gray-300"
-                                        }`}
-                                        title="Generate a custom widget from scratch with AI"
-                                    >
-                                        Build
-                                    </button>
-                                    {/* Slice 20.C1: Compose mode —
+                            <div className="flex items-center justify-between gap-2 px-3 pt-2 shrink-0">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <div className="flex items-center gap-1 bg-gray-800/50 rounded-md border border-gray-700/50 p-0.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => setChatMode("build")}
+                                            className={`px-3 py-1 text-xs rounded transition-colors ${
+                                                chatMode === "build"
+                                                    ? "bg-indigo-600/30 text-indigo-300 font-medium"
+                                                    : "text-gray-500 hover:text-gray-300"
+                                            }`}
+                                            title="Generate a custom widget from scratch with AI"
+                                        >
+                                            Build
+                                        </button>
+                                        {/* Slice 20.C1: Compose mode —
                                         stepwise widget composition (pick
                                         components, wire data slots)
                                         without going through an AI
                                         prompt. Replaces the chat pane
                                         with the ComposerPane when
                                         active. */}
-                                    <button
-                                        type="button"
-                                        onClick={() => setChatMode("compose")}
-                                        className={`px-3 py-1 text-xs rounded transition-colors ${
-                                            chatMode === "compose"
-                                                ? "bg-indigo-600/30 text-indigo-300 font-medium"
-                                                : "text-gray-500 hover:text-gray-300"
-                                        }`}
-                                        title="Build a widget by picking components and wiring data slots — no AI prompt needed"
-                                        data-testid="chat-mode-compose"
-                                    >
-                                        Compose
-                                    </button>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setChatMode("compose")
+                                            }
+                                            className={`px-3 py-1 text-xs rounded transition-colors ${
+                                                chatMode === "compose"
+                                                    ? "bg-indigo-600/30 text-indigo-300 font-medium"
+                                                    : "text-gray-500 hover:text-gray-300"
+                                            }`}
+                                            title="Build a widget by picking components and wiring data slots — no AI prompt needed"
+                                            data-testid="chat-mode-compose"
+                                        >
+                                            Compose
+                                        </button>
+                                    </div>
+                                    <span className="text-[11px] text-gray-500 truncate">
+                                        {chatMode === "compose"
+                                            ? "Pick components, wire data slots — no prompt needed"
+                                            : chatMode === "discover"
+                                            ? "Searching the registry for existing widgets"
+                                            : "AI will generate a custom widget"}
+                                    </span>
                                 </div>
-                                <span className="text-[11px] text-gray-500 truncate">
-                                    {chatMode === "compose"
-                                        ? "Pick components, wire data slots — no prompt needed"
-                                        : chatMode === "discover"
-                                        ? "Searching the registry for existing widgets"
-                                        : "AI will generate a custom widget"}
-                                </span>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setChatMode(
-                                        chatMode === "discover"
-                                            ? "build"
-                                            : "discover"
-                                    )
-                                }
-                                className={`flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border transition-colors shrink-0 ${
-                                    chatMode === "discover"
-                                        ? "bg-amber-600/20 border-amber-700/50 text-amber-200"
-                                        : "border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600"
-                                }`}
-                                title={
-                                    chatMode === "discover"
-                                        ? "Back to Build mode"
-                                        : "Search the Dash registry for existing widgets instead of building one"
-                                }
-                                data-testid="chat-mode-discover"
-                            >
-                                <FontAwesomeIcon
-                                    icon={
-                                        chatMode === "discover"
-                                            ? "arrow-left"
-                                            : "magnifying-glass"
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setChatMode(
+                                            chatMode === "discover"
+                                                ? "build"
+                                                : "discover"
+                                        )
                                     }
-                                    className="h-2.5 w-2.5"
-                                />
-                                {chatMode === "discover"
-                                    ? "Back to Build"
-                                    : "Discover existing"}
-                            </button>
-                        </div>
+                                    className={`flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border transition-colors shrink-0 ${
+                                        chatMode === "discover"
+                                            ? "bg-amber-600/20 border-amber-700/50 text-amber-200"
+                                            : "border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600"
+                                    }`}
+                                    title={
+                                        chatMode === "discover"
+                                            ? "Back to Build mode"
+                                            : "Search the Dash registry for existing widgets instead of building one"
+                                    }
+                                    data-testid="chat-mode-discover"
+                                >
+                                    <FontAwesomeIcon
+                                        icon={
+                                            chatMode === "discover"
+                                                ? "arrow-left"
+                                                : "magnifying-glass"
+                                        }
+                                        className="h-2.5 w-2.5"
+                                    />
+                                    {chatMode === "discover"
+                                        ? "Back to Build"
+                                        : "Discover existing"}
+                                </button>
+                            </div>
 
-                        {/* Chat content + provider gate. Relative wrapper
+                            {/* Chat content + provider gate. Relative wrapper
                         so the gate's `absolute inset-0` covers only
                         this region — the mode toggle above stays
                         clickable so the user can switch to Discover.
@@ -5628,141 +5849,151 @@ ${
                         which triggers the message-poller's reset
                         block to also null `selectedProviderForBuild`,
                         re-opening the gate. */}
-                        <div className="relative flex flex-col flex-1 min-h-0">
-                            {/* Slice 20.C1: Compose-mode UI replaces
+                            <div className="relative flex flex-col flex-1 min-h-0">
+                                {/* Slice 20.C1: Compose-mode UI replaces
                                 the chat pane and the provider gate.
                                 Stage 1 (component picker) emits a
                                 data-less widget skeleton on every
                                 edit through the same compilePreview
                                 pipeline the chat path uses, so the
                                 left-side Preview tab updates live. */}
-                            {chatMode === "compose" && USE_COMPOSER_V2 && (
-                                <ComposerPaneV2
-                                    key={composerSessionKey}
-                                    initialGrid={composerInitialGrid}
-                                    onChange={setComposerGrid}
-                                    selectedCellId={composerSelectedNodeId}
-                                    onSelectedCellChange={
-                                        setComposerSelectedNodeId
-                                    }
-                                    providers={providers}
-                                    apiKey={apiKey}
-                                    model={model}
-                                    backend={preferredBackend}
-                                    // Edit-mode awareness so the pane's
-                                    // mount-time auto-name + empty-grid
-                                    // emit don't overwrite the loaded
-                                    // editContext.componentCode. See
-                                    // ComposerPaneV2's editContext prop
-                                    // docs for the failure mode this
-                                    // prevents.
-                                    editContext={effectiveEditContext}
-                                    currentDraftId={draftSessionIdRef.current}
-                                    onEmit={(code) => {
-                                        setDetectedCode({
-                                            componentCode: code.componentCode,
-                                            configCode: code.configCode,
-                                            files: code.files || null,
-                                        });
-                                        compilePreview(code).catch(() => {});
-                                    }}
-                                />
-                            )}
-                            {chatMode === "compose" && !USE_COMPOSER_V2 && (
-                                <ComposerPane
-                                    key={composerSessionKey}
-                                    initialTree={composerInitialTree}
-                                    onTreeChange={setComposerTree}
-                                    selectedNodeId={composerSelectedNodeId}
-                                    onSelectedNodeChange={
-                                        setComposerSelectedNodeId
-                                    }
-                                    providers={providers}
-                                    apiKey={apiKey}
-                                    model={model}
-                                    backend={preferredBackend}
-                                    onEmit={(code) => {
-                                        // Mirror the composer's
-                                        // emitted code into
-                                        // detectedCode so the Code
-                                        // and Configure tabs (gated
-                                        // on detectedCode.componentCode)
-                                        // become active. Without
-                                        // this, the user can't see
-                                        // or edit the source the
-                                        // composer is generating.
-                                        setDetectedCode({
-                                            componentCode: code.componentCode,
-                                            configCode: code.configCode,
-                                            files: code.files || null,
-                                        });
-                                        compilePreview(code).catch(() => {});
-                                        // Intentionally NOT yanking
-                                        // the user back to Preview
-                                        // on every composer edit —
-                                        // when they're reading the
-                                        // Code tab, the auto-switch
-                                        // is disruptive. Preview
-                                        // content updates regardless
-                                        // of which tab is active.
-                                    }}
-                                />
-                            )}
-                            {chatMode === "build" &&
-                                selectedProviderForBuild === null &&
-                                !detectedCode?.componentCode && (
-                                    <ChatProviderGate
-                                        onChange={setSelectedProviderForBuild}
-                                        builtInCatalog={builtInCatalog}
-                                        knownExternalCatalog={
-                                            knownExternalCatalog
+                                {chatMode === "compose" && USE_COMPOSER_V2 && (
+                                    <ComposerPaneV2
+                                        key={composerSessionKey}
+                                        initialGrid={composerInitialGrid}
+                                        onChange={setComposerGrid}
+                                        selectedCellId={composerSelectedNodeId}
+                                        onSelectedCellChange={
+                                            setComposerSelectedNodeId
                                         }
+                                        providers={providers}
+                                        apiKey={apiKey}
+                                        model={model}
+                                        backend={preferredBackend}
+                                        // Edit-mode awareness so the pane's
+                                        // mount-time auto-name + empty-grid
+                                        // emit don't overwrite the loaded
+                                        // editContext.componentCode. See
+                                        // ComposerPaneV2's editContext prop
+                                        // docs for the failure mode this
+                                        // prevents.
+                                        editContext={effectiveEditContext}
+                                        currentDraftId={
+                                            draftSessionIdRef.current
+                                        }
+                                        onEmit={(code) => {
+                                            setDetectedCode({
+                                                componentCode:
+                                                    code.componentCode,
+                                                configCode: code.configCode,
+                                                files: code.files || null,
+                                            });
+                                            compilePreview(code).catch(
+                                                () => {}
+                                            );
+                                        }}
                                     />
                                 )}
+                                {chatMode === "compose" && !USE_COMPOSER_V2 && (
+                                    <ComposerPane
+                                        key={composerSessionKey}
+                                        initialTree={composerInitialTree}
+                                        onTreeChange={setComposerTree}
+                                        selectedNodeId={composerSelectedNodeId}
+                                        onSelectedNodeChange={
+                                            setComposerSelectedNodeId
+                                        }
+                                        providers={providers}
+                                        apiKey={apiKey}
+                                        model={model}
+                                        backend={preferredBackend}
+                                        onEmit={(code) => {
+                                            // Mirror the composer's
+                                            // emitted code into
+                                            // detectedCode so the Code
+                                            // and Configure tabs (gated
+                                            // on detectedCode.componentCode)
+                                            // become active. Without
+                                            // this, the user can't see
+                                            // or edit the source the
+                                            // composer is generating.
+                                            setDetectedCode({
+                                                componentCode:
+                                                    code.componentCode,
+                                                configCode: code.configCode,
+                                                files: code.files || null,
+                                            });
+                                            compilePreview(code).catch(
+                                                () => {}
+                                            );
+                                            // Intentionally NOT yanking
+                                            // the user back to Preview
+                                            // on every composer edit —
+                                            // when they're reading the
+                                            // Code tab, the auto-switch
+                                            // is disruptive. Preview
+                                            // content updates regardless
+                                            // of which tab is active.
+                                        }}
+                                    />
+                                )}
+                                {chatMode === "build" &&
+                                    selectedProviderForBuild === null &&
+                                    !detectedCode?.componentCode && (
+                                        <ChatProviderGate
+                                            onChange={
+                                                setSelectedProviderForBuild
+                                            }
+                                            builtInCatalog={builtInCatalog}
+                                            knownExternalCatalog={
+                                                knownExternalCatalog
+                                            }
+                                        />
+                                    )}
 
-                            {/* Slice 17b.1: provider-aware status row.
+                                {/* Slice 17b.1: provider-aware status row.
                                 Shows the active provider type so users
                                 know what context the AI has — also
                                 offers a quick "Change" button to
                                 re-open the gate. */}
-                            {chatMode === "build" &&
-                                selectedProviderForBuild !== null && (
-                                    <div className="flex flex-row items-center justify-between gap-2 px-3 py-1.5 text-xs border-b border-white/10 bg-indigo-900/10">
-                                        <div className="flex flex-row items-center gap-2 text-indigo-300">
-                                            <FontAwesomeIcon
-                                                icon="bolt"
-                                                className="h-3 w-3"
-                                            />
-                                            <span>
-                                                {selectedProviderForBuild?.sentinel ===
-                                                "none"
-                                                    ? "Building without an external provider"
-                                                    : `Building with ${
-                                                          selectedProviderForBuild?.type ||
-                                                          "(unknown)"
-                                                      }${
-                                                          selectedProviderForBuild?.providerClass
-                                                              ? ` (${selectedProviderForBuild.providerClass})`
-                                                              : ""
-                                                      }`}
-                                            </span>
+                                {chatMode === "build" &&
+                                    selectedProviderForBuild !== null && (
+                                        <div className="flex flex-row items-center justify-between gap-2 px-3 py-1.5 text-xs border-b border-white/10 bg-indigo-900/10">
+                                            <div className="flex flex-row items-center gap-2 text-indigo-300">
+                                                <FontAwesomeIcon
+                                                    icon="bolt"
+                                                    className="h-3 w-3"
+                                                />
+                                                <span>
+                                                    {selectedProviderForBuild?.sentinel ===
+                                                    "none"
+                                                        ? "Building without an external provider"
+                                                        : `Building with ${
+                                                              selectedProviderForBuild?.type ||
+                                                              "(unknown)"
+                                                          }${
+                                                              selectedProviderForBuild?.providerClass
+                                                                  ? ` (${selectedProviderForBuild.providerClass})`
+                                                                  : ""
+                                                          }`}
+                                                </span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setSelectedProviderForBuild(
+                                                        null
+                                                    )
+                                                }
+                                                className="text-indigo-300 hover:text-indigo-100 underline cursor-pointer"
+                                                title="Pick a different provider"
+                                            >
+                                                Change
+                                            </button>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                setSelectedProviderForBuild(
-                                                    null
-                                                )
-                                            }
-                                            className="text-indigo-300 hover:text-indigo-100 underline cursor-pointer"
-                                            title="Pick a different provider"
-                                        >
-                                            Change
-                                        </button>
-                                    </div>
-                                )}
+                                    )}
 
-                            {/* Render ChatCore only after the provider
+                                {/* Render ChatCore only after the provider
                                 gate is resolved (or skipped via edit
                                 mode). Otherwise the AI's first response
                                 is generated against a system prompt
@@ -5770,11 +6001,10 @@ ${
                                 pick — locking in a generic "what kind
                                 of widget?" message even after the
                                 user selects. */}
-                            {chatMode !== "compose" &&
-                                (chatMode !== "build" ||
-                                    selectedProviderForBuild !== null ||
-                                    detectedCode?.componentCode) && (
-                                    <ThemeContext.Provider value={chatThemeCtx}>
+                                {chatMode !== "compose" &&
+                                    (chatMode !== "build" ||
+                                        selectedProviderForBuild !== null ||
+                                        detectedCode?.componentCode) && (
                                         <ChatCore
                                             title=""
                                             model={model}
@@ -5865,6 +6095,9 @@ ${
                                             backend={preferredBackend}
                                             persistKey="dash-widget-builder"
                                             hideToolsBanner={true}
+                                            // The code lives in the Code
+                                            // tab; the chat shows a note.
+                                            hideCodeBlocks="Code updated — see the Code tab."
                                             initialMessage={
                                                 chatMode === "discover"
                                                     ? "Tell me what kind of widget you're looking for."
@@ -5873,26 +6106,26 @@ ${
                                                     : "Hi, I'd like to build a new widget."
                                             }
                                         />
-                                    </ThemeContext.Provider>
-                                )}
+                                    )}
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-            {/* Slice 17d.2 — install-time permission gate. Renders
+                )}
+                {/* Slice 17d.2 — install-time permission gate. Renders
                 via createPortal at fixed-position overlay (same
                 pattern JitConsentModal uses) so it stacks above
                 the widget-builder Modal without HeadlessUI Dialog
                 stacking issues. Self-managing isOpen via the
                 `pendingInstallContext` state so it only mounts when
                 the install flow has actually paused for consent. */}
-            <WidgetCredentialPermissionModal
-                isOpen={!!pendingInstallContext}
-                packageName={pendingInstallContext?.packageName || ""}
-                calls={pendingInstallContext?.calls || []}
-                onConfirm={handlePermissionConfirm}
-                onCancel={handlePermissionCancel}
-            />
-        </Modal>
+                <WidgetCredentialPermissionModal
+                    isOpen={!!pendingInstallContext}
+                    packageName={pendingInstallContext?.packageName || ""}
+                    calls={pendingInstallContext?.calls || []}
+                    onConfirm={handlePermissionConfirm}
+                    onCancel={handlePermissionCancel}
+                />
+            </Modal>
+        </ThemeContext.Provider>
     );
 };
