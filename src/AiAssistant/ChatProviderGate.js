@@ -27,7 +27,8 @@
  */
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { AppContext } from "@trops/dash-core";
-import { FontAwesomeIcon, ThemeContext } from "@trops/dash-react";
+import { FontAwesomeIcon } from "@trops/dash-react";
+import { useBuilderTheme } from "./useBuilderTheme";
 
 const NONE_SENTINEL = { sentinel: "none" };
 
@@ -37,9 +38,8 @@ export const ChatProviderGate = ({
     knownExternalCatalog = [],
 }) => {
     const appContext = useContext(AppContext);
-    const { currentTheme } = useContext(ThemeContext);
-    const borderColor =
-        currentTheme?.["border-primary-dark"] || "border-gray-700/50";
+    const bt = useBuilderTheme();
+    const borderColor = bt.border;
 
     // Pull installed providers from AppContext. If empty (the AppWrapper
     // may not have populated yet), fall back to a one-shot mainApi
@@ -189,19 +189,19 @@ export const ChatProviderGate = ({
 
     return (
         <div
-            className={`absolute inset-0 z-10 overflow-y-auto bg-gray-900/95 backdrop-blur-sm flex flex-col`}
+            className={`absolute inset-0 z-10 overflow-y-auto ${bt.surface} backdrop-blur-sm flex flex-col`}
         >
             <div className="px-4 pt-4 pb-2 shrink-0">
                 <div className="flex items-center gap-2 mb-1">
                     <FontAwesomeIcon
                         icon="plug"
-                        className="h-4 w-4 text-indigo-300"
+                        className={`h-4 w-4 ${bt.accent}`}
                     />
-                    <h2 className="text-sm font-semibold text-gray-100">
+                    <h2 className={`text-sm font-semibold ${bt.text}`}>
                         Choose a provider type for this widget
                     </h2>
                 </div>
-                <p className="text-xs text-gray-400 leading-snug">
+                <p className={`text-xs ${bt.muted} leading-snug`}>
                     The AI will write code targeting the type you pick. After
                     selecting, you'll bind a specific provider instance in the
                     preview pane. Pick "No external provider" for self-contained
@@ -212,12 +212,16 @@ export const ChatProviderGate = ({
             <div className="flex-1 px-4 pb-4 space-y-3 overflow-y-auto">
                 {pendingType && (
                     <div
-                        className={`rounded-md border ${borderColor} bg-amber-950 px-3 py-3 space-y-3`}
+                        className={`rounded-md border ${borderColor} ${bt.status.warning.bg} px-3 py-3 space-y-3`}
                     >
-                        <div className="text-sm font-semibold text-amber-200">
+                        <div
+                            className={`text-sm font-semibold ${bt.status.warning.text}`}
+                        >
                             No {pendingType.type} providers configured yet
                         </div>
-                        <p className="text-xs text-amber-100 leading-snug">
+                        <p
+                            className={`text-xs ${bt.status.warning.text} leading-snug`}
+                        >
                             You haven't added any{" "}
                             <span className="font-mono">
                                 {pendingType.type}
@@ -230,7 +234,7 @@ export const ChatProviderGate = ({
                             <button
                                 type="button"
                                 onClick={handleCreateNew}
-                                className="px-3 py-2 rounded text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors text-left"
+                                className={`px-3 py-2 rounded text-xs ${bt.primaryFill} font-medium transition-colors text-left`}
                             >
                                 Create new {pendingType.type} provider
                                 <span className="ml-2 text-[10px] opacity-80">
@@ -240,7 +244,7 @@ export const ChatProviderGate = ({
                             <button
                                 type="button"
                                 onClick={handleSkipForNow}
-                                className="px-3 py-2 rounded text-xs bg-amber-700 hover:bg-amber-600 text-amber-100 transition-colors text-left"
+                                className={`px-3 py-2 rounded text-xs ${bt.status.warning.solidBg} ${bt.status.warning.text} transition-colors text-left`}
                             >
                                 Skip for now
                                 <span className="ml-2 text-[10px] opacity-80">
@@ -251,7 +255,7 @@ export const ChatProviderGate = ({
                             <button
                                 type="button"
                                 onClick={handleCancelPending}
-                                className="px-3 py-2 rounded text-xs text-gray-400 hover:text-gray-200 hover:bg-white/5 transition-colors text-left"
+                                className={`px-3 py-2 rounded text-xs ${bt.muted} hover:opacity-100 ${bt.hoverSurface} transition-colors text-left`}
                             >
                                 Cancel — pick a different type
                             </button>
@@ -261,24 +265,28 @@ export const ChatProviderGate = ({
 
                 {!pendingType && hasTypes && (
                     <div>
-                        <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">
+                        <div
+                            className={`text-[10px] uppercase tracking-wider ${bt.muted} mb-1.5`}
+                        >
                             Provider types
                         </div>
                         <div
-                            className={`rounded-md border ${borderColor} bg-gray-800/40 divide-y divide-gray-700/40`}
+                            className={`rounded-md border ${borderColor} ${bt.surface}`}
                         >
                             {typeOptions.map((opt) => (
                                 <button
                                     key={`${opt.type}|${opt.providerClass}`}
                                     type="button"
                                     onClick={() => handleTypeClick(opt)}
-                                    className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-300 hover:bg-white/5 transition-colors"
+                                    className={`w-full flex items-center justify-between px-3 py-2 text-xs ${bt.text} ${bt.hoverSurface} transition-colors`}
                                 >
                                     <span className="truncate text-left">
                                         {opt.type}
                                     </span>
                                     <span className="ml-2 flex items-center gap-1 shrink-0">
-                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-200">
+                                        <span
+                                            className={`text-[10px] px-1.5 py-0.5 rounded ${bt.raised} ${bt.text}`}
+                                        >
                                             {opt.providerClass}
                                         </span>
                                     </span>
@@ -290,13 +298,15 @@ export const ChatProviderGate = ({
 
                 {!pendingType && (
                     <div>
-                        <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">
+                        <div
+                            className={`text-[10px] uppercase tracking-wider ${bt.muted} mb-1.5`}
+                        >
                             Or skip the provider
                         </div>
                         <button
                             type="button"
                             onClick={() => onChange(NONE_SENTINEL)}
-                            className={`w-full flex items-center justify-between px-3 py-2 text-xs text-gray-300 rounded-md border ${borderColor} bg-gray-800/40 hover:bg-white/5 transition-colors`}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-xs ${bt.text} rounded-md border ${borderColor} ${bt.surface} ${bt.hoverSurface} transition-colors`}
                         >
                             <span className="flex items-center">
                                 <FontAwesomeIcon
@@ -314,7 +324,7 @@ export const ChatProviderGate = ({
 
                 {!pendingType && !hasTypes && (
                     <div
-                        className={`rounded-md border ${borderColor} bg-amber-900/15 px-3 py-2 text-[11px] text-amber-200 leading-snug`}
+                        className={`rounded-md border ${borderColor} ${bt.status.warning.bg} px-3 py-2 text-[11px] ${bt.status.warning.text} leading-snug`}
                     >
                         No provider types available. The MCP catalog may not
                         have loaded yet, or you may be running in an offline
