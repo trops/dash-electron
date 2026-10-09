@@ -4906,10 +4906,12 @@ ${
                                                         </button>
                                                     </div>
                                                 )}
-                                            {/* Widget preview — fills available space */}
+                                            {/* Widget preview — fills available space.
+                                                The inner padding keeps the widget off
+                                                the frame's edges, like a dashboard cell. */}
                                             <div className="flex-1 p-4 overflow-auto">
                                                 <div
-                                                    className={`h-full rounded-lg border overflow-hidden shadow-lg ${
+                                                    className={`h-full rounded-lg border overflow-hidden shadow-lg p-3 ${
                                                         previewThemeCtx
                                                             ?.currentTheme?.[
                                                             "border-primary-dark"
