@@ -61,6 +61,20 @@ describe("dash-widget-builder skill — cross-widget events", () => {
     test("tells the AI to report published events to the user", () => {
         expect(events).toMatch(/### Tell the user/);
     });
+
+    test("teaches reacting to bots: completed/failed payloads, unwrapped", () => {
+        expect(events).toMatch(/### Listening to bots/);
+        // Bots publish bot:<ref>[<botId>].<event> on the same bus.
+        expect(events).toMatch(/bot:<ref>\[<botId>\]/);
+        expect(events).toMatch(/completed/);
+        expect(events).toMatch(/failed/);
+        // The fields a widget reads off the unwrapped payload.
+        expect(events).toMatch(/payload\.output/);
+        expect(events).toMatch(/payload\.error/);
+        expect(events).toMatch(/botName/);
+        // Wired by the user in Listeners — not hardcoded in the widget.
+        expect(events).toMatch(/Listeners/);
+    });
 });
 
 describe("dash-widget-builder skill — scheduled tasks", () => {

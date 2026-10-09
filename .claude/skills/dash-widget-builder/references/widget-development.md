@@ -422,6 +422,12 @@ automatically — you only supply the action suffix.
 > path still works for existing widgets and accepts arbitrary string event
 > names; consistent camelCase scoping applies either way.
 
+**Bots publish too.** A dashboard's bots send `completed` (with the bot's
+answer in `output`), `failed` (with `error`) and per-tool events on the same
+bus, as `bot:<ref>[<botId>].<event>`. A widget reacts to them with an
+ordinary handler the user wires in Configure › Listeners — see the SKILL.md
+"Listening to bots" section for the payload fields and an example.
+
 ---
 
 ## 7. Provider Integration
