@@ -29,6 +29,7 @@ import {
     cellFillsRow,
     rowHasFillingCell,
 } from "./gridLayout";
+import { useBuilderTheme } from "../useBuilderTheme";
 
 /**
  * Per-category color tokens. Renders containers + leaves with a
@@ -41,43 +42,45 @@ import {
  * container header. The cell body stays neutral so component
  * labels and controls remain readable.
  */
-const CATEGORY_COLOR = {
+// Left-border hues are fixed (they read on light and dark); the header
+// tint and label colour come from the builder theme.
+const categoryColors = (bt) => ({
     layout: {
         border: "border-l-purple-500",
-        headerBg: "bg-purple-900/30",
-        labelText: "text-purple-200",
+        headerBg: `${bt.tint}`,
+        labelText: `${bt.accent}`,
     },
     display: {
         border: "border-l-sky-500",
-        headerBg: "bg-sky-900/30",
-        labelText: "text-sky-200",
+        headerBg: `${bt.status.info.bg}`,
+        labelText: `${bt.status.info.text}`,
     },
     input: {
         border: "border-l-emerald-500",
-        headerBg: "bg-emerald-900/30",
-        labelText: "text-emerald-200",
+        headerBg: `${bt.status.success.bg}`,
+        labelText: `${bt.status.success.text}`,
     },
     action: {
         border: "border-l-amber-500",
-        headerBg: "bg-amber-900/30",
-        labelText: "text-amber-200",
+        headerBg: `${bt.status.warning.bg}`,
+        labelText: `${bt.status.warning.text}`,
     },
     feedback: {
         border: "border-l-pink-500",
-        headerBg: "bg-pink-900/30",
-        labelText: "text-pink-200",
+        headerBg: `${bt.status.error.bg}`,
+        labelText: `${bt.status.error.text}`,
     },
-};
-const FALLBACK_COLOR = {
+});
+const fallbackColor = (bt) => ({
     border: "border-l-gray-600",
-    headerBg: "bg-gray-800",
-    labelText: "text-gray-200",
-};
+    headerBg: `${bt.surface}`,
+    labelText: `${bt.text}`,
+});
 
-function getCategoryColor(componentType) {
+function getCategoryColor(componentType, bt) {
     const schema = getComponentSchema(componentType);
-    if (!schema) return FALLBACK_COLOR;
-    return CATEGORY_COLOR[schema.category] || FALLBACK_COLOR;
+    if (!schema) return fallbackColor(bt);
+    return categoryColors(bt)[schema.category] || fallbackColor(bt);
 }
 
 /**
@@ -185,11 +188,12 @@ function GridNode({
     onDragLeaveCell,
     onDropCell,
 }) {
+    const bt = useBuilderTheme();
     const targetGrid = grid.grids[gridId];
     if (!targetGrid) return null;
     return (
         <div
-            className="border border-gray-700 rounded p-2 flex flex-col gap-2 h-full w-full min-h-0 min-w-0"
+            className={`border ${bt.border} rounded p-2 flex flex-col gap-2 h-full w-full min-h-0 min-w-0`}
             data-testid={`composer-grid-${gridId}`}
         >
             {targetGrid.rows.map((row, rowIdx) => {
@@ -240,7 +244,7 @@ function GridNode({
                             type="button"
                             onClick={() => onRemoveRow(gridId, rowIdx)}
                             disabled={targetGrid.rows.length <= 1}
-                            className="text-xs text-gray-500 hover:text-red-300 disabled:opacity-30 px-1"
+                            className={`text-xs ${bt.muted} disabled:opacity-30 px-1`}
                             title="Remove row"
                             data-testid={`composer-grid-${gridId}-remove-row-${rowIdx}`}
                         >
@@ -252,7 +256,7 @@ function GridNode({
             <button
                 type="button"
                 onClick={() => onAddRow(gridId)}
-                className="shrink-0 w-full text-sm text-indigo-400 hover:text-indigo-200 border border-dashed border-gray-700 rounded py-2"
+                className={`shrink-0 w-full text-sm ${bt.accent} hover:opacity-80 border border-dashed ${bt.border} rounded py-2`}
                 data-testid={`composer-grid-${gridId}-add-row`}
             >
                 + Row
@@ -304,6 +308,7 @@ function CellNode({
     onDragLeaveCell,
     onDropCell,
 }) {
+    const bt = useBuilderTheme();
     if (!cell) return null;
     // Drag handlers — shared across leaf/container/empty render
     // branches so the user can drag any cell (and drop onto any
@@ -424,7 +429,9 @@ function CellNode({
     const dropIndicator = activeEdge ? (
         <div
             data-testid={`composer-cell-${cell.id}-drop-${activeEdge}`}
-            className={`absolute pointer-events-none bg-indigo-500 left-0 right-0 h-1 ${
+            className={`absolute pointer-events-none ${
+                bt.primaryFill
+            } left-0 right-0 h-1 ${
                 activeEdge === "top" ? "top-0" : "bottom-0"
             }`}
         />
@@ -441,7 +448,7 @@ function CellNode({
         cell.kind === "container" && cell.type && !isContainer(cell.type)
             ? "leaf"
             : cell.kind;
-    const selectionClass = isSelected ? "border-indigo-500" : "border-gray-700";
+    const selectionClass = isSelected ? `${bt.accentBorder}` : `${bt.border}`;
     if (effectiveKind === "empty") {
         return (
             <div
@@ -453,7 +460,7 @@ function CellNode({
                 <button
                     type="button"
                     onClick={() => onRequestPalette(cell.id)}
-                    className="flex-1 py-4 text-sm text-gray-500 hover:text-indigo-300"
+                    className={`flex-1 py-4 text-sm ${bt.muted} hover:opacity-80`}
                     data-testid={`composer-cell-${cell.id}-add`}
                 >
                     + Add component
@@ -461,7 +468,7 @@ function CellNode({
                 <button
                     type="button"
                     onClick={() => onSplitCell(cell.id)}
-                    className="px-2 text-xs text-gray-500 hover:text-indigo-300 border-l border-gray-700"
+                    className={`px-2 text-xs ${bt.muted} hover:opacity-80 border-l ${bt.border}`}
                     title="Add column to the right"
                     data-testid={`composer-cell-${cell.id}-split`}
                 >
@@ -470,7 +477,7 @@ function CellNode({
                 <button
                     type="button"
                     onClick={() => onRemoveCell(cell.id)}
-                    className="px-2 text-xs text-gray-500 hover:text-red-300 border-l border-gray-700"
+                    className={`px-2 text-xs ${bt.muted} border-l ${bt.border}`}
                     title="Remove cell"
                     data-testid={`composer-cell-${cell.id}-remove`}
                 >
@@ -480,7 +487,7 @@ function CellNode({
         );
     }
     if (effectiveKind === "leaf") {
-        const color = getCategoryColor(cell.type);
+        const color = getCategoryColor(cell.type, bt);
         // Fill cells (Table, DataList, …) take the row's full height
         // so the editor mirrors what the runtime widget does. Natural
         // leaves (Heading, Button, …) sit at content height.
@@ -489,7 +496,7 @@ function CellNode({
         return (
             <div
                 {...dragProps}
-                className={`relative border border-l-4 ${color.border} ${selectionClass} rounded p-3 bg-gray-900 hover:bg-gray-800 ${draggingOpacity}${fillClass}`}
+                className={`relative border border-l-4 ${color.border} ${selectionClass} rounded p-3 ${bt.surface} ${bt.hoverSurface} ${draggingOpacity}${fillClass}`}
                 data-testid={`composer-cell-${cell.id}`}
             >
                 {dropIndicator}
@@ -497,7 +504,7 @@ function CellNode({
                     <button
                         type="button"
                         onClick={() => onSelectCell(cell.id)}
-                        className={`text-sm ${color.labelText} font-mono truncate hover:text-white text-left flex-1`}
+                        className={`text-sm ${color.labelText} font-mono truncate hover:opacity-100 text-left flex-1`}
                         data-testid={`composer-cell-${cell.id}-select`}
                     >
                         {cell.type}
@@ -505,7 +512,7 @@ function CellNode({
                     <button
                         type="button"
                         onClick={() => onSplitCell(cell.id)}
-                        className="text-xs text-gray-500 hover:text-indigo-300 px-1"
+                        className={`text-xs ${bt.muted} hover:opacity-80 px-1`}
                         title="Add column to the right"
                         data-testid={`composer-cell-${cell.id}-split`}
                     >
@@ -514,7 +521,7 @@ function CellNode({
                     <button
                         type="button"
                         onClick={() => onRemoveCell(cell.id)}
-                        className="text-xs text-gray-500 hover:text-red-300 px-1"
+                        className={`text-xs ${bt.muted} px-1`}
                         title="Remove cell"
                         data-testid={`composer-cell-${cell.id}-remove`}
                     >
@@ -525,24 +532,24 @@ function CellNode({
         );
     }
     if (effectiveKind === "container" && cell.gridId) {
-        const color = getCategoryColor(cell.type);
+        const color = getCategoryColor(cell.type, bt);
         // Containers always fill — the editor shows the inner grid
         // expanding to the parent's height so the user sees the same
         // proportions the runtime will render.
         return (
             <div
                 {...dragProps}
-                className={`relative border border-l-4 ${color.border} ${selectionClass} rounded bg-gray-900 ${draggingOpacity} h-full min-h-0 flex flex-col`}
+                className={`relative border border-l-4 ${color.border} ${selectionClass} rounded ${bt.surface} ${draggingOpacity} h-full min-h-0 flex flex-col`}
                 data-testid={`composer-cell-${cell.id}`}
             >
                 {dropIndicator}
                 <div
-                    className={`shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-700 ${color.headerBg}`}
+                    className={`shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-b ${bt.border} ${color.headerBg}`}
                 >
                     <button
                         type="button"
                         onClick={() => onSelectCell(cell.id)}
-                        className={`text-sm ${color.labelText} font-mono truncate hover:text-white text-left flex-1`}
+                        className={`text-sm ${color.labelText} font-mono truncate hover:opacity-100 text-left flex-1`}
                         data-testid={`composer-cell-${cell.id}-select`}
                     >
                         {cell.type}
@@ -550,7 +557,7 @@ function CellNode({
                     <button
                         type="button"
                         onClick={() => onSplitCell(cell.id)}
-                        className="text-xs text-gray-500 hover:text-indigo-300 px-1"
+                        className={`text-xs ${bt.muted} hover:opacity-80 px-1`}
                         title="Add column to the right"
                         data-testid={`composer-cell-${cell.id}-split`}
                     >
@@ -559,7 +566,7 @@ function CellNode({
                     <button
                         type="button"
                         onClick={() => onRemoveCell(cell.id)}
-                        className="text-xs text-gray-500 hover:text-red-300 px-1"
+                        className={`text-xs ${bt.muted} px-1`}
                         title="Remove container (and everything inside)"
                         data-testid={`composer-cell-${cell.id}-remove`}
                     >

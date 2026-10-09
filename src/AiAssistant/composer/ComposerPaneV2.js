@@ -52,6 +52,7 @@ import { PaletteView } from "./PaletteView";
 import { PropertyInspector } from "./PropertyInspector";
 import { getComponentSchema } from "../dashReactComponentSchemas";
 import { ComposerProviderChoiceContext } from "./ComposerProviderChoiceContext";
+import { useBuilderTheme } from "../useBuilderTheme";
 
 /**
  * True when the component's schema exposes nothing the inspector
@@ -95,6 +96,7 @@ export function ComposerPaneV2({
     // The draft this session belongs to — its own name isn't a collision.
     currentDraftId = null,
 }) {
+    const bt = useBuilderTheme();
     const [grid, setGridRaw] = useState(() => {
         if (initialGrid) return initialGrid;
         // In edit mode, seed the grid's name from the existing widget so an
@@ -546,15 +548,15 @@ export function ComposerPaneV2({
         // ComposerProviderChoiceContext.
         <ComposerProviderChoiceContext.Provider value={lastProviderChoice}>
             <div
-                className="flex flex-col h-full min-h-0 text-gray-200"
+                className={`flex flex-col h-full min-h-0 ${bt.text}`}
                 data-testid="composer-pane-v2"
                 data-last-provider-choice={
                     lastProviderChoice ? lastProviderChoice.id : ""
                 }
             >
-                <div className="px-3 py-2 border-b border-white/10 shrink-0">
+                <div className={`px-3 py-2 border-b ${bt.border} shrink-0`}>
                     <label
-                        className="block text-xs text-gray-400 mb-1"
+                        className={`block text-xs ${bt.muted} mb-1`}
                         htmlFor="composer-widget-name-v2"
                     >
                         Widget name
@@ -569,7 +571,7 @@ export function ComposerPaneV2({
                             readOnly
                             disabled
                             title="The name can't be changed while editing an existing widget."
-                            className="w-full px-2 py-1 text-sm bg-gray-800/60 border border-gray-700 rounded text-gray-400 cursor-not-allowed"
+                            className={`w-full px-2 py-1 text-sm ${bt.surface} border ${bt.border} rounded ${bt.muted} cursor-not-allowed`}
                             data-testid="composer-widget-name"
                         />
                     ) : (
@@ -600,7 +602,7 @@ export function ComposerPaneV2({
                                         }
                                     }}
                                     placeholder="MyWidget"
-                                    className="flex-1 px-2 py-1 text-sm bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                                    className={`flex-1 px-2 py-1 text-sm ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
                                     data-testid="composer-widget-name"
                                 />
                                 <button
@@ -612,7 +614,7 @@ export function ComposerPaneV2({
                                     }
                                     title="Save name"
                                     aria-label="Save name"
-                                    className="shrink-0 px-2.5 py-1 text-sm rounded bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 text-white"
+                                    className={`shrink-0 px-2.5 py-1 text-sm rounded ${bt.primaryFill}`}
                                     data-testid="composer-widget-name-save"
                                 >
                                     <span aria-hidden="true">✓</span>
@@ -620,7 +622,7 @@ export function ComposerPaneV2({
                             </div>
                             {nameError && (
                                 <p
-                                    className="text-xs text-red-400 mt-1"
+                                    className={`text-xs ${bt.status.error.icon} mt-1`}
                                     data-testid="composer-widget-name-error"
                                 >
                                     {nameError}
@@ -629,7 +631,9 @@ export function ComposerPaneV2({
                             {nameSaved &&
                                 !nameError &&
                                 pendingName.trim() === grid.widgetName && (
-                                    <p className="text-xs text-emerald-400 mt-1">
+                                    <p
+                                        className={`text-xs ${bt.status.success.icon} mt-1`}
+                                    >
                                         Saved
                                     </p>
                                 )}
@@ -669,11 +673,13 @@ export function ComposerPaneV2({
                                 onClose={() => setSelectedCellId(null)}
                             />
                         </div>
-                        <div className="shrink-0 border-t border-white/10 px-3 py-3 bg-gray-900">
+                        <div
+                            className={`shrink-0 border-t ${bt.border} px-3 py-3 ${bt.surface}`}
+                        >
                             <button
                                 type="button"
                                 onClick={() => setSelectedCellId(null)}
-                                className="w-full px-3 py-3 text-sm font-medium rounded bg-indigo-600 hover:bg-indigo-500 text-white"
+                                className={`w-full px-3 py-3 text-sm font-medium rounded ${bt.primaryFill}`}
                                 data-testid="composer-inspector-done"
                             >
                                 Done editing
@@ -708,7 +714,9 @@ export function ComposerPaneV2({
                     />
                 ) : (
                     <div className="flex-1 min-h-0 flex flex-col px-3 py-2 gap-1">
-                        <div className="text-xs uppercase tracking-wide text-gray-500 shrink-0">
+                        <div
+                            className={`text-xs uppercase tracking-wide ${bt.muted} shrink-0`}
+                        >
                             Composition
                         </div>
                         {/* Editor flexes to fill the remaining height so

@@ -11,6 +11,7 @@
  * - surfaces an error when the model returns no parseable JSON
  */
 
+jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
 import "@testing-library/jest-dom";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
