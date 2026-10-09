@@ -20,6 +20,7 @@ import {
     Tabs,
     ThemeContext,
     useStatusTokens,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -111,7 +112,7 @@ function AlgoliaAnalyticsContent({ id, title, defaultIndex, defaultDays = 7 }) {
             })
             .catch((err) => {
                 if (!cancelled) {
-                    setErrorMsg(err?.message || "Failed to load indices");
+                    setErrorMsg(readableError(err, "Failed to load indices"));
                     setIndicesLoading(false);
                 }
             });
@@ -170,15 +171,13 @@ function AlgoliaAnalyticsContent({ id, title, defaultIndex, defaultDays = 7 }) {
                 const errors = [];
                 const parse = (r, label) => {
                     if (r.status !== "fulfilled") {
-                        errors.push(`${label}: ${r.reason}`);
+                        errors.push(`${label}: ${readableError(r.reason)}`);
                         return null;
                     }
                     const val = r.value;
                     if (val?.error) {
                         errors.push(
-                            `${label}: ${
-                                val.message || val.status || "Unknown error"
-                            }`
+                            `${label}: ${readableError(val, "Unknown error")}`
                         );
                         return null;
                     }
@@ -236,7 +235,7 @@ function AlgoliaAnalyticsContent({ id, title, defaultIndex, defaultDays = 7 }) {
                     setErrorMsg(errors[0]);
                 }
             } catch (err) {
-                setErrorMsg(err.message);
+                setErrorMsg(readableError(err));
             } finally {
                 setLoading(false);
             }

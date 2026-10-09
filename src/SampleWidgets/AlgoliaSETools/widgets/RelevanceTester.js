@@ -21,6 +21,7 @@ import {
     StatusBadge,
     ThemeContext,
     useStatusTokens,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -77,7 +78,7 @@ function RelevanceTesterContent({ title }) {
             })
             .catch((err) => {
                 if (!cancelled) {
-                    setError(err?.message || "Failed to load indices");
+                    setError(readableError(err, "Failed to load indices"));
                     setLoadingIndices(false);
                 }
             });
@@ -119,7 +120,7 @@ function RelevanceTesterContent({ title }) {
                 hitsPerPage: 20,
             });
             if (result?.error) {
-                setError(result.message || "Search failed");
+                setError(readableError(result, "Search failed"));
                 return;
             }
             setHits(result?.hits || []);
@@ -130,7 +131,7 @@ function RelevanceTesterContent({ title }) {
                 );
             }
         } catch (err) {
-            setError(err.message || "Search failed");
+            setError(readableError(err, "Search failed"));
         } finally {
             setSearching(false);
         }

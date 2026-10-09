@@ -24,6 +24,7 @@ import {
     ProgressBar2,
     ThemeContext,
     useStatusTokens,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -87,7 +88,7 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
             })
             .catch((err) => {
                 if (!cancelled) {
-                    setError(err?.message || "Failed to load indices");
+                    setError(readableError(err, "Failed to load indices"));
                     setLoadingIndices(false);
                 }
             });
@@ -115,7 +116,7 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
                 setSourceFile(result.filePaths[0]);
             }
         } catch (err) {
-            setError(err.message || "Failed to choose file");
+            setError(readableError(err, "Failed to choose file"));
         }
     };
 
@@ -153,7 +154,7 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
             };
             const handleUploadError = (_event, err) => {
                 setStage("idle");
-                setError(err?.message || err?.error || "Upload failed");
+                setError(readableError(err, "Upload failed"));
             };
 
             window.mainApi.on(
@@ -193,7 +194,7 @@ function AlgoliaBatchManagerContent({ title, defaultBatchSize = 500 }) {
         };
         const handleBatchError = (_event, err) => {
             setStage("idle");
-            setError(err?.message || err?.error || "Batch creation failed");
+            setError(readableError(err, "Batch creation failed"));
         };
 
         window.mainApi.on("algolia-create-batch-update", handleBatchUpdate);

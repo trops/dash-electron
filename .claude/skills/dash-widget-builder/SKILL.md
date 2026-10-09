@@ -928,9 +928,15 @@ Widget code runs in the browser (renderer process). Rules:
     `Array.isArray(y)`, optional chaining). Errors like "Cannot read properties
     of undefined" on first render are NOT acceptable.
 -   **Never silently swallow errors.** A `catch` block MUST render the error
-    to the user via `<Alert2 title="..." message={err.message} />` — NOT just
-    `setData([])` followed by a blank state. An empty array as the _result of
-    a caught exception_ is a silent failure.
+    to the user via `<AlertBanner variant="error" size="compact" message={readableError(err, "Search failed")} />`
+    — NOT just `setData([])` followed by a blank state. An empty array as the
+    _result of a caught exception_ is a silent failure.
+-   **Readable error text.** Pass every failure — a thrown `err`, an
+    `{ error: true, status, message }` result, an MCP tool error — through
+    `readableError(value, "fallback")` from `@trops/dash-react`. APIs often put
+    a raw JSON body in `message`; `readableError` pulls out the sentence and
+    explains the status ("… — this key doesn't have permission (403)"). Never
+    render `err.message` or `JSON.stringify(err)` directly.
 -   **Hooks first, conditional render after.** Call all hooks at the top of
     the component, then any early-return for "not configured" / "loading"
     states. Putting an early-return ABOVE a hook crashes the app the moment

@@ -25,6 +25,7 @@ import {
     EmptyState,
     Alert2,
     Skeleton,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -114,7 +115,7 @@ function AlgoliaRulesListContent({ title, indexName, hitsPerPage }) {
                     setLoading(false);
                 })
                 .catch((err) => {
-                    setError(err?.message || "Failed to load rules");
+                    setError(readableError(err, "Failed to load rules"));
                     setLoading(false);
                 });
         },

@@ -19,6 +19,7 @@ import {
     SelectInput,
     ThemeContext,
     useStatusTokens,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -77,7 +78,7 @@ function IndexSelectorContent({ title }) {
             })
             .catch((err) => {
                 if (!cancelled) {
-                    setError(err?.message || "Failed to load indices");
+                    setError(readableError(err, "Failed to load indices"));
                     setLoading(false);
                 }
             });

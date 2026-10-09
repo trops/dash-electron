@@ -17,6 +17,7 @@ import {
     SelectInput,
     ThemeContext,
     useStatusTokens,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -73,7 +74,7 @@ function AttributeExplorerContent({ title, sampleSize = "100" }) {
             })
             .catch((err) => {
                 if (!cancelled) {
-                    setError(err?.message || "Failed to load indices");
+                    setError(readableError(err, "Failed to load indices"));
                     setLoadingIndices(false);
                 }
             });
@@ -123,7 +124,7 @@ function AttributeExplorerContent({ title, sampleSize = "100" }) {
                     hitsPerPage,
                 });
                 if (result?.error) {
-                    setError(result.message || "Search failed");
+                    setError(readableError(result, "Search failed"));
                     return;
                 }
                 if (result?.hits) {
@@ -135,7 +136,7 @@ function AttributeExplorerContent({ title, sampleSize = "100" }) {
             const result = analyzeRecords(allHits);
             setAnalysis(result);
         } catch (err) {
-            setError(err.message || "Scan failed");
+            setError(readableError(err, "Scan failed"));
         } finally {
             setScanning(false);
         }

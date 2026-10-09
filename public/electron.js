@@ -1227,10 +1227,21 @@ function createWindow() {
                                 console.error(
                                     `[Algolia Analytics] ${resp.status}: ${text}`
                                 );
+                                // Algolia answers with a JSON body
+                                // ({"message": "...", "status": 403});
+                                // hand back its message, not the raw body.
+                                let message = text;
+                                try {
+                                    const body = JSON.parse(text);
+                                    message =
+                                        body?.message || body?.error || text;
+                                } catch {
+                                    /* plain-text body */
+                                }
                                 return {
                                     error: true,
                                     status: resp.status,
-                                    message: text,
+                                    message,
                                 };
                             }
                             return await resp.json();

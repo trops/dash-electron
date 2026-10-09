@@ -18,6 +18,7 @@ import {
     InputText,
     SelectInput,
     ThemeContext,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -68,7 +69,7 @@ function SearchPlaygroundContent({ title }) {
             })
             .catch((err) => {
                 if (!cancelled) {
-                    setError(err?.message || "Failed to load indices");
+                    setError(readableError(err, "Failed to load indices"));
                     setLoadingIndices(false);
                 }
             });
@@ -119,14 +120,14 @@ function SearchPlaygroundContent({ title }) {
 
             const result = await window.mainApi.algolia.search(searchParams);
             if (result?.error) {
-                setError(result.message || "Search failed");
+                setError(readableError(result, "Search failed"));
                 return;
             }
             setHits(result?.hits || []);
             setNbHits(result?.nbHits || 0);
             setQueryTime(result?.processingTimeMS ?? null);
         } catch (err) {
-            setError(err.message || "Search failed");
+            setError(readableError(err, "Search failed"));
         } finally {
             setSearching(false);
         }
