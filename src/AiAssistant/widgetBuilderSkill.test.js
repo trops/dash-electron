@@ -188,3 +188,12 @@ describe("dash-widget-builder skill — color comes from the theme", () => {
         expect(color).toMatch(/ThemeContext/);
     });
 });
+
+describe("dash-widget-builder skill — readable error text", () => {
+    test("errors go through dash-react readableError, never raw err.message", () => {
+        expect(skill).toMatch(/readableError\(value, "fallback"\)/);
+        expect(skill).toMatch(
+            /Never\s+render `err\.message` or `JSON\.stringify\(err\)` directly/
+        );
+    });
+});

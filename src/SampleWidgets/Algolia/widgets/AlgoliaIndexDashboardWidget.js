@@ -16,6 +16,7 @@ import {
     Caption2,
     EmptyState,
     ThemeContext,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -54,7 +55,7 @@ function AlgoliaIndexDashboardContent({ title }) {
                     setLoading(false);
                 })
                 .catch((err) => {
-                    setError(err?.message || "Failed to load indices");
+                    setError(readableError(err, "Failed to load indices"));
                     setLoading(false);
                 });
         },

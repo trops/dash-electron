@@ -17,6 +17,7 @@ import {
     SelectInput,
     ThemeContext,
     useStatusTokens,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -67,7 +68,7 @@ function ConfigRecommenderContent({ title, sampleSize = "100" }) {
             })
             .catch((err) => {
                 if (!cancelled) {
-                    setError(err?.message || "Failed to load indices");
+                    setError(readableError(err, "Failed to load indices"));
                     setLoadingIndices(false);
                 }
             });
@@ -108,7 +109,7 @@ function ConfigRecommenderContent({ title, sampleSize = "100" }) {
                 indexName: selectedIndex,
             });
             if (settings?.error) {
-                setError(settings.message || "Failed to load settings");
+                setError(readableError(settings, "Failed to load settings"));
                 return;
             }
 
@@ -126,7 +127,7 @@ function ConfigRecommenderContent({ title, sampleSize = "100" }) {
             const recs = generateRecommendations(settings, attributes);
             setRecommendations(recs);
         } catch (err) {
-            setError(err.message || "Analysis failed");
+            setError(readableError(err, "Analysis failed"));
         } finally {
             setAnalyzing(false);
         }

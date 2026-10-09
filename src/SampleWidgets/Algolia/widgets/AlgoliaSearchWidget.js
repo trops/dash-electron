@@ -21,6 +21,7 @@ import {
     StatusBadge,
     ThemeContext,
     useStatusTokens,
+    readableError,
 } from "@trops/dash-react";
 import { Widget, useMcpProvider, DashboardContext } from "@trops/dash-core";
 
@@ -119,7 +120,7 @@ function AlgoliaSearchContent({
                 });
                 setResults(parsed);
             } catch (err) {
-                setErrorMsg(err.message);
+                setErrorMsg(readableError(err));
             } finally {
                 setLoading(false);
             }

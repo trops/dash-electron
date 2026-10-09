@@ -16,6 +16,7 @@ import {
     SelectInput,
     ThemeContext,
     useStatusTokens,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -59,7 +60,7 @@ function IndexComparatorContent({ title }) {
             })
             .catch((err) => {
                 if (!cancelled) {
-                    setError(err?.message || "Failed to load indices");
+                    setError(readableError(err, "Failed to load indices"));
                     setLoadingIndices(false);
                 }
             });
@@ -101,16 +102,16 @@ function IndexComparatorContent({ title }) {
                 }),
             ]);
             if (settingsA?.error) {
-                setError(`${indexA}: ${settingsA.message || "Failed"}`);
+                setError(`${indexA}: ${readableError(settingsA, "Failed")}`);
                 return;
             }
             if (settingsB?.error) {
-                setError(`${indexB}: ${settingsB.message || "Failed"}`);
+                setError(`${indexB}: ${readableError(settingsB, "Failed")}`);
                 return;
             }
             setDiffResult(diffSettings(settingsA, settingsB));
         } catch (err) {
-            setError(err.message || "Comparison failed");
+            setError(readableError(err, "Comparison failed"));
         } finally {
             setComparing(false);
         }

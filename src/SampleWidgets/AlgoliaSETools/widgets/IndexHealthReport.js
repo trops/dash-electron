@@ -16,6 +16,7 @@ import {
     AlertBanner,
     Caption2,
     SelectInput,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -58,7 +59,7 @@ function IndexHealthReportContent({ title }) {
             })
             .catch((err) => {
                 if (!cancelled) {
-                    setError(err?.message || "Failed to load indices");
+                    setError(readableError(err, "Failed to load indices"));
                     setLoadingIndices(false);
                 }
             });
@@ -97,14 +98,14 @@ function IndexHealthReportContent({ title }) {
                 indexName: selectedIndex,
             });
             if (result?.error) {
-                setError(result.message || "Failed to load settings");
+                setError(readableError(result, "Failed to load settings"));
                 return;
             }
             setSettings(result);
             const scored = scoreIndex(result);
             setReport(scored);
         } catch (err) {
-            setError(err.message || "Failed to analyze index");
+            setError(readableError(err, "Failed to analyze index"));
         } finally {
             setLoadingSettings(false);
         }

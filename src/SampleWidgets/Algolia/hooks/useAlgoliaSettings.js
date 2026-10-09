@@ -6,6 +6,7 @@
  * raw credentials — credentials are resolved on the main process side.
  */
 import { useState, useEffect, useCallback } from "react";
+import { readableError } from "@trops/dash-react";
 
 export function useAlgoliaSettings(pc, indexName) {
     const [settings, setSettings] = useState(null);
@@ -24,12 +25,12 @@ export function useAlgoliaSettings(pc, indexName) {
                 cache: true,
             });
             if (result?.error) {
-                setError(result.message || "Failed to load settings");
+                setError(readableError(result, "Failed to load settings"));
             } else {
                 setSettings(result);
             }
         } catch (err) {
-            setError(err.message || "Failed to load settings");
+            setError(readableError(err, "Failed to load settings"));
         } finally {
             setLoading(false);
         }
@@ -47,13 +48,13 @@ export function useAlgoliaSettings(pc, indexName) {
                     settings: partialSettings,
                 });
                 if (result?.error) {
-                    setError(result.message || "Failed to save settings");
+                    setError(readableError(result, "Failed to save settings"));
                     return false;
                 }
                 await refresh();
                 return true;
             } catch (err) {
-                setError(err.message || "Failed to save settings");
+                setError(readableError(err, "Failed to save settings"));
                 return false;
             } finally {
                 setSaving(false);

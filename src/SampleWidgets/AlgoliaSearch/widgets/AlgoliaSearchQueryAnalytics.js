@@ -18,6 +18,7 @@ import {
     Caption2,
     ThemeContext,
     useStatusTokens,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -96,7 +97,7 @@ function AnalyticsContent({ title, days = 7 }) {
                     });
 
                 if (result?.error) {
-                    setErrorMsg(result.message || `Error ${result.status}`);
+                    setErrorMsg(readableError(result));
                     setAllSearches([]);
                 } else {
                     const searches = Array.isArray(result)
@@ -105,7 +106,7 @@ function AnalyticsContent({ title, days = 7 }) {
                     setAllSearches(searches);
                 }
             } catch (err) {
-                setErrorMsg(err.message);
+                setErrorMsg(readableError(err));
                 setAllSearches([]);
             } finally {
                 setLoading(false);

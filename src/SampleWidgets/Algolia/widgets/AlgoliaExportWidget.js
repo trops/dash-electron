@@ -21,6 +21,7 @@ import {
     StatusBadge,
     ProgressBar2,
     ThemeContext,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -79,7 +80,7 @@ function AlgoliaExportContent({ title }) {
             })
             .catch((err) => {
                 if (!cancelled) {
-                    setError(err?.message || "Failed to load indices");
+                    setError(readableError(err, "Failed to load indices"));
                     setLoadingIndices(false);
                 }
             });
@@ -126,7 +127,7 @@ function AlgoliaExportContent({ title }) {
             };
             const handleError = (_event, err) => {
                 setExporting(false);
-                setError(err?.message || err?.error || "Export failed");
+                setError(readableError(err, "Export failed"));
             };
 
             window.mainApi.on("algolia-browse-objects-update", handleUpdate);
@@ -159,7 +160,7 @@ function AlgoliaExportContent({ title }) {
             });
         } catch (err) {
             setExporting(false);
-            setError(err.message || "Failed to start export");
+            setError(readableError(err, "Failed to start export"));
         }
     }, [selectedIndex, pc?.providerHash, filterQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 

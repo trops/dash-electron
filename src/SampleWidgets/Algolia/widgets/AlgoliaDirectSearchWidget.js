@@ -18,6 +18,7 @@ import {
     InputText,
     SelectInput,
     ThemeContext,
+    readableError,
 } from "@trops/dash-react";
 import {
     Widget,
@@ -87,7 +88,7 @@ function AlgoliaDirectSearchContent({ title, defaultIndex, hitsPerPage = 10 }) {
             })
             .catch((err) => {
                 if (!cancelled) {
-                    setError(err?.message || "Failed to load indices");
+                    setError(readableError(err, "Failed to load indices"));
                     setLoadingIndices(false);
                 }
             });
@@ -111,12 +112,12 @@ function AlgoliaDirectSearchContent({ title, defaultIndex, hitsPerPage = 10 }) {
                     options: { page, hitsPerPage },
                 });
                 if (result?.error) {
-                    setError(result.message || "Search failed");
+                    setError(readableError(result, "Search failed"));
                 } else {
                     setResults(result);
                 }
             } catch (err) {
-                setError(err.message || "Search failed");
+                setError(readableError(err, "Search failed"));
             } finally {
                 setLoading(false);
             }
