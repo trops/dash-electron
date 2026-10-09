@@ -25,6 +25,7 @@
  *   - per-arg rows for non-auto method args
  */
 
+jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
 import "@testing-library/jest-dom";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";

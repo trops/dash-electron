@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { SCHEMA_COMPONENT_NAMES } from "../dashReactComponentSchemas";
 import { sendOneShotJson } from "./llmOneShot";
+import { useBuilderTheme } from "../useBuilderTheme";
 
 /**
  * "Suggest a starting layout" button + inline form (slice 20.C5).
@@ -37,6 +38,7 @@ export function SuggestLayoutButton({
     backend = "claude-code",
     onApplyTree,
 }) {
+    const bt = useBuilderTheme();
     const [open, setOpen] = useState(false);
     const [description, setDescription] = useState("");
     const [status, setStatus] = useState("idle");
@@ -142,7 +144,7 @@ export function SuggestLayoutButton({
             <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="w-full mb-2 px-2 py-1.5 text-xs rounded border border-indigo-700/40 bg-indigo-900/20 text-indigo-200 hover:bg-indigo-800/30"
+                className={`w-full mb-2 px-2 py-1.5 text-xs rounded border ${bt.accentBorder} ${bt.tint} ${bt.accent} ${bt.hoverTint}`}
                 data-testid="composer-suggest-layout-open"
             >
                 ✦ Suggest a starting layout
@@ -152,17 +154,19 @@ export function SuggestLayoutButton({
 
     return (
         <div
-            className="mb-3 rounded border border-indigo-700/40 bg-indigo-900/10 p-2 space-y-2"
+            className={`mb-3 rounded border ${bt.accentBorder} ${bt.tint} p-2 space-y-2`}
             data-testid="composer-suggest-layout-form"
         >
             <div className="flex items-center justify-between">
-                <div className="text-[11px] uppercase tracking-wide text-indigo-200">
+                <div
+                    className={`text-[11px] uppercase tracking-wide ${bt.accent}`}
+                >
                     Describe the widget
                 </div>
                 <button
                     type="button"
                     onClick={reset}
-                    className="text-[10px] text-gray-400 hover:text-gray-200"
+                    className={`text-[10px] ${bt.muted} hover:opacity-100`}
                     data-testid="composer-suggest-layout-close"
                 >
                     Cancel
@@ -173,7 +177,7 @@ export function SuggestLayoutButton({
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="e.g., An Algolia rules manager with a list of rules and a detail panel"
                 rows={3}
-                className="w-full px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                className={`w-full px-2 py-1 text-xs ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
                 data-testid="composer-suggest-layout-input"
             />
             <button
@@ -182,14 +186,14 @@ export function SuggestLayoutButton({
                 disabled={
                     status === "loading" || description.trim().length === 0
                 }
-                className="w-full px-2 py-1 text-xs rounded bg-indigo-700 hover:bg-indigo-600 disabled:bg-gray-700 disabled:text-gray-500 text-white"
+                className={`w-full px-2 py-1 text-xs rounded ${bt.primaryFill}`}
                 data-testid="composer-suggest-layout-submit"
             >
                 {status === "loading" ? "Asking…" : "Suggest layouts"}
             </button>
             {status === "error" && error && (
                 <div
-                    className="text-[10px] text-red-400"
+                    className={`text-[10px] ${bt.status.error.icon}`}
                     data-testid="composer-suggest-layout-error"
                 >
                     {error}
@@ -200,7 +204,7 @@ export function SuggestLayoutButton({
                     className="space-y-1"
                     data-testid="composer-suggest-layout-results"
                 >
-                    <div className="text-[10px] text-gray-400">
+                    <div className={`text-[10px] ${bt.muted}`}>
                         Pick one to replace the current tree:
                     </div>
                     {suggestions.map((s, i) => (
@@ -208,13 +212,15 @@ export function SuggestLayoutButton({
                             key={i}
                             type="button"
                             onClick={() => pickSuggestion(s)}
-                            className="block w-full text-left px-2 py-1.5 rounded border border-gray-700 bg-gray-900/50 hover:border-indigo-500 hover:bg-indigo-900/30"
+                            className={`block w-full text-left px-2 py-1.5 rounded border ${bt.border} ${bt.surface} ${bt.hoverAccentBorder} ${bt.hoverTint}`}
                             data-testid={`composer-suggest-layout-pick-${i}`}
                         >
-                            <div className="text-xs text-gray-200">
+                            <div className={`text-xs ${bt.text}`}>
                                 {s.label}
                             </div>
-                            <div className="text-[10px] text-gray-500 mt-0.5 font-mono">
+                            <div
+                                className={`text-[10px] ${bt.muted} mt-0.5 font-mono`}
+                            >
                                 {summarizeTree(s.root)}
                             </div>
                         </button>

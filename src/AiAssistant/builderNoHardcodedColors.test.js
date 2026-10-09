@@ -33,16 +33,22 @@ describe("Widget Builder — no hard-coded palette colours", () => {
         ]);
     });
 
-    test.each(["WidgetDraftsList.js", "ChatProviderGate.js"])(
-        "%s has none",
-        (file) => {
-            expect(hardcoded(file)).toEqual([]);
-        }
-    );
+    test.each([
+        "WidgetDraftsList.js",
+        "ChatProviderGate.js",
+        "composer/ComposerPaneV2.js",
+        "composer/GridEditor.js",
+        "composer/PaletteView.js",
+        "composer/PropertyInspector.js",
+        "composer/SuggestLayoutButton.js",
+        "composer/WirePicker.js",
+    ])("%s has none", (file) => {
+        expect(hardcoded(file)).toEqual([]);
+    });
 
     test("WidgetBuilderModal.js stays under its ceiling", () => {
-        // Slices A–B done (frame, Build panel, preview pane). Lower this as
-        // slices C–D convert the rest; never raise it.
+        // Slices A–C done. Lower this as slice D converts the Code /
+        // Configure / Console / Scorecard tabs; never raise it.
         const CEILING = 33;
         expect(hardcoded("WidgetBuilderModal.js").length).toBeLessThanOrEqual(
             CEILING

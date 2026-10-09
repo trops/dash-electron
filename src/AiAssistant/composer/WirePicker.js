@@ -5,6 +5,7 @@ import { scoreMethodList } from "./wireMatching";
 import { useWirableTypes } from "./wirableTypes";
 import { getKnownToolsForType, getKnownToolArgs } from "./mcpKnownTools";
 import { parseShapeFields } from "./composerEmitter";
+import { useBuilderTheme } from "../useBuilderTheme";
 
 /**
  * WirePicker — Compose-mode Stage 3 in-place picker.
@@ -130,6 +131,7 @@ function ProviderTypeStep({
     onPipe,
     onPick,
 }) {
+    const bt = useBuilderTheme();
     // Only show the loading-only state when we have nothing to show
     // yet. Credential types arrive synchronously from the registry,
     // so usually the list is non-empty even during the catalog
@@ -137,7 +139,7 @@ function ProviderTypeStep({
     if (wirable.status === "loading" && wirable.types.length === 0) {
         return (
             <div
-                className="text-sm px-2 py-1.5 rounded border border-dashed border-gray-700 bg-gray-900/50 text-gray-500"
+                className={`text-sm px-2 py-1.5 rounded border border-dashed ${bt.border} ${bt.surface} ${bt.muted}`}
                 data-testid={`composer-wire-loading-${propName}`}
             >
                 Loading provider catalog…
@@ -147,12 +149,12 @@ function ProviderTypeStep({
     if (wirable.types.length === 0) {
         return (
             <div
-                className="text-sm px-2 py-1.5 rounded border border-dashed border-gray-700 bg-gray-900/50 text-gray-500"
+                className={`text-sm px-2 py-1.5 rounded border border-dashed ${bt.border} ${bt.surface} ${bt.muted}`}
                 data-testid={`composer-wire-empty-${propName}`}
             >
                 No wirable provider types available.
                 {wirable.error && (
-                    <span className="block text-red-400 mt-1">
+                    <span className={`block ${bt.status.error.icon} mt-1`}>
                         {wirable.error}
                     </span>
                 )}
@@ -163,10 +165,12 @@ function ProviderTypeStep({
         <div className="space-y-2">
             {pipeSources.length > 0 && onPipe && (
                 <div
-                    className="rounded border border-amber-700/40 bg-amber-900/10 p-2"
+                    className={`rounded border ${bt.status.warning.border} ${bt.status.warning.bg} p-2`}
                     data-testid={`composer-pipe-sources-${propName}`}
                 >
-                    <div className="text-xs uppercase tracking-wide text-amber-300/80 mb-1.5">
+                    <div
+                        className={`text-xs uppercase tracking-wide ${bt.status.warning.icon} mb-1.5`}
+                    >
                         Reuse an existing wire
                     </div>
                     {/* Cap at ~3 visible rows with scroll for the
@@ -179,7 +183,7 @@ function ProviderTypeStep({
                                 key={`${src.nodeId}:${src.propName}`}
                                 type="button"
                                 onClick={() => onPipe(src.nodeId, src.propName)}
-                                className="text-left text-xs px-2 py-1.5 rounded border border-amber-600/40 bg-amber-700/20 hover:bg-amber-600/40 text-amber-100 hover:text-white transition-colors"
+                                className={`text-left text-xs px-2 py-1.5 rounded border ${bt.status.warning.border} ${bt.status.warning.bg} ${bt.status.warning.hoverBg} ${bt.status.warning.text} hover:opacity-100 transition-colors`}
                                 data-testid={`composer-pipe-source-${propName}-${src.nodeId}-${src.propName}`}
                             >
                                 <span className="font-mono">{src.label}</span>
@@ -189,10 +193,12 @@ function ProviderTypeStep({
                 </div>
             )}
             <div
-                className="rounded border border-gray-700 bg-gray-900/50 p-1 max-h-96 overflow-y-auto"
+                className={`rounded border ${bt.border} ${bt.surface} p-1 max-h-96 overflow-y-auto`}
                 data-testid={`composer-wire-providers-${propName}`}
             >
-                <div className="text-xs uppercase tracking-wide text-gray-500 px-1 mb-1">
+                <div
+                    className={`text-xs uppercase tracking-wide ${bt.muted} px-1 mb-1`}
+                >
                     {pipeSources.length > 0 && onPipe
                         ? "Or pick a new provider"
                         : "Pick a provider type"}
@@ -203,24 +209,30 @@ function ProviderTypeStep({
                             key={`${t.kind}:${t.id}:${t.instanceName || ""}`}
                             type="button"
                             onClick={() => onPick(t)}
-                            className="text-left text-sm px-2 py-1.5 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200"
+                            className={`text-left text-sm px-2 py-1.5 rounded ${bt.hoverTint} ${bt.text} hover:opacity-80`}
                             data-testid={`composer-wire-provider-${propName}-${
                                 t.instanceName || t.id
                             }`}
                         >
                             <div className="flex items-center justify-between gap-2">
                                 <span className="truncate">{t.name}</span>
-                                <span className="text-xs text-gray-500 shrink-0">
+                                <span
+                                    className={`text-xs ${bt.muted} shrink-0`}
+                                >
                                     {t.kind}
                                     {t.hasConfiguredInstance && (
-                                        <span className="ml-1 text-emerald-400">
+                                        <span
+                                            className={`ml-1 ${bt.status.success.icon}`}
+                                        >
                                             ✓ configured
                                         </span>
                                     )}
                                 </span>
                             </div>
                             {t.description && (
-                                <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                                <div
+                                    className={`text-xs ${bt.muted} mt-0.5 line-clamp-2`}
+                                >
                                     {t.description}
                                 </div>
                             )}
@@ -269,6 +281,7 @@ function CredentialMethodStep({
     onBack,
     onPick,
 }) {
+    const bt = useBuilderTheme();
     const ranked = useMemo(() => {
         const registry = PROVIDER_API_REGISTRY[type.id] || {};
         return scoreMethodList(Object.entries(registry), expectedType);
@@ -276,7 +289,7 @@ function CredentialMethodStep({
 
     return (
         <div
-            className="rounded border border-gray-700 bg-gray-900/50 p-1"
+            className={`rounded border ${bt.border} ${bt.surface} p-1`}
             data-testid={`composer-wire-methods-${propName}`}
         >
             <PickerHeader
@@ -285,9 +298,9 @@ function CredentialMethodStep({
                 onBack={onBack}
             />
             {ranked.length === 0 ? (
-                <div className="text-sm text-gray-500 px-2 py-1">
+                <div className={`text-sm ${bt.muted} px-2 py-1`}>
                     No methods on this provider return a shape compatible with{" "}
-                    <code className="text-gray-400">{expectedType}</code>.
+                    <code className={`${bt.muted}`}>{expectedType}</code>.
                 </div>
             ) : (
                 <div className="flex flex-col">
@@ -296,25 +309,29 @@ function CredentialMethodStep({
                             key={name}
                             type="button"
                             onClick={() => onPick(name)}
-                            className="text-left text-sm px-2 py-1.5 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200"
+                            className={`text-left text-sm px-2 py-1.5 rounded ${bt.hoverTint} ${bt.text} hover:opacity-80`}
                             data-testid={`composer-wire-method-${propName}-${name}`}
                             title={spec.desc || ""}
                         >
                             <div className="flex items-center justify-between">
                                 <span className="font-mono">{name}</span>
-                                <span className="text-xs text-gray-500 ml-2">
+                                <span className={`text-xs ${bt.muted} ml-2`}>
                                     {spec.returns &&
                                         spec.returns.type &&
                                         truncate(spec.returns.type, 32)}
                                     {score === 1 && (
-                                        <span className="ml-1 text-yellow-500/70">
+                                        <span
+                                            className={`ml-1 ${bt.status.warning.icon}`}
+                                        >
                                             ~
                                         </span>
                                     )}
                                 </span>
                             </div>
                             {spec.desc && (
-                                <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                                <div
+                                    className={`text-xs ${bt.muted} mt-0.5 line-clamp-2`}
+                                >
                                     {spec.desc}
                                 </div>
                             )}
@@ -327,6 +344,7 @@ function CredentialMethodStep({
 }
 
 function McpMethodStep({ propName, type, providers, onBack, onPick }) {
+    const bt = useBuilderTheme();
     // The MCP listTools bridge only works against a RUNNING server,
     // which requires a configured + started instance. If the user
     // has one, use it; otherwise show a configure-first hint plus
@@ -373,7 +391,7 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
 
     return (
         <div
-            className="rounded border border-gray-700 bg-gray-900/50 p-1"
+            className={`rounded border ${bt.border} ${bt.surface} p-1`}
             data-testid={`composer-wire-methods-${propName}`}
         >
             <PickerHeader
@@ -383,7 +401,9 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
             />
             {!configuredInstance && knownTools && (
                 <>
-                    <div className="text-xs text-amber-400 px-2 py-1">
+                    <div
+                        className={`text-xs ${bt.status.warning.icon} px-2 py-1`}
+                    >
                         Approximate — configure a {type.name} provider in
                         Settings → Providers for the live tool list.
                     </div>
@@ -396,13 +416,15 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
                                 key={tool.name}
                                 type="button"
                                 onClick={() => onPick(tool.name)}
-                                className="text-left text-sm px-2 py-1.5 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200"
+                                className={`text-left text-sm px-2 py-1.5 rounded ${bt.hoverTint} ${bt.text} hover:opacity-80`}
                                 data-testid={`composer-wire-method-${propName}-${tool.name}`}
                                 title={tool.description || ""}
                             >
                                 <span className="font-mono">{tool.name}</span>
                                 {tool.description && (
-                                    <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                                    <div
+                                        className={`text-xs ${bt.muted} mt-0.5 line-clamp-2`}
+                                    >
                                         {tool.description}
                                     </div>
                                 )}
@@ -412,7 +434,7 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
                 </>
             )}
             {!configuredInstance && !knownTools && (
-                <div className="text-sm text-gray-500 px-2 py-1 space-y-1">
+                <div className={`text-sm ${bt.muted} px-2 py-1 space-y-1`}>
                     <div>
                         No configured {type.name} provider and no static tool
                         list available. Configure one in Settings → Providers to
@@ -424,7 +446,7 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
                             value={freeText}
                             onChange={(e) => setFreeText(e.target.value)}
                             placeholder="tool name"
-                            className="flex-1 px-1.5 py-0.5 text-sm font-mono bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                            className={`flex-1 px-1.5 py-0.5 text-sm font-mono ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
                             data-testid={`composer-wire-tool-input-${propName}`}
                         />
                         <button
@@ -433,7 +455,7 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
                                 if (freeText.trim()) onPick(freeText.trim());
                             }}
                             disabled={!freeText.trim()}
-                            className="px-2 py-0.5 text-sm rounded bg-indigo-700 hover:bg-indigo-600 disabled:bg-gray-700 disabled:text-gray-500 text-white"
+                            className={`px-2 py-0.5 text-sm rounded ${bt.primaryFill}`}
                             data-testid={`composer-wire-tool-confirm-${propName}`}
                         >
                             Wire
@@ -442,28 +464,28 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
                 </div>
             )}
             {configuredInstance && status === "loading" && (
-                <div className="text-sm text-gray-500 px-2 py-1">
+                <div className={`text-sm ${bt.muted} px-2 py-1`}>
                     Connecting to {configuredInstance}…
                 </div>
             )}
             {configuredInstance && status === "error" && (
                 <div className="space-y-1">
                     <div className="flex items-center justify-between gap-2 px-2 py-1">
-                        <span className="text-xs text-amber-400">
+                        <span className={`text-xs ${bt.status.warning.icon}`}>
                             Couldn't reach {configuredInstance}
                             {knownTools ? " — showing approximate tools." : "."}
                         </span>
                         <button
                             type="button"
                             onClick={() => setReloadToken((n) => n + 1)}
-                            className="text-xs px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-100 shrink-0"
+                            className={`text-xs px-2 py-0.5 rounded ${bt.raised} ${bt.hoverSurface} ${bt.text} shrink-0`}
                             data-testid={`composer-wire-retry-${propName}`}
                         >
                             Retry
                         </button>
                     </div>
                     {error && (
-                        <div className="text-xs text-gray-500 px-2">
+                        <div className={`text-xs ${bt.muted} px-2`}>
                             {error}
                         </div>
                     )}
@@ -477,7 +499,7 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
                                     key={tool.name}
                                     type="button"
                                     onClick={() => onPick(tool.name)}
-                                    className="text-left text-sm px-2 py-1.5 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200"
+                                    className={`text-left text-sm px-2 py-1.5 rounded ${bt.hoverTint} ${bt.text} hover:opacity-80`}
                                     data-testid={`composer-wire-method-${propName}-${tool.name}`}
                                     title={tool.description || ""}
                                 >
@@ -485,7 +507,9 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
                                         {tool.name}
                                     </span>
                                     {tool.description && (
-                                        <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                                        <div
+                                            className={`text-xs ${bt.muted} mt-0.5 line-clamp-2`}
+                                        >
                                             {tool.description}
                                         </div>
                                     )}
@@ -499,7 +523,7 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
                             value={freeText}
                             onChange={(e) => setFreeText(e.target.value)}
                             placeholder="or type a tool name"
-                            className="flex-1 px-1.5 py-0.5 text-sm font-mono bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                            className={`flex-1 px-1.5 py-0.5 text-sm font-mono ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
                             data-testid={`composer-wire-tool-input-${propName}`}
                         />
                         <button
@@ -508,7 +532,7 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
                                 if (freeText.trim()) onPick(freeText.trim());
                             }}
                             disabled={!freeText.trim()}
-                            className="px-2 py-0.5 text-sm rounded bg-indigo-700 hover:bg-indigo-600 disabled:bg-gray-700 disabled:text-gray-500 text-white"
+                            className={`px-2 py-0.5 text-sm rounded ${bt.primaryFill}`}
                             data-testid={`composer-wire-tool-confirm-${propName}`}
                         >
                             Wire
@@ -517,7 +541,7 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
                 </div>
             )}
             {configuredInstance && status === "ok" && tools.length === 0 && (
-                <div className="text-sm text-gray-500 px-2 py-1">
+                <div className={`text-sm ${bt.muted} px-2 py-1`}>
                     No tools exposed by this server.
                 </div>
             )}
@@ -528,13 +552,15 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
                             key={tool.name}
                             type="button"
                             onClick={() => onPick(tool.name)}
-                            className="text-left text-sm px-2 py-1.5 rounded hover:bg-indigo-700/30 text-gray-300 hover:text-indigo-200"
+                            className={`text-left text-sm px-2 py-1.5 rounded ${bt.hoverTint} ${bt.text} hover:opacity-80`}
                             data-testid={`composer-wire-method-${propName}-${tool.name}`}
                             title={tool.description || ""}
                         >
                             <span className="font-mono">{tool.name}</span>
                             {tool.description && (
-                                <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                                <div
+                                    className={`text-xs ${bt.muted} mt-0.5 line-clamp-2`}
+                                >
                                     {tool.description}
                                 </div>
                             )}
@@ -547,6 +573,7 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
 }
 
 function PickerHeader({ title, expectedType, onBack }) {
+    const bt = useBuilderTheme();
     // Suppress the "→ <type>" hint when the type is the unrestricted
     // sentinel ("any") or "function" — neither is a useful filter
     // hint to surface; the former matches everything and the latter
@@ -556,10 +583,10 @@ function PickerHeader({ title, expectedType, onBack }) {
         expectedType && expectedType !== "any" && expectedType !== "function";
     return (
         <div className="flex items-center justify-between px-1 mb-1">
-            <div className="text-xs uppercase tracking-wide text-gray-500">
+            <div className={`text-xs uppercase tracking-wide ${bt.muted}`}>
                 {title}{" "}
                 {showExpected && (
-                    <span className="text-gray-600">
+                    <span className={`${bt.muted}`}>
                         → <code>{expectedType}</code>
                     </span>
                 )}
@@ -567,7 +594,7 @@ function PickerHeader({ title, expectedType, onBack }) {
             <button
                 type="button"
                 onClick={onBack}
-                className="text-xs text-indigo-400 hover:text-indigo-200"
+                className={`text-xs ${bt.accent} hover:opacity-80`}
                 data-testid="composer-wire-back"
             >
                 ← Back
@@ -618,6 +645,7 @@ export function WiredSlotSummary({
     onSetArg,
     onSetFieldMap,
 }) {
+    const bt = useBuilderTheme();
     const argNames = useMemo(() => {
         if (wire.providerClass === "mcp") {
             // MCP tools: prefer the known-tools catalog so required
@@ -642,18 +670,20 @@ export function WiredSlotSummary({
 
     return (
         <div
-            className="rounded border border-indigo-700/40 bg-indigo-900/20 text-indigo-200"
+            className={`rounded border ${bt.accentBorder} ${bt.tint} ${bt.accent}`}
             data-testid={`composer-wire-summary-${propName}`}
         >
             <div className="flex items-center justify-between text-sm px-2 py-1.5">
                 <div className="min-w-0">
-                    <span className="text-gray-400">Wired to: </span>
+                    <span className={`${bt.muted}`}>Wired to: </span>
                     <span className="font-mono">
                         {wire.provider || wire.providerType || "?"}.
                         {wire.method}
                     </span>
                     {!wire.provider && wire.providerType && (
-                        <span className="ml-2 text-xs text-amber-400">
+                        <span
+                            className={`ml-2 text-xs ${bt.status.warning.icon}`}
+                        >
                             (configure a {wire.providerType} provider to run)
                         </span>
                     )}
@@ -662,7 +692,7 @@ export function WiredSlotSummary({
                     <button
                         type="button"
                         onClick={onChange}
-                        className="text-xs text-indigo-300 hover:text-indigo-100 underline"
+                        className={`text-xs ${bt.accent} hover:opacity-80 underline`}
                         data-testid={`composer-wire-change-${propName}`}
                     >
                         Change
@@ -670,7 +700,7 @@ export function WiredSlotSummary({
                     <button
                         type="button"
                         onClick={onStatic}
-                        className="text-xs text-gray-400 hover:text-gray-200 underline"
+                        className={`text-xs ${bt.muted} hover:opacity-100 underline`}
                         data-testid={`composer-wire-revert-${propName}`}
                     >
                         Static
@@ -679,7 +709,7 @@ export function WiredSlotSummary({
             </div>
             {argNames.length > 0 && onSetArg && (
                 <div
-                    className="px-3 py-3 border-t border-indigo-700/40 space-y-3"
+                    className={`px-3 py-3 border-t ${bt.accentBorder} space-y-3`}
                     data-testid={`composer-wire-args-${propName}`}
                 >
                     {argNames.map((argName) => (
@@ -716,6 +746,7 @@ export function WiredSlotSummary({
  * isn't documented in the registry (no fields to pick from).
  */
 function FieldMapEditor({ propName, wire, targetType, onSetFieldMap }) {
+    const bt = useBuilderTheme();
     const targetFields = useMemo(
         () => parseShapeFields(targetType),
         [targetType]
@@ -734,10 +765,10 @@ function FieldMapEditor({ propName, wire, targetType, onSetFieldMap }) {
 
     return (
         <div
-            className="px-2 py-1.5 border-t border-indigo-700/40 space-y-1"
+            className={`px-2 py-1.5 border-t ${bt.accentBorder} space-y-1`}
             data-testid={`composer-fieldmap-${propName}`}
         >
-            <div className="text-xs text-gray-400">
+            <div className={`text-xs ${bt.muted}`}>
                 Map fields from <span className="font-mono">{wire.method}</span>
             </div>
             {targetFields.map((target) => (
@@ -746,7 +777,7 @@ function FieldMapEditor({ propName, wire, targetType, onSetFieldMap }) {
                     className="flex items-center justify-between gap-2"
                     data-testid={`composer-fieldmap-row-${propName}-${target}`}
                 >
-                    <span className="text-xs font-mono text-indigo-200">
+                    <span className={`text-xs font-mono ${bt.accent}`}>
                         {target}
                     </span>
                     <select
@@ -754,7 +785,7 @@ function FieldMapEditor({ propName, wire, targetType, onSetFieldMap }) {
                         onChange={(e) =>
                             handleChange(target, e.target.value || null)
                         }
-                        className="text-xs bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-gray-200"
+                        className={`text-xs ${bt.surface} border ${bt.border} rounded px-1 py-0.5 ${bt.text}`}
                         data-testid={`composer-fieldmap-select-${propName}-${target}`}
                     >
                         <option value="">(auto)</option>
@@ -798,6 +829,7 @@ function extractSourceItemFields(wire) {
 }
 
 function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
+    const bt = useBuilderTheme();
     const kind = (binding && binding.kind) || "literal";
 
     return (
@@ -806,10 +838,12 @@ function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
             className="space-y-2"
         >
             <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-mono text-indigo-200">
+                <span className={`text-sm font-mono ${bt.accent}`}>
                     {argName}
                 </span>
-                <div className="flex items-center gap-0.5 text-xs bg-gray-800 border border-gray-700 rounded p-0.5">
+                <div
+                    className={`flex items-center gap-0.5 text-xs ${bt.surface} border ${bt.border} rounded p-0.5`}
+                >
                     <button
                         type="button"
                         onClick={() =>
@@ -824,8 +858,8 @@ function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
                         }
                         className={`px-2 py-1 rounded ${
                             kind === "literal"
-                                ? "bg-indigo-600/40 text-indigo-100"
-                                : "text-gray-500 hover:text-gray-300"
+                                ? `${bt.tint} ${bt.accent}`
+                                : `${bt.muted} hover:opacity-100`
                         }`}
                         data-testid={`composer-arg-kind-literal-${propName}-${argName}`}
                     >
@@ -845,8 +879,8 @@ function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
                         }
                         className={`px-2 py-1 rounded ${
                             kind === "userConfig"
-                                ? "bg-indigo-600/40 text-indigo-100"
-                                : "text-gray-500 hover:text-gray-300"
+                                ? `${bt.tint} ${bt.accent}`
+                                : `${bt.muted} hover:opacity-100`
                         }`}
                         data-testid={`composer-arg-kind-userConfig-${propName}-${argName}`}
                     >
@@ -862,8 +896,8 @@ function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
                             }
                             className={`px-2 py-1 rounded ${
                                 kind === "eventArg"
-                                    ? "bg-indigo-600/40 text-indigo-100"
-                                    : "text-gray-500 hover:text-gray-300"
+                                    ? `${bt.tint} ${bt.accent}`
+                                    : `${bt.muted} hover:opacity-100`
                             }`}
                             data-testid={`composer-arg-kind-eventArg-${propName}-${argName}`}
                             title="Pass the event handler's first argument (the input's new value, the clicked item, etc.)"
@@ -902,17 +936,17 @@ function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
                             value,
                         });
                     }}
-                    className="w-full px-2 py-1.5 text-sm font-mono bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                    className={`w-full px-2 py-1.5 text-sm font-mono ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
                     data-testid={`composer-arg-literal-input-${propName}-${argName}`}
                     placeholder='"" / 0 / [...] / true'
                 />
             ) : kind === "eventArg" ? (
                 <div
-                    className="text-sm px-3 py-2 font-mono text-indigo-200 bg-gray-900/50 border border-gray-700 rounded"
+                    className={`text-sm px-3 py-2 font-mono ${bt.accent} ${bt.surface} border ${bt.border} rounded`}
                     data-testid={`composer-arg-eventarg-display-${propName}-${argName}`}
                 >
                     eventArg{" "}
-                    <span className="text-gray-500">
+                    <span className={`${bt.muted}`}>
                         (= the event handler's first arg)
                     </span>
                 </div>
@@ -930,7 +964,7 @@ function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
                             field: e.target.value,
                         })
                     }
-                    className="w-full px-2 py-1.5 text-sm font-mono bg-gray-800 border border-gray-700 rounded text-gray-100 focus:outline-none focus:border-indigo-500"
+                    className={`w-full px-2 py-1.5 text-sm font-mono ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
                     data-testid={`composer-arg-userconfig-input-${propName}-${argName}`}
                     placeholder="userConfig field name"
                 />
@@ -947,6 +981,7 @@ function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
  * buttons.
  */
 export function PipedSlotSummary({ propName, wire, tree, onChange, onStatic }) {
+    const bt = useBuilderTheme();
     const sourceLabel = (() => {
         if (!wire || !wire.sourceNodeId) return "(unknown)";
         // Walk the tree to find the source node's type for display.
@@ -969,18 +1004,18 @@ export function PipedSlotSummary({ propName, wire, tree, onChange, onStatic }) {
 
     return (
         <div
-            className="flex items-center justify-between text-sm px-2 py-1.5 rounded border border-amber-700/40 bg-amber-900/20 text-amber-200"
+            className={`flex items-center justify-between text-sm px-2 py-1.5 rounded border ${bt.status.warning.border} ${bt.status.warning.bg} ${bt.status.warning.text}`}
             data-testid={`composer-pipe-summary-${propName}`}
         >
             <div className="min-w-0">
-                <span className="text-gray-400">Piped from: </span>
+                <span className={`${bt.muted}`}>Piped from: </span>
                 <span className="font-mono">{sourceLabel}</span>
             </div>
             <div className="flex items-center gap-2 ml-2 shrink-0">
                 <button
                     type="button"
                     onClick={onChange}
-                    className="text-xs text-amber-300 hover:text-amber-100 underline"
+                    className={`text-xs ${bt.status.warning.icon} underline`}
                     data-testid={`composer-pipe-change-${propName}`}
                 >
                     Change
@@ -988,7 +1023,7 @@ export function PipedSlotSummary({ propName, wire, tree, onChange, onStatic }) {
                 <button
                     type="button"
                     onClick={onStatic}
-                    className="text-xs text-gray-400 hover:text-gray-200 underline"
+                    className={`text-xs ${bt.muted} hover:opacity-100 underline`}
                     data-testid={`composer-pipe-revert-${propName}`}
                 >
                     Static

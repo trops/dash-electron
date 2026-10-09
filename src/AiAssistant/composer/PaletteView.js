@@ -27,6 +27,7 @@
 import React, { useMemo, useState } from "react";
 import { MenuItem, ButtonIcon } from "@trops/dash-react";
 import { getSchemasByCategory } from "../dashReactComponentSchemas";
+import { useBuilderTheme } from "../useBuilderTheme";
 
 const CATEGORY_ORDER = ["layout", "display", "input", "action", "feedback"];
 const CATEGORY_LABEL = {
@@ -39,6 +40,7 @@ const CATEGORY_LABEL = {
 };
 
 export function PaletteView({ onPick, onCancel }) {
+    const bt = useBuilderTheme();
     const grouped = useMemo(() => getSchemasByCategory(), []);
     const [query, setQuery] = useState("");
     const [category, setCategory] = useState("all");
@@ -78,8 +80,10 @@ export function PaletteView({ onPick, onCancel }) {
             className="flex flex-col h-full min-h-0"
             data-testid="composer-palette-view"
         >
-            <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-white/10">
-                <span className="text-xs uppercase tracking-wide text-gray-400">
+            <div
+                className={`shrink-0 flex items-center justify-between px-3 py-2 border-b ${bt.border}`}
+            >
+                <span className={`text-xs uppercase tracking-wide ${bt.muted}`}>
                     Pick a component
                 </span>
                 <ButtonIcon
@@ -90,20 +94,22 @@ export function PaletteView({ onPick, onCancel }) {
                     data-testid="composer-palette-cancel"
                 />
             </div>
-            <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-white/10">
+            <div
+                className={`shrink-0 flex items-center gap-2 px-3 py-2 border-b ${bt.border}`}
+            >
                 <input
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Filter components…"
                     autoFocus
-                    className="flex-1 min-w-0 px-2 py-1 text-xs bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 placeholder-gray-500 focus:border-indigo-500/50 focus:outline-none"
+                    className={`flex-1 min-w-0 px-2 py-1 text-xs ${bt.surface} border ${bt.border} rounded ${bt.text} placeholder-gray-500 focus:outline-none`}
                     data-testid="composer-palette-search"
                 />
                 <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="shrink-0 px-2 py-1 text-xs bg-gray-800/70 border border-gray-700/50 rounded text-gray-200 focus:border-indigo-500/50 focus:outline-none"
+                    className={`shrink-0 px-2 py-1 text-xs ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
                     data-testid="composer-palette-category-filter"
                 >
                     <option value="all">{CATEGORY_LABEL.all}</option>
@@ -117,7 +123,7 @@ export function PaletteView({ onPick, onCancel }) {
             <div className="flex-1 min-h-0 overflow-y-auto px-2 py-2">
                 {totalMatches === 0 ? (
                     <div
-                        className="px-3 py-6 text-center text-xs text-gray-500"
+                        className={`px-3 py-6 text-center text-xs ${bt.muted}`}
                         data-testid="composer-palette-no-matches"
                     >
                         No components match
@@ -137,7 +143,9 @@ export function PaletteView({ onPick, onCancel }) {
                                 className="mb-2"
                                 data-testid={`composer-palette-category-${cat}`}
                             >
-                                <div className="px-2 pb-1 text-xs uppercase tracking-wide text-gray-500">
+                                <div
+                                    className={`px-2 pb-1 text-xs uppercase tracking-wide ${bt.muted}`}
+                                >
                                     {cat}
                                 </div>
                                 <div className="flex flex-col">
