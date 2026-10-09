@@ -25,7 +25,13 @@ import {
 } from "@trops/dash-react";
 import { Widget, useMcpProvider, DashboardContext } from "@trops/dash-core";
 
-import { extractMcpText, parseMcpJson } from "../utils/mcpUtils";
+import {
+    extractMcpText,
+    parseMcpJson,
+    listSearchIndices,
+    buildSearchParams,
+    normalizeSearchResult,
+} from "../utils/mcpUtils";
 
 function AlgoliaSearchContent({
     id,
@@ -50,11 +56,11 @@ function AlgoliaSearchContent({
     const [debugData, setDebugData] = useState(null);
     const [showDebug, setShowDebug] = useState(false);
 
-    // Derive available indices from MCP tools matching algolia_search_* pattern
-    const indices = tools
-        .map((t) => t.name || t)
-        .filter((name) => name.startsWith("algolia_search_"))
-        .map((name) => name.replace("algolia_search_", ""));
+    // One search tool per index: algolia_search_index_<index> (see listSearchIndices)
+    const indexTools = listSearchIndices(tools);
+    const indices = indexTools.map((t) => t.index);
+    const toolSuffix =
+        indexTools.find((t) => t.index === selectedIndex)?.suffix || null;
 
     // Auto-select defaultIndex or first available index when tools change
     useEffect(() => {
@@ -68,42 +74,27 @@ function AlgoliaSearchContent({
 
     const handleSearch = useCallback(
         async (page = 0) => {
-            if (!selectedIndex) return;
+            if (!toolSuffix) return;
             setLoading(true);
             setErrorMsg(null);
             setCurrentPage(page);
             try {
                 // Build params from the tool's input schema so all required fields are provided
                 const toolDef = tools.find(
-                    (t) => (t.name || t) === `algolia_search_${selectedIndex}`
+                    (t) => (t.name || t) === `algolia_search_${toolSuffix}`
                 );
                 const schema =
                     toolDef?.inputSchema?.properties ||
                     toolDef?.schema?.properties ||
                     {};
-                const params = {};
-                for (const key of Object.keys(schema)) {
-                    if (schema[key].type === "string") {
-                        params[key] = query;
-                    } else if (
-                        schema[key].type === "number" ||
-                        schema[key].type === "integer"
-                    ) {
-                        params[key] = 0;
-                    }
-                }
-                // Override with our specific values
-                if ("query" in schema) params.query = query;
-                if ("userIntent" in schema) params.userIntent = query;
-                if ("originalQuery" in schema) params.originalQuery = query;
-                if ("sessionId" in schema)
-                    params.sessionId = uuid || id || "default";
-                if ("hits_per_page" in schema)
-                    params.hits_per_page = hitsPerPage;
-                if ("hitsPerPage" in schema) params.hitsPerPage = hitsPerPage;
-                if ("page" in schema) params.page = page;
+                const params = buildSearchParams(schema, {
+                    query,
+                    page,
+                    hitsPerPage,
+                    sessionId: uuid || id || "default",
+                });
                 const res = await callTool(
-                    `algolia_search_${selectedIndex}`,
+                    `algolia_search_${toolSuffix}`,
                     params
                 );
                 const extracted = extractMcpText(res);
@@ -118,7 +109,17 @@ function AlgoliaSearchContent({
                             : JSON.stringify(extracted, null, 2),
                     parsed: JSON.stringify(parsed, null, 2),
                 });
-                setResults(parsed);
+                // A tool error (bad arguments, auth, …) comes back as a
+                // result with isError — show it instead of "No results".
+                const normalized = res?.isError
+                    ? null
+                    : normalizeSearchResult(parsed);
+                if (!normalized) {
+                    setResults(null);
+                    setErrorMsg(readableError(res, "Search failed"));
+                } else {
+                    setResults(normalized);
+                }
             } catch (err) {
                 setErrorMsg(readableError(err));
             } finally {
@@ -126,7 +127,7 @@ function AlgoliaSearchContent({
             }
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [selectedIndex, query, hitsPerPage, callTool]
+        [toolSuffix, query, hitsPerPage, callTool]
     );
 
     const handleIndexChange = (indexName) => {
@@ -157,9 +158,16 @@ function AlgoliaSearchContent({
         }
     };
 
-    const hits = results?.hits || (Array.isArray(results) ? results : []);
+    const hits = results?.hits || [];
     const nbHits = results?.nbHits ?? hits.length;
-    const nbPages = results?.nbPages ?? 1;
+    // Current servers don't report nbPages — a full page means there may
+    // be another one.
+    const nbPages = results?.nbPages ?? null;
+    const hasNextPage =
+        nbPages != null
+            ? currentPage < nbPages - 1
+            : hits.length >= hitsPerPage;
+    const showPager = currentPage > 0 || hasNextPage;
 
     // Theme tokens: record rows / debug panel sit one step above the Panel
     // surface; object IDs and debug section labels use the accent channel.
@@ -330,9 +338,10 @@ function AlgoliaSearchContent({
                             {nbHits.toLocaleString()} result
                             {nbHits !== 1 ? "s" : ""}
                         </span>
-                        {nbPages > 1 && (
+                        {showPager && (
                             <span>
-                                Page {currentPage + 1} of {nbPages}
+                                Page {currentPage + 1}
+                                {nbPages != null ? ` of ${nbPages}` : ""}
                             </span>
                         )}
                     </Caption2>
@@ -413,7 +422,7 @@ function AlgoliaSearchContent({
                     </div>
 
                     {/* Pagination */}
-                    {nbPages > 1 && (
+                    {showPager && (
                         <div className="flex items-center justify-center gap-2 pt-1">
                             <Button2
                                 onClick={() => handleSearch(currentPage - 1)}
@@ -423,11 +432,12 @@ function AlgoliaSearchContent({
                                 Prev
                             </Button2>
                             <Caption2>
-                                {currentPage + 1} / {nbPages}
+                                {currentPage + 1}
+                                {nbPages != null ? ` / ${nbPages}` : ""}
                             </Caption2>
                             <Button2
                                 onClick={() => handleSearch(currentPage + 1)}
-                                disabled={currentPage >= nbPages - 1 || loading}
+                                disabled={!hasNextPage || loading}
                                 size="sm"
                             >
                                 Next
