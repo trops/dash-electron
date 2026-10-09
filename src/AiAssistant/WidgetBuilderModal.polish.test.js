@@ -16,10 +16,10 @@ const source = fs.readFileSync(
 );
 
 describe("WidgetBuilderModal — polish", () => {
-    test("ChatCore renders inside the app theme provider", () => {
+    test("the whole builder (chat included) renders inside the app theme", () => {
         expect(source).toMatch(/window\.__dashAppThemeContext/);
         expect(source).toMatch(
-            /<ThemeContext\.Provider\s+value=\{chatThemeCtx\}>\s*<ChatCore/
+            /<ThemeContext\.Provider\s+value=\{chatThemeCtx\}>\s*<Modal/
         );
     });
 
