@@ -172,40 +172,59 @@ export function PreviewIframe({
         win.__hostModules = resolvedHostModules;
     }, [resolvedHostModules]);
 
+    // Callers pass inline handlers (new functions every render). Read them
+    // through a ref so the bridge below is built ONCE: the iframe posts
+    // bridge:ready a single time, and a bridge rebuilt after that never
+    // hears it — the widget was never sent and the preview sat on
+    // "Preview ready." (resumed drafts re-render many times at open).
+    const handlersRef = useRef({});
+    handlersRef.current = {
+        onReady,
+        onMounted,
+        onError,
+        onRenderStats,
+        onConsoleEvent,
+        onComposerNodeClick,
+    };
+    const writeHostModulesRef = useRef(writeHostModules);
+    writeHostModulesRef.current = writeHostModules;
+
     // Set up the bridge once. Runs on mount; teardown on unmount.
     useEffect(() => {
         const allowedOrigin = window.location.origin || "*";
         const bridge = createPreviewBridge({ iframeRef, allowedOrigin });
         bridgeRef.current = bridge;
+        const call = (name, payload) => {
+            const fn = handlersRef.current[name];
+            if (typeof fn === "function") fn(payload);
+        };
 
         const offReady = bridge.on("bridge:ready", (payload) => {
             readyRef.current = true;
-            writeHostModules();
+            writeHostModulesRef.current();
             setStatus("ready");
-            if (typeof onReady === "function") onReady(payload);
+            call("onReady", payload);
         });
 
         const offMounted = bridge.on("bridge:mounted", (payload) => {
             setStatus("mounted");
-            if (typeof onMounted === "function") onMounted(payload);
+            call("onMounted", payload);
         });
 
         const offError = bridge.on("bridge:error", (payload) => {
-            if (typeof onError === "function") onError(payload);
+            call("onError", payload);
         });
 
         const offStats = bridge.on("bridge:render-stats", (payload) => {
-            if (typeof onRenderStats === "function") onRenderStats(payload);
+            call("onRenderStats", payload);
         });
 
         const offConsole = bridge.on("bridge:console", (payload) => {
-            if (typeof onConsoleEvent === "function") onConsoleEvent(payload);
+            call("onConsoleEvent", payload);
         });
 
         const offClick = bridge.on("bridge:composer-clicked", (payload) => {
-            if (typeof onComposerNodeClick === "function") {
-                onComposerNodeClick(payload);
-            }
+            call("onComposerNodeClick", payload);
         });
 
         return () => {
@@ -219,15 +238,7 @@ export function PreviewIframe({
             bridgeRef.current = null;
             readyRef.current = false;
         };
-    }, [
-        onReady,
-        onMounted,
-        onError,
-        onRenderStats,
-        onConsoleEvent,
-        onComposerNodeClick,
-        writeHostModules,
-    ]);
+    }, []);
 
     // Push the selectable flag into the iframe whenever it flips.
     // Cheap — the shell only installs CSS once on first true, and

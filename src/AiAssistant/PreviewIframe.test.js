@@ -670,3 +670,52 @@ describe("PreviewIframe — render stats (slice 17c.5)", () => {
         });
     });
 });
+
+describe("PreviewIframe — parent re-renders", () => {
+    test("still sends the widget after re-renders with new inline handlers", () => {
+        // The builder passes inline arrows (e.g. onComposerNodeClick), so
+        // every render hands over new functions. The iframe announces
+        // bridge:ready once; a bridge rebuilt after that never hears it
+        // and the preview sat on "Preview ready." (resumed drafts).
+        const { container, rerender } = render(
+            <PreviewIframe onComposerNodeClick={() => {}} />
+        );
+        const iframe = container.querySelector("iframe");
+        const posted = [];
+        iframe.contentWindow.postMessage = (msg) => posted.push(msg);
+        act(() => {
+            window.dispatchEvent(
+                new MessageEvent("message", {
+                    origin: window.location.origin,
+                    data: { type: "bridge:ready", payload: {} },
+                })
+            );
+        });
+        rerender(<PreviewIframe onComposerNodeClick={() => {}} />);
+        rerender(
+            <PreviewIframe
+                onComposerNodeClick={() => {}}
+                bundleSource="module.exports = {}"
+                componentName="Clock"
+            />
+        );
+        expect(posted.map((m) => m.type)).toContain("bridge:load-bundle");
+    });
+
+    test("calls the latest handler, not the first one", () => {
+        const first = jest.fn();
+        const latest = jest.fn();
+        const { rerender } = render(<PreviewIframe onError={first} />);
+        rerender(<PreviewIframe onError={latest} />);
+        act(() => {
+            window.dispatchEvent(
+                new MessageEvent("message", {
+                    origin: window.location.origin,
+                    data: { type: "bridge:error", payload: { message: "x" } },
+                })
+            );
+        });
+        expect(first).not.toHaveBeenCalled();
+        expect(latest).toHaveBeenCalledWith({ message: "x" });
+    });
+});
