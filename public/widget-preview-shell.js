@@ -216,6 +216,57 @@
     // END appContextWithDashApi
     var dashApiCache = {};
 
+    // BEGIN applyThemeCssVars
+    // dash-react classes read the theme through CSS variables
+    // (`text-[var(--neutral-400)]`). The app writes them on its own
+    // document only, so copy the theme's cssVars onto this frame's root —
+    // and clear the ones the previous theme set. Returns the names written.
+    function applyThemeCssVars(root, themeContext, previous) {
+        var cssVars =
+            (themeContext &&
+                themeContext.currentTheme &&
+                themeContext.currentTheme.cssVars) ||
+            {};
+        var written = Object.keys(cssVars);
+        (previous || []).forEach(function (name) {
+            if (written.indexOf(name) === -1) root.style.removeProperty(name);
+        });
+        written.forEach(function (name) {
+            root.style.setProperty(name, cssVars[name]);
+        });
+        return written;
+    }
+    // END applyThemeCssVars
+    var themeVarsWritten = [];
+
+    // BEGIN copyIconStyles
+    // Widgets render icons with the app's FontAwesome instance, which
+    // injects its sizing CSS (.svg-inline--fa) into the APP document only —
+    // so in this frame every icon was 0×0. Copy that style block in once.
+    function copyIconStyles(fromDoc, toDoc) {
+        if (!fromDoc || !toDoc || !toDoc.head) return;
+        if (toDoc.head.querySelector("style[data-dash-icon-css]")) return;
+        var source = Array.prototype.find.call(
+            fromDoc.querySelectorAll("style"),
+            function (el) {
+                return (el.textContent || "").indexOf(".svg-inline--fa") !== -1;
+            }
+        );
+        if (!source) return;
+        var copy = toDoc.createElement("style");
+        copy.setAttribute("data-dash-icon-css", "");
+        copy.textContent = source.textContent;
+        toDoc.head.appendChild(copy);
+    }
+    // END copyIconStyles
+    function parentDocument() {
+        try {
+            return window.parent && window.parent.document;
+        } catch (e) {
+            return null;
+        }
+    }
+
     function unmountCurrent() {
         if (currentRoot && typeof currentRoot.unmount === "function") {
             try {
@@ -478,6 +529,11 @@
         }
         if (type === "bridge:set-theme") {
             currentTheme = (payload && payload.themeContext) || null;
+            themeVarsWritten = applyThemeCssVars(
+                document.documentElement,
+                currentTheme,
+                themeVarsWritten
+            );
             reRenderCurrent();
             return;
         }
@@ -514,6 +570,7 @@
             return;
         }
         if (type === "bridge:load-bundle") {
+            copyIconStyles(parentDocument(), document);
             mountWidget(payload);
             return;
         }
@@ -841,6 +898,7 @@
         // widget that loads as soon as bridge:ready fires has
         // window.mainApi available on first render.
         exposeHostMainApi();
+        copyIconStyles(parentDocument(), document);
         // shellVersion stays at "17c.1" — it identifies the bridge
         // protocol version, not the slice that last touched the
         // file. Bumping it would break tests that assert the exact
