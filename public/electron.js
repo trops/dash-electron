@@ -173,6 +173,7 @@ const {
     SCHEMAS: IPC_SCHEMAS,
 } = require("./lib/ipcValidators.cjs");
 const { parseBotsOptions, popoutHashRoute } = require("./lib/popoutRoute.cjs");
+const { ensureWidgetType } = require("./lib/widgetConfigType.cjs");
 
 const { updateElectronApp } = require("update-electron-app");
 
@@ -2972,7 +2973,9 @@ function createWindow() {
                     providerSnap.reason
                 );
             }
-            const configCode = providerSnap.source;
+            // AI configs sometimes omit `type: "widget"` — without it the
+            // bundle loader can't find the widget (preview + install).
+            const configCode = ensureWidgetType(providerSnap.source).source;
             const path = require("path");
             const fs = require("fs");
             const os = require("os");
@@ -3099,7 +3102,10 @@ function createWindow() {
                                   f.content,
                                   selectedProvider
                               );
-                              return { ...f, content: sn.source };
+                              return {
+                                  ...f,
+                                  content: ensureWidgetType(sn.source).source,
+                              };
                           }
                           return f;
                       })
@@ -3218,7 +3224,9 @@ function createWindow() {
                     providerSnap.reason
                 );
             }
-            const configCode = providerSnap.source;
+            // AI configs sometimes omit `type: "widget"` — without it the
+            // bundle loader can't find the widget (preview + install).
+            const configCode = ensureWidgetType(providerSnap.source).source;
             // If the renderer also packaged the primary widget's
             // .dash.js into files[], snap that copy too so the on-disk
             // file matches.
@@ -3235,7 +3243,10 @@ function createWindow() {
                               f.content,
                               selectedProvider
                           );
-                          return { ...f, content: sn.source };
+                          return {
+                              ...f,
+                              content: ensureWidgetType(sn.source).source,
+                          };
                       }
                       return f;
                   })

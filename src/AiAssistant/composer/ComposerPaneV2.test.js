@@ -77,6 +77,41 @@ describe("ComposerPaneV2 — widget name collision avoidance", () => {
         });
     });
 
+    test("skips names already used by drafts", async () => {
+        installMainApi(
+            jest.fn().mockResolvedValue([{ componentName: "ComposedWidget" }])
+        );
+        window.mainApi.drafts = {
+            list: jest.fn().mockResolvedValue([
+                { id: "d1", componentName: "ComposedWidget2" },
+                { id: "d2", name: "ComposedWidget3" },
+            ]),
+        };
+        render(<ComposerPaneV2 />);
+        const input = screen.getByTestId("composer-widget-name");
+        await waitFor(() => {
+            expect(input.value).toBe("ComposedWidget4");
+        });
+    });
+
+    test("doesn't count the draft being resumed against itself", async () => {
+        installMainApi(
+            jest.fn().mockResolvedValue([{ componentName: "ComposedWidget" }])
+        );
+        window.mainApi.drafts = {
+            list: jest
+                .fn()
+                .mockResolvedValue([
+                    { id: "mine", componentName: "ComposedWidget2" },
+                ]),
+        };
+        render(<ComposerPaneV2 currentDraftId="mine" />);
+        const input = screen.getByTestId("composer-widget-name");
+        await waitFor(() => {
+            expect(input.value).toBe("ComposedWidget2");
+        });
+    });
+
     test("bumps past every taken suffix", async () => {
         installMainApi(
             jest

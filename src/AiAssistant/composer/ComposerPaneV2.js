@@ -92,6 +92,8 @@ export function ComposerPaneV2({
     // bump must be skipped: the edit session is for the existing
     // widget's name, not a fresh "ComposedWidget{N}" choice.
     editContext = null,
+    // The draft this session belongs to — its own name isn't a collision.
+    currentDraftId = null,
 }) {
     const [grid, setGridRaw] = useState(() => {
         if (initialGrid) return initialGrid;
@@ -277,7 +279,17 @@ export function ComposerPaneV2({
         let cancelled = false;
         (async () => {
             try {
-                const configs = (await getConfigs()) || [];
+                const listDrafts = window.mainApi?.drafts?.list;
+                const [configs, drafts] = await Promise.all([
+                    Promise.resolve(getConfigs()).then((c) => c || []),
+                    // Unfinished drafts hold names too — a new widget
+                    // must not reuse one (it would collide on install).
+                    typeof listDrafts === "function"
+                        ? Promise.resolve(listDrafts())
+                              .then((d) => (Array.isArray(d) ? d : []))
+                              .catch(() => [])
+                        : [],
+                ]);
                 if (cancelled) return;
                 // Re-check after the await — the user may have typed
                 // a name while we waited for the IPC to come back.
@@ -292,6 +304,12 @@ export function ComposerPaneV2({
                             ? pkg.slice("@ai-built/".length)
                             : pkg;
                         taken.add(slug);
+                    }
+                }
+                for (const d of drafts) {
+                    if (currentDraftId && d?.id === currentDraftId) continue;
+                    for (const n of [d?.componentName, d?.name]) {
+                        if (n) taken.add(String(n).toLowerCase());
                     }
                 }
                 const base = "ComposedWidget";

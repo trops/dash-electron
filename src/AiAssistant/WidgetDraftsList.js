@@ -32,10 +32,12 @@ function relativeTime(ts) {
     return new Date(ts).toLocaleDateString();
 }
 
-function firstUserMessageExcerpt(chatHistory) {
+// The first thing the user typed — skipping hidden messages such as the
+// builder's automatic greeting, which is sent as a hidden user message.
+export function firstUserMessageExcerpt(chatHistory) {
     if (!Array.isArray(chatHistory)) return "";
     const firstUser = chatHistory.find(
-        (m) => m && (m.role === "user" || m.author === "user")
+        (m) => m && !m.hidden && (m.role === "user" || m.author === "user")
     );
     if (!firstUser) return "";
     const text =
