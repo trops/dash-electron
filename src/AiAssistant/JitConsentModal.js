@@ -22,7 +22,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button, FontAwesomeIcon } from "@trops/dash-react";
 import { humanizeAction } from "@trops/dash-core";
-import { enqueueRequest, dequeueHead } from "./jitConsentQueue";
+import { enqueueRequest, dequeueHead, removeRequest } from "./jitConsentQueue";
 import {
     buildMcpPatternGrant,
     buildFsFilenameGrant,
@@ -84,6 +84,16 @@ export const JitConsentModal = () => {
             // current head shouldn't disturb in-flight submission UI.
         });
         return cleanup;
+    }, []);
+
+    // A prompt main stopped waiting for (it timed out) closes here too;
+    // the widget already got an "expired — try again" error.
+    useEffect(() => {
+        if (!window.mainApi?.permissions?.onExpired) return;
+        return window.mainApi.permissions.onExpired((payload) => {
+            if (!payload?.requestId) return;
+            setQueue((q) => removeRequest(q, payload.requestId));
+        });
     }, []);
 
     // Reset the sibling-batch checkbox whenever the head request id

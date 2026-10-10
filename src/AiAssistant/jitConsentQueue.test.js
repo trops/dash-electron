@@ -15,7 +15,11 @@
 const test = require("node:test");
 const assert = require("node:assert");
 
-const { enqueueRequest, dequeueHead } = require("./jitConsentQueue");
+const {
+    enqueueRequest,
+    dequeueHead,
+    removeRequest,
+} = require("./jitConsentQueue");
 
 test("enqueue: appends to end (FIFO)", () => {
     const out = enqueueRequest([{ requestId: "a" }], { requestId: "b" });
@@ -59,4 +63,23 @@ test("dequeue: does not mutate input array", () => {
     const before = [...initial];
     dequeueHead(initial);
     assert.deepStrictEqual(initial, before);
+});
+
+// A prompt main gave up on (widget:permission-expired) leaves the queue,
+// wherever it is, so no one answers a request nothing is waiting for.
+test("remove: drops the expired request by id", () => {
+    const out = removeRequest(
+        [{ requestId: "a" }, { requestId: "b" }, { requestId: "c" }],
+        "b"
+    );
+    assert.deepStrictEqual(out, [{ requestId: "a" }, { requestId: "c" }]);
+});
+
+test("remove: unknown id returns the same array", () => {
+    const initial = [{ requestId: "a" }];
+    assert.strictEqual(removeRequest(initial, "zzz"), initial);
+});
+
+test("remove: tolerates a non-array queue", () => {
+    assert.deepStrictEqual(removeRequest(null, "a"), []);
 });
