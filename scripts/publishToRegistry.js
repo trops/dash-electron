@@ -481,6 +481,14 @@ function buildManifest(widgetDirName, scope) {
     // Use registry API download endpoint (the ZIP is stored on the registry, not GitHub releases)
     const downloadUrl = `${REGISTRY_BASE_URL}/api/packages/${scope}/${registryName}/download?version={version}`;
 
+    // The MCP tools the package calls (e.g. { algolia: { tools:
+    // ["algolia_search_*"] } }), same block the in-app publish sends. The
+    // app's update check compares it with what the user granted and asks
+    // for anything new before installing.
+    const permissions = scanPackagePermissions(
+        path.join(WIDGETS_DIR, widgetDirName)
+    );
+
     return {
         scope: scope,
         name: registryName,
@@ -495,7 +503,27 @@ function buildManifest(widgetDirName, scope) {
         publishedAt: new Date().toISOString(),
         widgets: manifestWidgets,
         appOrigin: pkg.name || "",
+        ...(permissions ? { permissions } : {}),
     };
+}
+
+/**
+ * Declared MCP permissions for a widget package directory, from
+ * dash-core's scanner. Null when the package calls no MCP tools, or when
+ * the installed dash-core predates the standalone scanner export.
+ */
+function scanPackagePermissions(packageDir) {
+    let scanner;
+    try {
+        scanner = require("@trops/dash-core/scanner");
+    } catch (e) {
+        console.warn(
+            `  ⚠ Permission scan skipped (dash-core scanner unavailable): ${e.message}`
+        );
+        return null;
+    }
+    const perms = scanner.scanWidgetPackagePermissions(packageDir);
+    return perms && Object.keys(perms).length > 0 ? perms : null;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────
