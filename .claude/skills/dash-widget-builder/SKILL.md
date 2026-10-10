@@ -810,11 +810,14 @@ Bot events are named `bot:<ref>[<botId>].<event>`:
 | `completed`                  | a run finished        | `botId`, `ref`, `botName`, `trigger`, `output`                                  |
 | `failed`                     | a run failed          | `botId`, `ref`, `botName`, `trigger`, `error`                                   |
 | `tool.<providerType>.<tool>` | a tool call succeeded | `botId`, `ref`, `botName`, `provider`, `providerType`, `tool`, `args`, `result` |
+| `result.<name>`              | the bot sent a result | `botId`, `ref`, `botName`, `name`, `label`, `items`, `summary`, `sentAt`        |
 
 -   `output` is the bot's final answer as text (Markdown possible); `error`
     is a readable message. Both, and a tool's `result`, are capped at 8 KB.
 -   `trigger` is how the run started: `"manual"`, `"schedule"` or `"event"`.
 -   Team leads never publish — only regular bots appear as sources.
+-   `result.<name>` is structured data the bot chose to send (see
+    "Showing a bot's results" below) — prefer it over parsing `output`.
 
 Same envelope rule as widget events — unwrap first:
 
@@ -839,6 +842,90 @@ useEffect(() => {
 ```js
 eventHandlers: ["onBotUpdate"],
 ```
+
+### Showing a bot's results
+
+When a widget's job is to show what a bot found — important emails, open
+PRs, leads to call — build it on the bot's **result** event, not its
+`completed` text. A bot declares named results in its settings
+(**Results**, e.g. "Important emails") and reports each one to its dashboard
+as a list of items. The widget just declares a handler; the user wires it to
+"<bot> › <result> (result)" in **Configure › Listeners**. Never hardcode a bot id, ref or
+result name.
+
+The payload (after unwrapping the envelope):
+
+-   `items` — the list, newest state each time (it replaces the previous
+    one; an empty list means "nothing right now"). Each item has a `title`
+    and usually some of `subtitle`, `detail`, `link` (http/https),
+    `time` (ISO 8601). Bots may add other fields (`from`, `priority`,
+    `count`…) — use them when present, never require them.
+-   `summary` — optional one-liner ("3 emails need a reply"), or `null`.
+-   `label`, `botName`, `sentAt` — for a header or "updated 5 min ago".
+
+The latest result is saved, so a widget that opens later gets it straight
+away — delivered to the same handler with `envelope.replay === true`. Treat
+it exactly like a live one.
+
+Items hold text from outside (email subjects, web pages): render them as
+plain text only — never `dangerouslySetInnerHTML`. Show `link` only when the
+user asks for links to open; opening one needs
+`window.mainApi.shell.openExternal(item.link)` (http/https only), which adds
+a permission the user must grant at install, so don't add it by default.
+
+```jsx
+import { useEffect, useRef, useState } from "react";
+import { useWidgetEvents } from "@trops/dash-core";
+import { Panel, SubHeading2, Paragraph, EmptyState } from "@trops/dash-react";
+
+export default function ImportantEmails() {
+    const { listen, listeners } = useWidgetEvents();
+    const [result, setResult] = useState(null);
+    const onResultRef = useRef(null);
+    onResultRef.current = (envelope) => {
+        const payload = envelope?.message || envelope;
+        if (!payload || !Array.isArray(payload.items)) return;
+        setResult(payload);
+    };
+    useEffect(() => {
+        listen(listeners, {
+            onEmails: (envelope) => onResultRef.current(envelope),
+        });
+    }, [listen, listeners]);
+
+    if (!result) {
+        return (
+            <Panel>
+                <EmptyState
+                    title="No emails yet"
+                    description="Connect this widget to your bot in Configure › Listeners."
+                />
+            </Panel>
+        );
+    }
+    return (
+        <Panel>
+            <SubHeading2 title={result.label} />
+            {result.summary ? <Paragraph text={result.summary} /> : null}
+            {result.items.map((item, i) => (
+                <div key={item.link || i}>
+                    <Paragraph text={item.title} />
+                    {item.subtitle ? <Paragraph text={item.subtitle} /> : null}
+                    {item.detail ? <Paragraph text={item.detail} /> : null}
+                </div>
+            ))}
+        </Panel>
+    );
+}
+```
+
+```js
+eventHandlers: ["onEmails"],
+```
+
+If the bot doesn't send the result yet, tell the user to open the bot,
+add it under **Results**, and ask the bot (in its instructions) to
+send it.
 
 ### Tell the user
 

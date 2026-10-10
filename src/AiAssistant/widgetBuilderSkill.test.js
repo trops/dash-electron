@@ -75,6 +75,19 @@ describe("dash-widget-builder skill — cross-widget events", () => {
         // Wired by the user in Listeners — not hardcoded in the widget.
         expect(events).toMatch(/Listeners/);
     });
+
+    test("teaches showing a bot's results (team-dashboards TD-003)", () => {
+        expect(events).toMatch(/### Showing a bot's results/);
+        expect(events).toMatch(/result\.<name>/);
+        // The payload a results widget reads.
+        expect(events).toMatch(/payload\.items/);
+        expect(events).toMatch(/summary/);
+        // A widget opened later gets the saved result as a replay.
+        expect(events).toMatch(/envelope\.replay === true/);
+        // Outside text: plain text only, links through openExternal.
+        expect(events).toMatch(/never `dangerouslySetInnerHTML`/);
+        expect(events).toMatch(/mainApi\.shell\.openExternal\(item\.link\)/);
+    });
 });
 
 describe("dash-widget-builder skill — scheduled tasks", () => {
