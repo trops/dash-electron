@@ -24,6 +24,7 @@ import { Button, FontAwesomeIcon } from "@trops/dash-react";
 import { humanizeAction } from "@trops/dash-core";
 import { enqueueRequest, dequeueHead } from "./jitConsentQueue";
 import {
+    buildMcpPatternGrant,
     buildFsFilenameGrant,
     buildFsAnyGrant,
     buildNetHostGrant,
@@ -115,6 +116,10 @@ export const JitConsentModal = () => {
     const innerArgs = args?.args || {};
     const pathArg = findPathArg(innerArgs);
     const isWriteVerb = WRITE_VERB.test(toolName);
+    // A wildcard the widget declares that covers this tool (e.g.
+    // "algolia_search_*" — one search tool per index). Sent by the gate.
+    const toolPattern =
+        typeof request.toolPattern === "string" ? request.toolPattern : null;
 
     const grantToolOnly = () => ({
         grantOrigin: "live",
@@ -211,6 +216,16 @@ export const JitConsentModal = () => {
     const handleAllowToolOnly = () => {
         setIsSubmitting(true);
         respond({ approve: true, scope: "tool", granted: grantToolOnly() });
+    };
+
+    const handleAllowToolPattern = () => {
+        if (!toolPattern) return;
+        setIsSubmitting(true);
+        respond({
+            approve: true,
+            scope: "tool-pattern",
+            granted: buildMcpPatternGrant({ serverName, pattern: toolPattern }),
+        });
     };
 
     const handleAllowToolWithPath = (p) => {
@@ -508,6 +523,18 @@ export const JitConsentModal = () => {
                                 backgroundColor="bg-gray-800"
                                 textColor="text-gray-200"
                                 hoverBackgroundColor="hover:bg-gray-700"
+                                disabled={isSubmitting}
+                            />
+                        )}
+                        {domain === "mcp" && toolPattern && !pathArg && (
+                            <Button
+                                title={`Allow all ${toolPattern} tools`}
+                                onClick={handleAllowToolPattern}
+                                textSize="text-xs"
+                                padding="py-1.5 px-3"
+                                backgroundColor="bg-gray-700"
+                                textColor="text-gray-100"
+                                hoverBackgroundColor="hover:bg-gray-600"
                                 disabled={isSubmitting}
                             />
                         )}

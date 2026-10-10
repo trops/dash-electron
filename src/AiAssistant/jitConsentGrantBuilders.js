@@ -79,7 +79,26 @@ function buildNetAnyGrant({ action }) {
     };
 }
 
+/**
+ * MCP grant for a declared wildcard ("algolia_search_*") — one approval
+ * covers every tool it matches, e.g. one search tool per Algolia index.
+ * The gate accepts only the pattern it offered for this request.
+ */
+function buildMcpPatternGrant({ serverName, pattern }) {
+    return {
+        grantOrigin: "live",
+        servers: {
+            [serverName]: {
+                tools: [pattern],
+                readPaths: [],
+                writePaths: [],
+            },
+        },
+    };
+}
+
 module.exports = {
+    buildMcpPatternGrant,
     buildFsFilenameGrant,
     buildFsAnyGrant,
     buildNetHostGrant,

@@ -15,12 +15,34 @@ const test = require("node:test");
 const assert = require("node:assert");
 
 const {
+    buildMcpPatternGrant,
     buildFsFilenameGrant,
     buildFsAnyGrant,
     buildNetHostGrant,
     buildNetSubdomainGrant,
     buildNetAnyGrant,
 } = require("./jitConsentGrantBuilders");
+
+// ---- mcp builders ----
+
+test("buildMcpPatternGrant: grants the declared wildcard on the server, no paths", () => {
+    assert.deepStrictEqual(
+        buildMcpPatternGrant({
+            serverName: "Algolia Public HR",
+            pattern: "algolia_search_*",
+        }),
+        {
+            grantOrigin: "live",
+            servers: {
+                "Algolia Public HR": {
+                    tools: ["algolia_search_*"],
+                    readPaths: [],
+                    writePaths: [],
+                },
+            },
+        }
+    );
+});
 
 // ---- fs builders ----
 
