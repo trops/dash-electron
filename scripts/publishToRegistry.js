@@ -32,6 +32,7 @@ const {
     deleteFromApi,
 } = require("./lib/registryAuth");
 const { scanBundle } = require("./lib/bundleSecurityLint.cjs");
+const { scanPackagePermissions } = require("./lib/packagePermissions.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -485,9 +486,9 @@ function buildManifest(widgetDirName, scope) {
     // ["algolia_search_*"] } }), same block the in-app publish sends. The
     // app's update check compares it with what the user granted and asks
     // for anything new before installing.
-    const permissions = scanPackagePermissions(
-        path.join(WIDGETS_DIR, widgetDirName)
-    );
+    const permissions =
+        scanPackagePermissions(path.join(WIDGETS_DIR, widgetDirName))?.mcp ||
+        null;
 
     return {
         scope: scope,
@@ -505,25 +506,6 @@ function buildManifest(widgetDirName, scope) {
         appOrigin: pkg.name || "",
         ...(permissions ? { permissions } : {}),
     };
-}
-
-/**
- * Declared MCP permissions for a widget package directory, from
- * dash-core's scanner. Null when the package calls no MCP tools, or when
- * the installed dash-core predates the standalone scanner export.
- */
-function scanPackagePermissions(packageDir) {
-    let scanner;
-    try {
-        scanner = require("@trops/dash-core/scanner");
-    } catch (e) {
-        console.warn(
-            `  ⚠ Permission scan skipped (dash-core scanner unavailable): ${e.message}`
-        );
-        return null;
-    }
-    const perms = scanner.scanWidgetPackagePermissions(packageDir);
-    return perms && Object.keys(perms).length > 0 ? perms : null;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────

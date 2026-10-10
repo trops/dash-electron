@@ -19,13 +19,14 @@
  * shares MCP servers per process. Slice 3 will move to per-dashboard server
  * scope reconfiguration; until then, the modal makes the implication explicit.
  */
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useRef, useState, useContext } from "react";
 import {
     Modal,
     Button,
     ThemeContext,
     FontAwesomeIcon,
 } from "@trops/dash-react";
+import { AppContext, normalizeGrantsByProviderType } from "@trops/dash-core";
 
 function _isSubsetOfArray(declared, granted) {
     if (!Array.isArray(declared) || declared.length === 0) return true;
@@ -74,6 +75,16 @@ const buildInitialSelectionForRequest = (payload) => {
 
 export const WidgetMcpConsentModal = () => {
     const { currentTheme } = useContext(ThemeContext);
+    // For comparing name-keyed grants with type-keyed declarations. A ref
+    // so the IPC listener (registered once) sees the current providers.
+    // Mounted beside the dashboard stage, outside AppContext — fall back
+    // to the app context the stage broadcasts on window.
+    const providers =
+        useContext(AppContext)?.providers ||
+        window.__dashAppContext?.providers ||
+        null;
+    const providersRef = useRef(providers);
+    providersRef.current = providers;
     const borderColor =
         currentTheme?.["border-primary-dark"] || "border-gray-700/50";
 
@@ -108,9 +119,19 @@ export const WidgetMcpConsentModal = () => {
                     const row = allRows.find(
                         (r) => r.widgetId === payload.widgetId
                     );
+                    // Grants are saved by provider name, declarations by
+                    // type — compare against a type-keyed copy.
+                    const byType = row
+                        ? normalizeGrantsByProviderType(
+                              [row],
+                              providersRef.current ||
+                                  window.__dashAppContext?.providers ||
+                                  null
+                          )[0]
+                        : null;
                     if (
-                        row &&
-                        isDeclaredFullyGranted(payload.declared, row.granted)
+                        byType &&
+                        isDeclaredFullyGranted(payload.declared, byType.granted)
                     ) {
                         return;
                     }
