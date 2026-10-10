@@ -717,6 +717,7 @@ const {
     BOTS_ASK_LEAD,
     BOTS_LIST_LEADS,
     BOTS_GET_RUNS,
+    BOTS_GET_LATEST_RESULT,
     BOTS_LIST_RECENT_RUNS,
     BOTS_LIST_DRAFTS,
     BOTS_DISMISS_DRAFT,
@@ -2295,6 +2296,11 @@ function createWindow() {
             botController.getRuns(msg && msg.botId, {
                 limit: msg && msg.limit,
             })
+        );
+        // Team dashboards (TD-002): the latest result a bot sent, so a
+        // widget that opens later still shows it.
+        logger.loggedHandle(BOTS_GET_LATEST_RESULT, (e, msg) =>
+            botController.getLatestResult(msg && msg.eventType)
         );
         // Bot monitor (TEAM-011 B3): the latest runs across every bot.
         // Lead drafts (TEAM-005): bots a team lead proposed, awaiting review.
