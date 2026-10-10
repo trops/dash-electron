@@ -2130,7 +2130,22 @@ function createWindow() {
 
         // --- Widget System ---
         setupWidgetRegistryHandlers();
-        setupWidgetMcpGrantsHandlers();
+        // Grants from declared permissions are keyed by provider type;
+        // dash-core saves them under the user's provider names (the key
+        // tool calls are checked against), so it needs the provider list.
+        setupWidgetMcpGrantsHandlers({
+            listProviders: () =>
+                (
+                    providerController.listProviders(
+                        mainWindow,
+                        resolveAppIdentifier(process.env, readPackageName())
+                    )?.providers || []
+                ).map(({ name, type, providerClass }) => ({
+                    name,
+                    type,
+                    providerClass,
+                })),
+        });
         setupWidgetMountTokenHandlers();
         setupJitConsentHandlers();
 

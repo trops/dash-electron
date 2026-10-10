@@ -19,10 +19,17 @@
  *   - All widgets on the dashboard lack a manifest (drips through to
  *     runtime JIT, same as today)
  */
-import React, { useContext, useEffect, useState, useCallback } from "react";
+import React, {
+    useContext,
+    useEffect,
+    useRef,
+    useState,
+    useCallback,
+} from "react";
 import { createPortal } from "react-dom";
 import { Button, FontAwesomeIcon } from "@trops/dash-react";
 import {
+    AppContext,
     computeDashboardPreflight,
     humanizeAction,
     WorkspaceContext,
@@ -175,6 +182,17 @@ export const PreflightConsentModal = () => {
     const workspace = useContext(WorkspaceContext);
     const workspaceId = workspace?.workspaceData?.id;
     const layout = workspace?.workspaceData?.layout;
+    // Grants are saved by provider name, declarations by type — the scan
+    // needs the providers to compare them. A ref so a provider change
+    // doesn't re-run the once-per-open scan.
+    // Mounted beside the dashboard stage, outside AppContext — fall back
+    // to the app context the stage broadcasts on window.
+    const providers =
+        useContext(AppContext)?.providers ||
+        window.__dashAppContext?.providers ||
+        null;
+    const providersRef = useRef(providers);
+    providersRef.current = providers;
 
     // null when no scan has run, [] when scan ran with nothing missing.
     const [needingWidgets, setNeedingWidgets] = useState(null);
@@ -193,6 +211,10 @@ export const PreflightConsentModal = () => {
             const result = computeDashboardPreflight({
                 layout,
                 allRows: Array.isArray(allRows) ? allRows : [],
+                providers:
+                    providersRef.current ||
+                    window.__dashAppContext?.providers ||
+                    null,
             });
             const ws = result.widgets || [];
             setNeedingWidgets(ws);
