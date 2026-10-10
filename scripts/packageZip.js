@@ -18,6 +18,7 @@
 const fs = require("fs");
 const path = require("path");
 const AdmZip = require("adm-zip");
+const { scanPackagePermissions } = require("./lib/packagePermissions.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const DIST_DIR = path.join(ROOT, "dist");
@@ -295,6 +296,27 @@ function main() {
 
     // Add dash.json
     zip.addFile("dash.json", Buffer.from(JSON.stringify(dashJson, null, 2)));
+
+    // package.json with the MCP tools the package calls. The app's update
+    // check reads dash.permissions from the zip's package.json to ask for
+    // new tools before installing (zips from the in-app publish carry one).
+    const permissions = scanPackagePermissions(effectiveWidgetsDir);
+    if (permissions) {
+        const zipPackageJson = {
+            name: zipBaseName,
+            version,
+            dash: { permissions },
+        };
+        zip.addFile(
+            "package.json",
+            Buffer.from(JSON.stringify(zipPackageJson, null, 2))
+        );
+        console.log(
+            `  Permissions: ${Object.entries(permissions.mcp)
+                .map(([server, p]) => `${server} (${p.tools.join(", ")})`)
+                .join("; ")}`
+        );
+    }
 
     // Write ZIP
     const zipFileName = `widgets-${zipBaseName}-v${version}.zip`;
