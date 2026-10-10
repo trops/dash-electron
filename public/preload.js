@@ -193,6 +193,16 @@ const extendedApi = {
                     handler
                 );
         },
+        // Main gave up waiting (the prompt timed out); drop that request.
+        onExpired: (callback) => {
+            const handler = (_event, payload) => callback(payload);
+            ipcRenderer.on("widget:permission-expired", handler);
+            return () =>
+                ipcRenderer.removeListener(
+                    "widget:permission-expired",
+                    handler
+                );
+        },
         respond: (requestId, decision) =>
             ipcRenderer.send("widget:permission-response", {
                 requestId,

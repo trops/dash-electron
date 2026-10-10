@@ -44,4 +44,16 @@ function dequeueHead(queue) {
     return queue.slice(1);
 }
 
-module.exports = { enqueueRequest, dequeueHead };
+/**
+ * Remove a request by id, wherever it sits — main sends
+ * `widget:permission-expired` when a prompt times out, and answering it
+ * after that would do nothing. Returns the same array when the id isn't
+ * queued.
+ */
+function removeRequest(queue, requestId) {
+    if (!Array.isArray(queue)) return [];
+    if (!queue.some((entry) => entry?.requestId === requestId)) return queue;
+    return queue.filter((entry) => entry?.requestId !== requestId);
+}
+
+module.exports = { enqueueRequest, dequeueHead, removeRequest };
