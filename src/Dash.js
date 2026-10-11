@@ -15,6 +15,7 @@ import {
     extractWidgetConfigs,
     setHostModules,
     makeScopedComponentId,
+    setWidgetBuilderRenderer,
 } from "@trops/dash-core";
 
 // Debug Console (standalone window)
@@ -28,6 +29,13 @@ import { WidgetMcpConsentModal } from "./AiAssistant/WidgetMcpConsentModal";
 import { JitConsentModal } from "./AiAssistant/JitConsentModal";
 import { PreflightConsentModal } from "./AiAssistant/PreflightConsentModal";
 import { registerWidgetPreview } from "./AiAssistant/registerWidgetPreview";
+import { makeEmbeddedWidgetBuilder } from "./AiAssistant/EmbeddedWidgetBuilder";
+import {
+    finalizeWidgetBuilderSession,
+    primeWidgetBuilderChat,
+    suppressStageRemount,
+    widgetBuilderBlocksRemount,
+} from "./AiAssistant/finalizeWidgetBuilderSession";
 
 // Local widgets that integrate with Dash. We discover every
 // `src/Widgets/<Package>/<Widget>.dash.js` via webpack's require.context
@@ -46,6 +54,9 @@ setHostModules({ "@trops/dash-core": dashCore });
 // Give dash-core's Widgets page the Widget Builder's sandboxed (iframe)
 // preview for live widget previews (app-navigation NAV-011).
 registerWidgetPreview();
+// The Create screen shows the Widget Builder inside itself (create-entry PRD
+// CRE-005 AC1). registerBundleConfigs is hoisted (function declaration below).
+setWidgetBuilderRenderer(makeEmbeddedWidgetBuilder(registerBundleConfigs));
 
 // the mainApi from electron bridge
 // you can overwrite this API with an abstraction for React
@@ -506,10 +517,8 @@ function WidgetPopoutDashboard() {
 // Main App
 class App extends React.Component {
     _removeNotificationClickListener = null;
-    // Suppress stageKey bump briefly after the widget builder closes
-    // so a late-arriving IPC widget:installed event doesn't remount
-    // the dashboard and discard unsaved layout edits.
-    _suppressStageKeyUntil = 0;
+    // The "don't remount after a builder closes" guard lives in
+    // finalizeWidgetBuilderSession (shared with the builder inside Create).
 
     state = {
         stageKey: 0,
@@ -534,19 +543,7 @@ class App extends React.Component {
             // loads an empty conversation on its first render — UNLESS
             // we're resuming a draft, in which case the modal will
             // overwrite the chat from the draft's saved chatHistory.
-            if (!resumeDraftId) {
-                try {
-                    localStorage.setItem(
-                        "dash-widget-builder",
-                        JSON.stringify({ messages: [] })
-                    );
-                } catch (_) {
-                    /* ignore */
-                }
-            }
-            if (window.mainApi?.llm?.endCliSession) {
-                window.mainApi.llm.endCliSession("dash-widget-builder");
-            }
+            primeWidgetBuilderChat({ resuming: !!resumeDraftId });
             // The Create screen sends `prompt` — the user's description,
             // sent as the chat's first message. It isn't part of the cell.
             const { prompt, ...cellDetail } = detail;
@@ -775,7 +772,7 @@ class App extends React.Component {
                         if (
                             !NO_REMOUNT_TOOLS.has(toolName) &&
                             !this.state.isWidgetBuilderOpen &&
-                            Date.now() > this._suppressStageKeyUntil
+                            !widgetBuilderBlocksRemount()
                         ) {
                             this.setState((prev) => ({
                                 stageKey: prev.stageKey + 1,
@@ -880,10 +877,7 @@ class App extends React.Component {
         // down the app shell (sidebar, Settings modal, AI panel, etc.)
         // on every widget install. Uninstall still uses the legacy
         // event since every component map entry may be affected.
-        if (
-            !this.state.isWidgetBuilderOpen &&
-            Date.now() > this._suppressStageKeyUntil
-        ) {
+        if (!this.state.isWidgetBuilderOpen && !widgetBuilderBlocksRemount()) {
             window.dispatchEvent(
                 new CustomEvent("dash:widget-installed", {
                     detail: { widgetName },
@@ -943,9 +937,16 @@ class App extends React.Component {
                                         setIsOpen={async (open) => {
                                             if (!open) {
                                                 // Modal closing — do all deferred work NOW
+                                                // The instance field, not state: the
+                                                // drafts list calls onInstalled and then
+                                                // closes in the same tick, before React
+                                                // applies the setState.
                                                 const installed =
+                                                    this._installedWidgetInfo ||
                                                     this.state
                                                         .installedWidgetInfo;
+                                                this._installedWidgetInfo =
+                                                    null;
                                                 const ctx =
                                                     this.state
                                                         .widgetBuilderCellContext;
@@ -957,8 +958,7 @@ class App extends React.Component {
                                                 // Suppress stageKey bumps for 3s so
                                                 // a late IPC event doesn't remount
                                                 // the dashboard and lose dirty edits.
-                                                this._suppressStageKeyUntil =
-                                                    Date.now() + 3000;
+                                                suppressStageRemount();
                                                 // Clear ALL transient widget-builder state on
                                                 // close so a subsequent open ("Edit with AI"
                                                 // on a different widget, or "Build widget"
@@ -984,115 +984,17 @@ class App extends React.Component {
                                                     installedWidgetInfo: null,
                                                 });
 
-                                                if (installed) {
-                                                    // Register widget in renderer's ComponentManager
-                                                    try {
-                                                        const bundleResult =
-                                                            await window.mainApi.widgets.readBundle(
-                                                                installed.scopedName
-                                                            );
-                                                        if (
-                                                            bundleResult?.success
-                                                        ) {
-                                                            // replaceExisting=true: we just
-                                                            // installed this widget (possibly
-                                                            // a post-edit update), so the
-                                                            // freshly-compiled bundle must
-                                                            // overwrite the stale component
-                                                            // that may already be in
-                                                            // ComponentManager from the
-                                                            // pre-edit state.
-                                                            registerBundleConfigs(
-                                                                installed.scopedName,
-                                                                bundleResult.source,
-                                                                null,
-                                                                {
-                                                                    replaceExisting: true,
-                                                                }
-                                                            );
-                                                        }
-                                                    } catch (regErr) {
-                                                        console.warn(
-                                                            "[App] Widget registration:",
-                                                            regErr
-                                                        );
+                                                // Register, refresh the widget lists, and
+                                                // swap / place it in its cell.
+                                                await finalizeWidgetBuilderSession(
+                                                    {
+                                                        installed,
+                                                        cellContext: ctx,
+                                                        editContext: editCtx,
+                                                        registerBundle:
+                                                            registerBundleConfigs,
                                                     }
-
-                                                    // Notify the widget sidebar (and anyone
-                                                    // else listening) that the installed-widget
-                                                    // list changed. This is the event the
-                                                    // main-process `widget:installed` broadcast
-                                                    // would normally trigger — but the ai-build
-                                                    // handler suppresses that broadcast when
-                                                    // cellContext is set (to avoid remounting
-                                                    // the dashboard). We do it here instead so
-                                                    // the sidebar refreshes without tearing
-                                                    // down the app shell.
-                                                    window.dispatchEvent(
-                                                        new Event(
-                                                            "dash:widgets-updated"
-                                                        )
-                                                    );
-                                                    window.dispatchEvent(
-                                                        new CustomEvent(
-                                                            "dash:widget-installed",
-                                                            {
-                                                                detail: {
-                                                                    widgetName:
-                                                                        installed.scopedName,
-                                                                },
-                                                            }
-                                                        )
-                                                    );
-
-                                                    if (
-                                                        editCtx?.originalWidgetId &&
-                                                        ctx?.gridItemId
-                                                    ) {
-                                                        // REMIX mode: swap existing widget in-place
-                                                        window.dispatchEvent(
-                                                            new CustomEvent(
-                                                                "dash:swap-widget-in-cell",
-                                                                {
-                                                                    detail: {
-                                                                        widgetComponentName:
-                                                                            installed.componentName,
-                                                                        widgetId:
-                                                                            editCtx.originalWidgetId,
-                                                                        cellNumber:
-                                                                            ctx.cellNumber,
-                                                                        gridItemId:
-                                                                            ctx.gridItemId,
-                                                                        workspaceId:
-                                                                            ctx.workspaceId,
-                                                                    },
-                                                                }
-                                                            )
-                                                        );
-                                                    } else if (
-                                                        ctx?.cellNumber &&
-                                                        ctx?.gridItemId
-                                                    ) {
-                                                        // NEW mode: place in empty cell
-                                                        window.dispatchEvent(
-                                                            new CustomEvent(
-                                                                "dash:place-widget-in-cell",
-                                                                {
-                                                                    detail: {
-                                                                        widgetComponentName:
-                                                                            installed.componentName,
-                                                                        cellNumber:
-                                                                            ctx.cellNumber,
-                                                                        gridItemId:
-                                                                            ctx.gridItemId,
-                                                                        workspaceId:
-                                                                            ctx.workspaceId,
-                                                                    },
-                                                                }
-                                                            )
-                                                        );
-                                                    }
-                                                }
+                                                );
                                             } else {
                                                 this.setState({
                                                     isWidgetBuilderOpen: true,
@@ -1103,6 +1005,10 @@ class App extends React.Component {
                                             componentName,
                                             scopedName
                                         ) => {
+                                            this._installedWidgetInfo = {
+                                                componentName,
+                                                scopedName,
+                                            };
                                             this.setState({
                                                 installedWidgetInfo: {
                                                     componentName,

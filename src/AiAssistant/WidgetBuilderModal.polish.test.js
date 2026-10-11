@@ -19,7 +19,7 @@ describe("WidgetBuilderModal — polish", () => {
     test("the whole builder (chat included) renders inside the app theme", () => {
         expect(source).toMatch(/window\.__dashAppThemeContext/);
         expect(source).toMatch(
-            /<ThemeContext\.Provider\s+value=\{chatThemeCtx\}>\s*<Modal/
+            /<ThemeContext\.Provider\s+value=\{chatThemeCtx\}>\s*<Frame/
         );
     });
 

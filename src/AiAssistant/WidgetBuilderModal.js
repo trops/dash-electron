@@ -901,6 +901,11 @@ function extractCategoryFromConfigCode(configCode) {
     return match ? match[1] : null;
 }
 
+// The builder's frame inside the Create screen: fills Create's body.
+const EmbeddedFrame = ({ children }) => (
+    <div className="flex flex-col flex-1 min-h-0 w-full h-full">{children}</div>
+);
+
 export const WidgetBuilderModal = ({
     isOpen,
     setIsOpen,
@@ -917,6 +922,11 @@ export const WidgetBuilderModal = ({
     // CRE-005): skips the drafts list and is sent, visibly, as the
     // chat's first message instead of the hidden greeting.
     initialPrompt = null,
+    // Rendered inside the Create screen (create-entry PRD CRE-005 AC1): the
+    // same body without the builder's own modal frame and header — Create's
+    // header (← Back, ×) stands in for them. Closing still goes through
+    // setIsOpen(false), which the host maps to "finish, then close Create".
+    embedded = false,
 }) => {
     // The modal renders outside DashboardStage's context tree, so
     // ThemeContext and AppContext are empty here. We bridge them via
@@ -1691,9 +1701,11 @@ ${
             setViewMode(null);
             return;
         }
-        if (effectiveEditContext || initialPrompt) {
-            // Remix / edit flow, or a prompt from the Create screen (the
-            // user already said what to build) — skip the drafts gate.
+        if (effectiveEditContext || initialPrompt || resumeDraftId) {
+            // Remix / edit flow, a prompt from the Create screen (the user
+            // already said what to build), or a draft picked to continue —
+            // skip the drafts gate. (With a draft, the list would race
+            // resumeFromDraft and could land on the list instead.)
             setViewMode("builder");
             return;
         }
@@ -3509,14 +3521,14 @@ ${
     const displayName =
         widgetName?.replace(/([A-Z])/g, " $1").trim() || "Widget";
 
+    const Frame = embedded ? EmbeddedFrame : Modal;
+    const frameProps = embedded
+        ? {}
+        : { isOpen, setIsOpen, width: "w-11/12", height: "h-5/6" };
+
     return (
         <ThemeContext.Provider value={chatThemeCtx}>
-            <Modal
-                isOpen={isOpen}
-                setIsOpen={setIsOpen}
-                width="w-11/12"
-                height="h-5/6"
-            >
+            <Frame {...frameProps}>
                 {/* e2e anchor — `data-testid="widget-builder-modal"` lets the
                 Playwright spec wait for the modal to be in the DOM after
                 dispatching `dash:open-widget-builder`. Bound to a wrapper
@@ -3526,23 +3538,24 @@ ${
                     data-testid="widget-builder-modal"
                     className="contents"
                 ></div>
-                {/* Header */}
-                <div
-                    className={`flex items-center justify-between px-4 py-3 border-b ${borderColor} ${bgDark} shrink-0`}
-                >
-                    <div className="flex items-center gap-2 min-w-0">
-                        <FontAwesomeIcon
-                            icon="wand-magic-sparkles"
-                            className={`h-4 w-4 shrink-0 ${accentText}`}
-                        />
-                        <span
-                            className={`text-base font-semibold shrink-0 ${chromeText}`}
-                        >
-                            {isRemixMode
-                                ? "Edit Widget with AI"
-                                : "Build Widget with AI"}
-                        </span>
-                        {/* Widget identity subtitle — shown only in edit
+                {/* Header — Create's header replaces it when embedded */}
+                {!embedded && (
+                    <div
+                        className={`flex items-center justify-between px-4 py-3 border-b ${borderColor} ${bgDark} shrink-0`}
+                    >
+                        <div className="flex items-center gap-2 min-w-0">
+                            <FontAwesomeIcon
+                                icon="wand-magic-sparkles"
+                                className={`h-4 w-4 shrink-0 ${accentText}`}
+                            />
+                            <span
+                                className={`text-base font-semibold shrink-0 ${chromeText}`}
+                            >
+                                {isRemixMode
+                                    ? "Edit Widget with AI"
+                                    : "Build Widget with AI"}
+                            </span>
+                            {/* Widget identity subtitle — shown only in edit
                         mode so the user can see which widget they're
                         editing without having to look at the footer's
                         "Installs to …" line. originalComponentName
@@ -3550,34 +3563,37 @@ ${
                         (e.g. "ai-built.composedwidget3.ComposedWidget3"),
                         which is the canonical identifier the user
                         recognizes from their dashboard layout. */}
-                        {isRemixMode &&
-                            effectiveEditContext?.originalComponentName && (
-                                <>
-                                    <span className={`shrink-0 ${chromeMuted}`}>
-                                        —
-                                    </span>
-                                    <code
-                                        className={`text-xs font-mono truncate ${accentText}`}
-                                        title={
-                                            effectiveEditContext.originalComponentName
-                                        }
-                                    >
-                                        {
-                                            effectiveEditContext.originalComponentName
-                                        }
-                                    </code>
-                                </>
-                            )}
+                            {isRemixMode &&
+                                effectiveEditContext?.originalComponentName && (
+                                    <>
+                                        <span
+                                            className={`shrink-0 ${chromeMuted}`}
+                                        >
+                                            —
+                                        </span>
+                                        <code
+                                            className={`text-xs font-mono truncate ${accentText}`}
+                                            title={
+                                                effectiveEditContext.originalComponentName
+                                            }
+                                        >
+                                            {
+                                                effectiveEditContext.originalComponentName
+                                            }
+                                        </code>
+                                    </>
+                                )}
+                        </div>
+                        <button
+                            onClick={() => setIsOpen(false)}
+                            className={`p-1.5 rounded transition-colors ${chromeMuted} ${tk(
+                                "hover-bg-primary-medium"
+                            )}`}
+                        >
+                            <FontAwesomeIcon icon="times" className="h-4 w-4" />
+                        </button>
                     </div>
-                    <button
-                        onClick={() => setIsOpen(false)}
-                        className={`p-1.5 rounded transition-colors ${chromeMuted} ${tk(
-                            "hover-bg-primary-medium"
-                        )}`}
-                    >
-                        <FontAwesomeIcon icon="times" className="h-4 w-4" />
-                    </button>
-                </div>
+                )}
 
                 {/* Health-check banner — only renders when something is
                 actually broken. Kept above the split pane so it's
@@ -6296,7 +6312,7 @@ ${
                     onConfirm={handlePermissionConfirm}
                     onCancel={handlePermissionCancel}
                 />
-            </Modal>
+            </Frame>
         </ThemeContext.Provider>
     );
 };
