@@ -732,6 +732,7 @@ const {
     BOTS_SET_SETTINGS,
     BOTS_ASK_LEAD,
     BOTS_LIST_LEADS,
+    BOTS_LIST_DASH_TEAM,
     BOTS_GET_RUNS,
     BOTS_GET_LATEST_RESULT,
     BOTS_LIST_RECENT_RUNS,
@@ -2486,6 +2487,10 @@ function createWindow() {
         );
         // AI Assistant "To:" picker: team leads by dashboard (TEAM-013).
         logger.loggedHandle(BOTS_LIST_LEADS, () => botController.listLeads());
+        // The Dash team's role bots for the Bots page (create-entry CRE-011).
+        logger.loggedHandle(BOTS_LIST_DASH_TEAM, () =>
+            botController.listDashTeam()
+        );
 
         // --- Widget Event IPC Bridge ---
         // Broadcasts widget pub/sub events to all windows except the sender.

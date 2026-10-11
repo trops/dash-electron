@@ -152,9 +152,9 @@ Built-in bots, always present, that do the making. Each has one role, its own in
 | **Builder** | Generates widgets and bots, places and wires them                                                                      | write: drafts, dashboards, bot definitions; installs only what you approved | strong             |
 | **Checker** | Checks the work: each widget renders, each trigger fires, nothing exceeds what was approved (e.g. no send-email tools) | read-only + preview runs; can fail a step                                   | strong             |
 
--   [ ] AC1: The team exists for every user; it isn't on any dashboard and can't be deleted (it can be paused).
+-   [x] AC1 (dash-core #721 v0.1.736 — Planner/Scout/Builder/Checker created at startup, delete refused, pause saved across restarts): The team exists for every user; it isn't on any dashboard and can't be deleted (it can be paused).
 -   [ ] AC2: The conversation labels who's speaking or acting (PLANNER, SCOUT…); Building shows who did each step.
--   [ ] AC3: Each role's model is set per provider with sensible defaults (e.g. Anthropic: Planner Opus, Scout Haiku, Builder Sonnet, Checker Sonnet) and is editable in Settings.
+-   [x] AC3 (dash-core #721 — per-role picks per provider on the Bots page Dash team section; editable there rather than Settings, which became the Bots page): Each role's model is set per provider with sensible defaults (e.g. Anthropic: Planner Opus, Scout Haiku, Builder Sonnet, Checker Sonnet) and is editable in Settings.
 -   [ ] AC4: Roles hand off through the existing bot machinery (runs, events, results — team-dashboards), not one long prompt, so each is testable alone.
 -   [ ] AC5: The Checker can send a step back to the Builder ("Let Builder fix it"), at most twice, then asks the user.
 -   [ ] AC6: Answering questions ("what did my bots find today?") uses the Planner with read access to results — the same team, not a separate assistant.
