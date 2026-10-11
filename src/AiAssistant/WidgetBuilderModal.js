@@ -38,6 +38,14 @@ import {
     deriveWidgetOwnership,
 } from "@trops/dash-core";
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
+import { extractWidgetName } from "./extractWidgetName";
+import {
+    INITIAL_AUTO_FIX,
+    MAX_AUTO_FIX,
+    buildFixRequest,
+    onBuildError,
+    resetAutoFix,
+} from "./autoFixPolicy";
 import { ChatProviderGate } from "./ChatProviderGate";
 import { WidgetDraftsList, firstUserMessageExcerpt } from "./WidgetDraftsList";
 import { builderTheme, useBuilderTheme } from "./useBuilderTheme";
@@ -721,26 +729,6 @@ function derivePrimaryFromFileBlocks(files) {
     return { componentCode, configCode };
 }
 
-function extractWidgetName(code) {
-    if (!code) return null;
-    // Match common React component export patterns:
-    //   export default function WidgetName
-    //   export const WidgetName = (
-    //   export function WidgetName(
-    //   function WidgetName ... export default WidgetName
-    const patterns = [
-        /export\s+default\s+function\s+(\w+)/,
-        /export\s+(?:const|let|var)\s+(\w+)\s*=/,
-        /export\s+function\s+(\w+)/,
-        /export\s+default\s+(\w+)\s*;/,
-    ];
-    for (const re of patterns) {
-        const match = code.match(re);
-        if (match) return match[1];
-    }
-    return null;
-}
-
 // Mirrors validateWidget.cjs::VALID_CATEGORIES — kept in sync manually
 // (small enum, rarely changes). Used to populate the install-footer picker.
 const VALID_CATEGORIES = [
@@ -1023,6 +1011,7 @@ export const WidgetBuilderModal = ({
             (payload && payload.message) || "Widget runtime error in iframe";
         const stack = (payload && payload.stack) || null;
         const friendly = `Widget preview error (${kind}): ${message}`;
+        previewErrorKindRef.current = "runtime";
         setPreviewError(friendly);
         setPreviewErrorMeta({
             kind: "iframe-error",
@@ -1080,6 +1069,17 @@ export const WidgetBuilderModal = ({
         selectedProviderForBuildRef.current = selectedProviderForBuild;
     }, [selectedProviderForBuild]);
     const [previewError, setPreviewError] = useState(null);
+    // Where the current previewError came from: "compile" (a build of the
+    // AI's code, or the code checks after it), "runtime" (the widget threw),
+    // or "other". Only build errors are fixed automatically (phase 2d).
+    const previewErrorKindRef = useRef(null);
+    // Automatic build-error fixes: the policy's state, the request last
+    // sent (so it isn't mistaken for the user's own message), and what the
+    // preview area shows — "fixing" while the AI corrects its code,
+    // "exhausted" when the tries ran out.
+    const autoFixStateRef = useRef(INITIAL_AUTO_FIX);
+    const lastAutoFixTextRef = useRef(null);
+    const [autoFix, setAutoFix] = useState({ status: "idle", attempt: 0 });
     // Test-inputs form state (slice 17b.9). One key per userConfig
     // field — the user types values here to exercise the previewed
     // widget with real data without leaving the modal. Reset when
@@ -2156,6 +2156,7 @@ ${
 
         const handleCapture = (message) => {
             console.warn("[WidgetBuilderModal] suppressed error:", message);
+            previewErrorKindRef.current = "runtime";
             setPreviewError(message || "Widget runtime error");
             setPreviewComponent(null);
         };
@@ -2449,7 +2450,19 @@ ${
     const compilePreview = useCallback(
         async (code, sourcePackageOverride = null) => {
             const name = extractWidgetName(code.componentCode);
-            if (!name || !code.componentCode) return;
+            if (!code.componentCode) return;
+            if (!name) {
+                // Can't tell which component to mount — a build error the
+                // AI can fix (sent automatically), never a silent stall.
+                lastCompiledCode.current = code.componentCode;
+                previewErrorKindRef.current = "compile";
+                setPreviewComponent(null);
+                setPreviewErrorMeta(null);
+                setPreviewError(
+                    "Couldn't find the widget's component in the code. It needs a named, exported component, for example `export default function MyWidget() { … }`."
+                );
+                return;
+            }
 
             // Bump the request counter. Any in-flight compile for an
             // earlier widget will see that its id is stale and bail out
@@ -2459,6 +2472,7 @@ ${
             const isStale = () => compileRequestIdRef.current !== requestId;
 
             setIsCompiling(true);
+            previewErrorKindRef.current = "compile";
             setPreviewError(null);
             setPreviewComponent(null);
             setProviderCorrection(null);
@@ -2722,6 +2736,9 @@ ${
                     // imports + identifier component refs).
                     setPreviewParsedConfig(match.config);
                     setPreviewError(null);
+                    // It compiled — the next failure gets fresh tries.
+                    autoFixStateRef.current = resetAutoFix();
+                    setAutoFix({ status: "idle", attempt: 0 });
                 } else {
                     setPreviewWidgetDefaults({});
                     setPreviewTestInputs({});
@@ -2745,6 +2762,60 @@ ${
             clearConsoleEvents,
         ]
     );
+
+    // Send a build-error fix request to this builder's chat. Hidden: it's
+    // the builder talking to the AI, not the user.
+    const sendFixRequest = useCallback((content, { hidden }) => {
+        try {
+            window.dispatchEvent(
+                new CustomEvent("dash:chat-core-send", {
+                    detail: {
+                        persistKey: "dash-widget-builder",
+                        content,
+                        hidden,
+                    },
+                })
+            );
+        } catch (_) {
+            /* ignore */
+        }
+    }, []);
+
+    // Build errors go back to the AI by themselves (phase 2d), up to
+    // MAX_AUTO_FIX times in a row; the user sees the error only when the
+    // tries run out. A short pause lets the AI's reply that produced the
+    // code finish before the next message.
+    useEffect(() => {
+        if (!previewError || isCompiling) return undefined;
+        const r = onBuildError(autoFixStateRef.current, {
+            code: lastCompiledCode.current,
+            kind: previewErrorKindRef.current,
+        });
+        autoFixStateRef.current = r.state;
+        if (r.exhausted) {
+            setAutoFix({ status: "exhausted", attempt: r.state.attempts });
+            return undefined;
+        }
+        if (!r.send) return undefined;
+        setAutoFix({ status: "fixing", attempt: r.state.attempts });
+        const content = buildFixRequest(previewError, previewErrorMeta);
+        lastAutoFixTextRef.current = content;
+        const t = setTimeout(
+            () => sendFixRequest(content, { hidden: true }),
+            1500
+        );
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [previewError, isCompiling]);
+
+    // The user's own message (anything but the builder's fix request)
+    // starts the automatic fixes over.
+    const handleChatEvent = useCallback((event, payload) => {
+        if (event !== "messageSent") return;
+        if (payload && payload.text === lastAutoFixTextRef.current) return;
+        autoFixStateRef.current = resetAutoFix();
+        setAutoFix({ status: "idle", attempt: 0 });
+    }, []);
 
     // Resume an in-progress draft. Triggered by the `resumeDraftId`
     // prop (Settings → Widgets → Draft chip → Resume button). Mirrors
@@ -2940,6 +3011,7 @@ ${
                 );
             } catch (err) {
                 if (isStale()) return;
+                previewErrorKindRef.current = "other";
                 setPreviewError(err?.message || "Failed to load preview");
                 setIsCompiling(false);
             }
@@ -3147,6 +3219,7 @@ ${
                         clearInterval(signInPollRef.current);
                         signInPollRef.current = null;
                         setSignInFlow(null);
+                        previewErrorKindRef.current = "other";
                         setPreviewError(
                             "Sign-in code expired. Click Sign in to try again."
                         );
@@ -3156,6 +3229,7 @@ ${
                 }
             }, intervalMs);
         } catch (err) {
+            previewErrorKindRef.current = "other";
             setPreviewError(err?.message || "Could not start sign-in flow.");
         }
     }, [browsingPackage, handleSelectRegistryPackage]);
@@ -3516,6 +3590,14 @@ ${
     // happens inside the compile success path.
 
     if (!isOpen) return null;
+
+    // A build error that isn't out of tries is being fixed (or waiting on
+    // the AI's fix) — decided here, not after an effect, so the red box
+    // never flashes first.
+    const autoFixShowing =
+        !!previewError &&
+        previewErrorKindRef.current === "compile" &&
+        autoFix.status !== "exhausted";
 
     const PreviewComponent = previewComponent;
     const displayName =
@@ -4540,8 +4622,35 @@ ${
                                             </div>
                                         )}
 
+                                    {/* A build error the AI is fixing by
+                                    itself (phase 2d) — no red box yet. */}
+                                    {previewError && autoFixShowing && (
+                                        <div
+                                            data-testid="auto-fix-progress"
+                                            className={`flex flex-col items-center justify-center h-full gap-3 ${bt.text}`}
+                                        >
+                                            <FontAwesomeIcon
+                                                icon="spinner"
+                                                className={`h-6 w-6 animate-spin ${bt.accent}`}
+                                            />
+                                            <div className="text-sm font-medium">
+                                                Fixing a build error… (try{" "}
+                                                {Math.max(autoFix.attempt, 1)}{" "}
+                                                of {MAX_AUTO_FIX})
+                                            </div>
+                                            <div
+                                                className={`text-xs ${bt.muted}`}
+                                            >
+                                                The AI is correcting its code.
+                                                The preview appears when it
+                                                builds.
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Compile error (non-auth) */}
                                     {previewError &&
+                                        !autoFixShowing &&
                                         !/authentic|unauth|401|sign.?in/i.test(
                                             previewError
                                         ) && (
@@ -4559,6 +4668,9 @@ ${
                                                         {previewErrorMeta?.code ===
                                                         "ESBUILD_SPAWN_FAILED"
                                                             ? "Widget compiler unavailable"
+                                                            : autoFix.status ===
+                                                              "exhausted"
+                                                            ? `Still failing after ${MAX_AUTO_FIX} automatic fixes`
                                                             : "Compilation Error"}
                                                     </div>
                                                     <pre
@@ -4732,31 +4844,48 @@ ${
                                                             // when present (slice 17b.12);
                                                             // otherwise fall back to the
                                                             // generic compile-error prompt.
+                                                            // Asked by hand: the
+                                                            // automatic fixes start
+                                                            // over after this.
                                                             const content =
-                                                                previewErrorMeta?.correction
-                                                                    ? previewErrorMeta.correction
-                                                                    : `Fix this compilation error:\n\n${previewError}\n\nPlease output both the corrected jsx component code block and the javascript config code block.`;
-                                                            try {
-                                                                window.dispatchEvent(
-                                                                    new CustomEvent(
-                                                                        "dash:chat-core-send",
-                                                                        {
-                                                                            detail: {
-                                                                                persistKey:
-                                                                                    "dash-widget-builder",
-                                                                                content,
-                                                                            },
-                                                                        }
-                                                                    )
+                                                                buildFixRequest(
+                                                                    previewError,
+                                                                    previewErrorMeta
                                                                 );
-                                                            } catch (_) {
-                                                                /* ignore */
-                                                            }
+                                                            autoFixStateRef.current =
+                                                                resetAutoFix();
+                                                            setAutoFix({
+                                                                status: "idle",
+                                                                attempt: 0,
+                                                            });
+                                                            sendFixRequest(
+                                                                content,
+                                                                {
+                                                                    hidden: false,
+                                                                }
+                                                            );
                                                         }}
                                                         className={`text-xs ${bt.accent} hover:opacity-80 underline cursor-pointer`}
                                                     >
-                                                        Send error to AI
+                                                        {autoFix.status ===
+                                                        "exhausted"
+                                                            ? "Try again"
+                                                            : "Send error to AI"}
                                                     </button>
+                                                    {autoFix.status ===
+                                                        "exhausted" && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setActiveTab(
+                                                                    "code"
+                                                                )
+                                                            }
+                                                            className={`ml-3 text-xs ${bt.accent} hover:opacity-80 underline cursor-pointer`}
+                                                        >
+                                                            Open Code tab
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}
@@ -6273,6 +6402,7 @@ ${
                                             apiKey={apiKey}
                                             backend={preferredBackend}
                                             persistKey="dash-widget-builder"
+                                            onPublishEvent={handleChatEvent}
                                             hideToolsBanner={true}
                                             // The code lives in the Code
                                             // tab; the chat shows a note.
