@@ -575,8 +575,10 @@ export default function AlgoliaIndexList({ title = "Algolia indices" }) {
 
 ### Widget .dash.js Configuration
 
+Import the component the way its file exports it: `export default function MyWidget` (as in Minimal Widget above) → `import MyWidget from "./MyWidget";`. A named export (`export const MyWidget`) → `import { MyWidget } from "./MyWidget";`. A mismatch fails the build ("No matching export").
+
 ```javascript
-import { MyWidget } from "./MyWidget";
+import MyWidget from "./MyWidget";
 
 export default {
     component: MyWidget,
