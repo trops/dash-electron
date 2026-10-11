@@ -1,7 +1,7 @@
 # PRD: Create — One Entry for Making Dashboards, Widgets, Bots and Themes
 
-**Status:** Draft
-**Last Updated:** 2026-10-10
+**Status:** In Progress
+**Last Updated:** 2026-10-11
 **Owner:** John Giatropoulos
 **Location:** dash-electron (Create and Edit modals, AI Assistant, Widget Builder); dash-core (Dash team bots, planner tools, bot/dashboard APIs, usage)
 **Related PRDs:** [ai-assistant.md](./ai-assistant.md), dash-core `team-dashboards.md` (bots report results, widgets start bots, one plan from a goal), dash-core `bot-teams.md` (teams, leads), dash-core `bot-factory.md` (budgets, usage), dash-core `app-navigation.md`
@@ -48,12 +48,12 @@ The work is done by **your Dash team**: built-in bots with one role each (Planne
 
 ### CRE-001: One start screen (P0)
 
--   [ ] AC1: A single Create modal, full screen with a margin, opens from the left rail's **+** and from Cmd/Ctrl+K "Create…".
--   [ ] AC2: It opens with the cursor in one prompt box, a heading and a one-line explanation.
--   [ ] AC3: Under the box: **+** (attach a provider or file), **Type** (Auto, Dashboard, Widget, Bot, Theme) and **Where** (New dashboard, or an existing one). Both are menus (`aria-haspopup`, `aria-expanded`). Type Dashboard + Where existing means "add to that dashboard".
--   [ ] AC4: An **AI** picker beside Send shows the provider in use ("AI: Claude Code") and lets the user change it. With no AI configured it says so and links to set one up; the no-AI row still works.
--   [ ] AC5: **Or start without AI:** Blank dashboard (opens Edit on Add), Import from file, Browse registry.
--   [ ] AC6: Enter starts the conversation; the prompt moves to the top.
+-   [x] AC1: A single Create modal, full screen with a margin, opens from the left rail's **+** and from Cmd/Ctrl+K "Create…". (2a: the rail's + is labelled Create; "Create…" is in the command palette. The palette still opens by click — nothing binds ⌘K yet.)
+-   [x] AC2: It opens with the cursor in one prompt box, a heading and a one-line explanation.
+-   [~] AC3 (2a: Type is a `ChoiceMenu` (dash-react) with Widget, Bot, and Dashboard/Theme disabled with a hint; **+** attach and **Where** not yet — a new bot picks its dashboard in the form's Team field): Under the box: **+** (attach a provider or file), **Type** (Auto, Dashboard, Widget, Bot, Theme) and **Where** (New dashboard, or an existing one). Both are menus (`aria-haspopup`, `aria-expanded`). Type Dashboard + Where existing means "add to that dashboard".
+-   [x] AC4 (2a: shown for Widget; writes `settings.aiAssistant.preferredBackend`, the same setting as Settings › AI Assistant, via `useAiBackend`): An **AI** picker beside Send shows the provider in use ("AI: Claude Code") and lets the user change it. With no AI configured it says so and links to set one up; the no-AI row still works.
+-   [x] AC5: **Or start without AI:** Blank dashboard (opens Edit on Add), Import from file, Browse registry. (2a: also New theme; Widget adds Browse widgets / Install from file / Load from folder, Bot adds Fill in the bot form.)
+-   [~] AC6 (2a: Enter sends — Widget opens the Widget Builder with the prompt as its first, visible message; Bot opens the bot form. The conversation inside Create comes with 2c): Enter starts the conversation; the prompt moves to the top.
 
 ### CRE-002: Starters (P2 — after result-aware packaging)
 
@@ -82,7 +82,7 @@ The work is done by **your Dash team**: built-in bots with one role each (Planne
 
 ### CRE-005: Single things stay quick (P0)
 
--   [ ] AC1: Type Widget, Bot or Theme skips the multi-part plan: the conversation builds that one thing with its preview beside it (today's Widget Builder and bot form, inside the modal).
+-   [~] AC1 (2a: Widget → the Widget Builder modal with the prompt, drafts list skipped; Bot → the bot form inside Create with the prompt as instructions. The builder inside Create is 2c): Type Widget, Bot or Theme skips the multi-part plan: the conversation builds that one thing with its preview beside it (today's Widget Builder and bot form, inside the modal).
 -   [ ] AC2: Provider choice happens in the conversation, not as a list before typing.
 
 ### CRE-006: Editing in the same modal (P0)
@@ -108,17 +108,17 @@ Decided 2026-10-10: editing uses the same full-screen modal; no scope toggle —
 
 ### CRE-008: Old entry points become shortcuts (P0)
 
-| Today                       | Becomes                                                                                                              |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| **+** → New Dashboard modal | Create. Blank, Import and Registry are the "start without AI" row. The Wizard is retired: its steps become the plan. |
-| Widgets page → New Widget   | Create, Type: Widget                                                                                                 |
-| Empty cell → Build with AI  | Edit modal, that cell selected, Ask AI                                                                               |
-| Empty cell → Add widget     | Edit modal on **Add**, no AI                                                                                         |
-| Dashboard pencil            | Edit modal on **Add**, nothing selected                                                                              |
-| Widget menu → Edit with AI  | Edit modal on **Ask AI**, that widget selected                                                                       |
-| Bots page → New Bot         | Create, Type: Bot (the form remains as a tab)                                                                        |
-| Team lead "add a bot"       | Create, Type: Bot, Where: that dashboard                                                                             |
-| AI Assistant panel          | The sidebar (CRE-007 AC4)                                                                                            |
+| Today                              | Becomes                                                                                                              |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **+** → New Dashboard modal (2a ✓) | Create. Blank, Import and Registry are the "start without AI" row. The Wizard is retired: its steps become the plan. |
+| Widgets page → New Widget (2a ✓)   | Create, Type: Widget                                                                                                 |
+| Empty cell → Build with AI         | Edit modal, that cell selected, Ask AI                                                                               |
+| Empty cell → Add widget            | Edit modal on **Add**, no AI                                                                                         |
+| Dashboard pencil                   | Edit modal on **Add**, nothing selected                                                                              |
+| Widget menu → Edit with AI         | Edit modal on **Ask AI**, that widget selected                                                                       |
+| Bots page → New Bot (2a ✓)         | Create, Type: Bot (the form remains as a tab)                                                                        |
+| Team lead "add a bot"              | Create, Type: Bot, Where: that dashboard                                                                             |
+| AI Assistant panel                 | The sidebar (CRE-007 AC4)                                                                                            |
 
 ### CRE-009: Reuse before building (P1)
 
@@ -181,9 +181,18 @@ Built-in bots, always present, that do the making. Each has one role, its own in
 
 1. **Edit modal, by hand first (P0):** the full-screen Edit with select-to-edit, Add (drag/click, registry install & add), selection settings tabs, staged Save/Cancel with confirm, page tabs; the pencil, Add widget and Edit with AI route into it. Ask AI changes one selected widget or bot (today's builders). (CRE-006, CRE-008 edit rows, CRE-010, CRE-013)
 2. **Create shell for single things (P0):** Start screen with Type Widget/Bot, the no-AI row and the AI picker; New Widget and New Bot route into it. (CRE-001, CRE-005, CRE-008)
+    - **2a (shipped with 2b folded in):** dash-react `ChoiceMenu`; dash-core `Components/Create/` (CreateModal, createRouting, aiBackend) + `hooks/useAiBackend`; rail + / palette Create… / New Widget / New Bot open it via `dash:open-create` ({ type, workspaceId }); Widget sends `dash:open-widget-builder` { prompt } → dash-electron `initialPrompt` (skips drafts, ChatCore `initialMessageHidden={false}`); Bot opens BotDetail inside Create; no-AI row: blank dashboard ("Untitled dashboard", Edit on Add), LayoutManagerModal `initialMethod` import/registry, ThemeManagerModal `startInCreate`, Widgets page `installRequest`.
+    - **2c (next):** the Widget Builder inside Create (a host slot like `setWidgetPreviewRenderer`), provider choice as a question in the conversation (CRE-005 AC2), drafts as "Continue a draft" on the start screen.
 3. **Dash team + cost (P1):** Planner/Scout/Builder/Checker as built-in bots with per-role models; usage and cost shown on bots and runs. (CRE-011, CRE-012 AC4–5)
 4. **Plan and build (P1):** team-dashboards Release 2 (widgets start bots) and Release 3 (planner) delivered as Type: Dashboard, with Before-building approvals, estimates, reuse order, Building with Checker and failure states, sidebar and Recent. (CRE-003, CRE-004, CRE-007, CRE-009, CRE-012 AC1–3)
 5. **Later (P2):** starters (after result-aware packaging), Preview with sample data, Auto and Theme types, the Assistant merge. (CRE-002, CRE-003 AC6, CRE-007 AC4)
+
+## Follow-ups (deferred from phase 1)
+
+1. **Configure screens in the panel (CRE-006 AC4/AC5):** after phase 2 — the selection's Settings / Listeners / Code tabs in the right panel instead of the Configure dialog.
+2. **Arrow-key move and resize (CRE-013 AC5):** a small slice; can go in anywhere.
+3. **Remounts on mode switch:** widgets in the PinnedSidebar and on legacy (non-grid) dashboards still reload between view and edit.
+4. **⌘K binding:** the palette shows "⌘K" but nothing binds it.
 
 ## Open Questions
 
@@ -198,4 +207,5 @@ Built-in bots, always present, that do the making. Each has one role, its own in
 | Version | Date       | Author            | Changes                                                                                                                                                                                                                                                                                    |
 | ------- | ---------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 0.1     | 2026-10-10 | John Giatropoulos | Draft for discussion, with mockup                                                                                                                                                                                                                                                          |
+| 0.3     | 2026-10-11 | John Giatropoulos | Phase 1 shipped; phase 2a (start screen, Widget/Bot types, no-AI row, entry points) implemented; follow-ups listed                                                                                                                                                                         |
 | 0.2     | 2026-10-10 | John Giatropoulos | Select-to-edit; one edit mode (Add / Ask AI); reuse before building; fresh-eyes review applied (no-AI start, approvals before Build, failure/Stop, staged Cancel, states, a11y); Dash team (CRE-011); cost and model visibility (CRE-012); phases reordered around a smaller first version |
