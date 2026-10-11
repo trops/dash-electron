@@ -92,8 +92,8 @@ Decided 2026-10-10: editing uses the same full-screen modal; no scope toggle —
 -   [x] AC1: Edit shows the whole dashboard on the left (with page tabs for paged dashboards), every widget plus a **Bots on this dashboard** row showing each bot's model and cost this month.
 -   [x] AC2: Nothing selected = the dashboard. Clicking a widget or bot selects it. Selecting a widget highlights the bot that feeds it; selecting a bot highlights the widgets it feeds; unrelated items dim.
 -   [x] AC3: The header breadcrumb ("Inbox triage › Important emails · widget") shows the selection; clicking the dashboard name goes back.
--   [ ] AC4: Selecting while on **Add** or a settings tab opens the selection's settings (widget: Settings; bot: Instructions). Only Ask AI stays on Ask AI. A by-hand user never lands in a chat by clicking.
--   [ ] AC5: The selection's no-chat tabs: widget Settings, Listeners, Code; bot Instructions, Runs, Access; dashboard Theme. (Layout is the left side itself.)
+-   [x] AC4 (dash-core #718 v0.1.733): Selecting while on **Add** or a settings tab opens the selection's settings (widget: Settings; bot: Instructions). Only Ask AI stays on Ask AI. A by-hand user never lands in a chat by clicking.
+-   [~] AC5 (widget: Settings / Listeners / Providers / Code inline via WidgetConfigPanel, staged until Save — dash-core #718; notifications/schedule behind "More settings…"; bot Instructions / Runs / Access = next slice): The selection's no-chat tabs: widget Settings, Listeners, Code; bot Instructions, Runs, Access; dashboard Theme. (Layout is the left side itself.)
 -   [x] AC6: All changes — by hand or by AI, to widgets, bots or layout — are **staged** until Save. Bot hints say "applies after you save".
 -   [x] AC7: **Cancel** confirms, listing what will be discarded and what is kept (registry installs stay installed).
 -   [ ] AC8: Adding bots or widgets through Ask AI comes back as a plan (needs CRE-003; until then Ask AI changes one selected widget or bot).
@@ -193,7 +193,7 @@ Built-in bots, always present, that do the making. Each has one role, its own in
 
 ## Follow-ups (deferred from phase 1)
 
-1. **Configure screens in the panel (CRE-006 AC4/AC5):** after phase 2 — the selection's Settings / Listeners / Code tabs in the right panel instead of the Configure dialog.
+1. **Configure screens in the panel (CRE-006 AC4/AC5):** widget side shipped (dash-core #718 v0.1.733); bot side (Instructions / Runs / Access — BotRunHistory for Runs, BotDetail split for Instructions/Access, its Save folded into the dashboard's) next.
 2. **Arrow-key move and resize (CRE-013 AC5):** a small slice; can go in anywhere.
 3. **Remounts on mode switch:** widgets in the PinnedSidebar and on legacy (non-grid) dashboards still reload between view and edit.
 4. **⌘K binding:** the palette shows "⌘K" but nothing binds it.
