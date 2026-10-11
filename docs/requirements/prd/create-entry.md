@@ -164,8 +164,8 @@ Built-in bots, always present, that do the making. Each has one role, its own in
 -   [ ] AC1: The plan shows an **Estimated cost**: to build (by role and model) and to run the bots (per day, at their schedules), with a note to change schedules to lower it.
 -   [ ] AC2: Each planned bot shows its model and tokens per run.
 -   [ ] AC3: Building shows actual tokens and cost per step and a running total; the end compares with the estimate.
--   [ ] AC4: Edit's bots row shows each bot's model and cost this month (from BudgetController usage).
--   [ ] AC5: With Claude Code (subscription) as the AI, show tokens and "included in your plan" instead of dollars; dollars for API-key providers.
+-   [x] AC4 (dash-core #720 v0.1.735 — runs record model, provider, all tokens incl. cache and cost; run history, Bots page last run, edit bots row): Edit's bots row shows each bot's model and cost this month (from BudgetController usage).
+-   [x] AC5 (dash-core #720): With Claude Code (subscription) as the AI, show tokens and "included in your plan" instead of dollars; dollars for API-key providers.
 
 ### CRE-013: States and accessibility (P0 across all boards)
 
