@@ -51,6 +51,7 @@ export const DASH_REACT_COMPONENTS = new Set([
     "Card2",
     "Card3",
     "Checkbox",
+    "ChoiceMenu",
     "Code",
     "Code2",
     "Code3",

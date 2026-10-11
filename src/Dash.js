@@ -547,11 +547,19 @@ class App extends React.Component {
             if (window.mainApi?.llm?.endCliSession) {
                 window.mainApi.llm.endCliSession("dash-widget-builder");
             }
+            // The Create screen sends `prompt` — the user's description,
+            // sent as the chat's first message. It isn't part of the cell.
+            const { prompt, ...cellDetail } = detail;
+            const initialPrompt =
+                !resumeDraftId && typeof prompt === "string" && prompt.trim()
+                    ? prompt.trim()
+                    : null;
             this.setState({
                 isWidgetBuilderOpen: true,
-                widgetBuilderCellContext: resumeDraftId ? null : detail,
+                widgetBuilderCellContext: resumeDraftId ? null : cellDetail,
                 widgetBuilderEditContext: null,
                 widgetBuilderResumeDraftId: resumeDraftId,
+                widgetBuilderInitialPrompt: initialPrompt,
             });
         });
 
@@ -971,6 +979,8 @@ class App extends React.Component {
                                                         null,
                                                     widgetBuilderResumeDraftId:
                                                         null,
+                                                    widgetBuilderInitialPrompt:
+                                                        null,
                                                     installedWidgetInfo: null,
                                                 });
 
@@ -1111,6 +1121,11 @@ class App extends React.Component {
                                         resumeDraftId={
                                             this.state
                                                 .widgetBuilderResumeDraftId ||
+                                            null
+                                        }
+                                        initialPrompt={
+                                            this.state
+                                                .widgetBuilderInitialPrompt ||
                                             null
                                         }
                                     />

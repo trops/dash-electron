@@ -913,6 +913,10 @@ export const WidgetBuilderModal = ({
     // Draft-chipped widget. Cleared on close so subsequent opens
     // start from a clean slate.
     resumeDraftId = null,
+    // The user's description from the Create screen (create-entry PRD
+    // CRE-005): skips the drafts list and is sent, visibly, as the
+    // chat's first message instead of the hidden greeting.
+    initialPrompt = null,
 }) => {
     // The modal renders outside DashboardStage's context tree, so
     // ThemeContext and AppContext are empty here. We bridge them via
@@ -1687,8 +1691,9 @@ ${
             setViewMode(null);
             return;
         }
-        if (effectiveEditContext) {
-            // Remix / edit flow — skip the drafts gate entirely.
+        if (effectiveEditContext || initialPrompt) {
+            // Remix / edit flow, or a prompt from the Create screen (the
+            // user already said what to build) — skip the drafts gate.
             setViewMode("builder");
             return;
         }
@@ -6252,7 +6257,15 @@ ${
                                                     ? "Tell me what kind of widget you're looking for."
                                                     : effectiveEditContext?.componentCode
                                                     ? "Hello, let's make some edits to this widget."
-                                                    : "Hi, I'd like to build a new widget."
+                                                    : initialPrompt ||
+                                                      "Hi, I'd like to build a new widget."
+                                            }
+                                            initialMessageHidden={
+                                                !(
+                                                    chatMode !== "discover" &&
+                                                    !effectiveEditContext?.componentCode &&
+                                                    initialPrompt
+                                                )
                                             }
                                         />
                                     )}
