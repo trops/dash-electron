@@ -87,7 +87,7 @@ node --test scripts/bundleSecurityLint.test.js
 
 # Bot Factory background-mode helpers (Slice 6b): pure tray/login-item logic
 step "Running Bot Factory background-mode tests (Slice 6b)"
-node --test public/botBackground.test.js public/appIdentifier.test.js public/widgetEventRelay.test.js public/botLeadIpc.test.js public/popoutRoute.test.js public/widgetConfigType.test.js public/widgetImportFixes.test.js
+node --test public/botBackground.test.js public/appIdentifier.test.js public/widgetEventRelay.test.js public/botLeadIpc.test.js public/popoutRoute.test.js public/widgetConfigType.test.js public/widgetImportFixes.test.js public/teamWidgetTools.test.js
 
 # 2. Update @trops dependencies to latest published versions
 step "Updating @trops dependencies"
@@ -149,6 +149,9 @@ npm run audit:electron
 step "Running AI Widget Builder unit tests"
 npm run test:ai
 npm run test:ai-node
+# The main-process copy of the Widget Builder's checks (the Dash team's
+# Checker) must match src/AiAssistant.
+node scripts/build-widget-checks.js --check
 
 # 6. Widget tests (disabled — test references stale local modules moved to @trops/dash-core)
 # TODO: update testWidgetIntegration.cjs to import from @trops/dash-core/electron
