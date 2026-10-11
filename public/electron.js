@@ -173,7 +173,23 @@ const {
     SCHEMAS: IPC_SCHEMAS,
 } = require("./lib/ipcValidators.cjs");
 const { parseBotsOptions, popoutHashRoute } = require("./lib/popoutRoute.cjs");
-const { ensureWidgetType } = require("./lib/widgetConfigType.cjs");
+// Config fix-ups before compiling: a missing export default, a component
+// import that doesn't match its export, a missing type: "widget".
+const { prepareWidgetConfig } = require("./lib/widgetImportFixes.cjs");
+
+// The primary widget component's source in a multi-file payload, else the
+// legacy componentCode.
+function primaryComponentOf(files, widgetName, componentCode) {
+    const hit = (Array.isArray(files) ? files : []).find(
+        (f) =>
+            f &&
+            typeof f.path === "string" &&
+            (f.path === `widgets/${widgetName}.js` ||
+                f.path === `widgets/${widgetName}.jsx` ||
+                f.path.endsWith(`/${widgetName}.js`))
+    );
+    return (hit && hit.content) || componentCode || "";
+}
 
 const { updateElectronApp } = require("update-electron-app");
 
@@ -3005,9 +3021,20 @@ function createWindow() {
                     providerSnap.reason
                 );
             }
-            // AI configs sometimes omit `type: "widget"` — without it the
-            // bundle loader can't find the widget (preview + install).
-            const configCode = ensureWidgetType(providerSnap.source).source;
+            // AI configs sometimes omit `type: "widget"`, never export the
+            // config, or import the component the wrong way — fix those
+            // slips before compiling (preview + install).
+            const configPrep = prepareWidgetConfig(providerSnap.source, {
+                componentSource: componentCode,
+                componentName: widgetName,
+            });
+            if (configPrep.fixes.length) {
+                console.log(
+                    "[widget-config] Auto-fixed:",
+                    configPrep.fixes.join("; ")
+                );
+            }
+            const configCode = configPrep.source;
             const path = require("path");
             const fs = require("fs");
             const os = require("os");
@@ -3136,7 +3163,14 @@ function createWindow() {
                               );
                               return {
                                   ...f,
-                                  content: ensureWidgetType(sn.source).source,
+                                  content: prepareWidgetConfig(sn.source, {
+                                      componentSource: primaryComponentOf(
+                                          files,
+                                          widgetName,
+                                          componentCode
+                                      ),
+                                      componentName: widgetName,
+                                  }).source,
                               };
                           }
                           return f;
@@ -3256,9 +3290,20 @@ function createWindow() {
                     providerSnap.reason
                 );
             }
-            // AI configs sometimes omit `type: "widget"` — without it the
-            // bundle loader can't find the widget (preview + install).
-            const configCode = ensureWidgetType(providerSnap.source).source;
+            // AI configs sometimes omit `type: "widget"`, never export the
+            // config, or import the component the wrong way — fix those
+            // slips before compiling (preview + install).
+            const configPrep = prepareWidgetConfig(providerSnap.source, {
+                componentSource: componentCode,
+                componentName: widgetName,
+            });
+            if (configPrep.fixes.length) {
+                console.log(
+                    "[widget-config] Auto-fixed:",
+                    configPrep.fixes.join("; ")
+                );
+            }
+            const configCode = configPrep.source;
             // If the renderer also packaged the primary widget's
             // .dash.js into files[], snap that copy too so the on-disk
             // file matches.
@@ -3277,7 +3322,14 @@ function createWindow() {
                           );
                           return {
                               ...f,
-                              content: ensureWidgetType(sn.source).source,
+                              content: prepareWidgetConfig(sn.source, {
+                                  componentSource: primaryComponentOf(
+                                      files,
+                                      widgetName,
+                                      componentCode
+                                  ),
+                                  componentName: widgetName,
+                              }).source,
                           };
                       }
                       return f;

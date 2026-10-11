@@ -63,7 +63,14 @@ describe("ensureWidgetType", () => {
             path.join(__dirname, "electron.js"),
             "utf8"
         );
-        assert.match(main, /require\("\.\/lib\/widgetConfigType\.cjs"\)/);
-        assert.ok((main.match(/ensureWidgetType\(/g) || []).length >= 4);
+        // Through prepareWidgetConfig (widgetImportFixes), which runs
+        // ensureWidgetType after the export/import fixes.
+        assert.match(main, /require\("\.\/lib\/widgetImportFixes\.cjs"\)/);
+        assert.ok((main.match(/prepareWidgetConfig\(/g) || []).length >= 4);
+        const lib = fs.readFileSync(
+            path.join(__dirname, "lib", "widgetImportFixes.cjs"),
+            "utf8"
+        );
+        assert.match(lib, /const typed = ensureWidgetType\(source\);/);
     });
 });

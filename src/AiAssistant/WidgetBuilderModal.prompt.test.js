@@ -125,8 +125,18 @@ describe("WidgetBuilderModal — provider API registry injection", () => {
         // real ones) instead of a generic "fix this error" prompt.
         // It sends through ChatCore (dash:chat-core-send), not by
         // writing localStorage — ChatCore only reads that at mount.
+        // Built by buildFixRequest (autoFixPolicy, which prefers the
+        // correction — unit-tested there), shared with the automatic fix.
         expect(source).toMatch(
-            /previewErrorMeta\?\.correction\s*\?\s*previewErrorMeta\.correction[\s\S]{0,800}"dash:chat-core-send"/
+            /buildFixRequest\(\s*previewError,\s*previewErrorMeta\s*\)[\s\S]{0,600}sendFixRequest\(/
+        );
+        expect(source).toMatch(/"dash:chat-core-send"/);
+        const policy = require("fs").readFileSync(
+            require("path").join(__dirname, "autoFixPolicy.js"),
+            "utf8"
+        );
+        expect(policy).toMatch(
+            /previewErrorMeta && previewErrorMeta\.correction[\s\S]{0,80}return previewErrorMeta\.correction;/
         );
     });
 });
