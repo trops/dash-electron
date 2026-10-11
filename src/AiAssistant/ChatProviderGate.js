@@ -24,11 +24,19 @@
  * provider INSTANCES of an existing type via the preview-area
  * dropdown's empty-state CTA (Settings → Providers deep-link). The
  * gate never offers creation of a new TYPE — types are catalog-defined.
+ *
+ * Question mode (create-entry PRD CRE-005 AC2): when the user already
+ * described the widget (`prompt`, from the Create screen), the gate reads
+ * as a question in the conversation — their prompt, "Which data should this
+ * widget use?", a few likely types guessed from the prompt, "No external
+ * provider" and "Choose another…" (the full list). The pick still comes
+ * before the chat starts, so the AI's instructions name the right type.
  */
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import { AppContext } from "@trops/dash-core";
-import { FontAwesomeIcon } from "@trops/dash-react";
+import { Button3, FontAwesomeIcon } from "@trops/dash-react";
 import { useBuilderTheme } from "./useBuilderTheme";
+import { suggestProviderTypes } from "./providerSuggestions";
 
 const NONE_SENTINEL = { sentinel: "none" };
 
@@ -36,6 +44,8 @@ export const ChatProviderGate = ({
     onChange,
     builtInCatalog = [],
     knownExternalCatalog = [],
+    // The user's description from the Create screen → question mode.
+    prompt = null,
 }) => {
     const appContext = useContext(AppContext);
     const bt = useBuilderTheme();
@@ -121,6 +131,22 @@ export const ChatProviderGate = ({
 
     const hasTypes = typeOptions.length > 0;
 
+    // Question mode shows a few guesses; "Choose another…" opens the list.
+    const [showAll, setShowAll] = useState(!prompt);
+    const suggestions = useMemo(
+        () =>
+            prompt
+                ? suggestProviderTypes(prompt, typeOptions, {
+                      installedTypes: new Set(
+                          Object.values(installedProviders || {})
+                              .map((p) => p && p.type)
+                              .filter(Boolean)
+                      ),
+                  })
+                : [],
+        [prompt, typeOptions, installedProviders]
+    );
+
     // Interim selection captured when the user clicks a type for which
     // they have zero installed instances. Showing a small confirmation
     // panel here surfaces the "no provider configured" problem BEFORE
@@ -187,6 +213,70 @@ export const ChatProviderGate = ({
 
     const handleCancelPending = () => setPendingType(null);
 
+    if (prompt && !showAll && !pendingType) {
+        return (
+            <div
+                data-testid="provider-question"
+                className={`absolute inset-0 z-10 overflow-y-auto ${bt.surface} flex flex-col gap-4 p-4`}
+            >
+                <div className="flex flex-col items-end gap-1">
+                    <span
+                        className={`text-xs font-semibold uppercase ${bt.accent}`}
+                    >
+                        You
+                    </span>
+                    <div
+                        className={`max-w-full rounded-lg px-3 py-2 text-sm ${bt.raised} ${bt.text}`}
+                    >
+                        {prompt}
+                    </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                    <div className={`text-sm font-semibold ${bt.text}`}>
+                        Which data should this widget use?
+                    </div>
+                    <p className={`text-xs ${bt.muted} leading-snug`}>
+                        The AI writes the widget for the kind of data you pick.
+                        You connect a specific account in the preview.
+                    </p>
+                    <div className="flex flex-row flex-wrap gap-2">
+                        {suggestions.map((opt) => {
+                            const notSetUp =
+                                countInstancesOfType(
+                                    opt.type,
+                                    opt.providerClass
+                                ) === 0;
+                            return (
+                                <Button3
+                                    key={`${opt.type}|${opt.providerClass}`}
+                                    size="sm"
+                                    onClick={() => handleTypeClick(opt)}
+                                    title={
+                                        notSetUp
+                                            ? `${
+                                                  opt.label || opt.type
+                                              } · not set up`
+                                            : opt.label || opt.type
+                                    }
+                                />
+                            );
+                        })}
+                        <Button3
+                            size="sm"
+                            onClick={() => onChange(NONE_SENTINEL)}
+                            title="No external provider"
+                        />
+                        <Button3
+                            size="sm"
+                            onClick={() => setShowAll(true)}
+                            title="Choose another…"
+                        />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div
             className={`absolute inset-0 z-10 overflow-y-auto ${bt.surface} backdrop-blur-sm flex flex-col`}
@@ -201,6 +291,16 @@ export const ChatProviderGate = ({
                         Choose a provider type for this widget
                     </h2>
                 </div>
+                {prompt && (
+                    <Button3
+                        size="sm"
+                        onClick={() => {
+                            setPendingType(null);
+                            setShowAll(false);
+                        }}
+                        title="← Back to the question"
+                    />
+                )}
                 <p className={`text-xs ${bt.muted} leading-snug`}>
                     The AI will write code targeting the type you pick. After
                     selecting, you'll bind a specific provider instance in the

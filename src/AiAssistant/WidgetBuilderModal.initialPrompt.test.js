@@ -54,4 +54,10 @@ describe("Widget Builder — initial prompt from the Create screen", () => {
             /initialMessageHidden=\{\s*!\(\s*chatMode !== "discover" &&\s*!effectiveEditContext\?\.componentCode &&\s*initialPrompt\s*\)\s*\}/
         );
     });
+
+    test("the provider gate gets the prompt, so it asks a question (2c-1)", () => {
+        expect(modal).toMatch(
+            /<ChatProviderGate[\s\S]{0,1000}prompt=\{initialPrompt\}/
+        );
+    });
 });

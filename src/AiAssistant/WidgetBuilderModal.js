@@ -3630,15 +3630,23 @@ ${
                 {viewMode === "drafts" && (
                     <div className="flex-1 min-h-0 overflow-hidden">
                         <WidgetDraftsList
-                            onInstalled={(scopedRegistryId, componentName) => {
+                            onInstalled={(packageName, componentName) => {
                                 // Hand off to the modal's normal post-install
                                 // flow so the dashboard picks up the new
-                                // widget. Same callback the modal's "Install"
-                                // button uses after a fresh AI build.
+                                // widget. Same callback — and the same
+                                // (scoped component id, package) arguments —
+                                // the modal's "Install" button uses after a
+                                // fresh AI build. The list reports the
+                                // package and the bare component name.
                                 if (typeof onInstalled === "function") {
                                     onInstalled(
-                                        scopedRegistryId,
-                                        componentName
+                                        packageName
+                                            ? makeScopedComponentId(
+                                                  packageName,
+                                                  componentName
+                                              )
+                                            : componentName,
+                                        packageName
                                     );
                                 }
                                 setIsOpen(false);
@@ -6098,6 +6106,7 @@ ${
                                             knownExternalCatalog={
                                                 knownExternalCatalog
                                             }
+                                            prompt={initialPrompt}
                                         />
                                     )}
 
