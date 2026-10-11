@@ -9,9 +9,9 @@
  *     ~line 177): `-p --disable-slash-commands --permission-mode
  *     bypassPermissions --output-format stream-json --verbose
  *     --system-prompt <prompt>`.
- *   - cwd = the dash-electron project root so the
- *     `.claude/skills/dash-widget-builder/` skill auto-loads (same
- *     skill the modal relies on).
+ *   - The dash-widget-builder skill's rules in the system prompt, as
+ *     the modal now sends them (phase 2e) — --disable-slash-commands
+ *     means the skill never auto-loads.
  *   - User text piped via stdin.
  *
  * What the runner does NOT do:
@@ -47,6 +47,18 @@ const { spawn } = require("child_process");
 
 const { SCENARIOS } = require("../src/AiAssistant/promptValidation/scenarios");
 const { buildSystemPrompt } = require("../src/AiAssistant/widgetBuilderPrompt");
+// The same rules the modal puts in its prompt (phase 2e).
+const SKILL_TEXT = require("fs").readFileSync(
+    require("path").join(
+        __dirname,
+        "..",
+        ".claude",
+        "skills",
+        "dash-widget-builder",
+        "SKILL.md"
+    ),
+    "utf8"
+);
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const FIXTURE_ROOT = path.join(
@@ -109,6 +121,7 @@ function runOneScenario(scenario) {
             selectedProvider: scenario.selectedProvider,
             installedProviders: scenario.installedProviders,
             skipFirstResponseStyle: true,
+            skillText: SKILL_TEXT,
         });
 
         const args = [

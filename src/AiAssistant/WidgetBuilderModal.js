@@ -1080,6 +1080,33 @@ export const WidgetBuilderModal = ({
     const autoFixStateRef = useRef(INITIAL_AUTO_FIX);
     const lastAutoFixTextRef = useRef(null);
     const [autoFix, setAutoFix] = useState({ status: "idle", attempt: 0 });
+    // The dash-widget-builder skill's text, for the system prompt
+    // (phase 2e): undefined while loading, null if it couldn't be read.
+    // The chat waits for it so the first message carries the rules.
+    const [builderSkillText, setBuilderSkillText] = useState(undefined);
+    useEffect(() => {
+        if (!isOpen) return undefined;
+        let alive = true;
+        const getSkill = window.mainApi?.widgetBuilder?.getSkill;
+        if (typeof getSkill !== "function") {
+            setBuilderSkillText(null);
+            return undefined;
+        }
+        Promise.resolve(getSkill())
+            .then((text) => {
+                if (!alive) return;
+                if (!text) {
+                    console.warn(
+                        "[WidgetBuilder] Building without the Dash widget rules — the skill couldn't be read."
+                    );
+                }
+                setBuilderSkillText(text || null);
+            })
+            .catch(() => alive && setBuilderSkillText(null));
+        return () => {
+            alive = false;
+        };
+    }, [isOpen]);
     // Test-inputs form state (slice 17b.9). One key per userConfig
     // field — the user types values here to exercise the previewed
     // widget with real data without leaving the modal. Reset when
@@ -6310,6 +6337,7 @@ ${
                                 of widget?" message even after the
                                 user selects. */}
                                 {chatMode !== "compose" &&
+                                    builderSkillText !== undefined &&
                                     (chatMode !== "build" ||
                                         selectedProviderForBuild !== null ||
                                         detectedCode?.componentCode) && (
@@ -6351,6 +6379,7 @@ ${
                                                         providers,
                                                     selectedProvider:
                                                         selectedProviderForBuild,
+                                                    skillText: builderSkillText,
                                                 });
                                                 // Edit mode: append the existing
                                                 // widget source so the AI sees what

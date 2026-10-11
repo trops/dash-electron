@@ -136,6 +136,9 @@ const extendedApi = {
                 widgetName,
                 componentName,
             }),
+        // The dash-widget-builder skill's text for the builder's prompt
+        // (null when it can't be read).
+        getSkill: () => ipcRenderer.invoke("widget:builder-skill"),
     },
     aiAssistant: {
         // Probes Claude CLI availability, esbuild native helper
