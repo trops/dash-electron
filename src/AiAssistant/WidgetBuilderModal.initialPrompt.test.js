@@ -42,7 +42,7 @@ describe("Widget Builder — initial prompt from the Create screen", () => {
     test("the modal takes initialPrompt and skips the drafts list with it", () => {
         expect(modal).toMatch(/initialPrompt = null,/);
         expect(modal).toMatch(
-            /if \(effectiveEditContext \|\| initialPrompt\) \{[\s\S]{0,200}setViewMode\("builder"\);/
+            /if \(effectiveEditContext \|\| initialPrompt \|\| resumeDraftId\) \{[\s\S]{0,400}setViewMode\("builder"\);/
         );
     });
 

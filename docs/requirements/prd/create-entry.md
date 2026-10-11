@@ -82,8 +82,8 @@ The work is done by **your Dash team**: built-in bots with one role each (Planne
 
 ### CRE-005: Single things stay quick (P0)
 
--   [~] AC1 (2a: Widget → the Widget Builder modal with the prompt, drafts list skipped; Bot → the bot form inside Create with the prompt as instructions. The builder inside Create is 2c): Type Widget, Bot or Theme skips the multi-part plan: the conversation builds that one thing with its preview beside it (today's Widget Builder and bot form, inside the modal).
--   [ ] AC2: Provider choice happens in the conversation, not as a list before typing.
+-   [x] AC1 (2a: Bot → the bot form inside Create; 2c-3: Widget → the Widget Builder inside Create under "Create › New widget", ← Back keeps the prompt; Theme still opens the theme editor from the no-AI row): Type Widget, Bot or Theme skips the multi-part plan: the conversation builds that one thing with its preview beside it (today's Widget Builder and bot form, inside the modal).
+-   [x] AC2 (2c-1: after the prompt, "Which data should this widget use?" with types guessed from the prompt, No external provider and Choose another…; the pick still precedes the chat so the AI's instructions name the type): Provider choice happens in the conversation, not as a list before typing.
 
 ### CRE-006: Editing in the same modal (P0)
 
@@ -182,7 +182,10 @@ Built-in bots, always present, that do the making. Each has one role, its own in
 1. **Edit modal, by hand first (P0):** the full-screen Edit with select-to-edit, Add (drag/click, registry install & add), selection settings tabs, staged Save/Cancel with confirm, page tabs; the pencil, Add widget and Edit with AI route into it. Ask AI changes one selected widget or bot (today's builders). (CRE-006, CRE-008 edit rows, CRE-010, CRE-013)
 2. **Create shell for single things (P0):** Start screen with Type Widget/Bot, the no-AI row and the AI picker; New Widget and New Bot route into it. (CRE-001, CRE-005, CRE-008)
     - **2a (shipped with 2b folded in):** dash-react `ChoiceMenu`; dash-core `Components/Create/` (CreateModal, createRouting, aiBackend) + `hooks/useAiBackend`; rail + / palette Create… / New Widget / New Bot open it via `dash:open-create` ({ type, workspaceId }); Widget sends `dash:open-widget-builder` { prompt } → dash-electron `initialPrompt` (skips drafts, ChatCore `initialMessageHidden={false}`); Bot opens BotDetail inside Create; no-AI row: blank dashboard ("Untitled dashboard", Edit on Add), LayoutManagerModal `initialMethod` import/registry, ThemeManagerModal `startInCreate`, Widgets page `installRequest`.
-    - **2c (next):** the Widget Builder inside Create (a host slot like `setWidgetPreviewRenderer`), provider choice as a question in the conversation (CRE-005 AC2), drafts as "Continue a draft" on the start screen.
+    - **2c-1 (shipped, electron #867):** provider choice as a question (`ChatProviderGate` question mode + `providerSuggestions.js`); drafts-list install passes (scoped component id, package).
+    - **2c-2 (shipped, core #716):** "Continue a draft" — the three newest drafts on the start screen (Type: Widget).
+    - **2c-3:** the Widget Builder inside Create. dash-core `setWidgetBuilderRenderer` slot + CreateModal builder step (Back keeps the prompt; closing ends the step). dash-electron `EmbeddedWidgetBuilder` (clears the chat before mount, finishes an install once on Done / Back / close / Create new provider) and `WidgetBuilderModal` `embedded` (no frame/header). The builder window's close steps moved to `finalizeWidgetBuilderSession.js` (register → refresh → swap / place), shared by both, with the remount guard. Empty-cell Build with AI, Edit with AI and the Widgets page still open the builder window.
+    - **2d (next):** the builder fixes its own compile errors — known slips (e.g. a config with no `export default`, a named import of a default export) fixed before compiling, like `ensureWidgetType`; other build errors sent back to the AI automatically once or twice ("Fixing a build error…"); the error is shown only if it still fails.
 3. **Dash team + cost (P1):** Planner/Scout/Builder/Checker as built-in bots with per-role models; usage and cost shown on bots and runs. (CRE-011, CRE-012 AC4–5)
 4. **Plan and build (P1):** team-dashboards Release 2 (widgets start bots) and Release 3 (planner) delivered as Type: Dashboard, with Before-building approvals, estimates, reuse order, Building with Checker and failure states, sidebar and Recent. (CRE-003, CRE-004, CRE-007, CRE-009, CRE-012 AC1–3)
 5. **Later (P2):** starters (after result-aware packaging), Preview with sample data, Auto and Theme types, the Assistant merge. (CRE-002, CRE-003 AC6, CRE-007 AC4)
@@ -193,6 +196,9 @@ Built-in bots, always present, that do the making. Each has one role, its own in
 2. **Arrow-key move and resize (CRE-013 AC5):** a small slice; can go in anywhere.
 3. **Remounts on mode switch:** widgets in the PinnedSidebar and on legacy (non-grid) dashboards still reload between view and edit.
 4. **⌘K binding:** the palette shows "⌘K" but nothing binds it.
+5. **Build-mode registry panel:** the builder searches the registry with the latest visible message and shows "0 matches" in the preview area even in Build mode — show it only when there are matches.
+6. **Deleted drafts linger in the widget list:** `drafts.delete` removes the draft folder but leaves an `@ai-built/draft-<id>` entry in `widgets.list`.
+7. **Move the other builder entry points into Create** (empty-cell Build with AI, Edit with AI, Widgets page) once the inside-Create builder has been in use.
 
 ## Open Questions
 
