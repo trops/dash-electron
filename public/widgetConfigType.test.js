@@ -59,13 +59,15 @@ describe("ensureWidgetType", () => {
     });
 
     it("is applied in both the preview compile and the install build", () => {
+        // The compile + install moved to lib/aiBuild.cjs (create-entry
+        // CRE-011), which both IPC handlers and the Dash team use.
         const main = fs.readFileSync(
-            path.join(__dirname, "electron.js"),
+            path.join(__dirname, "lib", "aiBuild.cjs"),
             "utf8"
         );
         // Through prepareWidgetConfig (widgetImportFixes), which runs
         // ensureWidgetType after the export/import fixes.
-        assert.match(main, /require\("\.\/lib\/widgetImportFixes\.cjs"\)/);
+        assert.match(main, /require\("\.\/widgetImportFixes\.cjs"\)/);
         assert.ok((main.match(/prepareWidgetConfig\(/g) || []).length >= 4);
         const lib = fs.readFileSync(
             path.join(__dirname, "lib", "widgetImportFixes.cjs"),

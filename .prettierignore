@@ -37,3 +37,4 @@ webpack.config.js
 
 tailwind.css
 index.dash.js
+public/lib/widgetChecks.cjs
