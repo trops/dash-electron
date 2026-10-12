@@ -6,6 +6,7 @@
 import {
     validateProviderApiUsage,
     validateNoModalUsage,
+    validateNoBotCalls,
     validateComponentReferences,
 } from "./widgetCodeValidator";
 import { evaluateScorecard } from "./composer/scorecardChecks";
@@ -14,6 +15,7 @@ import { getKnownToolsForType } from "./composer/mcpKnownTools";
 const generated = require("../../public/lib/widgetChecks.cjs");
 
 const SAMPLES = [
+    "export default function D() { window.mainApi.bots.run('b'); return null; }",
     `import { Panel, Heading } from "@trops/dash-react";
 export default function A() { return <Panel><Heading title="x" /></Panel>; }`,
     `import { Modal, Bogus } from "@trops/dash-react";
@@ -29,6 +31,9 @@ describe("widgetChecks.cjs matches src/AiAssistant", () => {
         );
         expect(generated.validateNoModalUsage(code)).toEqual(
             validateNoModalUsage(code)
+        );
+        expect(generated.validateNoBotCalls(code)).toEqual(
+            validateNoBotCalls(code)
         );
         expect(generated.validateComponentReferences(code)).toEqual(
             validateComponentReferences(code)

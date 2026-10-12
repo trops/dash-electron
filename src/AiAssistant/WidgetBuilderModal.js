@@ -76,6 +76,8 @@ import {
     buildAiCorrectionMessage,
     validateNoModalUsage,
     buildNoModalCorrectionMessage,
+    validateNoBotCalls,
+    buildNoBotCallsCorrectionMessage,
     validateComponentReferences,
     buildComponentReferenceCorrectionMessage,
 } from "./widgetCodeValidator";
@@ -2660,6 +2662,32 @@ ${
                     // single-purpose rule first (it's the more
                     // architectural fix; the prop-API hallucination
                     // is downstream of choosing the wrong shape).
+                    // TD-005: widgets never start bots themselves — Dash
+                    // refuses to install one that does, so stop it here.
+                    const botCheck = validateNoBotCalls(componentSrc);
+                    if (!botCheck.ok) {
+                        setPreviewError(
+                            "Widget starts a bot directly, which widgets may not do:\n" +
+                                botCheck.errors
+                                    .map(
+                                        (e) =>
+                                            `\`${e.snippet}\` (line ${e.line})`
+                                    )
+                                    .join("\n") +
+                                '\n\nClick "Send error to AI" to make it an action widget that publishes an event.'
+                        );
+                        setPreviewErrorMeta({
+                            kind: "bot-call-in-widget",
+                            errors: botCheck.errors,
+                            correction: buildNoBotCallsCorrectionMessage(
+                                botCheck.errors
+                            ),
+                        });
+                        setPreviewComponent(null);
+                        setPreviewParsedConfig(match.config);
+                        return;
+                    }
+
                     const modalCheck = validateNoModalUsage(componentSrc);
                     if (!modalCheck.ok) {
                         const list = modalCheck.errors

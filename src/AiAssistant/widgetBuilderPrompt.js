@@ -183,7 +183,7 @@ ${formatInstalledProvidersForPrompt(installedProviders)}
 If this is your FIRST response, do NOT output code. Reply with 1–2 short sentences asking what they want the widget to do with local-only data or interactions (no provider talk). Keep it under 30 words. No lists, no examples.`;
         return `${MODAL_CONTEXT_PREAMBLE}You are the Dash Widget Builder. Follow the Dash widget rules at the end of this prompt for ALL architectural guidance.
 
-The user has chosen NOT to use any external provider — generate a self-contained widget (clock, counter, static display, etc.) with NO \`providers: [...]\` array in the config.${firstResponseSection}`;
+The user has chosen NOT to use any external provider — generate a self-contained widget (clock, counter, static display, etc.) with NO \`providers: [...]\` array in the config. It can still publish events — a button that runs one of the user's bots is an action widget (see "Action widgets" in the Dash widget rules), never a simulated run: \`const { publishEvent, listen, listeners } = useWidgetEvents();\` (from "@trops/dash-core"), \`publishEvent("checkEmail", { requestedAt: Date.now() })\` on click with the event in the config's \`events\`, and listen for the bot's completed/failed via \`eventHandlers\`. There is no \`dashApi.publish\`.${firstResponseSection}`;
     }
 
     // Legacy branch — picker hasn't fired yet (rare; the picker gates

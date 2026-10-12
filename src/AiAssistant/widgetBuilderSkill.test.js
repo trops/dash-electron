@@ -210,3 +210,29 @@ describe("dash-widget-builder skill — readable error text", () => {
         );
     });
 });
+
+describe("action widgets (team-dashboards TD-004/TD-005)", () => {
+    const skill = fs.readFileSync(
+        path.join(
+            __dirname,
+            "..",
+            "..",
+            ".claude",
+            "skills",
+            "dash-widget-builder",
+            "SKILL.md"
+        ),
+        "utf8"
+    );
+    const section = skill.slice(skill.indexOf("### Action widgets"));
+    test("publish an event, show it was sent, listen for completed/failed, wire under Run on events", () => {
+        expect(section).toMatch(/A widget never starts a bot itself/);
+        expect(section).toMatch(/never\s+simulate a run with a timer/);
+        expect(section).toMatch(/needs \*\*no provider\*\*/);
+        expect(section).toContain('publishEvent("checkEmail"');
+        expect(section).toContain('events: ["checkEmail"]');
+        expect(section).toContain('eventHandlers: ["onBotFinished"]');
+        expect(section).toMatch(/Run on events/);
+        expect(section).toContain("Never write `window.mainApi.bots`");
+    });
+});

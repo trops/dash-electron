@@ -740,6 +740,11 @@
             {
                 get: function (_target, methodName) {
                     return function () {
+                        if (namespaceName === "bots") {
+                            throw new Error(
+                                "[preview-gate] widgets may not start bots — publish an event and wire the bot to it (Run on events)"
+                            );
+                        }
                         throw new Error(
                             "[preview-gate] provider '" +
                                 namespaceName +
@@ -754,6 +759,9 @@
     }
 
     function shouldBlockNamespace(namespaceName) {
+        // Widgets never start bots themselves (team-dashboards TD-005):
+        // always blocked, whatever the widget declares.
+        if (namespaceName === "bots") return true;
         if (!Array.isArray(currentDeclaredProviders)) return false;
         if (CREDENTIALED_NAMESPACES.indexOf(namespaceName) === -1) return false;
         return currentDeclaredProviders.indexOf(namespaceName) === -1;
