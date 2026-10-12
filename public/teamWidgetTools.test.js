@@ -240,6 +240,14 @@ describe("codeProblems", () => {
     it("is empty for good code", () => {
         assert.deepEqual(codeProblems(GOOD_COMPONENT), []);
     });
+    it("refuses a widget that starts a bot (TD-005)", () => {
+        const code = GOOD_COMPONENT.replace(
+            "    return (",
+            "    window.mainApi.bots.run('b');\n    return ("
+        );
+        const p = codeProblems(code);
+        assert.ok(p.some((x) => /widgets may not start bots/.test(x)));
+    });
 });
 
 describe("the Widget Builder's IPC handlers use lib/aiBuild.cjs", () => {

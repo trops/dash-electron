@@ -8,9 +8,11 @@
 export {
     validateProviderApiUsage,
     validateNoModalUsage,
+    validateNoBotCalls,
     validateComponentReferences,
     buildAiCorrectionMessage,
     buildNoModalCorrectionMessage,
+    buildNoBotCallsCorrectionMessage,
     buildComponentReferenceCorrectionMessage,
 } from "./widgetCodeValidator";
 export { evaluateScorecard } from "./composer/scorecardChecks";

@@ -162,6 +162,56 @@ export function validateNoModalUsage(componentCode) {
 }
 
 /**
+ * Widgets never start bots themselves (team-dashboards TD-005): they publish
+ * an event the user wires a bot to. Rejects any reach into `mainApi.bots` —
+ * `mainApi.bots`, `mainApi?.bots`, `mainApi["bots"]`, and destructuring
+ * `{ bots } = …mainApi`. (Dash also refuses to install such a package.)
+ *
+ * Returns: { ok, errors: [{ line, snippet, suggestion }] }.
+ */
+const BOT_CALL_PATTERNS = [
+    /mainApi\s*(?:\?\.|\.)\s*bots\b/g,
+    /mainApi\s*(?:\?\.)?\s*\[\s*["'`]bots["'`]\s*\]/g,
+    /\{[^{}]*\bbots\b[^{}]*\}\s*=\s*[\w.?]*mainApi\b/g,
+];
+export function validateNoBotCalls(componentCode) {
+    if (!componentCode || typeof componentCode !== "string") {
+        return { ok: true, errors: [] };
+    }
+    const errors = [];
+    const seenLines = new Set();
+    for (const re of BOT_CALL_PATTERNS) {
+        for (const m of componentCode.matchAll(re)) {
+            const line = lineOf(componentCode, m.index);
+            if (seenLines.has(line)) continue;
+            seenLines.add(line);
+            errors.push({
+                line,
+                snippet: m[0],
+                suggestion:
+                    "Publish an event instead (declare it in the config's events, publishEvent on click) and tell the user to wire the bot under its Run on events.",
+            });
+        }
+    }
+    errors.sort((a, b) => a.line - b.line);
+    return { ok: errors.length === 0, errors };
+}
+
+/** The chat correction for a widget that reaches mainApi.bots. */
+export function buildNoBotCallsCorrectionMessage(errors) {
+    if (!errors || errors.length === 0) return "";
+    const lines = [
+        "The widget you generated starts a bot directly, which widgets may not do:",
+    ];
+    for (const e of errors) lines.push(`- \`${e.snippet}\` on line ${e.line}`);
+    lines.push("");
+    lines.push(
+        'Re-emit BOTH code blocks (component + config). Make it an action widget: declare the event in the config\'s `events`, call `publishEvent("<event>", payload)` from `useWidgetEvents()` on click and show a local "sent" status, and listen for the bot\'s completed/failed through `eventHandlers` to show when it finished. Tell the user to wire the bot under its Run on events. Never reference `mainApi.bots` in any form.'
+    );
+    return lines.join("\n");
+}
+
+/**
  * Build a corrective-message string the modal can post into the
  * chat history so the AI fixes the no-Modal violation.
  */

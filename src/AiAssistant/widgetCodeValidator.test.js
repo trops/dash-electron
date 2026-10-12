@@ -6,6 +6,8 @@ import {
     validateProviderApiUsage,
     buildAiCorrectionMessage,
     validateNoModalUsage,
+    validateNoBotCalls,
+    buildNoBotCallsCorrectionMessage,
     buildNoModalCorrectionMessage,
     validateComponentReferences,
     buildComponentReferenceCorrectionMessage,
@@ -521,5 +523,35 @@ describe("buildComponentReferenceCorrectionMessage", () => {
         ]);
         expect(msg).toMatch(/component \+ config/i);
         expect(msg).toMatch(/dash-react-components.md|@trops\/dash-react/);
+    });
+});
+
+describe("validateNoBotCalls (team-dashboards TD-005)", () => {
+    test("catches every way of reaching mainApi.bots", () => {
+        const code = [
+            "const a = () => window.mainApi.bots.run(id);",
+            "const b = () => window.mainApi?.bots?.askLead(id, q);",
+            'const c = mainApi["bots"];',
+            "const { bots } = window.mainApi;",
+        ].join("\n");
+        const res = validateNoBotCalls(code);
+        expect(res.ok).toBe(false);
+        expect(res.errors.map((e) => e.line)).toEqual([1, 2, 3, 4]);
+    });
+
+    test("publishing events, or the word bots in text, is fine", () => {
+        const code =
+            'publishEvent("checkEmail", {}); const t = "Your bots run on events"; window.mainApi.widgets.list();';
+        expect(validateNoBotCalls(code)).toEqual({ ok: true, errors: [] });
+    });
+
+    test("the correction turns it into an action widget", () => {
+        const msg = buildNoBotCallsCorrectionMessage(
+            validateNoBotCalls("window.mainApi.bots.run(1)").errors
+        );
+        expect(msg).toMatch(/starts a bot directly/);
+        expect(msg).toMatch(/publishEvent/);
+        expect(msg).toMatch(/Run on events/);
+        expect(msg).toMatch(/BOTH code blocks/);
     });
 });

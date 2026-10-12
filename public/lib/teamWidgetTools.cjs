@@ -39,6 +39,14 @@ function codeProblems(componentCode) {
             );
         }
     }
+    const botCalls = checks.validateNoBotCalls(componentCode);
+    if (!botCalls.ok) {
+        for (const e of botCalls.errors) {
+            problems.push(
+                `line ${e.line}: ${e.snippet} — widgets may not start bots; publish an event the user wires a bot to`
+            );
+        }
+    }
     const modal = checks.validateNoModalUsage(componentCode);
     if (!modal.ok) {
         for (const e of modal.errors) {

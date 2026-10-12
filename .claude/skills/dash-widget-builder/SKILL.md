@@ -845,6 +845,66 @@ useEffect(() => {
 eventHandlers: ["onBotUpdate"],
 ```
 
+### Action widgets — a button that starts a bot
+
+When the user asks for a button (or any control) that runs, starts or
+triggers one of their bots, build an **action widget** like this — never
+simulate a run with a timer, and don't ask whether to: this is the only way.
+It needs **no provider** — it only publishes an event — so build it the same
+way when the user picked "No external provider".
+
+A widget never starts a bot itself. It **sends an event**; the user wires a
+bot to run on that event (the bot's **Run on events**). That keeps the user
+in charge of what can start their bots — and Dash refuses to install a
+widget whose code reaches `mainApi.bots` (run, ask or anything else), and
+the builder's checks reject it.
+
+1. Declare the event in the config's `events` (bare names).
+2. On click, publish it, and show that the request went out — there's no
+   "started" event, so keep a local status.
+3. To show when the run finished, declare a handler in `eventHandlers` and
+   listen for that bot's `completed` / `failed` (see "Listening to bots").
+4. Tell the user, in the widget's empty state and your reply, to wire the
+   bot: **open the bot › Run on events › pick this widget's event**, and the
+   widget's **Configure › Listeners** for the finished status.
+
+```jsx
+const { publishEvent, listen, listeners } = useWidgetEvents();
+const [status, setStatus] = useState(null); // null | "sent" | "done" | "failed"
+const onBotRef = useRef(null);
+onBotRef.current = (envelope) => {
+    const payload = envelope?.message || envelope;
+    setStatus(payload.error ? "failed" : "done");
+};
+useEffect(() => {
+    listen(listeners, { onBotFinished: (e) => onBotRef.current(e) });
+}, [listen, listeners]);
+
+return (
+    <Panel>
+        <Button
+            title={status === "sent" ? "Checking…" : "Check email"}
+            onClick={() => {
+                publishEvent("checkEmail", { requestedAt: Date.now() });
+                setStatus("sent");
+            }}
+        />
+        {status === "done" ? <Paragraph text="Done." /> : null}
+        {status === "failed" ? (
+            <Paragraph text="The bot couldn't finish." />
+        ) : null}
+    </Panel>
+);
+```
+
+```js
+events: ["checkEmail"],
+eventHandlers: ["onBotFinished"],
+```
+
+Never write `window.mainApi.bots` (or `mainApi?.bots`, `mainApi["bots"]`,
+or `const { bots } = window.mainApi`) in a widget.
+
 ### Showing a bot's results
 
 When a widget's job is to show what a bot found — important emails, open
