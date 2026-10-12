@@ -36,6 +36,7 @@ import {
     makeScopedComponentId,
     // Shared with the Widgets page (who may publish / edit a package).
     deriveWidgetOwnership,
+    runTeamRole,
 } from "@trops/dash-core";
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
 import { extractWidgetName } from "./extractWidgetName";
@@ -50,6 +51,8 @@ import { ChatProviderGate } from "./ChatProviderGate";
 import { WidgetDraftsList, firstUserMessageExcerpt } from "./WidgetDraftsList";
 import { builderTheme, useBuilderTheme } from "./useBuilderTheme";
 import { WidgetConsolePane } from "./WidgetConsolePane";
+import { CheckerCard } from "./CheckerCard";
+import { checkRequestText, fixRequestText } from "./teamCheck";
 import { ComposerPane } from "./composer/ComposerPane";
 import { ComposerPaneV2 } from "./composer/ComposerPaneV2";
 // Slice 19G.2: installWidgetConsoleCapture is no longer wired into
@@ -2792,6 +2795,39 @@ ${
 
     // Send a build-error fix request to this builder's chat. Hidden: it's
     // the builder talking to the AI, not the user.
+    // The Dash team's Checker on the widget just installed (create-entry
+    // CRE-011 AC5): null | { phase, run?, reason?, soFar?, widgetName }.
+    const [teamCheck, setTeamCheck] = useState(null);
+    const [teamCheckKept, setTeamCheckKept] = useState(false);
+    // "Let Builder fix it" asks so far this session (at most MAX_TEAM_FIXES).
+    const teamFixesRef = useRef(0);
+    const startTeamCheck = useCallback((widgetName) => {
+        if (!widgetName || !window.mainApi?.bots?.listDashTeam) return;
+        setTeamCheckKept(false);
+        setTeamCheck({ phase: "checking", widgetName, soFar: "" });
+        runTeamRole("checker", checkRequestText(widgetName), {
+            onText: (soFar) =>
+                setTeamCheck((c) =>
+                    c && c.widgetName === widgetName && c.phase === "checking"
+                        ? { ...c, soFar }
+                        : c
+                ),
+        }).then((res) => {
+            setTeamCheck((c) =>
+                c && c.widgetName === widgetName
+                    ? res.skipped
+                        ? { phase: "skipped", reason: res.reason, widgetName }
+                        : {
+                              phase:
+                                  res.status === "failed" ? "failed" : "done",
+                              run: res,
+                              widgetName,
+                          }
+                    : c
+            );
+        });
+    }, []);
+
     const sendFixRequest = useCallback((content, { hidden }) => {
         try {
             window.dispatchEvent(
@@ -3533,6 +3569,7 @@ ${
                         success: true,
                         widgetName: result.widgetName,
                     });
+                    startTeamCheck(result.widgetName);
                     if (onInstalled) {
                         // Pass the canonical scoped component id (e.g.
                         // "ai-built.mywidget.MyWidget") — that's the key
@@ -3573,6 +3610,7 @@ ${
             editMode,
             remixName,
             selectedProviderForBuild,
+            startTeamCheck,
         ]
     );
 
@@ -5706,6 +5744,34 @@ ${
                                                         : "now appears in your Widgets list."}
                                                 </p>
                                             </div>
+                                            <CheckerCard
+                                                check={teamCheck}
+                                                fixes={teamFixesRef.current}
+                                                bt={bt}
+                                                kept={teamCheckKept}
+                                                onKeep={() =>
+                                                    setTeamCheckKept(true)
+                                                }
+                                                onFix={() => {
+                                                    const answer =
+                                                        teamCheck?.run
+                                                            ?.output || "";
+                                                    teamFixesRef.current += 1;
+                                                    // Back to the builder with
+                                                    // the code kept; the chat
+                                                    // rewrites it, the user
+                                                    // installs the update.
+                                                    setInstallStatus(null);
+                                                    setTeamCheck(null);
+                                                    sendFixRequest(
+                                                        fixRequestText(
+                                                            installStatus.widgetName,
+                                                            answer
+                                                        ),
+                                                        { hidden: false }
+                                                    );
+                                                }}
+                                            />
                                             <div className="flex gap-3">
                                                 <button
                                                     onClick={() =>
