@@ -474,6 +474,7 @@ const {
     checkDashboardUpdatesForApp,
     getProviderSetupManifest,
     getDashboardPublishPreview,
+    getDashboardPackageConfig,
     // Dashboard ratings
     saveDashboardRating,
     getDashboardRating,
@@ -639,6 +640,7 @@ const {
     DASHBOARD_CONFIG_CHECK_UPDATES,
     DASHBOARD_CONFIG_PROVIDER_SETUP,
     DASHBOARD_CONFIG_PUBLISH_PREVIEW,
+    DASHBOARD_CONFIG_PACKAGE_CONFIG,
     DASHBOARD_RATING_SAVE,
     DASHBOARD_RATING_GET,
     DASHBOARD_RATING_LIST,
@@ -2042,6 +2044,11 @@ function createWindow() {
         );
         logger.loggedHandle(DASHBOARD_CONFIG_PROVIDER_SETUP, (e, message) =>
             getProviderSetupManifest(message.appId, message.requiredProviders)
+        );
+        // A registry dashboard's config without installing it — starters
+        // (create-entry 5b).
+        logger.loggedHandle(DASHBOARD_CONFIG_PACKAGE_CONFIG, (e, message) =>
+            getDashboardPackageConfig(message && message.packageName)
         );
         logger.loggedHandle(DASHBOARD_CONFIG_PUBLISH_PREVIEW, (e, message) =>
             getDashboardPublishPreview(
