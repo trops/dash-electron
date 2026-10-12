@@ -48,7 +48,13 @@ describe("Bots view IPC handlers", () => {
     it("BOTS_RUN passes continueConversation (reply to continue)", () => {
         assert.match(
             src,
-            /loggedHandle\(\s*BOTS_RUN,[\s\S]{0,200}botController\.run\([\s\S]{0,120}continueConversation/
+            /loggedHandle\(\s*BOTS_RUN,[\s\S]{0,400}botController\.run\([\s\S]{0,120}continueConversation/
+        );
+    });
+    it("BOTS_RUN passes planId (a Dash team run inside a Create plan, 4e-1)", () => {
+        assert.match(
+            src,
+            /\{ botId, prompt, continueConversation, planId \}[\s\S]{0,400}planId: planId \|\| null/
         );
     });
 });
