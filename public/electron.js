@@ -722,6 +722,10 @@ const {
     BOTS_START_PLAN_BUILD,
     BOTS_STOP_PLAN_BUILD,
     BOTS_GET_PLAN_BUILD,
+    BOTS_FIX_PLAN_BUILD,
+    BOTS_RETRY_PLAN_BUILD,
+    BOTS_RESUME_PLAN_BUILD,
+    BOTS_REMOVE_PLAN_BUILD,
     BOTS_GET_RUNS,
     BOTS_GET_LATEST_RESULT,
     BOTS_LIST_RECENT_RUNS,
@@ -2492,6 +2496,20 @@ function createWindow() {
         );
         logger.loggedHandle(BOTS_GET_PLAN_BUILD, (e, msg) =>
             botController.getPlanBuild(msg && msg.buildId)
+        );
+        // After a build (4d-3, CRE-004 AC4/AC5): Let Builder fix it, Try
+        // again, run what waited for a provider, Remove what was built.
+        logger.loggedHandle(BOTS_FIX_PLAN_BUILD, (e, msg) =>
+            botController.fixPlanBuild(msg && msg.buildId, msg && msg.stepId)
+        );
+        logger.loggedHandle(BOTS_RETRY_PLAN_BUILD, (e, msg) =>
+            botController.retryPlanBuild(msg && msg.buildId, msg && msg.stepId)
+        );
+        logger.loggedHandle(BOTS_RESUME_PLAN_BUILD, (e, msg) =>
+            botController.resumePlanBuild(msg && msg.buildId)
+        );
+        logger.loggedHandle(BOTS_REMOVE_PLAN_BUILD, (e, msg) =>
+            botController.removePlanBuild(msg && msg.buildId)
         );
 
         // --- Widget Event IPC Bridge ---
