@@ -69,7 +69,7 @@ The work is done by **your Dash team**: built-in bots with one role each (Planne
 -   [ ] AC3: **Before building** lists every install (with what it can access) and every sign-in, each with its own button (Review & approve, Connect). The Build button names what's still open ("Connect Gmail & build"); pressing it walks through them first. Nothing pops up during the build.
 -   [x] AC4 (4e-1: kept automatically as it goes — no Save draft button needed; the plan says "Kept in Recent · nothing has been built or installed yet"): Nothing is created or installed until Build. Back, Close and Save draft keep the plan under Recent, and the header says so.
 -   [ ] AC5: The plan says what the bots can and can't do ("can read email; none can send email").
--   [ ] AC6: Preview shows the dashboard with sample data (P2).
+-   [x] AC6 (5d, dash-core Components/Create/PlanSketch.js + planPreview.js: a sketch on the plan card laid out the way the build lays it out — widgets in a one- or two-column grid, then a Bot results box per bot that shows its results; the Planner adds made-up `sample` lines per piece (generic names, never the user's data); every box says Sample; Hide/Show; without samples a box shows the piece's notes and the card says the Planner hasn't added sample data yet. A starter's plan fills in once the Planner adapts it): Preview shows the dashboard with sample data (P2).
 
 ### CRE-004: Building with progress (P1)
 
