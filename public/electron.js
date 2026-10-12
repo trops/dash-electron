@@ -726,6 +726,10 @@ const {
     BOTS_RETRY_PLAN_BUILD,
     BOTS_RESUME_PLAN_BUILD,
     BOTS_REMOVE_PLAN_BUILD,
+    CREATE_RECENT_LIST,
+    CREATE_RECENT_GET,
+    CREATE_RECENT_SAVE,
+    CREATE_RECENT_REMOVE,
     BOTS_GET_RUNS,
     BOTS_GET_LATEST_RESULT,
     BOTS_LIST_RECENT_RUNS,
@@ -2295,10 +2299,12 @@ function createWindow() {
         });
         logger.loggedHandle(
             BOTS_RUN,
-            (e, { botId, prompt, continueConversation }) =>
-                // A reply in the Bots view continues the bot's conversation.
+            (e, { botId, prompt, continueConversation, planId }) =>
+                // A reply in the Bots view continues the bot's conversation;
+                // a Dash team run inside a Create plan gets its memory (4e-1).
                 botController.run(botId, prompt, {
                     continueConversation: !!continueConversation,
+                    planId: planId || null,
                 })
         );
         // Bots view (TEAM-011): a bot's run history.
@@ -2510,6 +2516,19 @@ function createWindow() {
         );
         logger.loggedHandle(BOTS_REMOVE_PLAN_BUILD, (e, msg) =>
             botController.removePlanBuild(msg && msg.buildId)
+        );
+        // Create's Recent (create-entry CRE-007 AC2, phase 4e-1).
+        logger.loggedHandle(CREATE_RECENT_LIST, () =>
+            botController.listCreateRecent()
+        );
+        logger.loggedHandle(CREATE_RECENT_GET, (e, msg) =>
+            botController.getCreateRecent(msg && msg.id)
+        );
+        logger.loggedHandle(CREATE_RECENT_SAVE, (e, msg) =>
+            botController.saveCreateRecent((msg && msg.entry) || {})
+        );
+        logger.loggedHandle(CREATE_RECENT_REMOVE, (e, msg) =>
+            botController.removeCreateRecent(msg && msg.id)
         );
 
         // --- Widget Event IPC Bridge ---
