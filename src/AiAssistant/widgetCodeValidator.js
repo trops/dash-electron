@@ -197,6 +197,46 @@ export function validateNoBotCalls(componentCode) {
     return { ok: errors.length === 0, errors };
 }
 
+/**
+ * Widgets publish events with `publishEvent` from `useWidgetEvents()` (or
+ * the `publishEvent` prop), which names the event after the widget
+ * (`Component[id].event`) — what bots and other widgets subscribe to. The
+ * raw `api.publishEvent(...)` sends the bare name, so nothing ever hears it
+ * (create-entry phase 4d-2).
+ *
+ * Returns: { ok, errors: [{ line, snippet, suggestion }] }.
+ */
+const RAW_PUBLISH_PATTERN = /\bapi\s*(?:\?\.|\.)\s*publishEvent\s*\(/g;
+export function validateEventPublishing(componentCode) {
+    if (!componentCode || typeof componentCode !== "string") {
+        return { ok: true, errors: [] };
+    }
+    const errors = [];
+    for (const m of componentCode.matchAll(RAW_PUBLISH_PATTERN)) {
+        errors.push({
+            line: lineOf(componentCode, m.index),
+            snippet: m[0].replace(/\s*\($/, ""),
+            suggestion:
+                'Use publishEvent from useWidgetEvents(): const { publishEvent } = useWidgetEvents(); publishEvent("<event>", payload).',
+        });
+    }
+    return { ok: errors.length === 0, errors };
+}
+
+/** The chat correction for a widget that publishes with api.publishEvent. */
+export function buildEventPublishingCorrectionMessage(errors) {
+    if (!errors || errors.length === 0) return "";
+    const lines = [
+        "The widget you generated publishes with api.publishEvent, which sends the bare event name — no bot or widget can hear it:",
+    ];
+    for (const e of errors) lines.push(`- \`${e.snippet}\` on line ${e.line}`);
+    lines.push("");
+    lines.push(
+        'Re-emit BOTH code blocks (component + config). Publish with `const { publishEvent } = useWidgetEvents();` and `publishEvent("<event>", payload)` (imported from @trops/dash-core), with the event declared in the config\'s `events`. Never call `api.publishEvent`.'
+    );
+    return lines.join("\n");
+}
+
 /** The chat correction for a widget that reaches mainApi.bots. */
 export function buildNoBotCallsCorrectionMessage(errors) {
     if (!errors || errors.length === 0) return "";

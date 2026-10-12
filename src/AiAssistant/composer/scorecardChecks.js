@@ -28,14 +28,18 @@ import {
  * (Button.onClick → window.mainApi.foo.bar), the emitted code grows
  * a data-fetch surface and the checks fire as intended — at which
  * point the rubric items become actionable instead of noisy.
+ *
+ * Importing @trops/dash-core alone isn't a data-fetch surface: an action
+ * widget imports useWidgetEvents from it just to publish an event, and has
+ * no data to load (create-entry phase 4d-2).
  */
 function hasDataFetchSurface(code) {
     if (typeof code !== "string") return false;
     return (
-        /@trops\/dash-core/.test(code) ||
         /window\.mainApi\./.test(code) ||
         /\buseMcpProvider\s*\(/.test(code) ||
-        /\buseWidgetProviders\s*\(/.test(code)
+        /\buseWidgetProviders\s*\(/.test(code) ||
+        /\buseWebSocketProvider\s*\(/.test(code)
     );
 }
 

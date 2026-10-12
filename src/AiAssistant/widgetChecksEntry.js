@@ -9,10 +9,12 @@ export {
     validateProviderApiUsage,
     validateNoModalUsage,
     validateNoBotCalls,
+    validateEventPublishing,
     validateComponentReferences,
     buildAiCorrectionMessage,
     buildNoModalCorrectionMessage,
     buildNoBotCallsCorrectionMessage,
+    buildEventPublishingCorrectionMessage,
     buildComponentReferenceCorrectionMessage,
 } from "./widgetCodeValidator";
 export { evaluateScorecard } from "./composer/scorecardChecks";

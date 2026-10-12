@@ -905,6 +905,8 @@ eventHandlers: ["onBotFinished"],
 Never write `window.mainApi.bots` (or `mainApi?.bots`, `mainApi["bots"]`,
 or `const { bots } = window.mainApi`) in a widget.
 
+Publish **only** with `publishEvent` from `useWidgetEvents()`. Never call `api.publishEvent(...)` (the `api` prop): it sends the bare event name, so no bot or widget ever hears it, and the Widget Builder rejects it.
+
 ### Showing a bot's results
 
 When a widget's job is to show what a bot found — important emails, open

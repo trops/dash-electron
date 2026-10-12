@@ -47,6 +47,14 @@ function codeProblems(componentCode) {
             );
         }
     }
+    const publishing = checks.validateEventPublishing(componentCode);
+    if (!publishing.ok) {
+        for (const e of publishing.errors) {
+            problems.push(
+                `line ${e.line}: ${e.snippet} sends the bare event name, so no bot or widget hears it — ${e.suggestion}`
+            );
+        }
+    }
     const modal = checks.validateNoModalUsage(componentCode);
     if (!modal.ok) {
         for (const e of modal.errors) {

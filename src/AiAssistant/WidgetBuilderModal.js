@@ -78,6 +78,8 @@ import {
     buildNoModalCorrectionMessage,
     validateNoBotCalls,
     buildNoBotCallsCorrectionMessage,
+    validateEventPublishing,
+    buildEventPublishingCorrectionMessage,
     validateComponentReferences,
     buildComponentReferenceCorrectionMessage,
 } from "./widgetCodeValidator";
@@ -2681,6 +2683,32 @@ ${
                             errors: botCheck.errors,
                             correction: buildNoBotCallsCorrectionMessage(
                                 botCheck.errors
+                            ),
+                        });
+                        setPreviewComponent(null);
+                        setPreviewParsedConfig(match.config);
+                        return;
+                    }
+
+                    // Events published with api.publishEvent go out
+                    // unprefixed, so no bot or widget hears them (4d-2).
+                    const publishCheck = validateEventPublishing(componentSrc);
+                    if (!publishCheck.ok) {
+                        setPreviewError(
+                            "Widget publishes with api.publishEvent, so no bot or widget hears its events:\n" +
+                                publishCheck.errors
+                                    .map(
+                                        (e) =>
+                                            `\`${e.snippet}\` (line ${e.line})`
+                                    )
+                                    .join("\n") +
+                                '\n\nClick "Send error to AI" to publish with useWidgetEvents instead.'
+                        );
+                        setPreviewErrorMeta({
+                            kind: "raw-publish-in-widget",
+                            errors: publishCheck.errors,
+                            correction: buildEventPublishingCorrectionMessage(
+                                publishCheck.errors
                             ),
                         });
                         setPreviewComponent(null);

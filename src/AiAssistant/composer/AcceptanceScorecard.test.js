@@ -420,3 +420,39 @@ describe("AcceptanceScorecard — Ask AI integration", () => {
         expect(rule.index).toBe(12);
     });
 });
+
+describe("action widgets aren't graded on data states (4d-2)", () => {
+    const ACTION = `
+import React, { useState } from "react";
+import { Panel, Button, SubHeading2 } from "@trops/dash-react";
+import { useWidgetEvents } from "@trops/dash-core";
+export default function Ask() {
+    const { publishEvent } = useWidgetEvents();
+    const [sent, setSent] = useState(false);
+    return (
+        <Panel><div className="flex flex-col gap-2 p-4">
+            <SubHeading2 title="Ask" />
+            <Button title="Ask" onClick={() => { publishEvent("askClicked", {}); setSent(true); }} />
+        </div></Panel>
+    );
+}`;
+    test("importing dash-core for useWidgetEvents leaves loading/empty/error n/a", () => {
+        const byIndex = Object.fromEntries(
+            evaluateScorecard(ACTION).map((r) => [r.index, r.pass])
+        );
+        for (const i of [2, 3, 4, 5, 15]) expect(byIndex[i]).toBeNull();
+        expect(byIndex[0]).toBe(true);
+        expect(byIndex[1]).toBe(true);
+    });
+    test("a widget calling a provider is still graded", () => {
+        const withProvider = ACTION.replace(
+            "useWidgetEvents();",
+            'useWidgetEvents(); const { callTool } = useMcpProvider("gmail");'
+        );
+        const byIndex = Object.fromEntries(
+            evaluateScorecard(withProvider).map((r) => [r.index, r.pass])
+        );
+        expect(byIndex[2]).toBe(false);
+        expect(byIndex[3]).toBe(false);
+    });
+});
