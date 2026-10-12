@@ -60,7 +60,7 @@ The work is done by **your Dash team**: built-in bots with one role each (Planne
 -   [ ] AC1: Starters below the prompt, filtered by category tabs.
 -   [ ] AC2: Each shows a name, one line, what it makes and what it needs (named providers, never "your CRM").
 -   [ ] AC3: Picking one opens its plan (Remix); it never builds directly.
--   [ ] AC4: Starters come from registry dashboard packages with bots (bot-factory US-027). **Depends on** team export and bot packages carrying `publishes` and result wiring (team-dashboards follow-up).
+-   [ ] AC4 (dependency done in 5a-1: dashboard packages carry their team — results, triggers, listeners — and import re-points them; publishing them to the registry is 5a-2): Starters come from registry dashboard packages with bots (bot-factory US-027). **Depends on** team export and bot packages carrying `publishes` and result wiring (team-dashboards follow-up).
 
 ### CRE-003: A plan before building (P1)
 
