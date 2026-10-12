@@ -57,10 +57,10 @@ The work is done by **your Dash team**: built-in bots with one role each (Planne
 
 ### CRE-002: Starters (P2 — after result-aware packaging)
 
--   [ ] AC1: Starters below the prompt, filtered by category tabs.
--   [ ] AC2: Each shows a name, one line, what it makes and what it needs (named providers, never "your CRM").
--   [ ] AC3: Picking one opens its plan (Remix); it never builds directly.
--   [ ] AC4 (dependency done in 5a-1: dashboard packages carry their team — results, triggers, listeners — and import re-points them; 5a-2: they publish to the registry with a bot summary, which the registry keeps and shows; install from the registry shows and adds them — first live-tested with the starters in 5b): Starters come from registry dashboard packages with bots (bot-factory US-027). **Depends on** team export and bot packages carrying `publishes` and result wiring (team-dashboards follow-up).
+-   [x] AC1 (5b, dash-core Components/Create/StarterCards.js + starters.js): Starters below the prompt, filtered by category tabs. Shown for Type Auto and Dashboard: public registry dashboards tagged `starter` that have bots; tabs All + each category present; each card has a thumbnail drawn from the package's layout (its grid, a label per cell).
+-   [x] AC2 (5b): Each shows a name, one line, what it makes and what it needs (named providers, never "your CRM") — e.g. "Makes 2 widgets · 1 bot · needs Gmail, Google Calendar".
+-   [x] AC3 (5b: the package is read without installing; its widgets become registry pieces and its bots new bots — instructions, read-only tools, schedule, results, shown in Bot results; the plan shows at once and the Planner is asked to adapt it; Build goes through Before building and the normal build): Picking one opens its plan (Remix); it never builds directly.
+-   [x] AC4 (5b: three starters published by trops — Morning Brief, Inbox Triage, PR Review; dependency done in 5a-1: dashboard packages carry their team — results, triggers, listeners — and import re-points them; 5a-2: they publish to the registry with a bot summary, which the registry keeps and shows; install from the registry shows and adds them — first live-tested with the starters in 5b): Starters come from registry dashboard packages with bots (bot-factory US-027). **Depends on** team export and bot packages carrying `publishes` and result wiring (team-dashboards follow-up).
 
 ### CRE-003: A plan before building (P1)
 
