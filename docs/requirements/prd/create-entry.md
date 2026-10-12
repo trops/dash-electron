@@ -124,12 +124,12 @@ Decided 2026-10-10: editing uses the same full-screen modal; no scope toggle —
 
 Every planned piece — widgets **and bots** — is resolved in one order, and the plan says which:
 
--   [ ] AC1: **Yours first:** installed widgets, your own (`@<you>/…`, `@ai-built/…`) and existing bots. Tagged **Yours**.
--   [ ] AC2: **Then the registry:** widget packages, dashboard packages and bot templates. Tagged **Registry · install**. A registry widget is only matched to a bot result it declares it can show; otherwise it must read the provider directly.
+-   [x] AC1 (widgets; dash-core #726 v0.1.741 — the Scout looks before Create builds, matches tagged Yours / AI-built; bots not yet): **Yours first:** installed widgets, your own (`@<you>/…`, `@ai-built/…`) and existing bots. Tagged **Yours**.
+-   [x] AC2 (widget packages; dash-core #726 — Registry · install opens the registry search): **Then the registry:** widget packages, dashboard packages and bot templates. Tagged **Registry · install**. A registry widget is only matched to a bot result it declares it can show; otherwise it must read the provider directly.
 -   [ ] AC3: **Then build it.** Tagged **New**.
 -   [ ] AC4: Every planned widget has **Swap…**, an inline picker of alternatives that can show the same thing (yours, registry, or build new).
 -   [ ] AC5: The summary counts both ("3 bots: 1 from the registry, 2 new · 3 widgets: 1 yours, 1 from the registry, 1 new").
--   [ ] AC6: Registry unreachable → the plan says so and falls back to Yours and New.
+-   [x] AC6 (dash-core #722/#726 — search_library says the registry couldn't be searched and still lists yours): Registry unreachable → the plan says so and falls back to Yours and New.
 
 ### CRE-010: Building by hand stays first-class (P0)
 
@@ -153,10 +153,10 @@ Built-in bots, always present, that do the making. Each has one role, its own in
 | **Checker** | Checks the work: each widget renders, each trigger fires, nothing exceeds what was approved (e.g. no send-email tools) | read-only + preview runs; can fail a step                                   | strong             |
 
 -   [x] AC1 (dash-core #721 v0.1.736 — Planner/Scout/Builder/Checker created at startup, delete refused, pause saved across restarts): The team exists for every user; it isn't on any dashboard and can't be deleted (it can be paused).
--   [ ] AC2: The conversation labels who's speaking or acting (PLANNER, SCOUT…); Building shows who did each step.
+-   [ ] AC2 (partly, slice 4: SCOUT step in Create and CHECKER card in the Widget Builder, each with model and tokens; the full conversation and Building labels come with phase 4): The conversation labels who's speaking or acting (PLANNER, SCOUT…); Building shows who did each step.
 -   [x] AC3 (dash-core #721 — per-role picks per provider on the Bots page Dash team section; editable there rather than Settings, which became the Bots page): Each role's model is set per provider with sensible defaults (e.g. Anthropic: Planner Opus, Scout Haiku, Builder Sonnet, Checker Sonnet) and is editable in Settings.
 -   [ ] AC4: Roles hand off through the existing bot machinery (runs, events, results — team-dashboards), not one long prompt, so each is testable alone.
--   [ ] AC5: The Checker can send a step back to the Builder ("Let Builder fix it"), at most twice, then asks the user.
+-   [x] AC5 (dash-electron slice 4 — after each Widget Builder install the Checker checks it; Let Builder fix it, at most twice, then over to the user): The Checker can send a step back to the Builder ("Let Builder fix it"), at most twice, then asks the user.
 -   [ ] AC6: Answering questions ("what did my bots find today?") uses the Planner with read access to results — the same team, not a separate assistant.
 
 ### CRE-012: Cost and model visibility (P1)
