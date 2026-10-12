@@ -229,6 +229,8 @@ describe("action widgets (team-dashboards TD-004/TD-005)", () => {
         expect(section).toMatch(/A widget never starts a bot itself/);
         expect(section).toMatch(/never\s+simulate a run with a timer/);
         expect(section).toMatch(/needs \*\*no provider\*\*/);
+        // 4d-2: api.publishEvent sends the bare name — nothing hears it.
+        expect(section).toMatch(/Never call `api\.publishEvent\(\.\.\.\)`/);
         expect(section).toContain('publishEvent("checkEmail"');
         expect(section).toContain('events: ["checkEmail"]');
         expect(section).toContain('eventHandlers: ["onBotFinished"]');

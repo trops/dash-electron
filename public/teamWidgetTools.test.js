@@ -248,6 +248,24 @@ describe("codeProblems", () => {
         const p = codeProblems(code);
         assert.ok(p.some((x) => /widgets may not start bots/.test(x)));
     });
+
+    it("refuses api.publishEvent — bots can't hear it (4d-2)", () => {
+        const code = GOOD_COMPONENT.replace(
+            "    return (",
+            "    props.api.publishEvent('askClicked', {});\n    return ("
+        );
+        const p = codeProblems(code);
+        assert.ok(
+            p.some((x) =>
+                /api\.publishEvent sends the bare event name.*useWidgetEvents/.test(
+                    x
+                )
+            )
+        );
+        assert.ok(
+            !codeProblems(GOOD_COMPONENT).some((x) => /publishEvent/.test(x))
+        );
+    });
 });
 
 describe("the Widget Builder's IPC handlers use lib/aiBuild.cjs", () => {

@@ -73,7 +73,7 @@ The work is done by **your Dash team**: built-in bots with one role each (Planne
 
 ### CRE-004: Building with progress (P1)
 
--   [ ] AC1 (partly, 4d-1: install, create dashboard, Builder builds, Checker checks, place — each with who did it, model and tokens; Dash's own steps say "no AI"; bots, wiring and first run are 4d-2): Steps — install & connect, create bots, build widgets, place, wire, **check the work**, first run — each showing which team member did it, the model, tokens and cost.
+-   [ ] AC1 (partly, 4d-1: install, create dashboard, Builder builds, Checker checks, place — each with who did it, model and tokens; Dash's own steps say "no AI"; 4d-2: save bots, Bot results widget, triggers and listeners as Dash steps; first run is offered as Run <bot> now, never automatic; failed-step options are 4d-3): Steps — install & connect, create bots, build widgets, place, wire, **check the work**, first run — each showing which team member did it, the model, tokens and cost.
 -   [ ] AC2: A live preview fills in as steps finish.
 -   [ ] AC3 (partly, 4d-1: Stop aborts the running role, stops the rest, keeps what's built; "a draft in Recent" is 4e): **Stop** halts after the current step; what's built is kept as a draft in Recent.
 -   [ ] AC4: A failed step shows what failed and offers **Let Builder fix it**, **Edit plan** and **Remove what was built**. Finished steps are kept.

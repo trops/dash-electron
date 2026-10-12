@@ -8,6 +8,8 @@ import {
     validateNoModalUsage,
     validateNoBotCalls,
     buildNoBotCallsCorrectionMessage,
+    validateEventPublishing,
+    buildEventPublishingCorrectionMessage,
     buildNoModalCorrectionMessage,
     validateComponentReferences,
     buildComponentReferenceCorrectionMessage,
@@ -553,5 +555,38 @@ describe("validateNoBotCalls (team-dashboards TD-005)", () => {
         expect(msg).toMatch(/publishEvent/);
         expect(msg).toMatch(/Run on events/);
         expect(msg).toMatch(/BOTH code blocks/);
+    });
+});
+
+describe("validateEventPublishing — api.publishEvent isn't heard (4d-2)", () => {
+    test("rejects api.publishEvent in any spelling", () => {
+        const code = [
+            "export default function Ask(props) {",
+            '  const go = () => props.api.publishEvent("askClicked", {});',
+            "  const { api } = props;",
+            "  api?.publishEvent('x');",
+            "}",
+        ].join("\n");
+        const res = validateEventPublishing(code);
+        expect(res.ok).toBe(false);
+        expect(res.errors.map((e) => e.line)).toEqual([2, 4]);
+        expect(res.errors[0].snippet).toBe("api.publishEvent");
+        expect(res.errors[0].suggestion).toMatch(/useWidgetEvents/);
+    });
+    test("accepts useWidgetEvents' publishEvent and the publishEvent prop", () => {
+        expect(
+            validateEventPublishing(
+                'const { publishEvent } = useWidgetEvents(); publishEvent("askClicked", {}); props.publishEvent("x");'
+            ).ok
+        ).toBe(true);
+        expect(validateEventPublishing("").ok).toBe(true);
+    });
+    test("the correction asks for useWidgetEvents and both blocks", () => {
+        const msg = buildEventPublishingCorrectionMessage(
+            validateEventPublishing('props.api.publishEvent("a")').errors
+        );
+        expect(msg).toMatch(/Re-emit BOTH code blocks/);
+        expect(msg).toMatch(/const \{ publishEvent \} = useWidgetEvents\(\);/);
+        expect(msg).toMatch(/Never call `api\.publishEvent`/);
     });
 });
