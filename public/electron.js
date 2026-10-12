@@ -719,6 +719,9 @@ const {
     BOTS_ASK_LEAD,
     BOTS_LIST_LEADS,
     BOTS_LIST_DASH_TEAM,
+    BOTS_START_PLAN_BUILD,
+    BOTS_STOP_PLAN_BUILD,
+    BOTS_GET_PLAN_BUILD,
     BOTS_GET_RUNS,
     BOTS_GET_LATEST_RESULT,
     BOTS_LIST_RECENT_RUNS,
@@ -2476,6 +2479,19 @@ function createWindow() {
         // The Dash team's role bots for the Bots page (create-entry CRE-011).
         logger.loggedHandle(BOTS_LIST_DASH_TEAM, () =>
             botController.listDashTeam()
+        );
+        // Building an approved plan (create-entry CRE-004, phase 4d).
+        logger.loggedHandle(BOTS_START_PLAN_BUILD, (e, msg) =>
+            botController.startPlanBuild(
+                msg && msg.plan,
+                (msg && msg.opts) || {}
+            )
+        );
+        logger.loggedHandle(BOTS_STOP_PLAN_BUILD, (e, msg) =>
+            botController.stopPlanBuild(msg && msg.buildId)
+        );
+        logger.loggedHandle(BOTS_GET_PLAN_BUILD, (e, msg) =>
+            botController.getPlanBuild(msg && msg.buildId)
         );
 
         // --- Widget Event IPC Bridge ---

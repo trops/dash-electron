@@ -73,12 +73,12 @@ The work is done by **your Dash team**: built-in bots with one role each (Planne
 
 ### CRE-004: Building with progress (P1)
 
--   [ ] AC1: Steps — install & connect, create bots, build widgets, place, wire, **check the work**, first run — each showing which team member did it, the model, tokens and cost.
+-   [ ] AC1 (partly, 4d-1: install, create dashboard, Builder builds, Checker checks, place — each with who did it, model and tokens; Dash's own steps say "no AI"; bots, wiring and first run are 4d-2): Steps — install & connect, create bots, build widgets, place, wire, **check the work**, first run — each showing which team member did it, the model, tokens and cost.
 -   [ ] AC2: A live preview fills in as steps finish.
--   [ ] AC3: **Stop** halts after the current step; what's built is kept as a draft in Recent.
+-   [ ] AC3 (partly, 4d-1: Stop aborts the running role, stops the rest, keeps what's built; "a draft in Recent" is 4e): **Stop** halts after the current step; what's built is kept as a draft in Recent.
 -   [ ] AC4: A failed step shows what failed and offers **Let Builder fix it**, **Edit plan** and **Remove what was built**. Finished steps are kept.
 -   [ ] AC5: Steps that need a provider the user skipped wait ("waiting for Gmail") instead of failing.
--   [ ] AC6: When done, **Go to dashboard** opens the live dashboard (not the editor), and the header compares actual cost with the estimate.
+-   [x] AC6 (4d-1: Go to dashboard closes Create and opens the built dashboard's tab, live; the end shows actual tokens against the estimate): When done, **Go to dashboard** opens the live dashboard (not the editor), and the header compares actual cost with the estimate.
 
 ### CRE-005: Single things stay quick (P0)
 
@@ -163,7 +163,7 @@ Built-in bots, always present, that do the making. Each has one role, its own in
 
 -   [ ] AC1: The plan shows an **Estimated cost**: to build (by role and model) and to run the bots (per day, at their schedules), with a note to change schedules to lower it.
 -   [ ] AC2: Each planned bot shows its model and tokens per run.
--   [ ] AC3: Building shows actual tokens and cost per step and a running total; the end compares with the estimate.
+-   [x] AC3 (4d-1: per-step model and tokens, running total, end compares with the estimate; dollars only for API runs): Building shows actual tokens and cost per step and a running total; the end compares with the estimate.
 -   [x] AC4 (dash-core #720 v0.1.735 — runs record model, provider, all tokens incl. cache and cost; run history, Bots page last run, edit bots row): Edit's bots row shows each bot's model and cost this month (from BudgetController usage).
 -   [x] AC5 (dash-core #720): With Claude Code (subscription) as the AI, show tokens and "included in your plan" instead of dollars; dollars for API-key providers.
 
