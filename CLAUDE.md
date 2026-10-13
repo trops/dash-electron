@@ -138,6 +138,8 @@ element across dash-electron, dash-core, and widgets must come from
 without per-component overrides. This is the same rule the AI Widget Builder
 enforces on AI-generated widgets — it applies to hand-written code too.
 
+**The design guide is the reference:** dash-react `docs/design-guide.html` (rules, Aurora color roles, spacing, patterns, the review checklist) and `docs/component-gallery.html` (every component, live, with known issues). Tailwind palette classes render in Dash colors here (dash-react `aurora-palette.cjs`), but app code should still use theme roles and dash-react components.
+
 **Before writing any new component or markup:**
 
 1. Check whether `@trops/dash-react` already provides the primitive (Button,

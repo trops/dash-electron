@@ -1,6 +1,16 @@
 const path = require("path");
 const os = require("os");
 
+// Palette names follow Aurora (dash-react design guide, "Colors in widgets"):
+// gray/slate/zinc/neutral/stone take Aurora neutral, indigo/violet/purple the
+// accent. Older dash-react without the file keeps Tailwind's defaults.
+let auroraColors = () => ({});
+try {
+    ({ auroraColors } = require("@trops/dash-react/dist/aurora-palette.cjs"));
+} catch (_e) {
+    // dash-react predates the Aurora palette
+}
+
 /**
  * Build explicit safelist entries for arbitrary-value classes
  * referencing CSS custom properties — e.g. `bg-[var(--primary-700)]`.
@@ -75,6 +85,7 @@ module.exports = {
     ],
     theme: {
         extend: {
+            colors: auroraColors(),
             // Aurora fonts (slice 1). Makes the default sans + `font-mono`
             // resolve to Hanken Grotesk / JetBrains Mono app-wide. Loaded via
             // @fontsource on jsDelivr in src/index.html (CSP-allowlisted).
