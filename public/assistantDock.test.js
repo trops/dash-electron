@@ -34,7 +34,14 @@ describe("AssistantDock — Create (4e-2)", () => {
     });
     it("rail buttons are labelled for screen readers", () => {
         assert.match(src, /\{railButton\("create", "plus", "Create"\)\}/);
-        assert.match(src, /aria-label=\{label\}/);
-        assert.match(src, /aria-pressed=\{open === which\}/);
+        // dash-react ButtonIcon2: ariaLabel → aria-label, ariaPressed →
+        // aria-pressed.
+        assert.match(src, /<ButtonIcon2[\s\S]*?ariaLabel=\{label\}/);
+        assert.match(src, /ariaPressed=\{open === which\}/);
+    });
+    it("the open panel's rail button is shown selected (guide rule 13)", () => {
+        assert.match(src, /selected=\{open === which\}/);
+        // No opacity-modifier hover classes on the rail.
+        assert.doesNotMatch(src, /hover:bg-white\/10/);
     });
 });

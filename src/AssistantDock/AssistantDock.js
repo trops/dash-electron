@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect } from "react";
-import { ThemeContext, FontAwesomeIcon } from "@trops/dash-react";
+import { ThemeContext, ButtonIcon2 } from "@trops/dash-react";
 import { CreateDockPanel } from "@trops/dash-core";
 import { AiAssistantPanel } from "../AiAssistant/AiAssistantPanel";
 import { BotActivityPanel } from "../BotActivity/BotActivityPanel";
@@ -37,19 +37,19 @@ export const AssistantDock = () => {
         return () => window.removeEventListener("dash:create-fold", onFold);
     }, []);
 
+    // A rail toggle: the open panel's button is filled in both modes (design
+    // guide rule 13) and reports its state to screen readers.
     const railButton = (which, icon, label, extra = null) => (
-        <button
-            onClick={() => toggle(which)}
-            className={`p-2 rounded-lg hover:bg-white/10 transition-colors hover:text-gray-200 relative ${
-                open === which ? "text-gray-200" : "text-gray-400"
-            }`}
-            title={label}
-            aria-label={label}
-            aria-pressed={open === which}
-        >
-            <FontAwesomeIcon icon={icon} className="h-4 w-4" />
+        <span className="relative" title={label}>
+            <ButtonIcon2
+                icon={icon}
+                ariaLabel={label}
+                ariaPressed={open === which}
+                selected={open === which}
+                onClick={() => toggle(which)}
+            />
             {extra}
-        </button>
+        </span>
     );
 
     return (
@@ -73,7 +73,7 @@ export const AssistantDock = () => {
                 onCollapsedChange={(c) => setOpen(c ? null : "ai")}
             />
             <div
-                className={`chrome-rail flex flex-col items-center w-10 border-l ${borderColor} ${bgDark} shrink-0 h-screen gap-1 pt-3`}
+                className={`chrome-rail flex flex-col items-center w-12 border-l ${borderColor} ${bgDark} shrink-0 h-screen gap-2 pt-3`}
             >
                 {railButton("create", "plus", "Create")}
                 {railButton("ai", "wand-magic-sparkles", "AI Assistant")}
