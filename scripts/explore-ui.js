@@ -314,7 +314,7 @@ const destinations = {
     },
     "settings.aiAssistant": async (win) => {
         await openSettingsModal(win);
-        await clickSection(win, "AI Assistant");
+        await clickSection(win, "AI");
     },
     "settings.general": async (win) => {
         await openSettingsModal(win);
@@ -367,13 +367,6 @@ const destinations = {
     "settings.dashboards.section": async (win) => {
         await openSettingsModal(win);
         await clickSection(win, "Dashboards");
-    },
-    aiAssistant: async (win) => {
-        // Click "Open AI Assistant" floating button at bottom-right.
-        await win
-            .getByRole("button", { name: "Open AI Assistant", exact: true })
-            .click();
-        await win.waitForTimeout(1000);
     },
 };
 

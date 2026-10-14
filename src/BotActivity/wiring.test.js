@@ -44,10 +44,10 @@ describe("Bot Activity panel mount (AssistantDock)", () => {
         expect(dashSrc).toMatch(/renderAiAssistant=\{<AssistantDock \/>\}/);
     });
 
-    it("the dock hosts the Bot monitor panel and the AI Assistant", () => {
+    it("the dock hosts the Bot monitor panel — not the retired AI Assistant (5e-2c)", () => {
         expect(dockSrc).toMatch(/import \{ BotActivityPanel \}/);
         expect(dockSrc).toMatch(/<BotActivityPanel\s/);
-        expect(dockSrc).toMatch(/<AiAssistantPanel\s/);
+        expect(dockSrc).not.toMatch(/AiAssistantPanel/);
         expect(dockSrc).toMatch(/onApprovalsCount=\{setApprovals\}/);
     });
 });

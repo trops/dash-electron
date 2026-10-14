@@ -1,9 +1,25 @@
 # PRD: In-App AI Assistant & Widget Builder
 
-**Status:** In Progress (Phase 3 complete, Phases 1-2 partial; Discover tab shipped 2026-04-19)
-**Last Updated:** 2026-04-19
+**Status:** In Progress (Phase 3 complete, Phases 1-2 partial; Discover tab shipped 2026-04-19). **The right-side AI Assistant panel is retired** (create-entry 5e-2c, 2026-10-14) — see below. The Widget Builder is unchanged.
+**Last Updated:** 2026-10-14
 **Owner:** John Giatropoulos
 **Related PRDs:** None
+
+> **Panel retired (create-entry 5e-2c, 2026-10-14).** The wand button and the AI Assistant panel are gone from the right-hand rail; asking and making things both happen in **Create** (create-entry PRD CRE-007 AC4). What the panel did, and where it lives now:
+>
+> | The panel could…                                               | Now                                                        |
+> | -------------------------------------------------------------- | ---------------------------------------------------------- |
+> | Add a widget or bot to a dashboard, switch a dashboard's theme | A Create plan for that dashboard (5e-2b)                   |
+> | Make a new dashboard                                           | A Create plan                                              |
+> | Ask a team lead                                                | Create's Ask box, To: picker (5e-2a)                       |
+> | Answer questions about bots and dashboards                     | Create's Ask box (the Planner)                             |
+> | Remove, move or resize widgets; set layouts                    | Edit mode on the dashboard                                 |
+> | Add or remove providers                                        | The Providers page                                         |
+> | Make a theme from a description                                | Create › Theme                                             |
+> | Make a theme from a website; delete dashboards                 | The Themes and Dashboards pages                            |
+> | Chat with your connected tools                                 | A dashboard's team lead (no general-purpose chat any more) |
+>
+> Kept: ChatCore (the Widget Builder's chat engine), Settings › AI (renamed from "AI Assistant"; Create and the Widget Builder use it), and Dash's MCP server for outside apps — its `ask_team_lead` runs now say "Asked through Dash's MCP server". Assistant chats were never saved past the window, so there's no history to move.
 
 ---
 
