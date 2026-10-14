@@ -2486,9 +2486,13 @@ function createWindow() {
         logger.loggedHandle(BOTS_ASK_LEAD, (e, msg) =>
             botController.askLead(msg && msg.botId, msg && msg.question, {
                 continueConversation: !!(msg && msg.continueConversation),
-                // Only the AI Assistant's direct-to-lead picker labels its
-                // runs (TEAM-013); any other value is dropped.
-                via: msg && msg.via === "assistant" ? "assistant" : null,
+                // Only the AI Assistant's direct-to-lead picker (TEAM-013) and
+                // Create's Ask box "To:" (create-entry 5e-2a) label their
+                // runs; any other value is dropped.
+                via:
+                    msg && (msg.via === "assistant" || msg.via === "create")
+                        ? msg.via
+                        : null,
             })
         );
         // AI Assistant "To:" picker: team leads by dashboard (TEAM-013).
