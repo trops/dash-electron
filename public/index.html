@@ -12,6 +12,14 @@
     -->
         <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
         <title>Dash</title>
+        <!-- Dash's background (dash-react --bg) before any CSS loads, so the
+             first paint isn't the browser's default gray. The app's
+             design.css body rule loads later and takes over. -->
+        <style>
+            body {
+                background: #0a0b10;
+            }
+        </style>
         <script>
             window.global = window;
         </script>
