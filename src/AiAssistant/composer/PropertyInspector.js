@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
+import { Button3, ButtonIcon3, InputText } from "@trops/dash-react";
 import {
     getComponentSchema,
     getInputBinding,
@@ -177,15 +178,11 @@ export function PropertyInspector({
     if (!node) return null;
     if (!schema) {
         return (
-            <div className={`px-3 py-2 text-xs ${bt.muted}`}>
-                No schema for component <code>{node.type}</code>.
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className={`ml-2 ${bt.accent} underline`}
-                >
-                    Back
-                </button>
+            <div className={`p-3 flex items-center gap-2 text-sm ${bt.muted}`}>
+                <span>
+                    No schema for component <code>{node.type}</code>.
+                </span>
+                <Button3 title="Back" onClick={onClose} size="sm" />
             </div>
         );
     }
@@ -208,31 +205,29 @@ export function PropertyInspector({
             data-testid={`composer-inspector-${node.id}`}
         >
             <div
-                className={`flex items-center justify-between px-3 py-3 border-b ${bt.border} shrink-0`}
+                className={`flex items-center justify-between gap-3 p-3 border-b ${bt.border} shrink-0`}
             >
-                <div className={`text-sm ${bt.text}`}>
-                    <span className={`${bt.muted}`}>Editing </span>
-                    <span className={`${bt.text}`}>{node.type}</span>
-                </div>
-                <button
-                    type="button"
+                <h3 className={`text-sm font-semibold ${bt.text} truncate`}>
+                    Editing <span className="font-mono">{node.type}</span>
+                </h3>
+                <Button3
+                    title="← Back to palette"
                     onClick={onClose}
-                    className={`text-sm ${bt.accent} hover:opacity-80`}
-                    data-testid="composer-inspector-close"
-                >
-                    ← Back to palette
-                </button>
+                    size="sm"
+                    className="shrink-0"
+                    testId="composer-inspector-close"
+                />
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-3">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3">
                 <VariantPicker
                     nodeId={node.id}
                     currentType={node.type}
                     onChangeType={onChangeType}
                 />
                 {propRows.length === 0 && (
-                    <div className={`text-xs ${bt.muted}`}>
+                    <p className={`text-sm ${bt.muted}`}>
                         This component has no editable props.
-                    </div>
+                    </p>
                 )}
                 {propRows.map(([propName, propSchema]) => {
                     const wireSpec = node.wires
@@ -389,6 +384,7 @@ function PropRow({
             <button
                 type="button"
                 onClick={() => setExpanded((v) => !v)}
+                aria-expanded={expanded}
                 className={`w-full flex items-center justify-between px-3 py-3 text-left ${bt.hoverSurface}`}
                 data-testid={`composer-prop-toggle-${propName}`}
             >
@@ -424,45 +420,38 @@ function PropRow({
                 </span>
             </button>
             {expanded && (
-                <div className="px-2 pb-2 space-y-1.5">
+                <div className="px-3 pb-3 flex flex-col gap-2">
                     {isDataSlot && !isCallbackProp && (
-                        <div className="flex items-center justify-end mb-1">
-                            <div
-                                className={`flex items-center gap-0.5 text-xs ${bt.surface} border ${bt.border} rounded p-0.5`}
+                        // Static | Wire mode pills. Icon toggles rather
+                        // than SegmentedControl so each option keeps its
+                        // own test id.
+                        <div
+                            className="flex items-center justify-end gap-1"
+                            role="group"
+                            aria-label={`${propName} source`}
+                        >
+                            <ButtonIcon3
+                                onClick={() =>
+                                    onSetSlotMode(nodeId, propName, "static")
+                                }
+                                selected={mode === "static"}
+                                ariaPressed={mode === "static"}
+                                size="sm"
+                                testId={`composer-slot-static-${propName}`}
                             >
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        onSetSlotMode(
-                                            nodeId,
-                                            propName,
-                                            "static"
-                                        )
-                                    }
-                                    className={`px-1.5 py-0.5 rounded ${
-                                        mode === "static"
-                                            ? `${bt.tint} ${bt.accent}`
-                                            : `${bt.muted} hover:opacity-100`
-                                    }`}
-                                    data-testid={`composer-slot-static-${propName}`}
-                                >
-                                    static
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        onSetSlotMode(nodeId, propName, "wire")
-                                    }
-                                    className={`px-1.5 py-0.5 rounded ${
-                                        mode === "wire"
-                                            ? `${bt.tint} ${bt.accent}`
-                                            : `${bt.muted} hover:opacity-100`
-                                    }`}
-                                    data-testid={`composer-slot-wire-${propName}`}
-                                >
-                                    wire
-                                </button>
-                            </div>
+                                Static
+                            </ButtonIcon3>
+                            <ButtonIcon3
+                                onClick={() =>
+                                    onSetSlotMode(nodeId, propName, "wire")
+                                }
+                                selected={mode === "wire"}
+                                ariaPressed={mode === "wire"}
+                                size="sm"
+                                testId={`composer-slot-wire-${propName}`}
+                            >
+                                Wire
+                            </ButtonIcon3>
                         </div>
                     )}
                     {mode === "wire" ? (
@@ -590,33 +579,30 @@ function StaticValueEditor({
 
     if (type === "function") {
         return (
-            <div
-                className={`text-sm px-2 py-1.5 rounded border ${bt.border} ${bt.surface} ${bt.muted} italic`}
-            >
-                (callback — set this in code, not the composer)
-            </div>
+            <p className={`text-sm ${bt.muted}`}>
+                Callback — set this in code, not the composer.
+            </p>
         );
     }
 
     if (type === "ReactNode") {
         return (
-            <div
-                className={`text-sm px-2 py-1.5 rounded border ${bt.border} ${bt.surface} ${bt.muted} italic`}
-            >
-                (rendered children — nest components in the tree)
-            </div>
+            <p className={`text-sm ${bt.muted}`}>
+                Rendered children — nest components in the tree.
+            </p>
         );
     }
 
     if (type === "boolean") {
         return (
-            <label className={`flex items-center gap-2 text-xs ${bt.text}`}>
+            <label className={`flex items-center gap-2 text-sm ${bt.text}`}>
                 <input
                     type="checkbox"
                     checked={value === true}
                     onChange={(e) =>
                         onChangeProp(nodeId, propName, e.target.checked)
                     }
+                    aria-label={propName}
                     data-testid={`composer-input-${propName}`}
                 />
                 {value === true ? "true" : "false"}
@@ -626,11 +612,10 @@ function StaticValueEditor({
 
     if (type === "number") {
         return (
-            <input
+            <InputText
                 type="number"
                 value={typeof value === "number" ? value : ""}
-                onChange={(e) => {
-                    const raw = e.target.value;
+                onChange={(raw) => {
                     if (raw === "") {
                         onChangeProp(nodeId, propName, undefined);
                     } else {
@@ -640,7 +625,7 @@ function StaticValueEditor({
                         }
                     }
                 }}
-                className={`w-full px-3 py-2 text-sm ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
+                ariaLabel={propName}
                 data-testid={`composer-input-${propName}`}
             />
         );
@@ -659,17 +644,12 @@ function StaticValueEditor({
 
     // Strings, "any", and anything else fall through to text input.
     return (
-        <input
-            type="text"
+        <InputText
             value={typeof value === "string" ? value : ""}
-            onChange={(e) =>
-                onChangeProp(
-                    nodeId,
-                    propName,
-                    e.target.value === "" ? undefined : e.target.value
-                )
+            onChange={(v) =>
+                onChangeProp(nodeId, propName, v === "" ? undefined : v)
             }
-            className={`w-full px-3 py-2 text-sm ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
+            ariaLabel={propName}
             data-testid={`composer-input-${propName}`}
         />
     );
@@ -708,24 +688,25 @@ function JsonTextarea({ nodeId, propName, value, onChangeProp }) {
     }, [draft, nodeId, propName, onChangeProp]);
 
     return (
-        <div>
+        <div className="flex flex-col gap-1">
             <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={apply}
                 rows={4}
                 placeholder="[ ]"
-                className={`w-full px-3 py-2 text-sm font-mono ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
+                aria-label={propName}
+                className={`dr-input w-full px-3 py-2 text-sm font-mono ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
                 data-testid={`composer-input-${propName}`}
             />
             {error && (
-                <div className={`text-xs ${bt.status.error.icon} mt-1`}>
+                <p className={`text-xs ${bt.status.error.icon}`}>
                     JSON parse error: {error}
-                </div>
+                </p>
             )}
-            <div className={`text-xs ${bt.muted} mt-0.5`}>
+            <p className={`text-xs ${bt.muted}`}>
                 JSON — applied when the field loses focus
-            </div>
+            </p>
         </div>
     );
 }
@@ -752,35 +733,33 @@ function VariantPicker({ nodeId, currentType, onChangeType }) {
     if (variants.length < 2 || typeof onChangeType !== "function") return null;
     return (
         <div
-            className="flex items-center gap-2"
+            className="flex flex-col gap-2"
             data-testid={`composer-variant-picker-${nodeId}`}
         >
-            <span className={`text-xs uppercase tracking-wide ${bt.muted}`}>
-                Style
-            </span>
+            <h3 className={`text-sm font-semibold ${bt.text}`}>Style</h3>
+            {/* Icon toggles rather than SegmentedControl so each
+                variant keeps its own test id. */}
             <div
-                className={`flex items-center gap-0.5 text-xs ${bt.surface} border ${bt.border} rounded p-0.5`}
+                className="flex flex-wrap items-center gap-1"
+                role="group"
+                aria-label="Style"
             >
                 {variants.map((name, idx) => {
                     const label = variantLabel(currentType, name, idx);
                     const isActive = name === currentType;
                     return (
-                        <button
+                        <ButtonIcon3
                             key={name}
-                            type="button"
                             onClick={() =>
                                 !isActive && onChangeType(nodeId, name)
                             }
-                            className={`px-2 py-0.5 rounded ${
-                                isActive
-                                    ? `${bt.tint} ${bt.accent}`
-                                    : `${bt.muted} hover:opacity-100`
-                            }`}
-                            data-testid={`composer-variant-${nodeId}-${name}`}
-                            title={name}
+                            selected={isActive}
+                            ariaPressed={isActive}
+                            size="sm"
+                            testId={`composer-variant-${nodeId}-${name}`}
                         >
                             {label}
-                        </button>
+                        </ButtonIcon3>
                     );
                 })}
             </div>

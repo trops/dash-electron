@@ -24,7 +24,9 @@ export function builderTheme(themeCtx) {
     return {
         tk,
         text: tk("text-primary-light"),
-        muted: `${tk("text-primary-medium")} opacity-70`,
+        // Muted text is its own token, never opacity (design guide), so it
+        // stays readable on its surface in both modes.
+        muted: tk("text-primary-medium"),
         accent: tk("text-secondary-medium"),
         border: tk("border-primary-dark"),
         accentBorder: tk("border-secondary-medium"),

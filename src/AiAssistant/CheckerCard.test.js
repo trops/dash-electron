@@ -8,6 +8,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 jest.mock("@trops/dash-core", () => ({
     runCostLabel: (run) => (run && run.model ? "Sonnet · 6.1k tokens" : ""),
 }));
+jest.mock("@trops/dash-react", () => require("./dashReactTestStub"));
 
 import { CheckerCard } from "./CheckerCard";
 

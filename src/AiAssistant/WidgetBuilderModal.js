@@ -21,12 +21,20 @@ import React, {
 } from "react";
 import {
     Modal,
+    Button,
+    Button2,
+    Button3,
+    ButtonIcon3,
+    Card2,
+    ChoiceMenu,
     FontAwesomeIcon,
+    InputText,
+    ListRow,
+    PanelHeader,
+    SegmentedControl,
     ThemeContext,
     CodeEditorVS,
     getStatusColors,
-    getStylesForItem,
-    themeObjects,
 } from "@trops/dash-react";
 import {
     ChatCore,
@@ -47,7 +55,7 @@ import {
     onBuildError,
     resetAutoFix,
 } from "./autoFixPolicy";
-import { ChatProviderGate } from "./ChatProviderGate";
+import { ChatProviderGate, typeLabel } from "./ChatProviderGate";
 import { WidgetDraftsList, firstUserMessageExcerpt } from "./WidgetDraftsList";
 import { builderTheme, useBuilderTheme } from "./useBuilderTheme";
 import { WidgetConsolePane } from "./WidgetConsolePane";
@@ -157,8 +165,8 @@ function PreviewProviderPicker({
                             {label} provider:
                         </span>
                         {options.length === 0 ? (
-                            <button
-                                type="button"
+                            <Button2
+                                size="sm"
                                 onClick={() => {
                                     // Cross-modal nav: dash-electron's
                                     // Dash.js listens for this and closes
@@ -190,10 +198,8 @@ function PreviewProviderPicker({
                                         );
                                     }
                                 }}
-                                className={`text-[11px] px-2 py-1 rounded ${bt.tint} ${bt.hoverTint} ${bt.accent} border ${bt.accentBorder} transition-colors`}
-                            >
-                                + Add new {label} provider
-                            </button>
+                                title={`Set up a ${label} provider`}
+                            />
                         ) : (
                             <select
                                 value={current}
@@ -372,9 +378,7 @@ function PreviewTestInputsForm({
             className={`px-4 pt-2 pb-3 border-b ${bt.border} shrink-0 space-y-2`}
         >
             <div className="flex items-center justify-between gap-2">
-                <span
-                    className={`text-[10px] uppercase tracking-wider ${bt.muted}`}
-                >
+                <span className={`text-xs font-medium ${bt.muted}`}>
                     Test inputs
                     {isDirtyLocal && (
                         <span
@@ -386,27 +390,19 @@ function PreviewTestInputsForm({
                 </span>
                 <div className="flex items-center gap-2">
                     {hasAppliedOverrides && (
-                        <button
-                            type="button"
+                        <Button3
+                            size="sm"
                             onClick={onReset}
-                            className={`text-[10px] ${bt.muted} hover:opacity-100 underline`}
-                        >
-                            Reset to defaults
-                        </button>
+                            title="Reset to defaults"
+                        />
                     )}
-                    <button
-                        type="button"
+                    <Button2
+                        size="sm"
                         onClick={handleApply}
                         disabled={!isDirtyLocal}
-                        data-testid="preview-test-inputs-apply"
-                        className={
-                            isDirtyLocal
-                                ? `text-[11px] px-2 py-1 rounded ${bt.primaryFill}`
-                                : `text-[11px] px-2 py-1 rounded ${bt.raised} ${bt.muted} cursor-not-allowed`
-                        }
-                    >
-                        Apply to preview
-                    </button>
+                        testId="preview-test-inputs-apply"
+                        title="Apply to preview"
+                    />
                 </div>
             </div>
             <div className="space-y-1.5">
@@ -901,6 +897,51 @@ const EmbeddedFrame = ({ children }) => (
     <div className="flex flex-col flex-1 min-h-0 w-full h-full">{children}</div>
 );
 
+// The builder as its own modal: one raised surface over the dimmed page
+// (design guide, layout rule 2) — both panes sit on it, split by a hairline.
+const BuilderModalFrame = ({ surfaceClass = "", children, ...modalProps }) => (
+    <Modal {...modalProps}>
+        <div
+            className={`dr-modal-surface flex flex-col h-full w-full rounded-lg overflow-clip border ${surfaceClass}`}
+        >
+            {children}
+        </div>
+    </Modal>
+);
+
+// One tab over the preview (Preview / Code / Configure / Console /
+// Scorecard): the design guide's underline tabs — the `dr-tab` hooks dash-core's
+// tab bars use — with the theme's tokens outside Aurora.
+const BuilderTab = ({
+    active,
+    onClick,
+    icon,
+    label,
+    badge = null,
+    disabled = false,
+    title = undefined,
+    testId = undefined,
+    activeClass,
+    idleClass,
+}) => (
+    <button
+        type="button"
+        role="tab"
+        aria-selected={active}
+        onClick={onClick}
+        disabled={disabled}
+        title={title}
+        data-testid={testId}
+        className={`dr-tab ${
+            active ? `dr-tab-active ${activeClass}` : idleClass
+        } flex items-center gap-2 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`}
+    >
+        <FontAwesomeIcon icon={icon} className="h-3 w-3" />
+        {label}
+        {badge}
+    </button>
+);
+
 export const WidgetBuilderModal = ({
     isOpen,
     setIsOpen,
@@ -1068,6 +1109,11 @@ export const WidgetBuilderModal = ({
     //   - { name, type, providerClass }           → an installed provider
     const [selectedProviderForBuild, setSelectedProviderForBuild] =
         useState(null);
+    // What the user typed in the gate's message box before picking a
+    // provider. The gate then asks which data to use, and the chat opens
+    // with it as the first message — like `initialPrompt` from Create.
+    const [typedPrompt, setTypedPrompt] = useState(null);
+    const startPrompt = initialPrompt || typedPrompt;
     // Mirror into a ref so the message-poller closure (which captures
     // state at modal-open time) can read the latest pick without us
     // having to invalidate the interval on every change.
@@ -1638,32 +1684,16 @@ ${
     const tk = (key) => currentTheme?.[key] || "";
     const bgDark = tk("bg-primary-dark");
     const borderColor = tk("border-primary-dark");
-    const chromeText = tk("text-primary-light");
-    const chromeMuted = `${tk("text-primary-medium")} opacity-70`;
+    // Muted text is a token, never opacity (design guide).
+    const chromeMuted = tk("text-primary-medium");
     const accentText = tk("text-secondary-medium");
-    const tabActive = `${tk("bg-primary-medium")} ${tk("text-primary-light")}`;
-    const tabIdle = `${tk(
-        "text-primary-medium"
-    )} opacity-70 hover:opacity-100 ${tk("hover-bg-primary-medium")}`;
-    const fieldClass = `${tk("bg-primary-very-dark")} ${tk(
-        "border-primary-medium"
-    )} ${tk("text-primary-light")} border rounded focus:outline-none`;
+    // Underline tabs over the preview (BuilderTab).
+    const tabActive = `${tk("text-primary-light")} ${tk(
+        "border-secondary-medium"
+    )}`;
+    const tabIdle = `${tk("text-primary-medium")} border-transparent`;
     const status = getStatusColors(chatThemeCtx?.themeVariant || "dark");
     const bt = builderTheme(chatThemeCtx);
-    // Same classes dash-react's <Button> uses, so primary actions read
-    // right in every theme.
-    const primaryButton = `dr-btn dr-btn-primary rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
-        getStylesForItem(
-            themeObjects.BUTTON,
-            currentTheme || {},
-            { scrollable: false, grow: false, space: false },
-            null,
-            "md"
-        ).string
-    }`;
-    const secondaryButton = `px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${tk(
-        "bg-primary-medium"
-    )} ${tk("hover-bg-primary-light")} ${chromeText}`;
     const codeChip = `px-1 rounded font-mono ${tk("bg-primary-very-dark")}`;
 
     const widgetName = extractWidgetName(detectedCode.componentCode);
@@ -2301,6 +2331,7 @@ ${
                         // provider view would show as if they started from
                         // the beginning").
                         setSelectedProviderForBuild(null);
+                        setTypedPrompt(null);
                         lastCompiledCode.current = null;
                         // Reset the message counter so this block doesn't
                         // re-fire on the next poll tick (msgs is still []
@@ -3724,10 +3755,16 @@ ${
     const displayName =
         widgetName?.replace(/([A-Z])/g, " $1").trim() || "Widget";
 
-    const Frame = embedded ? EmbeddedFrame : Modal;
+    const Frame = embedded ? EmbeddedFrame : BuilderModalFrame;
     const frameProps = embedded
         ? {}
-        : { isOpen, setIsOpen, width: "w-11/12", height: "h-5/6" };
+        : {
+              isOpen,
+              setIsOpen,
+              width: "w-11/12",
+              height: "h-5/6",
+              surfaceClass: `${bgDark} ${borderColor}`,
+          };
 
     return (
         <ThemeContext.Provider value={chatThemeCtx}>
@@ -3743,39 +3780,23 @@ ${
                 ></div>
                 {/* Header — Create's header replaces it when embedded */}
                 {!embedded && (
-                    <div
-                        className={`flex items-center justify-between px-4 py-3 border-b ${borderColor} ${bgDark} shrink-0`}
-                    >
-                        <div className="flex items-center gap-2 min-w-0">
-                            <FontAwesomeIcon
-                                icon="wand-magic-sparkles"
-                                className={`h-4 w-4 shrink-0 ${accentText}`}
-                            />
-                            <span
-                                className={`text-base font-semibold shrink-0 ${chromeText}`}
-                            >
-                                {isRemixMode
-                                    ? "Edit Widget with AI"
-                                    : "Build Widget with AI"}
-                            </span>
-                            {/* Widget identity subtitle — shown only in edit
-                        mode so the user can see which widget they're
-                        editing without having to look at the footer's
-                        "Installs to …" line. originalComponentName
-                        carries the full scoped ID
-                        (e.g. "ai-built.composedwidget3.ComposedWidget3"),
-                        which is the canonical identifier the user
-                        recognizes from their dashboard layout. */}
-                            {isRemixMode &&
-                                effectiveEditContext?.originalComponentName && (
-                                    <>
-                                        <span
-                                            className={`shrink-0 ${chromeMuted}`}
-                                        >
-                                            —
-                                        </span>
+                    <PanelHeader
+                        glyph="wand-magic-sparkles"
+                        title={
+                            <span className="flex items-baseline gap-2 min-w-0">
+                                <span className="shrink-0">
+                                    {isRemixMode
+                                        ? "Edit widget with AI"
+                                        : "Build widget with AI"}
+                                </span>
+                                {/* Edit mode names the widget (its full
+                                scoped ID, e.g. "ai-built.composedwidget3.
+                                ComposedWidget3" — what the user knows from
+                                their dashboard layout). */}
+                                {isRemixMode &&
+                                    effectiveEditContext?.originalComponentName && (
                                         <code
-                                            className={`text-xs font-mono truncate ${accentText}`}
+                                            className={`text-xs font-mono font-normal truncate ${chromeMuted}`}
                                             title={
                                                 effectiveEditContext.originalComponentName
                                             }
@@ -3784,18 +3805,17 @@ ${
                                                 effectiveEditContext.originalComponentName
                                             }
                                         </code>
-                                    </>
-                                )}
-                        </div>
-                        <button
-                            onClick={() => setIsOpen(false)}
-                            className={`p-1.5 rounded transition-colors ${chromeMuted} ${tk(
-                                "hover-bg-primary-medium"
-                            )}`}
-                        >
-                            <FontAwesomeIcon icon="times" className="h-4 w-4" />
-                        </button>
-                    </div>
+                                    )}
+                            </span>
+                        }
+                        actions={
+                            <ButtonIcon3
+                                icon="xmark"
+                                ariaLabel="Close"
+                                onClick={() => setIsOpen(false)}
+                            />
+                        }
+                    />
                 )}
 
                 {/* Health-check banner — only renders when something is
@@ -3900,6 +3920,7 @@ ${
                                 setPreviewError(null);
                                 setInstallStatus(null);
                                 setSelectedProviderForBuild(null);
+                                setTypedPrompt(null);
                                 // Reset compose-mode state so a fresh
                                 // session doesn't inherit the tree from
                                 // whatever was last loaded.
@@ -4011,137 +4032,104 @@ ${
 
                 {/* Split pane */}
                 {viewMode === "builder" && (
-                    <div className={`flex flex-row flex-1 min-h-0 ${bgDark}`}>
+                    <div className="flex flex-row flex-1 min-h-0">
                         {/* Left: Live Preview (2/3) */}
                         <div className="flex flex-col flex-[2] min-w-0 min-h-0 overflow-hidden">
                             {/* Tab bar */}
                             <div
-                                className={`flex items-center justify-between px-2 py-1.5 border-b ${borderColor} shrink-0`}
+                                className={`dr-tabs flex items-stretch h-12 gap-3 pl-2 pr-3 border-b ${borderColor} shrink-0`}
                             >
-                                <div className="flex items-center gap-1">
-                                    <button
+                                <div
+                                    className="flex items-stretch gap-1"
+                                    role="tablist"
+                                    aria-label="Widget views"
+                                >
+                                    <BuilderTab
+                                        active={activeTab === "preview"}
                                         onClick={() => setActiveTab("preview")}
-                                        className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
-                                            activeTab === "preview"
-                                                ? tabActive
-                                                : tabIdle
-                                        }`}
-                                    >
-                                        <FontAwesomeIcon
-                                            icon="eye"
-                                            className="h-2.5 w-2.5"
-                                        />
-                                        Preview
-                                    </button>
-                                    <button
+                                        icon="eye"
+                                        label="Preview"
+                                        activeClass={tabActive}
+                                        idleClass={tabIdle}
+                                    />
+                                    <BuilderTab
+                                        active={activeTab === "code"}
                                         onClick={() => setActiveTab("code")}
                                         disabled={!detectedCode.componentCode}
-                                        className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
-                                            activeTab === "code"
-                                                ? tabActive
-                                                : tabIdle
-                                        } ${
-                                            !detectedCode.componentCode
-                                                ? "opacity-30 cursor-not-allowed"
-                                                : ""
-                                        }`}
-                                    >
-                                        <FontAwesomeIcon
-                                            icon="code"
-                                            className="h-2.5 w-2.5"
-                                        />
-                                        Code
-                                    </button>
-                                    <button
+                                        icon="code"
+                                        label="Code"
+                                        activeClass={tabActive}
+                                        idleClass={tabIdle}
+                                    />
+                                    <BuilderTab
+                                        active={activeTab === "configure"}
                                         onClick={() =>
                                             setActiveTab("configure")
                                         }
                                         disabled={!detectedCode.componentCode}
-                                        className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
-                                            activeTab === "configure"
-                                                ? tabActive
-                                                : tabIdle
-                                        } ${
-                                            !detectedCode.componentCode
-                                                ? "opacity-30 cursor-not-allowed"
-                                                : ""
-                                        }`}
-                                    >
-                                        <FontAwesomeIcon
-                                            icon="cog"
-                                            className="h-2.5 w-2.5"
-                                        />
-                                        Configure
-                                    </button>
-                                    <button
+                                        icon="cog"
+                                        label="Configure"
+                                        activeClass={tabActive}
+                                        idleClass={tabIdle}
+                                    />
+                                    <BuilderTab
+                                        active={activeTab === "console"}
                                         onClick={() => setActiveTab("console")}
-                                        className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
-                                            activeTab === "console"
-                                                ? tabActive
-                                                : tabIdle
-                                        }`}
-                                        data-testid="tab-console"
-                                    >
-                                        <FontAwesomeIcon
-                                            icon="terminal"
-                                            className="h-2.5 w-2.5"
-                                        />
-                                        Console
-                                        {consoleEvents.some(
-                                            (e) => e.severity === "error"
-                                        ) && (
-                                            <span
-                                                className={`ml-1 px-1 rounded text-xs ${status.error.solidBg} ${bt.onSolid}`}
-                                                title="Error in widget output"
-                                            >
-                                                {
-                                                    consoleEvents.filter(
-                                                        (e) =>
-                                                            e.severity ===
-                                                            "error"
-                                                    ).length
-                                                }
-                                            </span>
-                                        )}
-                                    </button>
+                                        icon="terminal"
+                                        label="Console"
+                                        testId="tab-console"
+                                        activeClass={tabActive}
+                                        idleClass={tabIdle}
+                                        badge={
+                                            consoleEvents.some(
+                                                (e) => e.severity === "error"
+                                            ) ? (
+                                                <span
+                                                    className={`px-1.5 rounded text-xs ${status.error.solidBg} ${bt.onSolid}`}
+                                                    title="Error in widget output"
+                                                >
+                                                    {
+                                                        consoleEvents.filter(
+                                                            (e) =>
+                                                                e.severity ===
+                                                                "error"
+                                                        ).length
+                                                    }
+                                                </span>
+                                            ) : null
+                                        }
+                                    />
                                     {chatMode === "build" && (
-                                        <button
+                                        <BuilderTab
+                                            active={activeTab === "scorecard"}
                                             onClick={() =>
                                                 setActiveTab("scorecard")
                                             }
                                             disabled={
                                                 !detectedCode.componentCode
                                             }
-                                            className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
-                                                activeTab === "scorecard"
-                                                    ? tabActive
-                                                    : tabIdle
-                                            } ${
-                                                !detectedCode.componentCode
-                                                    ? "opacity-30 cursor-not-allowed"
-                                                    : ""
-                                            }`}
-                                            data-testid="tab-scorecard"
+                                            icon="circle-check"
+                                            label="Scorecard"
+                                            testId="tab-scorecard"
                                             title="Cohesion-rule checklist for the generated widget"
-                                        >
-                                            <FontAwesomeIcon
-                                                icon="circle-check"
-                                                className="h-2.5 w-2.5"
-                                            />
-                                            Scorecard
-                                            {scorecardFailCount > 0 && (
-                                                <span
-                                                    className={`ml-1 px-1 rounded text-xs ${status.error.solidBg} ${bt.onSolid}`}
-                                                    title={`${scorecardFailCount} cohesion rule${
-                                                        scorecardFailCount === 1
-                                                            ? ""
-                                                            : "s"
-                                                    } failing`}
-                                                >
-                                                    {scorecardFailCount}
-                                                </span>
-                                            )}
-                                        </button>
+                                            activeClass={tabActive}
+                                            idleClass={tabIdle}
+                                            badge={
+                                                scorecardFailCount > 0 ? (
+                                                    <span
+                                                        className={`px-1.5 rounded text-xs ${status.error.solidBg} ${bt.onSolid}`}
+                                                        title={`${scorecardFailCount} cohesion rule${
+                                                            scorecardFailCount ===
+                                                            1
+                                                                ? ""
+                                                                : "s"
+                                                        } failing`}
+                                                    >
+                                                        {scorecardFailCount}
+                                                    </span>
+                                                ) : null
+                                            }
+                                        />
                                     )}
                                 </div>
                                 {isCompiling && (
@@ -4246,102 +4234,99 @@ ${
                                                       )}s ago`
                                                     : ""}
                                             </span>
-                                            <button
-                                                onClick={() => {
-                                                    // Re-fire the auto-save
-                                                    // effect by re-setting
-                                                    // detectedCode to its
-                                                    // current value. The
-                                                    // useEffect deps include
-                                                    // componentCode/configCode/
-                                                    // files (by reference) so a
-                                                    // new object identity is
-                                                    // enough to retrigger.
-                                                    setDetectedCode((prev) => ({
-                                                        ...prev,
-                                                    }));
-                                                }}
-                                                disabled={
-                                                    draftSaveState === "saving"
-                                                }
-                                                className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors ${
-                                                    draftSaveState === "saving"
-                                                        ? `${tk(
-                                                              "bg-primary-medium"
-                                                          )} ${chromeMuted} cursor-wait`
-                                                        : `${tk(
-                                                              "bg-primary-medium"
-                                                          )} ${tk(
-                                                              "hover-bg-primary-light"
-                                                          )} ${chromeText}`
-                                                }`}
-                                                title="Force a draft save now"
-                                                data-testid="builder-save-draft"
-                                            >
-                                                <FontAwesomeIcon
-                                                    icon="save"
-                                                    className="h-2.5 w-2.5"
-                                                />
-                                                Save Draft
-                                            </button>
-                                            <button
-                                                onClick={async () => {
-                                                    const id =
-                                                        draftSessionIdRef.current;
-                                                    if (!id) return;
-                                                    setOpeningEditor(true);
-                                                    setEditorOpenError(null);
-                                                    try {
-                                                        const result =
-                                                            await window.mainApi?.drafts?.openInEditor?.(
-                                                                id
-                                                            );
-                                                        if (!result?.success) {
-                                                            setEditorOpenError(
-                                                                result?.error ||
-                                                                    "Couldn't open the editor"
-                                                            );
-                                                        } else {
-                                                            // Clean break — user
-                                                            // is now editing in
-                                                            // VS Code. The
-                                                            // in-pane editor
-                                                            // would drift, so
-                                                            // close.
-                                                            setIsOpen(false);
-                                                        }
-                                                    } catch (err) {
-                                                        setEditorOpenError(
-                                                            err?.message ||
-                                                                String(err)
+                                            <span data-testid="builder-save-draft">
+                                                <Button3
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        // Re-fire the auto-save
+                                                        // effect by re-setting
+                                                        // detectedCode to its
+                                                        // current value. The
+                                                        // useEffect deps include
+                                                        // componentCode/configCode/
+                                                        // files (by reference) so a
+                                                        // new object identity is
+                                                        // enough to retrigger.
+                                                        setDetectedCode(
+                                                            (prev) => ({
+                                                                ...prev,
+                                                            })
                                                         );
-                                                    } finally {
-                                                        setOpeningEditor(false);
+                                                    }}
+                                                    disabled={
+                                                        draftSaveState ===
+                                                        "saving"
                                                     }
-                                                }}
-                                                disabled={openingEditor}
-                                                className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors ${
-                                                    openingEditor
-                                                        ? `${tk(
-                                                              "bg-secondary-dark"
-                                                          )} ${chromeMuted} cursor-wait`
-                                                        : `${tk(
-                                                              "bg-secondary-dark"
-                                                          )} ${tk(
-                                                              "hover-bg-secondary-medium"
-                                                          )} ${chromeText}`
-                                                }`}
-                                                title="Open this widget's package directory in your editor (VS Code if installed)"
-                                                data-testid="builder-open-editor"
-                                            >
-                                                <FontAwesomeIcon
-                                                    icon="up-right-from-square"
-                                                    className="h-2.5 w-2.5"
-                                                />
-                                                {openingEditor
-                                                    ? "Opening…"
-                                                    : "Open in editor"}
-                                            </button>
+                                                    tooltip="Force a draft save now"
+                                                >
+                                                    <span className="flex items-center gap-2">
+                                                        <FontAwesomeIcon
+                                                            icon="save"
+                                                            className="h-3 w-3"
+                                                        />
+                                                        Save Draft
+                                                    </span>
+                                                </Button3>
+                                            </span>
+                                            <span data-testid="builder-open-editor">
+                                                <Button3
+                                                    size="sm"
+                                                    onClick={async () => {
+                                                        const id =
+                                                            draftSessionIdRef.current;
+                                                        if (!id) return;
+                                                        setOpeningEditor(true);
+                                                        setEditorOpenError(
+                                                            null
+                                                        );
+                                                        try {
+                                                            const result =
+                                                                await window.mainApi?.drafts?.openInEditor?.(
+                                                                    id
+                                                                );
+                                                            if (
+                                                                !result?.success
+                                                            ) {
+                                                                setEditorOpenError(
+                                                                    result?.error ||
+                                                                        "Couldn't open the editor"
+                                                                );
+                                                            } else {
+                                                                // Clean break — user
+                                                                // is now editing in
+                                                                // VS Code. The
+                                                                // in-pane editor
+                                                                // would drift, so
+                                                                // close.
+                                                                setIsOpen(
+                                                                    false
+                                                                );
+                                                            }
+                                                        } catch (err) {
+                                                            setEditorOpenError(
+                                                                err?.message ||
+                                                                    String(err)
+                                                            );
+                                                        } finally {
+                                                            setOpeningEditor(
+                                                                false
+                                                            );
+                                                        }
+                                                    }}
+                                                    disabled={openingEditor}
+                                                    tooltip="Open this widget's package directory in your editor (VS Code if installed)"
+                                                >
+                                                    <span className="flex items-center gap-2">
+                                                        <FontAwesomeIcon
+                                                            icon="up-right-from-square"
+                                                            className="h-3 w-3"
+                                                        />
+                                                        {openingEditor
+                                                            ? "Opening…"
+                                                            : "Open in editor"}
+                                                    </span>
+                                                </Button3>
+                                            </span>
                                         </div>
                                     )}
                             </div>
@@ -4384,7 +4369,7 @@ ${
                                                     </p>
                                                     {effectiveEditContext.originalPackage && (
                                                         <p
-                                                            className={`text-[10px] ${bt.muted} font-mono`}
+                                                            className={`text-xs ${bt.muted} font-mono`}
                                                         >
                                                             package:{" "}
                                                             {
@@ -4393,7 +4378,7 @@ ${
                                                         </p>
                                                     )}
                                                     <p
-                                                        className={`text-[10px] ${bt.muted} font-mono break-words`}
+                                                        className={`text-xs ${bt.muted} font-mono break-words`}
                                                     >
                                                         reason:{" "}
                                                         {
@@ -4455,7 +4440,7 @@ ${
                                                                 )}
                                                             </div>
                                                             <span
-                                                                className={`text-[10px] uppercase tracking-wide ${bt.muted} shrink-0`}
+                                                                className={`text-xs font-medium ${bt.muted} shrink-0`}
                                                             >
                                                                 Click a widget
                                                                 to preview
@@ -4490,15 +4475,14 @@ ${
                                                                         access
                                                                         to.
                                                                     </p>
-                                                                    <button
-                                                                        type="button"
+                                                                    <Button2
+                                                                        size="sm"
+                                                                        title="Sign in"
                                                                         onClick={
                                                                             handleSignInForPreview
                                                                         }
-                                                                        className={`px-3 py-1 text-xs rounded ${bt.primaryFill} shrink-0 transition-colors`}
-                                                                    >
-                                                                        Sign in
-                                                                    </button>
+                                                                        className="shrink-0"
+                                                                    />
                                                                 </div>
                                                             )}
                                                         {!discoverSearching &&
@@ -4530,7 +4514,7 @@ ${
                                                                         (
                                                                             pkg
                                                                         ) => (
-                                                                            <button
+                                                                            <Card2
                                                                                 key={`${
                                                                                     pkg.scope ||
                                                                                     ""
@@ -4542,25 +4526,30 @@ ${
                                                                                         pkg
                                                                                     )
                                                                                 }
-                                                                                className={`group text-left rounded-lg border ${bt.border} ${bt.surface} ${bt.hoverSurface} ${bt.hoverAccentBorder} hover:shadow-lg hover:shadow-indigo-950/50 p-4 transition-all cursor-pointer`}
+                                                                                ariaLabel={`Preview ${
+                                                                                    pkg.displayName ||
+                                                                                    pkg.name
+                                                                                }`}
+                                                                                hover
+                                                                                className="flex flex-col gap-1 text-left"
                                                                             >
-                                                                                <div className="flex items-start justify-between gap-2 mb-1.5">
+                                                                                <div className="flex items-start justify-between gap-2">
                                                                                     <div
-                                                                                        className={`font-semibold text-sm ${bt.text} truncate hover:opacity-80`}
+                                                                                        className={`font-semibold text-sm ${bt.text} truncate`}
                                                                                     >
                                                                                         {pkg.displayName ||
                                                                                             pkg.name}
                                                                                     </div>
                                                                                     {pkg.installed && (
                                                                                         <span
-                                                                                            className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide ${bt.status.success.bg} ${bt.status.success.icon} border ${bt.status.success.border}`}
+                                                                                            className={`shrink-0 px-1.5 py-0.5 rounded text-xs font-medium ${bt.status.success.bg} ${bt.status.success.icon} border ${bt.status.success.border}`}
                                                                                         >
                                                                                             Installed
                                                                                         </span>
                                                                                     )}
                                                                                 </div>
                                                                                 <div
-                                                                                    className={`text-[11px] ${bt.muted} truncate font-mono mb-2`}
+                                                                                    className={`text-xs ${bt.muted} truncate font-mono`}
                                                                                 >
                                                                                     {pkg.scope
                                                                                         ? `@${pkg.scope.replace(
@@ -4575,7 +4564,7 @@ ${
                                                                                 </div>
                                                                                 {pkg.description && (
                                                                                     <div
-                                                                                        className={`text-xs ${bt.muted} overflow-hidden leading-relaxed`}
+                                                                                        className={`text-sm ${bt.muted} overflow-hidden leading-snug mt-1`}
                                                                                         style={{
                                                                                             display:
                                                                                                 "-webkit-box",
@@ -4589,15 +4578,7 @@ ${
                                                                                         }
                                                                                     </div>
                                                                                 )}
-                                                                                <div
-                                                                                    className={`mt-3 text-[10px] uppercase tracking-wide ${bt.accent} opacity-0 group-hover:opacity-100 transition-opacity`}
-                                                                                >
-                                                                                    Click
-                                                                                    to
-                                                                                    preview
-                                                                                    →
-                                                                                </div>
-                                                                            </button>
+                                                                            </Card2>
                                                                         )
                                                                     )}
                                                                 </div>
@@ -4623,7 +4604,7 @@ ${
                                                             {chatMode ===
                                                             "discover"
                                                                 ? "Search the registry"
-                                                                : "Describe your widget"}
+                                                                : "Your preview shows here"}
                                                         </p>
                                                         <p
                                                             className={`text-xs ${bt.muted}`}
@@ -4631,7 +4612,7 @@ ${
                                                             {chatMode ===
                                                             "discover"
                                                                 ? "Tell the AI what kind of widget you're looking for and registry matches will appear here."
-                                                                : "The AI will generate code and a live preview will appear here automatically."}
+                                                                : "Once the widget is written, it runs here with live data."}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -4683,7 +4664,7 @@ ${
                                                                     "—"}
                                                             </div>
                                                             <div
-                                                                className={`flex items-center gap-2 text-[11px] ${bt.status.warning.text}`}
+                                                                className={`flex items-center gap-2 text-xs ${bt.status.warning.text}`}
                                                             >
                                                                 <span className="inline-flex gap-0.5">
                                                                     <span
@@ -4714,30 +4695,28 @@ ${
                                                                 automatically.
                                                             </div>
                                                             {signInFlow.verificationUrlComplete && (
-                                                                <button
-                                                                    type="button"
+                                                                <Button3
+                                                                    size="sm"
                                                                     onClick={() =>
                                                                         window.mainApi?.shell?.openExternal?.(
                                                                             signInFlow.verificationUrlComplete
                                                                         )
                                                                     }
-                                                                    className={`text-xs ${bt.accent} hover:opacity-80 underline`}
                                                                 >
                                                                     Reopen
                                                                     sign-in page
-                                                                </button>
+                                                                </Button3>
                                                             )}
                                                         </div>
                                                     ) : (
-                                                        <button
-                                                            type="button"
+                                                        <Button
+                                                            size="sm"
                                                             onClick={
                                                                 handleSignInForPreview
                                                             }
-                                                            className={`px-3 py-1.5 text-xs rounded ${bt.primaryFill} transition-colors`}
                                                         >
                                                             Sign in
-                                                        </button>
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </div>
@@ -4865,7 +4844,7 @@ ${
                                                                                 .location
                                                                                 ?.lineText && (
                                                                                 <pre
-                                                                                    className={`text-[11px] ${bt.status.error.text} ${bt.surface} rounded px-2 py-1 overflow-x-auto whitespace-pre`}
+                                                                                    className={`text-xs ${bt.status.error.text} ${bt.surface} rounded px-2 py-1 overflow-x-auto whitespace-pre`}
                                                                                 >
                                                                                     {
                                                                                         e
@@ -4928,8 +4907,8 @@ ${
                                                                     2
                                                                 )}
                                                             </pre>
-                                                            <button
-                                                                type="button"
+                                                            <Button3
+                                                                size="sm"
                                                                 onClick={() => {
                                                                     try {
                                                                         navigator.clipboard.writeText(
@@ -4943,13 +4922,13 @@ ${
                                                                         /* noop */
                                                                     }
                                                                 }}
-                                                                className={`mt-2 text-xs ${bt.accent} hover:opacity-80 underline cursor-pointer`}
                                                             >
                                                                 Copy diagnostics
-                                                            </button>
+                                                            </Button3>
                                                         </details>
                                                     )}
-                                                    <button
+                                                    <Button
+                                                        size="sm"
                                                         onClick={() => {
                                                             // Slice 19H: dispatch the
                                                             // dash:chat-core-send window
@@ -4986,26 +4965,24 @@ ${
                                                                 }
                                                             );
                                                         }}
-                                                        className={`text-xs ${bt.accent} hover:opacity-80 underline cursor-pointer`}
                                                     >
                                                         {autoFix.status ===
                                                         "exhausted"
                                                             ? "Try again"
                                                             : "Send error to AI"}
-                                                    </button>
+                                                    </Button>
                                                     {autoFix.status ===
                                                         "exhausted" && (
-                                                        <button
-                                                            type="button"
+                                                        <Button2
+                                                            size="sm"
                                                             onClick={() =>
                                                                 setActiveTab(
                                                                     "code"
                                                                 )
                                                             }
-                                                            className={`ml-3 text-xs ${bt.accent} hover:opacity-80 underline cursor-pointer`}
                                                         >
                                                             Open Code tab
-                                                        </button>
+                                                        </Button2>
                                                     )}
                                                 </div>
                                             </div>
@@ -5151,8 +5128,8 @@ ${
                                                             will request a
                                                             corrected version.
                                                         </div>
-                                                        <button
-                                                            type="button"
+                                                        <Button
+                                                            size="sm"
                                                             onClick={() => {
                                                                 try {
                                                                     const raw =
@@ -5192,10 +5169,9 @@ ${
                                                                     /* ignore */
                                                                 }
                                                             }}
-                                                            className={`mt-1 px-2 py-1 text-xs rounded border ${bt.status.warning.border} ${bt.status.warning.bg} ${bt.status.warning.hoverBg} ${bt.status.warning.text}`}
                                                         >
                                                             Send to AI to fix
-                                                        </button>
+                                                        </Button>
                                                     </div>
                                                 )}
                                             {/* Widget preview — fills available space.
@@ -5340,19 +5316,18 @@ ${
                                                     className={`px-6 py-3 border-t ${borderColor} shrink-0 space-y-2`}
                                                 >
                                                     <div className="flex items-center justify-between gap-3">
-                                                        <button
-                                                            type="button"
+                                                        <Button3
+                                                            size="sm"
                                                             onClick={
                                                                 handleBackToDiscover
                                                             }
-                                                            className={`text-xs flex items-center gap-1 hover:opacity-80 ${accentText}`}
                                                         >
                                                             <FontAwesomeIcon
                                                                 icon="arrow-left"
                                                                 className="h-2.5 w-2.5"
                                                             />
                                                             Back to Discover
-                                                        </button>
+                                                        </Button3>
                                                         <div
                                                             className={`text-xs truncate flex-1 text-right font-mono ${chromeMuted}`}
                                                         >
@@ -5375,53 +5350,44 @@ ${
                                                                 : "Preview this widget, then install or remix."}
                                                         </span>
                                                         <div className="flex items-center gap-3 shrink-0">
-                                                            <button
-                                                                type="button"
+                                                            <Button2
+                                                                size="sm"
                                                                 onClick={
                                                                     handleRemixRegistryPackage
                                                                 }
                                                                 disabled={
                                                                     !detectedCode?.componentCode
                                                                 }
-                                                                title="Fork this widget into @ai-built/ and edit it with AI"
-                                                                className={
-                                                                    secondaryButton
-                                                                }
+                                                                tooltip="Fork this widget into @ai-built/ and edit it with AI"
                                                             >
                                                                 Remix
-                                                            </button>
+                                                            </Button2>
                                                             {browsingPackage.installed ? (
-                                                                <button
-                                                                    type="button"
+                                                                <Button
+                                                                    size="sm"
                                                                     onClick={
                                                                         handleAddInstalledToDashboard
                                                                     }
                                                                     disabled={
                                                                         !cellContext
                                                                     }
-                                                                    title={
+                                                                    tooltip={
                                                                         cellContext
                                                                             ? "Place this widget in the dashboard cell you opened the builder from"
                                                                             : "Open the builder from an empty grid cell to place widgets"
                                                                     }
-                                                                    className={
-                                                                        primaryButton
-                                                                    }
                                                                 >
                                                                     Add to
                                                                     Dashboard
-                                                                </button>
+                                                                </Button>
                                                             ) : (
-                                                                <button
-                                                                    type="button"
+                                                                <Button
+                                                                    size="sm"
                                                                     onClick={
                                                                         handleInstallRegistryPackage
                                                                     }
                                                                     disabled={
                                                                         registryInstalling
-                                                                    }
-                                                                    className={
-                                                                        primaryButton
                                                                     }
                                                                 >
                                                                     {registryInstalling
@@ -5429,7 +5395,7 @@ ${
                                                                         : cellContext
                                                                         ? "Install + Add to Dashboard"
                                                                         : "Install"}
-                                                                </button>
+                                                                </Button>
                                                             )}
                                                         </div>
                                                     </div>
@@ -5480,22 +5446,14 @@ ${
                                                                             of
                                                                             duplicating.
                                                                         </p>
-                                                                        <button
-                                                                            type="button"
+                                                                        <Button2
+                                                                            size="sm"
+                                                                            title="Sign in"
                                                                             onClick={
                                                                                 handleSignInForPreview
                                                                             }
-                                                                            className={`px-3 py-1 text-xs rounded shrink-0 transition-colors ${tk(
-                                                                                "bg-secondary-medium"
-                                                                            )} ${tk(
-                                                                                "hover-bg-secondary-light"
-                                                                            )} ${tk(
-                                                                                "text-secondary-very-light"
-                                                                            )}`}
-                                                                        >
-                                                                            Sign
-                                                                            in
-                                                                        </button>
+                                                                            className="shrink-0"
+                                                                        />
                                                                     </div>
                                                                 )}
                                                             {/* Signed-in-but-not-the-owner hint. Surfaces
@@ -5579,59 +5537,41 @@ ${
                                                                 )}
                                                             {/* Update / Remix toggle — only when user is the owner */}
                                                             {isOwner && (
-                                                                <div
-                                                                    className={`flex items-center gap-1 rounded-md border p-0.5 w-fit ${tk(
-                                                                        "bg-primary-very-dark"
-                                                                    )} ${borderColor}`}
-                                                                >
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() =>
-                                                                            setEditMode(
-                                                                                "update"
-                                                                            )
-                                                                        }
-                                                                        className={`px-3 py-1 text-xs rounded transition-colors ${
-                                                                            editMode ===
-                                                                            "update"
-                                                                                ? `${tabActive} font-medium`
-                                                                                : tabIdle
-                                                                        }`}
-                                                                    >
-                                                                        Update
-                                                                        Original
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() =>
-                                                                            setEditMode(
-                                                                                "remix"
-                                                                            )
-                                                                        }
-                                                                        className={`px-3 py-1 text-xs rounded transition-colors ${
-                                                                            editMode ===
-                                                                            "remix"
-                                                                                ? `${tabActive} font-medium`
-                                                                                : tabIdle
-                                                                        }`}
-                                                                    >
-                                                                        Remix as
-                                                                        New
-                                                                    </button>
-                                                                </div>
+                                                                <SegmentedControl
+                                                                    ariaLabel="Update or remix"
+                                                                    value={
+                                                                        editMode
+                                                                    }
+                                                                    onChange={
+                                                                        setEditMode
+                                                                    }
+                                                                    options={[
+                                                                        {
+                                                                            value: "update",
+                                                                            label: "Update original",
+                                                                        },
+                                                                        {
+                                                                            value: "remix",
+                                                                            label: "Remix as new",
+                                                                        },
+                                                                    ]}
+                                                                />
                                                             )}
                                                             {editMode ===
                                                                 "remix" && (
-                                                                <input
-                                                                    type="text"
+                                                                <InputText
                                                                     value={
                                                                         remixName
                                                                     }
                                                                     onChange={(
-                                                                        e
+                                                                        value
                                                                     ) => {
+                                                                        // PascalCase, letters and digits only.
                                                                         const raw =
-                                                                            e.target.value.replace(
+                                                                            String(
+                                                                                value ||
+                                                                                    ""
+                                                                            ).replace(
                                                                                 /[^a-zA-Z0-9]/g,
                                                                                 ""
                                                                             );
@@ -5647,8 +5587,7 @@ ${
                                                                         );
                                                                     }}
                                                                     placeholder="RemixWidgetName"
-                                                                    className={`w-full px-3 py-1.5 text-sm ${fieldClass}`}
-                                                                    title="Name for the remixed widget (PascalCase)"
+                                                                    ariaLabel="Name for the remixed widget"
                                                                 />
                                                             )}
                                                         </div>
@@ -5685,44 +5624,25 @@ ${
                                                                     install
                                                                 </span>
                                                             )}
-                                                            <select
+                                                            <ChoiceMenu
+                                                                label="Category"
                                                                 value={
                                                                     selectedCategory ||
-                                                                    ""
+                                                                    null
                                                                 }
-                                                                onChange={(e) =>
+                                                                options={
+                                                                    VALID_CATEGORIES
+                                                                }
+                                                                onChange={(v) =>
                                                                     setSelectedCategory(
-                                                                        e.target
-                                                                            .value ||
+                                                                        v ||
                                                                             null
                                                                     )
                                                                 }
-                                                                className={`px-2 py-1.5 text-xs ${fieldClass}`}
-                                                                title="Pick a category before installing"
-                                                            >
-                                                                <option
-                                                                    value=""
-                                                                    disabled
-                                                                >
-                                                                    Pick a
-                                                                    category…
-                                                                </option>
-                                                                {VALID_CATEGORIES.map(
-                                                                    (c) => (
-                                                                        <option
-                                                                            key={
-                                                                                c
-                                                                            }
-                                                                            value={
-                                                                                c
-                                                                            }
-                                                                        >
-                                                                            {c}
-                                                                        </option>
-                                                                    )
-                                                                )}
-                                                            </select>
-                                                            <button
+                                                                align="right"
+                                                                direction="up"
+                                                            />
+                                                            <Button
                                                                 onClick={
                                                                     handleInstall
                                                                 }
@@ -5733,10 +5653,7 @@ ${
                                                                             "remix" &&
                                                                         !remixName)
                                                                 }
-                                                                className={
-                                                                    primaryButton
-                                                                }
-                                                                title={
+                                                                tooltip={
                                                                     !selectedCategory
                                                                         ? "Pick a category first"
                                                                         : editMode ===
@@ -5745,14 +5662,15 @@ ${
                                                                         ? "Enter a name for the remix"
                                                                         : undefined
                                                                 }
-                                                            >
-                                                                {!isRemixMode
-                                                                    ? "Install Widget"
-                                                                    : editMode ===
-                                                                      "update"
-                                                                    ? "Update Widget"
-                                                                    : "Remix Widget"}
-                                                            </button>
+                                                                title={
+                                                                    !isRemixMode
+                                                                        ? "Install widget"
+                                                                        : editMode ===
+                                                                          "update"
+                                                                        ? "Update widget"
+                                                                        : "Remix widget"
+                                                                }
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -5829,15 +5747,16 @@ ${
                                                 }}
                                             />
                                             <div className="flex gap-3">
-                                                <button
+                                                <Button
+                                                    size="sm"
                                                     onClick={() =>
                                                         setIsOpen(false)
                                                     }
-                                                    className={`px-5 py-2 rounded-lg ${bt.primaryFill} text-sm font-medium transition-colors`}
                                                 >
                                                     Done
-                                                </button>
-                                                <button
+                                                </Button>
+                                                <Button2
+                                                    size="sm"
                                                     onClick={() => {
                                                         setInstallStatus(null);
                                                         setPreviewComponent(
@@ -5855,12 +5774,11 @@ ${
                                                             );
                                                         }
                                                     }}
-                                                    className={`px-5 py-2 rounded-lg ${bt.raised} ${bt.hoverSurface} ${bt.text} text-sm font-medium transition-colors`}
                                                 >
                                                     {browsingPackage
                                                         ? "Browse More"
                                                         : "Build Another"}
-                                                </button>
+                                                </Button2>
                                             </div>
                                         </div>
                                     )}
@@ -5880,14 +5798,14 @@ ${
                                                     {installStatus.error}
                                                 </pre>
                                             </div>
-                                            <button
+                                            <Button2
+                                                size="sm"
                                                 onClick={() =>
                                                     setInstallStatus(null)
                                                 }
-                                                className={`px-5 py-2 rounded-lg ${bt.raised} ${bt.hoverSurface} ${bt.text} text-sm font-medium transition-colors`}
                                             >
                                                 Try Again
-                                            </button>
+                                            </Button2>
                                         </div>
                                     )}
                                 </div>
@@ -5899,45 +5817,39 @@ ${
                                     <div className="flex flex-1 min-h-0 overflow-hidden">
                                         {/* File explorer sidebar */}
                                         <div
-                                            className={`w-48 border-r ${borderColor} shrink-0 overflow-auto py-1`}
+                                            className={`w-52 border-r ${borderColor} shrink-0 overflow-auto p-2 flex flex-col gap-0.5`}
                                         >
-                                            <div
-                                                className={`px-2 py-1 text-[10px] font-semibold ${bt.muted} uppercase tracking-wider`}
+                                            <h3
+                                                className={`px-2 pb-1 text-xs font-medium ${bt.muted}`}
                                             >
                                                 Files
-                                            </div>
-                                            <button
+                                            </h3>
+                                            <ListRow
+                                                icon="file-code"
+                                                mono
+                                                title={`${
+                                                    widgetName || "Widget"
+                                                }.js`}
+                                                selected={
+                                                    activeFile === "component"
+                                                }
                                                 onClick={() =>
                                                     setActiveFile("component")
                                                 }
-                                                className={`w-full text-left px-3 py-1.5 text-xs font-mono truncate transition-colors ${
-                                                    activeFile === "component"
-                                                        ? `${bt.tint} ${bt.accent}`
-                                                        : `${bt.muted} ${bt.hoverSurface} hover:opacity-100`
-                                                }`}
-                                            >
-                                                <FontAwesomeIcon
-                                                    icon="file-code"
-                                                    className="h-2.5 w-2.5 mr-1.5"
-                                                />
-                                                {widgetName || "Widget"}.js
-                                            </button>
-                                            <button
+                                            />
+                                            <ListRow
+                                                icon="cog"
+                                                mono
+                                                title={`${
+                                                    widgetName || "Widget"
+                                                }.dash.js`}
+                                                selected={
+                                                    activeFile === "config"
+                                                }
                                                 onClick={() =>
                                                     setActiveFile("config")
                                                 }
-                                                className={`w-full text-left px-3 py-1.5 text-xs font-mono truncate transition-colors ${
-                                                    activeFile === "config"
-                                                        ? `${bt.tint} ${bt.accent}`
-                                                        : `${bt.muted} ${bt.hoverSurface} hover:opacity-100`
-                                                }`}
-                                            >
-                                                <FontAwesomeIcon
-                                                    icon="cog"
-                                                    className="h-2.5 w-2.5 mr-1.5"
-                                                />
-                                                {widgetName || "Widget"}.dash.js
-                                            </button>
+                                            />
                                         </div>
                                         {/* Editor pane with breadcrumb header */}
                                         <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
@@ -6003,7 +5915,7 @@ ${
                                                 className={`flex items-center justify-between px-3 py-2 border-t ${borderColor} shrink-0`}
                                             >
                                                 <span
-                                                    className={`text-[10px] ${bt.muted}`}
+                                                    className={`text-xs ${bt.muted}`}
                                                 >
                                                     {hasUnsavedEdits
                                                         ? "Unsaved changes"
@@ -6011,26 +5923,26 @@ ${
                                                 </span>
                                                 {hasUnsavedEdits ? (
                                                     <div className="flex items-center gap-2">
-                                                        <button
+                                                        <Button3
+                                                            size="sm"
                                                             onClick={
                                                                 handleCancelEdits
                                                             }
-                                                            className={`px-3 py-1 rounded text-xs ${bt.muted} hover:opacity-100 ${bt.hoverSurface} transition-colors`}
                                                         >
                                                             Cancel
-                                                        </button>
-                                                        <button
+                                                        </Button3>
+                                                        <Button
+                                                            size="sm"
                                                             onClick={
                                                                 handleSaveEdits
                                                             }
-                                                            className={`px-3 py-1 rounded text-xs ${bt.primaryFill} font-medium transition-colors`}
                                                         >
                                                             Save &amp; Compile
-                                                        </button>
+                                                        </Button>
                                                     </div>
                                                 ) : (
                                                     <span
-                                                        className={`text-[10px] ${bt.muted}`}
+                                                        className={`text-xs ${bt.muted}`}
                                                     >
                                                         JavaScript
                                                     </span>
@@ -6171,7 +6083,7 @@ ${
                                                     onClick={() =>
                                                         setActiveTab("code")
                                                     }
-                                                    className={`underline ${bt.accent} hover:opacity-80`}
+                                                    className={`underline ${bt.accent}`}
                                                 >
                                                     Code
                                                 </button>{" "}
@@ -6197,104 +6109,74 @@ ${
                         <div
                             className={`flex flex-col flex-1 min-w-0 overflow-hidden border-l ${borderColor}`}
                         >
-                            {/* Build / Compose are the two CREATE paths,
-                            grouped in a segmented control. Discover is
-                            a separate path entirely (search the
-                            registry for existing widgets, not build a
-                            new one) so it sits outside the toggle as
-                            its own button with different styling. */}
+                            {/* Build / Compose are the two ways to MAKE a widget
+                            (a segmented control). Discover is a different path —
+                            find an existing widget in the registry — so it's its
+                            own button. */}
                             <div
-                                className={`flex items-center justify-between gap-2 px-3 py-2 border-b shrink-0 ${borderColor}`}
+                                className={`flex items-center justify-between gap-2 h-12 px-3 border-b shrink-0 ${borderColor}`}
                             >
-                                <div className="flex items-center gap-2 min-w-0">
-                                    <div
-                                        className={`flex items-center gap-1 ${bt.surface} rounded-md border ${bt.border} p-0.5`}
-                                    >
-                                        <button
-                                            type="button"
-                                            onClick={() => setChatMode("build")}
-                                            className={`px-3 py-1 text-xs rounded transition-colors ${
-                                                chatMode === "build"
-                                                    ? `${bt.tint} ${bt.accent} font-medium`
-                                                    : `${bt.muted} hover:opacity-100`
-                                            }`}
-                                            title="Generate a custom widget from scratch with AI"
-                                        >
-                                            Build
-                                        </button>
-                                        {/* Slice 20.C1: Compose mode —
-                                        stepwise widget composition (pick
-                                        components, wire data slots)
-                                        without going through an AI
-                                        prompt. Replaces the chat pane
-                                        with the ComposerPane when
-                                        active. */}
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                setChatMode("compose")
-                                            }
-                                            className={`px-3 py-1 text-xs rounded transition-colors ${
-                                                chatMode === "compose"
-                                                    ? `${bt.tint} ${bt.accent} font-medium`
-                                                    : `${bt.muted} hover:opacity-100`
-                                            }`}
-                                            title="Build a widget by picking components and wiring data slots — no AI prompt needed"
-                                            data-testid="chat-mode-compose"
-                                        >
-                                            Compose
-                                        </button>
-                                    </div>
-                                    <span
-                                        className={`text-[11px] ${bt.muted} truncate`}
-                                    >
-                                        {chatMode === "compose"
-                                            ? "Pick components, wire data slots — no prompt needed"
-                                            : chatMode === "discover"
-                                            ? "Searching the registry for existing widgets"
-                                            : "AI will generate a custom widget"}
-                                    </span>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        setChatMode(
-                                            chatMode === "discover"
-                                                ? "build"
-                                                : "discover"
-                                        )
-                                    }
-                                    className={`flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border transition-colors shrink-0 ${
+                                <SegmentedControl
+                                    ariaLabel="How to make the widget"
+                                    size="md"
+                                    value={
                                         chatMode === "discover"
-                                            ? `${bt.status.warning.bg} ${bt.status.warning.border} ${bt.status.warning.text}`
-                                            : `${bt.border} ${bt.muted} hover:opacity-100`
-                                    }`}
-                                    title={
-                                        chatMode === "discover"
-                                            ? "Back to Build mode"
-                                            : "Search the Dash registry for existing widgets instead of building one"
+                                            ? null
+                                            : chatMode
                                     }
-                                    data-testid="chat-mode-discover"
-                                >
-                                    <FontAwesomeIcon
-                                        icon={
-                                            chatMode === "discover"
-                                                ? "arrow-left"
-                                                : "magnifying-glass"
+                                    onChange={(v) => setChatMode(v)}
+                                    options={[
+                                        { value: "build", label: "Build" },
+                                        {
+                                            // Compose: pick components and wire data
+                                            // slots, no AI prompt (slice 20.C1).
+                                            value: "compose",
+                                            label: (
+                                                <span data-testid="chat-mode-compose">
+                                                    Compose
+                                                </span>
+                                            ),
+                                        },
+                                    ]}
+                                />
+                                <span data-testid="chat-mode-discover">
+                                    <Button2
+                                        size="sm"
+                                        onClick={() =>
+                                            setChatMode(
+                                                chatMode === "discover"
+                                                    ? "build"
+                                                    : "discover"
+                                            )
                                         }
-                                        className="h-2.5 w-2.5"
-                                    />
-                                    {chatMode === "discover"
-                                        ? "Back to Build"
-                                        : "Discover existing"}
-                                </button>
+                                        tooltip={
+                                            chatMode === "discover"
+                                                ? "Back to building a widget"
+                                                : "Search the Dash registry for an existing widget instead of building one"
+                                        }
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            <FontAwesomeIcon
+                                                icon={
+                                                    chatMode === "discover"
+                                                        ? "arrow-left"
+                                                        : "magnifying-glass"
+                                                }
+                                                className="h-3 w-3"
+                                            />
+                                            {chatMode === "discover"
+                                                ? "Back to Build"
+                                                : "Discover existing"}
+                                        </span>
+                                    </Button2>
+                                </span>
                             </div>
 
-                            {/* Chat content + provider gate. Relative wrapper
-                        so the gate's `absolute inset-0` covers only
-                        this region — the mode toggle above stays
-                        clickable so the user can switch to Discover.
-                        The gate appears when in build mode and no
+                            {/* Chat content + provider gate. The gate fills
+                        this region in place of the chat (ChatCore isn't
+                        mounted until a provider is picked), with its own
+                        message box at the bottom. It appears in build
+                        mode when no
                         provider has been picked yet (Edit-with-AI
                         auto-derives via the useEffect at line ~1467
                         and skips the gate). New Chat clears messages
@@ -6400,53 +6282,85 @@ ${
                                             knownExternalCatalog={
                                                 knownExternalCatalog
                                             }
-                                            prompt={initialPrompt}
+                                            prompt={startPrompt}
+                                            onPrompt={(text) => {
+                                                // A new description starts a
+                                                // new conversation: ChatCore
+                                                // only sends its first message
+                                                // into an empty history.
+                                                if (text) {
+                                                    try {
+                                                        localStorage.setItem(
+                                                            "dash-widget-builder",
+                                                            JSON.stringify({
+                                                                messages: [],
+                                                            })
+                                                        );
+                                                    } catch {
+                                                        /* ignore */
+                                                    }
+                                                    // The poller reads an emptied history as
+                                                    // "New chat" (and resets the gate) unless
+                                                    // its count starts over too.
+                                                    lastMsgCount.current = 0;
+                                                }
+                                                setTypedPrompt(text || null);
+                                            }}
+                                            canEditPrompt={
+                                                !initialPrompt && !!typedPrompt
+                                            }
                                         />
                                     )}
 
-                                {/* Slice 17b.1: provider-aware status row.
-                                Shows the active provider type so users
-                                know what context the AI has — also
-                                offers a quick "Change" button to
-                                re-open the gate. */}
+                                {/* Slice 17b.1: which data the AI is
+                                writing for, with "Change" to pick again. */}
                                 {chatMode === "build" &&
                                     selectedProviderForBuild !== null && (
                                         <div
-                                            className={`flex flex-row items-center justify-between gap-2 px-3 py-1.5 text-xs border-b ${bt.border} ${bt.tint}`}
+                                            className={`flex flex-row items-center justify-between gap-2 pl-4 pr-3 py-1.5 text-sm border-b ${bt.border}`}
                                         >
                                             <div
-                                                className={`flex flex-row items-center gap-2 ${bt.accent}`}
+                                                className={`flex flex-row items-center gap-2 min-w-0 ${bt.muted}`}
                                             >
                                                 <FontAwesomeIcon
-                                                    icon="bolt"
-                                                    className="h-3 w-3"
+                                                    icon="plug"
+                                                    className="h-3 w-3 shrink-0"
                                                 />
-                                                <span>
+                                                <span className="truncate">
                                                     {selectedProviderForBuild?.sentinel ===
                                                     "none"
-                                                        ? "Building without an external provider"
-                                                        : `Building with ${
-                                                              selectedProviderForBuild?.type ||
+                                                        ? "No external provider"
+                                                        : `Data: ${
+                                                              [
+                                                                  ...builtInCatalog,
+                                                                  ...knownExternalCatalog,
+                                                              ].find(
+                                                                  (e) =>
+                                                                      e?.id ===
+                                                                      selectedProviderForBuild?.type
+                                                              )?.name ||
+                                                              typeLabel(
+                                                                  selectedProviderForBuild?.type
+                                                              ) ||
                                                               "(unknown)"
-                                                          }${
-                                                              selectedProviderForBuild?.providerClass
-                                                                  ? ` (${selectedProviderForBuild.providerClass})`
-                                                                  : ""
                                                           }`}
                                                 </span>
                                             </div>
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    setSelectedProviderForBuild(
-                                                        null
-                                                    )
-                                                }
-                                                className={`${bt.accent} hover:opacity-80 underline cursor-pointer`}
-                                                title="Pick a different provider"
-                                            >
-                                                Change
-                                            </button>
+                                            {/* Only before code exists: the
+                                            gate can't reopen over a written
+                                            widget (start a new chat instead). */}
+                                            {!detectedCode?.componentCode && (
+                                                <Button3
+                                                    size="sm"
+                                                    title="Change"
+                                                    tooltip="Pick different data"
+                                                    onClick={() =>
+                                                        setSelectedProviderForBuild(
+                                                            null
+                                                        )
+                                                    }
+                                                />
+                                            )}
                                         </div>
                                     )}
 
@@ -6563,14 +6477,14 @@ ${
                                                     ? "Tell me what kind of widget you're looking for."
                                                     : effectiveEditContext?.componentCode
                                                     ? "Hello, let's make some edits to this widget."
-                                                    : initialPrompt ||
+                                                    : startPrompt ||
                                                       "Hi, I'd like to build a new widget."
                                             }
                                             initialMessageHidden={
                                                 !(
                                                     chatMode !== "discover" &&
                                                     !effectiveEditContext?.componentCode &&
-                                                    initialPrompt
+                                                    startPrompt
                                                 )
                                             }
                                         />

@@ -11,7 +11,14 @@ import React, {
     useContext,
     useRef,
 } from "react";
-import { FontAwesomeIcon, ThemeContext } from "@trops/dash-react";
+import {
+    Button,
+    Button2,
+    ButtonIcon3,
+    Card2,
+    FontAwesomeIcon,
+    ThemeContext,
+} from "@trops/dash-react";
 import { normalizeEventName, normalizeHandlerName } from "./widgetEventNames";
 import { useBuilderTheme } from "./useBuilderTheme";
 
@@ -96,74 +103,79 @@ function serializeConfig(componentName, data) {
     return `export default ${JSON.stringify(config, null, 4)};`;
 }
 
-// Section header with optional add button
-function SectionHeader({ title, icon, onAdd, borderColor }) {
+// A section's title row: icon + title, and "Add" on the right.
+function SectionHeader({ title, icon, onAdd }) {
     const bt = useBuilderTheme();
     return (
-        <div
-            className={`flex items-center justify-between py-2 px-1 border-b ${
-                borderColor || `${bt.border}`
-            }`}
-        >
-            <div
-                className={`flex items-center gap-2 text-xs font-semibold ${bt.text} uppercase tracking-wider`}
+        <div className="flex items-center justify-between gap-2">
+            <h3
+                className={`flex items-center gap-2 text-sm font-semibold ${bt.text}`}
             >
                 <FontAwesomeIcon
                     icon={icon}
-                    className={`h-3 w-3 ${bt.muted}`}
+                    className={`h-3.5 w-3.5 ${bt.muted}`}
                 />
                 {title}
-            </div>
+            </h3>
             {onAdd && (
-                <button
+                <Button2
+                    size="sm"
                     onClick={onAdd}
-                    className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] ${bt.accent} hover:opacity-80 ${bt.hoverTint} transition-colors`}
+                    ariaLabel={`Add to ${title}`}
                 >
-                    <FontAwesomeIcon icon="plus" className="h-2 w-2" />
-                    Add
-                </button>
+                    <span className="flex items-center gap-2">
+                        <FontAwesomeIcon icon="plus" className="h-3 w-3" />
+                        Add
+                    </span>
+                </Button2>
             )}
         </div>
     );
 }
 
-// Removable item wrapper
-function RemovableItem({ children, onRemove, borderColor }) {
+// One entry in a section (a provider, a field): a recessed group with a
+// Remove button — no box inside the section's card.
+function RemovableItem({ children, onRemove }) {
     const bt = useBuilderTheme();
     return (
         <div
-            className={`relative border ${
-                borderColor || `${bt.border}`
-            } rounded-lg p-3 mt-2 group`}
+            className={`relative flex flex-col gap-2 rounded-lg p-3 pr-11 ${bt.surface}`}
         >
-            <button
-                onClick={onRemove}
-                className={`absolute top-2 right-2 ${bt.muted} transition-colors opacity-0 group-hover:opacity-100`}
-            >
-                <FontAwesomeIcon icon="times" className="h-3 w-3" />
-            </button>
+            <div className="absolute top-2 right-2">
+                <ButtonIcon3
+                    icon="xmark"
+                    ariaLabel="Remove"
+                    onClick={onRemove}
+                />
+            </div>
             {children}
         </div>
     );
 }
 
-// Small form field
+// A labelled field: the label sits above, and wraps the control so it
+// names it.
 function Field({ label, children, className = "" }) {
     const bt = useBuilderTheme();
     return (
-        <div className={`mb-2 ${className}`}>
-            <label
-                className={`block text-[10px] ${bt.muted} mb-0.5 uppercase tracking-wider`}
-            >
-                {label}
-            </label>
+        <label className={`flex flex-col gap-1 ${className}`}>
+            <span className={`text-xs font-medium ${bt.text}`}>{label}</span>
             {children}
-        </div>
+        </label>
     );
 }
 
-// Compact text input matching dark theme
-function SmallInput({ value, onChange, placeholder, type = "text" }) {
+const fieldClass = (bt) =>
+    `dr-input w-full px-3 py-1.5 text-sm ${bt.surface} border ${bt.border} rounded-md ${bt.text} focus:outline-none`;
+
+// Text input
+function SmallInput({
+    value,
+    onChange,
+    placeholder,
+    type = "text",
+    ariaLabel,
+}) {
     const bt = useBuilderTheme();
     return (
         <input
@@ -171,19 +183,20 @@ function SmallInput({ value, onChange, placeholder, type = "text" }) {
             value={value || ""}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className={`w-full px-2 py-1 text-xs ${bt.surface} border ${bt.border} rounded ${bt.text} placeholder-gray-600 focus:outline-none`}
+            aria-label={ariaLabel}
+            className={fieldClass(bt)}
         />
     );
 }
 
-// Compact select
+// Select
 function SmallSelect({ value, onChange, options }) {
     const bt = useBuilderTheme();
     return (
         <select
             value={value || ""}
             onChange={(e) => onChange(e.target.value)}
-            className={`w-full px-2 py-1 text-xs ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
+            className={fieldClass(bt)}
         >
             {options.map((opt) => (
                 <option key={opt.value ?? opt} value={opt.value ?? opt}>
@@ -194,7 +207,7 @@ function SmallSelect({ value, onChange, options }) {
     );
 }
 
-// Compact toggle
+// Checkbox with its label
 function SmallToggle({ checked, onChange, label }) {
     const bt = useBuilderTheme();
     return (
@@ -203,9 +216,9 @@ function SmallToggle({ checked, onChange, label }) {
                 type="checkbox"
                 checked={checked || false}
                 onChange={(e) => onChange(e.target.checked)}
-                className={`rounded ${bt.border} ${bt.surface} ${bt.accent} focus:ring-offset-0 h-3 w-3`}
+                className={`rounded ${bt.border} ${bt.surface} ${bt.accent} focus:ring-offset-0 h-4 w-4`}
             />
-            <span className={`text-[10px] ${bt.muted}`}>{label}</span>
+            <span className={`text-sm ${bt.text}`}>{label}</span>
         </label>
     );
 }
@@ -514,9 +527,9 @@ export const WidgetConfigureTab = ({
 
     return (
         <div className="flex flex-col flex-1 min-h-0">
-            <div className="flex-1 overflow-auto px-4 py-3 space-y-4">
+            <div className="flex-1 overflow-auto p-4 flex flex-col gap-4">
                 {/* Widget Info */}
-                <div>
+                <Card2 padding="p-4" className="flex flex-col gap-3">
                     <SectionHeader
                         title="Widget Info"
                         icon="info-circle"
@@ -549,10 +562,10 @@ export const WidgetConfigureTab = ({
                             </Field>
                         </div>
                     </div>
-                </div>
+                </Card2>
 
                 {/* Providers */}
-                <div>
+                <Card2 padding="p-4" className="flex flex-col gap-3">
                     <SectionHeader
                         title="Providers"
                         icon="plug"
@@ -560,7 +573,7 @@ export const WidgetConfigureTab = ({
                         borderColor={bc}
                     />
                     {form.providers.length === 0 && (
-                        <p className={`text-[10px] ${bt.muted} mt-2 italic`}>
+                        <p className={`text-sm ${bt.muted}`}>
                             No providers configured. Add one if your widget
                             connects to an external service.
                         </p>
@@ -631,10 +644,10 @@ export const WidgetConfigureTab = ({
                             </div>
                         </RemovableItem>
                     ))}
-                </div>
+                </Card2>
 
                 {/* Events Published */}
-                <div>
+                <Card2 padding="p-4" className="flex flex-col gap-3">
                     <SectionHeader
                         title="Events (Published)"
                         icon="broadcast-tower"
@@ -642,7 +655,7 @@ export const WidgetConfigureTab = ({
                         borderColor={bc}
                     />
                     {form.events.length === 0 && (
-                        <p className={`text-[10px] ${bt.muted} mt-2 italic`}>
+                        <p className={`text-sm ${bt.muted}`}>
                             No events. Add events your widget publishes for
                             other widgets to listen to.
                         </p>
@@ -661,19 +674,15 @@ export const WidgetConfigureTab = ({
                                             }
                                             placeholder="eventName"
                                         />
-                                        <button
+                                        <ButtonIcon3
+                                            icon="xmark"
+                                            ariaLabel="Remove"
                                             onClick={() => removeEvent(idx)}
-                                            className={`${bt.muted} shrink-0`}
-                                        >
-                                            <FontAwesomeIcon
-                                                icon="times"
-                                                className="h-2.5 w-2.5"
-                                            />
-                                        </button>
+                                        />
                                     </div>
                                     {showHint && (
                                         <p
-                                            className={`text-[10px] ${bt.status.warning.icon} mt-0.5 ml-1`}
+                                            className={`text-xs ${bt.status.warning.icon} mt-0.5 ml-1`}
                                         >
                                             Will save as:{" "}
                                             <span className="font-mono">
@@ -685,10 +694,10 @@ export const WidgetConfigureTab = ({
                             );
                         })}
                     </div>
-                </div>
+                </Card2>
 
                 {/* Event Handlers */}
-                <div>
+                <Card2 padding="p-4" className="flex flex-col gap-3">
                     <SectionHeader
                         title="Event Handlers (Subscribed)"
                         icon="headphones"
@@ -696,7 +705,7 @@ export const WidgetConfigureTab = ({
                         borderColor={bc}
                     />
                     {form.eventHandlers.length === 0 && (
-                        <p className={`text-[10px] ${bt.muted} mt-2 italic`}>
+                        <p className={`text-sm ${bt.muted}`}>
                             No handlers. Add handlers to listen for events from
                             other widgets.
                         </p>
@@ -716,19 +725,15 @@ export const WidgetConfigureTab = ({
                                             }
                                             placeholder="onEventName"
                                         />
-                                        <button
+                                        <ButtonIcon3
+                                            icon="xmark"
+                                            ariaLabel="Remove"
                                             onClick={() => removeHandler(idx)}
-                                            className={`${bt.muted} shrink-0`}
-                                        >
-                                            <FontAwesomeIcon
-                                                icon="times"
-                                                className="h-2.5 w-2.5"
-                                            />
-                                        </button>
+                                        />
                                     </div>
                                     {showHint && (
                                         <p
-                                            className={`text-[10px] ${bt.status.warning.icon} mt-0.5 ml-1`}
+                                            className={`text-xs ${bt.status.warning.icon} mt-0.5 ml-1`}
                                         >
                                             Will save as:{" "}
                                             <span className="font-mono">
@@ -740,10 +745,10 @@ export const WidgetConfigureTab = ({
                             );
                         })}
                     </div>
-                </div>
+                </Card2>
 
                 {/* Scheduled Tasks */}
-                <div>
+                <Card2 padding="p-4" className="flex flex-col gap-3">
                     <SectionHeader
                         title="Scheduled Tasks"
                         icon="clock"
@@ -751,7 +756,7 @@ export const WidgetConfigureTab = ({
                         borderColor={bc}
                     />
                     {(form.scheduledTasks || []).length === 0 && (
-                        <p className={`text-[10px] ${bt.muted} mt-2 italic`}>
+                        <p className={`text-sm ${bt.muted}`}>
                             No scheduled tasks. Add named handlers the framework
                             can run on a schedule (Settings → Schedule sets the
                             cadence).
@@ -783,21 +788,17 @@ export const WidgetConfigureTab = ({
                                             }
                                             placeholder="taskKey (camelCase)"
                                         />
-                                        <button
+                                        <ButtonIcon3
+                                            icon="xmark"
+                                            ariaLabel="Remove"
                                             onClick={() =>
                                                 removeScheduledTaskRow(idx)
                                             }
-                                            className={`${bt.muted} shrink-0`}
-                                        >
-                                            <FontAwesomeIcon
-                                                icon="times"
-                                                className="h-2.5 w-2.5"
-                                            />
-                                        </button>
+                                        />
                                     </div>
                                     {showHint && (
                                         <p
-                                            className={`text-[10px] ${bt.status.warning.icon} ml-1`}
+                                            className={`text-xs ${bt.status.warning.icon} ml-1`}
                                         >
                                             Will save as:{" "}
                                             <span className="font-mono">
@@ -839,10 +840,10 @@ export const WidgetConfigureTab = ({
                             );
                         })}
                     </div>
-                </div>
+                </Card2>
 
                 {/* User Config Fields */}
-                <div>
+                <Card2 padding="p-4" className="flex flex-col gap-3">
                     <SectionHeader
                         title="User Config Fields"
                         icon="sliders-h"
@@ -850,7 +851,7 @@ export const WidgetConfigureTab = ({
                         borderColor={bc}
                     />
                     {Object.keys(form.userConfig).length === 0 && (
-                        <p className={`text-[10px] ${bt.muted} mt-2 italic`}>
+                        <p className={`text-sm ${bt.muted}`}>
                             No config fields. Add fields that users can
                             customize when placing this widget.
                         </p>
@@ -949,14 +950,15 @@ export const WidgetConfigureTab = ({
                                         label="Required"
                                     />
                                     {fieldConfig.type === "select" && (
-                                        <div>
+                                        <div className="flex flex-col gap-2">
                                             <div className="flex items-center justify-between">
                                                 <span
-                                                    className={`text-[10px] ${bt.muted} uppercase tracking-wider`}
+                                                    className={`text-xs font-medium ${bt.text}`}
                                                 >
                                                     Options
                                                 </span>
-                                                <button
+                                                <Button2
+                                                    size="sm"
                                                     onClick={() => {
                                                         const opts =
                                                             fieldConfig.options ||
@@ -973,16 +975,21 @@ export const WidgetConfigureTab = ({
                                                             ]
                                                         );
                                                     }}
-                                                    className={`text-[10px] ${bt.accent} hover:opacity-80`}
                                                 >
-                                                    + Add Option
-                                                </button>
+                                                    <span className="flex items-center gap-2">
+                                                        <FontAwesomeIcon
+                                                            icon="plus"
+                                                            className="h-3 w-3"
+                                                        />
+                                                        Add option
+                                                    </span>
+                                                </Button2>
                                             </div>
                                             {(fieldConfig.options || []).map(
                                                 (opt, optIdx) => (
                                                     <div
                                                         key={optIdx}
-                                                        className="flex items-center gap-1 mt-1"
+                                                        className="flex items-center gap-2"
                                                     >
                                                         <SmallInput
                                                             value={opt.label}
@@ -1026,7 +1033,9 @@ export const WidgetConfigureTab = ({
                                                             }}
                                                             placeholder="Value"
                                                         />
-                                                        <button
+                                                        <ButtonIcon3
+                                                            icon="xmark"
+                                                            ariaLabel="Remove option"
                                                             onClick={() => {
                                                                 const opts = (
                                                                     fieldConfig.options ||
@@ -1042,13 +1051,7 @@ export const WidgetConfigureTab = ({
                                                                     opts
                                                                 );
                                                             }}
-                                                            className={`${bt.muted} shrink-0`}
-                                                        >
-                                                            <FontAwesomeIcon
-                                                                icon="times"
-                                                                className="h-2 w-2"
-                                                            />
-                                                        </button>
+                                                        />
                                                     </div>
                                                 )
                                             )}
@@ -1058,28 +1061,23 @@ export const WidgetConfigureTab = ({
                             </RemovableItem>
                         )
                     )}
-                </div>
+                </Card2>
             </div>
 
             {/* Footer */}
             <div
-                className={`flex items-center justify-between px-3 py-2 border-t ${bc} shrink-0`}
+                className={`flex items-center justify-between gap-3 px-4 py-3 border-t ${bc} shrink-0`}
             >
-                <span className={`text-[10px] ${bt.muted}`}>
-                    {dirty ? "Unsaved changes" : ""}
+                <span className={`text-xs ${bt.muted}`}>
+                    {dirty ? "Unsaved changes" : "No unsaved changes"}
                 </span>
                 {dirty ? (
-                    <button
+                    <Button
+                        size="sm"
                         onClick={handleSave}
-                        className={`px-3 py-1 rounded text-xs ${bt.primaryFill} font-medium transition-colors`}
-                    >
-                        Save &amp; Compile
-                    </button>
-                ) : (
-                    <span className={`text-[10px] ${bt.muted}`}>
-                        Widget Configuration
-                    </span>
-                )}
+                        title="Save & compile"
+                    />
+                ) : null}
             </div>
         </div>
     );

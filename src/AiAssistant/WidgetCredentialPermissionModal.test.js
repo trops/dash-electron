@@ -3,6 +3,8 @@
  *
  * Tests for the install-time permission modal (slice 17d.2).
  */
+jest.mock("@trops/dash-react", () => require("./dashReactTestStub"));
+jest.mock("./useBuilderTheme", () => require("./builderThemeStub"));
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
@@ -44,6 +46,21 @@ describe("WidgetCredentialPermissionModal — render", () => {
         expect(screen.getByText("algolia.listIndices()")).toBeInTheDocument();
         expect(screen.getByText("algolia.deleteRule()")).toBeInTheDocument();
         expect(screen.getByText("slack.postMessage()")).toBeInTheDocument();
+    });
+
+    test("the panel is a raised modal surface", () => {
+        render(
+            <WidgetCredentialPermissionModal
+                isOpen
+                packageName="@ai-built/x"
+                calls={sampleCalls}
+                onConfirm={() => {}}
+                onCancel={() => {}}
+            />
+        );
+        const panel = screen.getByTestId("widget-credential-permission-modal");
+        expect(panel).toHaveClass("dr-modal-surface");
+        expect(panel).toHaveAttribute("role", "dialog");
     });
 
     test("groups methods under their provider", () => {

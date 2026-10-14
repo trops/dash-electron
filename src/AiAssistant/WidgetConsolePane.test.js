@@ -10,6 +10,7 @@
  * event payload.
  */
 jest.mock("./useBuilderTheme", () => require("./builderThemeStub"));
+jest.mock("@trops/dash-react", () => require("./dashReactTestStub"));
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
@@ -90,5 +91,36 @@ describe("WidgetConsolePane — Send-to-AI per error", () => {
             />
         );
         expect(screen.getAllByTestId("console-send-to-ai")).toHaveLength(2);
+    });
+});
+
+describe("WidgetConsolePane — toolbar and empty states", () => {
+    test("with no events it says so", () => {
+        render(<WidgetConsolePane events={[]} />);
+        expect(screen.getByText("No console output yet")).toBeInTheDocument();
+    });
+
+    test("Errors only filters the rows", () => {
+        render(
+            <WidgetConsolePane
+                events={[evt("error", "boom"), evt("log", "tick")]}
+            />
+        );
+        expect(screen.getAllByTestId("console-row")).toHaveLength(2);
+        fireEvent.click(screen.getByLabelText("Errors only"));
+        expect(screen.getAllByTestId("console-row")).toHaveLength(1);
+    });
+
+    test("Errors only with no errors shows the empty state", () => {
+        render(<WidgetConsolePane events={[evt("log", "tick")]} />);
+        fireEvent.click(screen.getByLabelText("Errors only"));
+        expect(screen.getByText("No errors")).toBeInTheDocument();
+    });
+
+    test("Clear calls onClear", () => {
+        const onClear = jest.fn();
+        render(<WidgetConsolePane events={[]} onClear={onClear} />);
+        fireEvent.click(screen.getByTestId("console-clear"));
+        expect(onClear).toHaveBeenCalledTimes(1);
     });
 });

@@ -1,5 +1,14 @@
 import React, { useCallback, useState } from "react";
 import {
+    Button,
+    Button2,
+    Button3,
+    Card2,
+    EmptyState,
+    FontAwesomeIcon,
+    ListRow,
+} from "@trops/dash-react";
+import {
     SCHEMA_COMPONENT_NAMES,
     DASH_REACT_COMPONENT_SCHEMAS,
 } from "../dashReactComponentSchemas";
@@ -194,7 +203,7 @@ export function QuickStartPane({
 
     return (
         <div
-            className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-4"
+            className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4"
             data-testid="composer-quick-start"
         >
             {!currentIntent ? (
@@ -233,17 +242,60 @@ export function QuickStartPane({
 
             {/* Escape hatch — drop into the palette on the seed cell.
                 Always visible so the user can bail at any step. */}
-            <div className={`border-t ${bt.border} pt-3`}>
-                <button
-                    type="button"
+            <div className={`pt-4 border-t ${bt.border}`}>
+                <Button2
+                    block
+                    size="sm"
                     onClick={() => seedCellId && onRequestPalette(seedCellId)}
                     disabled={!seedCellId}
-                    className={`w-full px-3 py-3 text-sm rounded border border-dashed ${bt.border} ${bt.muted} hover:opacity-80 ${bt.hoverAccentBorder} disabled:opacity-30`}
-                    data-testid="composer-quick-start-scratch"
-                >
-                    Or start blank — pick a single component
-                </button>
+                    testId="composer-quick-start-scratch"
+                    title="Or start blank — pick a single component"
+                />
             </div>
+        </div>
+    );
+}
+
+// One step's heading: what this step is, a sentence under it, and Change
+// (back to the previous step) on the right.
+function StepHeader({ icon = null, title, tagline = null, onBack = null }) {
+    const bt = useBuilderTheme();
+    return (
+        <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-1 min-w-0">
+                <h2
+                    className={`flex items-center gap-2 text-base font-semibold ${bt.text}`}
+                >
+                    {icon ? (
+                        <FontAwesomeIcon
+                            icon={icon}
+                            className={`h-4 w-4 shrink-0 ${bt.accent}`}
+                        />
+                    ) : null}
+                    <span className="truncate">{title}</span>
+                </h2>
+                {tagline ? (
+                    <p className={`text-sm leading-snug ${bt.muted}`}>
+                        {tagline}
+                    </p>
+                ) : null}
+            </div>
+            {onBack ? (
+                <Button3
+                    size="sm"
+                    onClick={onBack}
+                    testId="composer-quick-start-back"
+                    className="shrink-0"
+                >
+                    <span className="flex items-center gap-2">
+                        <FontAwesomeIcon
+                            icon="arrow-left"
+                            className="h-3 w-3"
+                        />
+                        Change
+                    </span>
+                </Button3>
+            ) : null}
         </div>
     );
 }
@@ -251,84 +303,46 @@ export function QuickStartPane({
 function ProviderPicker({ intentObj, wirable, onPick, onBack }) {
     const bt = useBuilderTheme();
     return (
-        <div data-testid="composer-quick-start-providers" className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-                <div>
-                    <div
-                        className={`text-xs uppercase tracking-wide ${bt.muted}`}
-                    >
-                        Quick start
-                    </div>
-                    <h2 className={`text-base ${bt.text} mt-0.5`}>
-                        {intentObj.icon} Pick a service
-                    </h2>
-                    <div className={`text-xs ${bt.muted} mt-0.5`}>
-                        The widget will be scaffolded around this provider's
-                        common tools. You'll wire specific methods after.
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    onClick={onBack}
-                    className={`text-sm ${bt.accent} hover:opacity-80 shrink-0`}
-                    data-testid="composer-quick-start-back"
-                >
-                    ← Change
-                </button>
-            </div>
+        <div
+            data-testid="composer-quick-start-providers"
+            className="flex flex-col gap-3"
+        >
+            <StepHeader
+                icon={intentObj.icon}
+                title="Pick a service"
+                tagline="The widget is set up around this service's common tools. You choose the exact ones after."
+                onBack={onBack}
+            />
             {wirable.status === "loading" && wirable.types.length === 0 ? (
-                <div
-                    className={`text-sm px-3 py-3 rounded border border-dashed ${bt.border} ${bt.surface} ${bt.muted}`}
-                >
-                    Loading provider catalog…
-                </div>
+                <p className={`text-sm ${bt.muted}`}>
+                    Loading the list of services…
+                </p>
             ) : wirable.types.length === 0 ? (
-                <div
-                    className={`text-sm px-3 py-3 rounded border border-dashed ${bt.border} ${bt.surface} ${bt.muted}`}
-                >
-                    No provider types available.
-                    {wirable.error && (
-                        <span className={`block ${bt.status.error.icon} mt-1`}>
-                            {wirable.error}
-                        </span>
-                    )}
-                </div>
+                <EmptyState
+                    title="No services available"
+                    description={
+                        wirable.error ||
+                        "The catalog didn't load. Close the builder and try again."
+                    }
+                />
             ) : (
                 <div
-                    className={`rounded border ${bt.border} ${bt.surface} p-1 max-h-96 overflow-y-auto`}
+                    className="flex flex-col gap-0.5"
                     data-testid="composer-quick-start-providers-list"
                 >
                     {wirable.types.map((t) => (
-                        <button
+                        <ListRow
                             key={`${t.kind}:${t.id}`}
-                            type="button"
+                            icon="plug"
+                            title={t.name}
+                            meta={
+                                t.hasConfiguredInstance
+                                    ? "Set up"
+                                    : t.description || "Not set up yet"
+                            }
                             onClick={() => onPick(t)}
-                            className={`block w-full text-left text-sm px-2 py-1.5 rounded ${bt.hoverTint} ${bt.text} hover:opacity-80`}
-                            data-testid={`composer-quick-start-provider-${t.id}-${t.kind}`}
-                        >
-                            <div className="flex items-center justify-between gap-2">
-                                <span className="truncate">{t.name}</span>
-                                <span
-                                    className={`text-xs ${bt.muted} shrink-0`}
-                                >
-                                    {t.kind}
-                                    {t.hasConfiguredInstance && (
-                                        <span
-                                            className={`ml-1 ${bt.status.success.icon}`}
-                                        >
-                                            ✓ configured
-                                        </span>
-                                    )}
-                                </span>
-                            </div>
-                            {t.description && (
-                                <div
-                                    className={`text-xs ${bt.muted} mt-0.5 line-clamp-2`}
-                                >
-                                    {t.description}
-                                </div>
-                            )}
-                        </button>
+                            testId={`composer-quick-start-provider-${t.id}-${t.kind}`}
+                        />
                     ))}
                 </div>
             )}
@@ -337,33 +351,46 @@ function ProviderPicker({ intentObj, wirable, onPick, onBack }) {
 }
 
 function IntentPicker({ onPick }) {
-    const bt = useBuilderTheme();
     return (
-        <div data-testid="composer-quick-start-intents">
-            <div className={`text-xs uppercase tracking-wide ${bt.muted} mb-2`}>
-                Quick start
-            </div>
-            <h2 className={`text-base ${bt.text} mb-3`}>
-                What kind of widget do you want?
-            </h2>
+        <div
+            data-testid="composer-quick-start-intents"
+            className="flex flex-col gap-3"
+        >
+            <StepHeader
+                title="What kind of widget do you want?"
+                tagline="Pick one to see starter layouts for it."
+            />
             <div className="grid grid-cols-2 gap-3">
                 {INTENTS.map((it) => (
-                    <button
-                        key={it.id}
-                        type="button"
-                        onClick={() => onPick(it.id)}
-                        className={`text-left rounded border ${bt.border} ${bt.surface} ${bt.hoverAccentBorder} ${bt.hoverTint} p-3 space-y-1`}
-                        data-testid={`composer-quick-start-intent-${it.id}`}
-                    >
-                        <div className="text-2xl leading-none">{it.icon}</div>
-                        <div className={`text-sm ${bt.text}`}>{it.label}</div>
-                        <div className={`text-xs ${bt.muted}`}>
-                            {it.tagline}
-                        </div>
-                    </button>
+                    <IntentCard key={it.id} intent={it} onPick={onPick} />
                 ))}
             </div>
         </div>
+    );
+}
+
+function IntentCard({ intent, onPick }) {
+    const bt = useBuilderTheme();
+    return (
+        <Card2
+            onClick={() => onPick(intent.id)}
+            ariaLabel={intent.label}
+            testId={`composer-quick-start-intent-${intent.id}`}
+            padding="p-3"
+            hover
+            className="flex flex-col gap-2 text-left"
+        >
+            <FontAwesomeIcon
+                icon={intent.icon}
+                className={`h-4 w-4 ${bt.accent}`}
+            />
+            <span className={`text-sm font-semibold ${bt.text}`}>
+                {intent.label}
+            </span>
+            <span className={`text-xs leading-snug ${bt.muted}`}>
+                {intent.tagline}
+            </span>
+        </Card2>
     );
 }
 
@@ -389,8 +416,8 @@ function IntentDetail({
     // provider, show that provider in the header instead of the
     // generic intent label/tagline.
     const headerLabel = providerChoice
-        ? `${intentObj.icon} ${providerChoice.name}`
-        : `${intentObj.icon} ${intentObj.label} widget`;
+        ? providerChoice.name
+        : `${intentObj.label} widget`;
     const headerTagline = providerChoice
         ? providerChoice.description ||
           `Widget that uses the ${providerChoice.name} provider.`
@@ -398,62 +425,50 @@ function IntentDetail({
     return (
         <div
             data-testid={`composer-quick-start-detail-${intentObj.id}`}
-            className="space-y-4"
+            className="flex flex-col gap-4"
         >
-            <div className="flex items-center justify-between gap-3">
-                <div>
-                    <div
-                        className={`text-xs uppercase tracking-wide ${bt.muted}`}
-                    >
-                        Quick start
-                    </div>
-                    <h2 className={`text-base ${bt.text} mt-0.5`}>
-                        {headerLabel}
-                    </h2>
-                    <div className={`text-xs ${bt.muted} mt-0.5`}>
-                        {headerTagline}
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    onClick={onBack}
-                    className={`text-sm ${bt.accent} hover:opacity-80 shrink-0`}
-                    data-testid="composer-quick-start-back"
-                >
-                    ← Change
-                </button>
-            </div>
+            <StepHeader
+                icon={intentObj.icon}
+                title={headerLabel}
+                tagline={headerTagline}
+                onBack={onBack}
+            />
 
             {samples.length > 0 && (
-                <div data-testid="composer-quick-start-samples">
-                    <div
-                        className={`text-xs uppercase tracking-wide ${bt.muted} mb-2`}
-                    >
+                <div
+                    data-testid="composer-quick-start-samples"
+                    className="flex flex-col gap-2"
+                >
+                    <h3 className={`text-sm font-semibold ${bt.text}`}>
                         Starter layouts
-                    </div>
-                    <div className="space-y-2">
-                        {samples.map((layout) => (
-                            <button
-                                key={layout.id}
-                                type="button"
-                                onClick={() => onApplySample(layout)}
-                                className={`block w-full text-left rounded border ${bt.border} ${bt.surface} ${bt.hoverAccentBorder} ${bt.hoverTint} p-3 space-y-1`}
-                                data-testid={`composer-quick-start-sample-${layout.id}`}
+                    </h3>
+                    {samples.map((layout) => (
+                        <Card2
+                            key={layout.id}
+                            onClick={() => onApplySample(layout)}
+                            ariaLabel={layout.label}
+                            testId={`composer-quick-start-sample-${layout.id}`}
+                            padding="p-3"
+                            hover
+                            className="flex flex-col gap-1 text-left"
+                        >
+                            <span
+                                className={`text-sm font-semibold ${bt.text}`}
                             >
-                                <div className={`text-sm ${bt.text}`}>
-                                    {layout.label}
-                                </div>
-                                <div className={`text-xs ${bt.muted}`}>
-                                    {layout.description}
-                                </div>
-                                <div
-                                    className={`text-xs ${bt.muted} font-mono whitespace-pre pt-2 border-t ${bt.border}`}
-                                >
-                                    {layout.outline}
-                                </div>
-                            </button>
-                        ))}
-                    </div>
+                                {layout.label}
+                            </span>
+                            <span
+                                className={`text-sm leading-snug ${bt.muted}`}
+                            >
+                                {layout.description}
+                            </span>
+                            <span
+                                className={`text-xs ${bt.muted} font-mono whitespace-pre mt-2 pt-2 border-t ${bt.border}`}
+                            >
+                                {layout.outline}
+                            </span>
+                        </Card2>
+                    ))}
                 </div>
             )}
 
@@ -486,96 +501,104 @@ function AiForm({
     resetAi,
 }) {
     const bt = useBuilderTheme();
-    return (
-        <div
-            className={`rounded border ${bt.accentBorder} ${bt.tint} p-3 space-y-2`}
-            data-testid="composer-quick-start-ai"
-        >
-            {!aiOpen ? (
-                <button
-                    type="button"
+    if (!aiOpen) {
+        return (
+            <div data-testid="composer-quick-start-ai">
+                <Button2
+                    block
+                    size="sm"
                     onClick={() => setAiOpen(true)}
-                    className={`w-full px-3 py-2 text-sm rounded ${bt.accent} ${bt.hoverTint}`}
-                    data-testid="composer-quick-start-ai-open"
+                    testId="composer-quick-start-ai-open"
                 >
-                    ✦ Or describe what you want — scaffold it with AI
-                </button>
-            ) : (
-                <>
-                    <div className="flex items-center justify-between">
-                        <div
-                            className={`text-xs uppercase tracking-wide ${bt.accent}`}
-                        >
-                            Describe the widget
-                        </div>
-                        <button
-                            type="button"
-                            onClick={resetAi}
-                            className={`text-xs ${bt.muted} hover:opacity-100`}
-                            data-testid="composer-quick-start-ai-close"
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                    <textarea
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="e.g., Search Algolia indices, show matching docs in a list"
-                        rows={3}
-                        className={`w-full px-3 py-2 text-sm ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
-                        data-testid="composer-quick-start-ai-input"
-                    />
-                    <button
-                        type="button"
-                        onClick={submitAi}
-                        disabled={
-                            status === "loading" ||
-                            description.trim().length === 0
-                        }
-                        className={`w-full px-3 py-2 text-sm font-medium rounded ${bt.primaryFill}`}
-                        data-testid="composer-quick-start-ai-submit"
-                    >
-                        {status === "loading" ? "Asking…" : "Scaffold with AI"}
-                    </button>
-                    {status === "error" && error && (
-                        <div
-                            className={`text-xs ${bt.status.error.icon}`}
-                            data-testid="composer-quick-start-ai-error"
-                        >
-                            {error}
-                        </div>
-                    )}
-                    {status === "ok" && suggestions.length > 0 && (
-                        <div
-                            className="space-y-2"
-                            data-testid="composer-quick-start-ai-results"
-                        >
-                            <div className={`text-xs ${bt.muted}`}>
-                                Pick a suggestion to apply:
-                            </div>
-                            {suggestions.map((s, i) => (
-                                <button
-                                    key={i}
-                                    type="button"
-                                    onClick={() => pickSuggestion(s)}
-                                    className={`block w-full text-left px-3 py-2 rounded border ${bt.border} ${bt.surface} ${bt.hoverAccentBorder} ${bt.hoverTint}`}
-                                    data-testid={`composer-quick-start-ai-pick-${i}`}
-                                >
-                                    <div className={`text-sm ${bt.text}`}>
-                                        {s.label}
-                                    </div>
-                                    <div
-                                        className={`text-xs ${bt.muted} mt-1 font-mono whitespace-pre`}
-                                    >
-                                        {summarizeTree(s.root)}
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </>
+                    <span className="flex items-center gap-2">
+                        <FontAwesomeIcon
+                            icon="wand-magic-sparkles"
+                            className="h-3 w-3"
+                        />
+                        Or describe it and let AI lay it out
+                    </span>
+                </Button2>
+            </div>
+        );
+    }
+    return (
+        <Card2
+            padding="p-4"
+            className="flex flex-col gap-3"
+            testId="composer-quick-start-ai"
+        >
+            <div className="flex items-center justify-between gap-2">
+                <h3 className={`text-sm font-semibold ${bt.text}`}>
+                    Describe the widget
+                </h3>
+                <Button3
+                    size="sm"
+                    onClick={resetAi}
+                    testId="composer-quick-start-ai-close"
+                    title="Cancel"
+                />
+            </div>
+            <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="e.g., Search Algolia indices, show matching docs in a list"
+                aria-label="Describe the widget"
+                rows={3}
+                className={`dr-input w-full px-3 py-2 text-sm ${bt.surface} border ${bt.border} rounded-lg ${bt.text} resize-none focus:outline-none`}
+                data-testid="composer-quick-start-ai-input"
+            />
+            <Button
+                block
+                size="sm"
+                onClick={submitAi}
+                disabled={
+                    status === "loading" || description.trim().length === 0
+                }
+                testId="composer-quick-start-ai-submit"
+                title={status === "loading" ? "Asking…" : "Lay it out with AI"}
+            />
+            {status === "error" && error && (
+                <p
+                    role="alert"
+                    className={`text-sm ${bt.status.error.text}`}
+                    data-testid="composer-quick-start-ai-error"
+                >
+                    {error}
+                </p>
             )}
-        </div>
+            {status === "ok" && suggestions.length > 0 && (
+                <div
+                    className="flex flex-col gap-2"
+                    data-testid="composer-quick-start-ai-results"
+                >
+                    <p className={`text-sm ${bt.muted}`}>
+                        Pick a suggestion to apply:
+                    </p>
+                    {suggestions.map((s, i) => (
+                        <Card2
+                            key={i}
+                            onClick={() => pickSuggestion(s)}
+                            ariaLabel={s.label}
+                            testId={`composer-quick-start-ai-pick-${i}`}
+                            padding="p-3"
+                            hover
+                            className="flex flex-col gap-1 text-left"
+                        >
+                            <span
+                                className={`text-sm font-semibold ${bt.text}`}
+                            >
+                                {s.label}
+                            </span>
+                            <span
+                                className={`text-xs ${bt.muted} font-mono whitespace-pre`}
+                            >
+                                {summarizeTree(s.root)}
+                            </span>
+                        </Card2>
+                    ))}
+                </div>
+            )}
+        </Card2>
     );
 }
 

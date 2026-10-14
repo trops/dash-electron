@@ -338,6 +338,8 @@ Left = Navigation          Center = Content          Right = Helpers
 └───────────────────────────────────────────────────────┘
 ```
 
+**Layout (2026-10-13, design audit screen 3a):** the sketch above is the original. Today the builder is one raised modal surface: a panel header (title, quiet ✕), Preview / Code / Configure / Console / Scorecard as underline tabs on the left (2/3), and Build | Compose plus "Discover existing" on the right (1/3), with both header rows the same height so their hairlines line up. The Build pane opens on its message box ("Describe the widget you want"). Sending asks "Which data should this widget use?" with likely choices; the chat starts with the description as its first message once the data is picked. "Pick the data first…" opens the full list: rows with an icon, a readable name and "Not set up yet" / "Set up · N accounts", plus a filter. A type with no account asks before going on (set up, skip, or pick something else). The install bar uses a Category menu and a primary Install button.
+
 ### Widget Lifecycle
 
 ```

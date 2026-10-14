@@ -19,6 +19,7 @@
  * palette, re-emits) is exercised in ComposerPane.test.js.
  */
 
+jest.mock("@trops/dash-react", () => require("../dashReactTestStub"));
 jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen } from "@testing-library/react";

@@ -16,6 +16,8 @@
  * via category headers; styling and a11u details are not in scope.
  */
 
+// PropertyInspector / SuggestLayoutButton render dash-react controls.
+jest.mock("@trops/dash-react", () => require("../dashReactTestStub"));
 jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
 import "@testing-library/jest-dom";
 import { act, fireEvent, render, screen } from "@testing-library/react";

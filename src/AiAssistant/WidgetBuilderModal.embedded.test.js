@@ -24,17 +24,18 @@ describe("WidgetBuilderModal — embedded", () => {
 
     test("embedded swaps the Modal for a plain frame", () => {
         expect(modal).toMatch(
-            /const Frame = embedded \? EmbeddedFrame : Modal;/
+            /const Frame = embedded \? EmbeddedFrame : BuilderModalFrame;/
         );
         expect(modal).toMatch(/<Frame \{\.\.\.frameProps\}>/);
         expect(modal).toMatch(/<\/Frame>/);
-        expect(modal).not.toMatch(/<\/Modal>/);
+        // The standalone frame is the Modal with one raised surface inside.
+        expect(modal).toMatch(
+            /const BuilderModalFrame = [\s\S]{0,200}<Modal \{\.\.\.modalProps\}>\s*<div\s+className=\{`dr-modal-surface/
+        );
     });
 
     test("the builder's own header is hidden when embedded", () => {
-        expect(modal).toMatch(
-            /\{!embedded && \(\s*<div\s+className=\{`flex items-center justify-between px-4 py-3 border-b/
-        );
+        expect(modal).toMatch(/\{!embedded && \(\s*<PanelHeader/);
     });
 });
 

@@ -326,7 +326,7 @@ export const INTENTS = [
     {
         id: "search",
         label: "Search",
-        icon: "🔍",
+        icon: "magnifying-glass",
         tagline: "Find or filter data — input on top, results below.",
         aiHint:
             "The user wants a SEARCH widget: prioritize layouts with " +
@@ -336,7 +336,7 @@ export const INTENTS = [
     {
         id: "view",
         label: "View",
-        icon: "📊",
+        icon: "chart-column",
         tagline: "Show data, stats, or records — a read-only surface.",
         aiHint:
             "The user wants a VIEW widget: prioritize layouts that " +
@@ -346,7 +346,7 @@ export const INTENTS = [
     {
         id: "act",
         label: "Act",
-        icon: "⚡",
+        icon: "bolt",
         tagline: "Submit a form or fire an action — inputs + a button.",
         aiHint:
             "The user wants an ACTION widget: include input fields " +
@@ -356,7 +356,7 @@ export const INTENTS = [
     {
         id: "else",
         label: "Custom",
-        icon: "✨",
+        icon: "wand-magic-sparkles",
         tagline: "Something else — start free-form or let AI propose.",
         aiHint:
             "The user wants a CUSTOM widget that doesn't fit search / " +
@@ -366,7 +366,7 @@ export const INTENTS = [
     {
         id: "provider",
         label: "Provider",
-        icon: "📡",
+        icon: "plug",
         tagline:
             "Start from a service — Slack, Algolia, Google Drive, " +
             "GitHub, etc.",

@@ -15,8 +15,15 @@
  * inside the builder modal, which provides the app theme — colours come
  * from theme tokens and dash-react status colours (no hard-coded grays).
  */
-import React, { useState, useEffect, useCallback, useContext } from "react";
-import { Button, ThemeContext, getStatusColors } from "@trops/dash-react";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+    Button,
+    Button2,
+    Button3,
+    EmptyState,
+    FontAwesomeIcon,
+} from "@trops/dash-react";
+import { useBuilderTheme } from "./useBuilderTheme";
 
 function relativeTime(ts) {
     if (!ts) return "";
@@ -61,9 +68,7 @@ export const WidgetDraftsList = ({
     const [installingId, setInstallingId] = useState(null);
     const [installError, setInstallError] = useState(null);
     const [openingEditorId, setOpeningEditorId] = useState(null);
-    const themeCtx = useContext(ThemeContext) || {};
-    const currentTheme = themeCtx.currentTheme;
-    const status = getStatusColors(themeCtx.themeVariant || "dark");
+    const bt = useBuilderTheme();
 
     const refresh = useCallback(async () => {
         try {
@@ -147,61 +152,62 @@ export const WidgetDraftsList = ({
         [refresh, onInstalled]
     );
 
-    // Colours come from the app theme (the builder wraps this list in it).
-    const tk = (key) => currentTheme?.[key] || "";
-    const text = tk("text-primary-light");
-    const muted = `${tk("text-primary-medium")} opacity-70`;
-    const border = tk("border-primary-dark");
-    const btn = "px-3 py-1 text-xs font-medium rounded transition-colors";
-    const btnQuiet = `${btn} ${tk("bg-primary-medium")} ${tk(
-        "hover-bg-primary-light"
-    )} ${text}`;
-    const btnOff = "opacity-50 cursor-not-allowed";
+    const noFilesYet =
+        "Draft has no on-disk files yet — resume + send a message first";
 
     if (loading) {
         return (
-            <div
-                className={`flex flex-col items-center justify-center h-full p-8 ${muted}`}
-            >
-                <div className="text-sm">Loading drafts…</div>
+            <div className="flex flex-col items-center justify-center h-full p-4">
+                <p className={`text-sm ${bt.muted}`}>Loading drafts…</p>
             </div>
         );
     }
 
     return (
         <div
-            className={`flex flex-col h-full ${tk("bg-primary-dark")} ${text}`}
+            className={`flex flex-col h-full ${bt.tk("bg-primary-dark")} ${
+                bt.text
+            }`}
         >
             <div
-                className={`flex items-center justify-between px-6 py-4 border-b ${border}`}
+                className={`flex items-center justify-between gap-4 p-4 border-b ${bt.border}`}
             >
-                <div>
-                    <h2 className={`text-lg font-semibold ${text}`}>Drafts</h2>
-                    <p className={`text-xs mt-1 ${muted}`}>
+                <div className="flex flex-col gap-1 min-w-0">
+                    <h2 className={`text-sm font-semibold ${bt.text}`}>
+                        Drafts
+                    </h2>
+                    <p className={`text-xs ${bt.muted}`}>
                         Widgets you started building but haven't installed yet.
                         Resume one to keep editing.
                     </p>
                 </div>
-                <span data-testid="drafts-start-new" className="contents">
-                    <Button onClick={onStartNew}>Build new widget</Button>
-                </span>
+                <Button
+                    title="Build new widget"
+                    size="sm"
+                    onClick={onStartNew}
+                    testId="drafts-start-new"
+                />
             </div>
             {installError && (
                 <div
-                    className={`px-6 py-2 border-b text-xs ${status.error.bg} ${status.error.border} ${status.error.text}`}
+                    role="alert"
+                    className={`px-4 py-2 border-b text-sm ${bt.status.error.bg} ${bt.status.error.border} ${bt.status.error.text}`}
                 >
                     Install failed: {installError}
                 </div>
             )}
             {drafts.length === 0 ? (
-                <div
-                    className={`flex flex-col items-center justify-center flex-1 p-8 ${muted}`}
-                >
-                    <div className="text-sm">No drafts yet.</div>
-                    <div className="text-xs mt-2">
-                        Start a new widget — your work will be saved here
-                        automatically.
-                    </div>
+                <div className="flex flex-col items-center justify-center flex-1 p-4">
+                    <EmptyState
+                        icon={
+                            <FontAwesomeIcon
+                                icon="file-pen"
+                                className="h-6 w-6"
+                            />
+                        }
+                        title="No drafts yet"
+                        description="Start a new widget — your work is saved here automatically."
+                    />
                 </div>
             ) : (
                 <ul className="flex-1 overflow-y-auto">
@@ -217,28 +223,26 @@ export const WidgetDraftsList = ({
                         return (
                             <li
                                 key={draft.id}
-                                className={`px-6 py-4 border-b transition-colors ${border} ${tk(
-                                    "hover-bg-primary-medium"
-                                )}`}
+                                className={`p-4 border-b transition-colors ${bt.border} ${bt.hoverSurface}`}
                                 data-testid="drafts-row"
                             >
                                 <div className="flex items-start justify-between gap-4">
-                                    <div className="flex-1 min-w-0">
+                                    <div className="flex flex-col gap-1 flex-1 min-w-0">
                                         <div className="flex items-baseline gap-3">
                                             <h3
-                                                className={`text-sm font-semibold truncate ${text}`}
+                                                className={`text-sm font-semibold truncate ${bt.text}`}
                                             >
                                                 {draft.name || "Untitled draft"}
                                             </h3>
                                             <span
-                                                className={`text-xs flex-shrink-0 ${muted}`}
+                                                className={`text-xs flex-shrink-0 ${bt.muted}`}
                                             >
                                                 {relativeTime(draft.updatedAt)}
                                             </span>
                                         </div>
                                         {excerpt && (
                                             <p
-                                                className={`text-xs mt-1 line-clamp-2 ${muted}`}
+                                                className={`text-xs line-clamp-2 ${bt.muted}`}
                                             >
                                                 {excerpt}
                                             </p>
@@ -247,96 +251,88 @@ export const WidgetDraftsList = ({
                                     <div className="flex items-center gap-2 flex-shrink-0">
                                         {!isConfirming ? (
                                             <>
-                                                <span
-                                                    data-testid="drafts-resume"
-                                                    className="contents"
-                                                >
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() =>
-                                                            onResume?.(draft)
-                                                        }
-                                                    >
-                                                        Resume
-                                                    </Button>
-                                                </span>
-                                                <button
+                                                <Button2
+                                                    title="Resume"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        onResume?.(draft)
+                                                    }
+                                                    testId="drafts-resume"
+                                                />
+                                                <Button3
+                                                    title={
+                                                        openingEditorId ===
+                                                        draft.id
+                                                            ? "Opening…"
+                                                            : "Open in editor"
+                                                    }
+                                                    size="sm"
                                                     onClick={() =>
                                                         handleOpenInEditor(
                                                             draft
                                                         )
                                                     }
                                                     disabled={editorOff}
-                                                    title={
+                                                    tooltip={
                                                         !draft.packageDir
-                                                            ? "Draft has no on-disk files yet — resume + send a message first"
+                                                            ? noFilesYet
                                                             : "Open this widget's package in your editor (VS Code if available)"
                                                     }
-                                                    className={`${btnQuiet} ${
-                                                        editorOff ? btnOff : ""
-                                                    }`}
-                                                    data-testid="drafts-open-editor"
-                                                >
-                                                    {openingEditorId ===
-                                                    draft.id
-                                                        ? "Opening…"
-                                                        : "Open in editor"}
-                                                </button>
-                                                <button
+                                                    testId="drafts-open-editor"
+                                                />
+                                                <Button3
+                                                    title={
+                                                        installingId ===
+                                                        draft.id
+                                                            ? "Installing…"
+                                                            : "Install"
+                                                    }
+                                                    size="sm"
                                                     onClick={() =>
                                                         handleInstall(draft)
                                                     }
                                                     disabled={installOff}
-                                                    title={
+                                                    tooltip={
                                                         !draft.packageDir
-                                                            ? "Draft has no on-disk files yet — resume + send a message first"
+                                                            ? noFilesYet
                                                             : "Install this widget"
                                                     }
-                                                    className={`${btnQuiet} ${
-                                                        installOff ? btnOff : ""
-                                                    }`}
-                                                    data-testid="drafts-install"
-                                                >
-                                                    {installingId === draft.id
-                                                        ? "Installing…"
-                                                        : "Install"}
-                                                </button>
-                                                <button
+                                                    testId="drafts-install"
+                                                />
+                                                <Button3
+                                                    title="Delete"
+                                                    size="sm"
                                                     onClick={() =>
                                                         setConfirmDeleteId(
                                                             draft.id
                                                         )
                                                     }
-                                                    className={btnQuiet}
-                                                    data-testid="drafts-delete"
-                                                >
-                                                    Delete
-                                                </button>
+                                                    testId="drafts-delete"
+                                                />
                                             </>
                                         ) : (
                                             <>
                                                 <span
-                                                    className={`text-xs ${status.warning.icon}`}
+                                                    className={`text-xs ${bt.status.warning.icon}`}
                                                 >
                                                     Delete?
                                                 </span>
-                                                <button
+                                                <Button2
+                                                    title="Yes"
+                                                    size="sm"
+                                                    danger
                                                     onClick={() =>
                                                         handleDelete(draft.id)
                                                     }
-                                                    className={`${btn} border ${status.error.bg} ${status.error.border} ${status.error.strongText} ${status.error.hoverBg}`}
-                                                    data-testid="drafts-delete-confirm"
-                                                >
-                                                    Yes
-                                                </button>
-                                                <button
+                                                    testId="drafts-delete-confirm"
+                                                />
+                                                <Button3
+                                                    title="Cancel"
+                                                    size="sm"
                                                     onClick={() =>
                                                         setConfirmDeleteId(null)
                                                     }
-                                                    className={btnQuiet}
-                                                >
-                                                    Cancel
-                                                </button>
+                                                />
                                             </>
                                         )}
                                     </div>

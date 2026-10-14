@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { runCostLabel } from "@trops/dash-core";
+import { Button2, Button3 } from "@trops/dash-react";
 import { MAX_TEAM_FIXES, verdictOf } from "./teamCheck";
 
 /**
@@ -7,6 +8,8 @@ import { MAX_TEAM_FIXES, verdictOf } from "./teamCheck";
  * the Widget Builder's success screen (create-entry CRE-011 AC5). PASSED or
  * FAILED with what it saw; on FAILED, "Let Builder fix it" (at most twice)
  * or "Keep it anyway". A paused Checker says so and blocks nothing.
+ * Its actions are secondary/quiet: the success screen's "Done" is the
+ * view's one primary button.
  *
  * @param {object} check  { phase: "checking"|"done"|"skipped"|"failed",
  *                          run?, reason?, soFar? }
@@ -17,17 +20,14 @@ export function CheckerCard({ check, fixes = 0, bt, onFix, onKeep, kept }) {
     const [showDetails, setShowDetails] = useState(false);
     if (!check) return null;
     const label = (
-        <span
-            className={`text-xs font-semibold uppercase tracking-wider ${bt.muted}`}
-        >
-            Checker
-        </span>
+        <h3 className={`text-sm font-semibold ${bt.text}`}>Checker</h3>
     );
+    const card = `w-full max-w-xl rounded-lg border ${bt.border} p-4 text-sm flex`;
     if (check.phase === "skipped") {
         return (
             <div
                 data-testid="checker-card"
-                className={`w-full max-w-xl rounded-lg border ${bt.border} px-4 py-3 text-sm flex flex-row gap-3 items-center`}
+                className={`${card} flex-row gap-3 items-center`}
             >
                 {label}
                 <span className={bt.muted}>
@@ -41,7 +41,7 @@ export function CheckerCard({ check, fixes = 0, bt, onFix, onKeep, kept }) {
         return (
             <div
                 data-testid="checker-card"
-                className={`w-full max-w-xl rounded-lg border ${bt.border} px-4 py-3 text-sm flex flex-col gap-2`}
+                className={`${card} flex-col gap-2`}
             >
                 <div className="flex flex-row gap-3 items-center">
                     {label}
@@ -64,10 +64,7 @@ export function CheckerCard({ check, fixes = 0, bt, onFix, onKeep, kept }) {
     const meta = runCostLabel(run);
     const canFix = verdict === "FAILED" && fixes < MAX_TEAM_FIXES && !kept;
     return (
-        <div
-            data-testid="checker-card"
-            className={`w-full max-w-xl rounded-lg border ${bt.border} px-4 py-3 text-sm flex flex-col gap-3`}
-        >
+        <div data-testid="checker-card" className={`${card} flex-col gap-3`}>
             <div className="flex flex-row gap-3 items-center flex-wrap">
                 {label}
                 <span
@@ -96,15 +93,17 @@ export function CheckerCard({ check, fixes = 0, bt, onFix, onKeep, kept }) {
                 user decides on. A fixed height either way (inline: the
                 prebuilt CSS has no max-height utilities). */}
             {answer && verdict === "PASSED" ? (
-                <button
-                    type="button"
-                    onClick={() => setShowDetails((v) => !v)}
-                    className={`self-start text-xs underline ${bt.muted}`}
-                >
-                    {showDetails
-                        ? "Hide what it checked"
-                        : "Show what it checked"}
-                </button>
+                <div className="self-start">
+                    <Button3
+                        size="sm"
+                        onClick={() => setShowDetails((v) => !v)}
+                        title={
+                            showDetails
+                                ? "Hide what it checked"
+                                : "Show what it checked"
+                        }
+                    />
+                </div>
             ) : null}
             {answer && (verdict !== "PASSED" || showDetails) ? (
                 <pre
@@ -118,21 +117,17 @@ export function CheckerCard({ check, fixes = 0, bt, onFix, onKeep, kept }) {
             {verdict === "FAILED" && !kept ? (
                 <div className="flex flex-row gap-3 items-center flex-wrap">
                     {canFix ? (
-                        <button
-                            type="button"
+                        <Button2
+                            size="sm"
                             onClick={onFix}
-                            className={`px-4 py-2 rounded-lg ${bt.primaryFill} text-sm font-medium transition-colors`}
-                        >
-                            Let Builder fix it
-                        </button>
+                            title="Let Builder fix it"
+                        />
                     ) : null}
-                    <button
-                        type="button"
+                    <Button3
+                        size="sm"
                         onClick={onKeep}
-                        className={`px-4 py-2 rounded-lg ${bt.raised} ${bt.hoverSurface} ${bt.text} text-sm font-medium transition-colors`}
-                    >
-                        Keep it anyway
-                    </button>
+                        title="Keep it anyway"
+                    />
                     <span className={`text-xs ${bt.muted}`}>
                         {canFix
                             ? `fix ${fixes + 1} of ${MAX_TEAM_FIXES}`

@@ -1,13 +1,26 @@
 /**
  * ChatProviderGate
  *
- * Full-coverage overlay rendered inside the chat panel of
- * WidgetBuilderModal. Gates entry to the chat: until the user picks a
- * provider TYPE (or "no external provider"), they cannot interact
- * with the chat.
+ * The start of the Build chat in WidgetBuilderModal. Until the user picks a
+ * provider TYPE (or "No external provider") the AI chat isn't mounted, so
+ * the AI's instructions name the right type from its first reply.
  *
- * Type-first architecture (post-refactor): the gate lists provider
- * TYPES drawn from three sources, deduped on (type, providerClass):
+ * Three views, all laid out like the chat they lead into (design guide,
+ * layout rule 16 — the message box sits at the bottom):
+ *
+ *   - Start (no prompt yet, `onPrompt` given): an empty state, "Describe
+ *     the widget you want", and the message box. Sending calls
+ *     `onPrompt(text)`; the host passes it back as `prompt`, which turns
+ *     the gate into the question below. "Pick the data first…" opens the
+ *     list instead.
+ *   - Question (`prompt`, create-entry PRD CRE-005 AC2): the user's message,
+ *     then "Which data should this widget use?" with a few likely types
+ *     guessed from it, "No external provider" and "Choose another…".
+ *   - List: every type as a row (icon, readable name, whether it's set up),
+ *     with a filter.
+ *
+ * Type-first architecture: the list draws types from three sources,
+ * deduped on (type, providerClass):
  *
  *   1. Built-in MCP catalog              → class = "mcp"
  *   2. Known-external MCP catalog        → class = "mcp"
@@ -15,41 +28,67 @@
  *                                          (e.g. "credential" for
  *                                          algolia-style providers)
  *
- * Selection emits `{ type, providerClass }` — no instance name. The
- * runtime instance binding ("which Algolia Prod / Dev / Sandbox?") is
- * handled later by the existing preview-area `PreviewProviderPicker`
- * dropdown.
+ * Selection emits `{ type, providerClass }` — no instance name. Which
+ * account ("Algolia Prod / Dev") is picked later in the preview's
+ * `PreviewProviderPicker`.
  *
- * "Add new" is intentionally NOT in this gate. The user adds new
- * provider INSTANCES of an existing type via the preview-area
- * dropdown's empty-state CTA (Settings → Providers deep-link). The
- * gate never offers creation of a new TYPE — types are catalog-defined.
- *
- * Question mode (create-entry PRD CRE-005 AC2): when the user already
- * described the widget (`prompt`, from the Create screen), the gate reads
- * as a question in the conversation — their prompt, "Which data should this
- * widget use?", a few likely types guessed from the prompt, "No external
- * provider" and "Choose another…" (the full list). The pick still comes
- * before the chat starts, so the AI's instructions name the right type.
+ * Picking a type with no account set up asks first: set one up now (opens
+ * Settings → Providers), skip for now, or pick something else.
  */
 import React, { useContext, useEffect, useMemo, useState } from "react";
-import { AppContext } from "@trops/dash-core";
-import { Button3, FontAwesomeIcon } from "@trops/dash-react";
+import { AppContext, resolveIcon } from "@trops/dash-core";
+import {
+    Button,
+    Button2,
+    Button3,
+    ChatComposer,
+    ChatMessage,
+    EmptyState,
+    FontAwesomeIcon,
+    ListRow,
+    PanelHeader,
+    SearchInput,
+} from "@trops/dash-react";
 import { useBuilderTheme } from "./useBuilderTheme";
 import { suggestProviderTypes } from "./providerSuggestions";
 
 const NONE_SENTINEL = { sentinel: "none" };
 
+/** "google-calendar" → "Google Calendar" (for types without a catalog name). */
+export function typeLabel(type) {
+    return String(type || "")
+        .split(/[-_\s]+/)
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+}
+
+/** The row's second line: whether the user has an account for the type. */
+export function setupLine(count) {
+    if (count === 0) return "Not set up yet";
+    return `Set up · ${count} account${count === 1 ? "" : "s"}`;
+}
+
+const rowIcon = (icon) => {
+    const resolved = resolveIcon ? resolveIcon(icon) : icon;
+    return !resolved || resolved === "puzzle-piece" ? "plug" : resolved;
+};
+
 export const ChatProviderGate = ({
     onChange,
     builtInCatalog = [],
     knownExternalCatalog = [],
-    // The user's description from the Create screen → question mode.
+    // The user's description (from the Create screen, or typed here) →
+    // question mode.
     prompt = null,
+    // Called with the text sent from the start view's message box, or
+    // with null to go back and edit it.
+    onPrompt = null,
+    // The prompt was typed here (not from Create), so it can be edited.
+    canEditPrompt = false,
 }) => {
     const appContext = useContext(AppContext);
     const bt = useBuilderTheme();
-    const borderColor = bt.border;
 
     // Pull installed providers from AppContext. If empty (the AppWrapper
     // may not have populated yet), fall back to a one-shot mainApi
@@ -97,42 +136,46 @@ export const ChatProviderGate = ({
             : fallbackProviders;
 
     // Build the type list. Three sources, deduped on (type, class).
-    // Built-in MCP and known-external both contribute type+class="mcp".
-    // Installed providers contribute their own type+class (catches
-    // credential-class types like algolia that aren't in either MCP
-    // catalog).
     const typeOptions = useMemo(() => {
         const seen = new Map();
 
-        const addEntry = (type, providerClass, label) => {
+        const addEntry = (type, providerClass, label, icon) => {
             if (!type || !providerClass) return;
             const key = `${type}|${providerClass}`;
             if (seen.has(key)) return;
-            seen.set(key, { type, providerClass, label: label || type });
+            seen.set(key, {
+                type,
+                providerClass,
+                label: label || typeLabel(type),
+                icon: icon || null,
+            });
         };
 
         for (const entry of builtInCatalog || []) {
             if (!entry?.id) continue;
-            addEntry(entry.id, "mcp", entry.name || entry.id);
+            addEntry(entry.id, "mcp", entry.name, entry.icon);
         }
         for (const entry of knownExternalCatalog || []) {
             if (!entry?.id) continue;
-            addEntry(entry.id, "mcp", entry.name || entry.id);
+            addEntry(entry.id, "mcp", entry.name, entry.icon);
         }
         for (const p of Object.values(installedProviders || {})) {
             if (!p?.type) continue;
-            addEntry(p.type, p.providerClass || "credential", p.type);
+            addEntry(p.type, p.providerClass || "credential", null, null);
         }
 
         return Array.from(seen.values()).sort((a, b) =>
-            a.type.localeCompare(b.type)
+            a.label.localeCompare(b.label)
         );
     }, [builtInCatalog, knownExternalCatalog, installedProviders]);
 
     const hasTypes = typeOptions.length > 0;
 
-    // Question mode shows a few guesses; "Choose another…" opens the list.
-    const [showAll, setShowAll] = useState(!prompt);
+    // The list shows when asked for, or when there's no way to start from a
+    // message (no prompt and no onPrompt).
+    const [showAll, setShowAll] = useState(!prompt && !onPrompt);
+    const [filter, setFilter] = useState("");
+    const [draft, setDraft] = useState("");
     const suggestions = useMemo(
         () =>
             prompt
@@ -147,19 +190,7 @@ export const ChatProviderGate = ({
         [prompt, typeOptions, installedProviders]
     );
 
-    // Interim selection captured when the user clicks a type for which
-    // they have zero installed instances. Showing a small confirmation
-    // panel here surfaces the "no provider configured" problem BEFORE
-    // the user goes through the full chat-and-build flow only to
-    // discover the gap at preview time. Three exits:
-    //   - Create new: dispatches dash:open-settings-create-provider
-    //     (handled by Dash.js + DashboardStage listeners shipped in
-    //      v0.0.513 / v0.1.452 — closes the builder, opens Settings
-    //      → Providers in create mode with the type pre-selected).
-    //   - Skip for now: calls onChange anyway. The widget config will
-    //     declare the type; the preview-area dropdown's existing "+
-    //     Add new" CTA is the path back if the user changes their mind.
-    //   - Cancel: returns to the type list so they can pick differently.
+    // A type picked that has no account yet — asks before going on.
     const [pendingType, setPendingType] = useState(null);
 
     const countInstancesOfType = (type, providerClass) => {
@@ -173,17 +204,15 @@ export const ChatProviderGate = ({
     };
 
     const handleTypeClick = (opt) => {
-        const installedCount = countInstancesOfType(
-            opt.type,
-            opt.providerClass
-        );
-        if (installedCount === 0) {
+        if (countInstancesOfType(opt.type, opt.providerClass) === 0) {
             setPendingType(opt);
         } else {
             onChange({ type: opt.type, providerClass: opt.providerClass });
         }
     };
 
+    // Closes the builder and opens Settings → Providers in create mode with
+    // the type chosen (Dash.js + DashboardStage listeners).
     const handleCreateNew = () => {
         if (!pendingType) return;
         try {
@@ -203,6 +232,8 @@ export const ChatProviderGate = ({
         }
     };
 
+    // The widget declares the type; the preview's "Add new" connects an
+    // account later.
     const handleSkipForNow = () => {
         if (!pendingType) return;
         onChange({
@@ -211,228 +242,248 @@ export const ChatProviderGate = ({
         });
     };
 
-    const handleCancelPending = () => setPendingType(null);
+    const frame = "flex flex-col flex-1 min-h-0";
+    const scroller = "flex-1 min-h-0 overflow-y-auto flex flex-col gap-4 p-4";
+    // The message box stays at the bottom while the gate waits for a pick
+    // (layout rule 16); the chat starts once the data is picked.
+    const waitingComposer = (
+        <ChatComposer
+            value=""
+            disabled
+            placeholder="Pick which data to use above"
+            ariaLabel="Message"
+            hint="The chat starts once the data is picked."
+        />
+    );
+    const yourMessage = prompt ? (
+        <div className="flex flex-col items-end gap-1">
+            <ChatMessage role="you">{prompt}</ChatMessage>
+            {canEditPrompt && onPrompt ? (
+                <Button3
+                    size="sm"
+                    title="Edit description"
+                    onClick={() => {
+                        setPendingType(null);
+                        setDraft(prompt);
+                        onPrompt(null);
+                    }}
+                />
+            ) : null}
+        </div>
+    ) : null;
 
-    if (prompt && !showAll && !pendingType) {
+    if (pendingType) {
+        const name = pendingType.label || typeLabel(pendingType.type);
         return (
-            <div
-                data-testid="provider-question"
-                className={`absolute inset-0 z-10 overflow-y-auto ${bt.surface} flex flex-col gap-4 p-4`}
-            >
-                <div className="flex flex-col items-end gap-1">
-                    <span
-                        className={`text-xs font-semibold uppercase ${bt.accent}`}
-                    >
-                        You
-                    </span>
+            <div className={frame} data-testid="provider-setup">
+                <div className={scroller}>
+                    {yourMessage}
                     <div
-                        className={`max-w-full rounded-lg px-3 py-2 text-sm ${bt.raised} ${bt.text}`}
-                    >
-                        {prompt}
-                    </div>
-                </div>
-                <div className="flex flex-col gap-2">
-                    <div className={`text-sm font-semibold ${bt.text}`}>
-                        Which data should this widget use?
-                    </div>
-                    <p className={`text-xs ${bt.muted} leading-snug`}>
-                        The AI writes the widget for the kind of data you pick.
-                        You connect a specific account in the preview.
-                    </p>
-                    <div className="flex flex-row flex-wrap gap-2">
-                        {suggestions.map((opt) => {
-                            const notSetUp =
-                                countInstancesOfType(
-                                    opt.type,
-                                    opt.providerClass
-                                ) === 0;
-                            return (
-                                <Button3
-                                    key={`${opt.type}|${opt.providerClass}`}
-                                    size="sm"
-                                    onClick={() => handleTypeClick(opt)}
-                                    title={
-                                        notSetUp
-                                            ? `${
-                                                  opt.label || opt.type
-                                              } · not set up`
-                                            : opt.label || opt.type
-                                    }
-                                />
-                            );
-                        })}
-                        <Button3
-                            size="sm"
-                            onClick={() => onChange(NONE_SENTINEL)}
-                            title="No external provider"
-                        />
-                        <Button3
-                            size="sm"
-                            onClick={() => setShowAll(true)}
-                            title="Choose another…"
-                        />
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div
-            className={`absolute inset-0 z-10 overflow-y-auto ${bt.surface} backdrop-blur-sm flex flex-col`}
-        >
-            <div className="px-4 pt-4 pb-2 shrink-0">
-                <div className="flex items-center gap-2 mb-1">
-                    <FontAwesomeIcon
-                        icon="plug"
-                        className={`h-4 w-4 ${bt.accent}`}
-                    />
-                    <h2 className={`text-sm font-semibold ${bt.text}`}>
-                        Choose a provider type for this widget
-                    </h2>
-                </div>
-                {prompt && (
-                    <Button3
-                        size="sm"
-                        onClick={() => {
-                            setPendingType(null);
-                            setShowAll(false);
-                        }}
-                        title="← Back to the question"
-                    />
-                )}
-                <p className={`text-xs ${bt.muted} leading-snug`}>
-                    The AI will write code targeting the type you pick. After
-                    selecting, you'll bind a specific provider instance in the
-                    preview pane. Pick "No external provider" for self-contained
-                    widgets (clock, counter, etc.).
-                </p>
-            </div>
-
-            <div className="flex-1 px-4 pb-4 space-y-3 overflow-y-auto">
-                {pendingType && (
-                    <div
-                        className={`rounded-md border ${borderColor} ${bt.status.warning.bg} px-3 py-3 space-y-3`}
+                        role="alert"
+                        className={`flex flex-col gap-3 rounded-lg border p-4 ${bt.status.warning.bg} ${bt.status.warning.border}`}
                     >
                         <div
                             className={`text-sm font-semibold ${bt.status.warning.text}`}
                         >
-                            No {pendingType.type} providers configured yet
+                            {name} isn't set up yet
                         </div>
                         <p
-                            className={`text-xs ${bt.status.warning.text} leading-snug`}
+                            className={`text-sm leading-snug ${bt.status.warning.text}`}
                         >
-                            You haven't added any{" "}
-                            <span className="font-mono">
-                                {pendingType.type}
-                            </span>{" "}
-                            providers in Settings yet. You can create one now,
-                            or skip and add an instance later via the preview
-                            pane's "Add new" button.
+                            The widget can be written for {name} now, but it
+                            shows no data until you connect an account. Set one
+                            up now (this closes the builder and opens Settings),
+                            or skip and connect one later from the preview.
                         </p>
-                        <div className="flex flex-col gap-2">
-                            <button
-                                type="button"
+                        <div className="flex flex-row flex-wrap gap-2">
+                            <Button
+                                title={`Set up ${name}`}
+                                size="sm"
                                 onClick={handleCreateNew}
-                                className={`px-3 py-2 rounded text-xs ${bt.primaryFill} font-medium transition-colors text-left`}
-                            >
-                                Create new {pendingType.type} provider
-                                <span className="ml-2 text-[10px] opacity-80">
-                                    (closes builder, opens Settings)
-                                </span>
-                            </button>
-                            <button
-                                type="button"
+                            />
+                            <Button2
+                                title="Skip for now"
+                                size="sm"
                                 onClick={handleSkipForNow}
-                                className={`px-3 py-2 rounded text-xs ${bt.status.warning.solidBg} ${bt.status.warning.text} transition-colors text-left`}
-                            >
-                                Skip for now
-                                <span className="ml-2 text-[10px] opacity-80">
-                                    (proceed; widget will declare the type but
-                                    won't connect until you add an instance)
-                                </span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleCancelPending}
-                                className={`px-3 py-2 rounded text-xs ${bt.muted} hover:opacity-100 ${bt.hoverSurface} transition-colors text-left`}
-                            >
-                                Cancel — pick a different type
-                            </button>
+                            />
+                            <Button2
+                                title="Pick something else"
+                                size="sm"
+                                onClick={() => setPendingType(null)}
+                            />
                         </div>
                     </div>
-                )}
+                </div>
+                {waitingComposer}
+            </div>
+        );
+    }
 
-                {!pendingType && hasTypes && (
-                    <div>
-                        <div
-                            className={`text-[10px] uppercase tracking-wider ${bt.muted} mb-1.5`}
-                        >
-                            Provider types
-                        </div>
-                        <div
-                            className={`rounded-md border ${borderColor} ${bt.surface}`}
-                        >
-                            {typeOptions.map((opt) => (
-                                <button
-                                    key={`${opt.type}|${opt.providerClass}`}
-                                    type="button"
-                                    onClick={() => handleTypeClick(opt)}
-                                    className={`w-full flex items-center justify-between px-3 py-2 text-xs ${bt.text} ${bt.hoverSurface} transition-colors`}
-                                >
-                                    <span className="truncate text-left">
-                                        {opt.type}
-                                    </span>
-                                    <span className="ml-2 flex items-center gap-1 shrink-0">
-                                        <span
-                                            className={`text-[10px] px-1.5 py-0.5 rounded ${bt.raised} ${bt.text}`}
-                                        >
-                                            {opt.providerClass}
-                                        </span>
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {!pendingType && (
-                    <div>
-                        <div
-                            className={`text-[10px] uppercase tracking-wider ${bt.muted} mb-1.5`}
-                        >
-                            Or skip the provider
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => onChange(NONE_SENTINEL)}
-                            className={`w-full flex items-center justify-between px-3 py-2 text-xs ${bt.text} rounded-md border ${borderColor} ${bt.surface} ${bt.hoverSurface} transition-colors`}
-                        >
-                            <span className="flex items-center">
-                                <FontAwesomeIcon
-                                    icon="circle-minus"
-                                    className="h-3 w-3 mr-2 opacity-60"
+    if (!showAll && prompt) {
+        return (
+            <div className={frame} data-testid="provider-question">
+                <div className={scroller}>
+                    {yourMessage}
+                    <ChatMessage role="reply" label="Widget Builder">
+                        <div className="flex flex-col gap-3">
+                            <div className={`text-sm font-semibold ${bt.text}`}>
+                                Which data should this widget use?
+                            </div>
+                            <p className={`text-sm leading-snug ${bt.muted}`}>
+                                I'll write the widget for the kind of data you
+                                pick. You choose which account in the preview.
+                            </p>
+                            <div className="flex flex-row flex-wrap gap-2">
+                                {suggestions.map((opt) => {
+                                    const notSetUp =
+                                        countInstancesOfType(
+                                            opt.type,
+                                            opt.providerClass
+                                        ) === 0;
+                                    return (
+                                        <Button2
+                                            key={`${opt.type}|${opt.providerClass}`}
+                                            size="sm"
+                                            onClick={() => handleTypeClick(opt)}
+                                            title={
+                                                notSetUp
+                                                    ? `${opt.label} · not set up`
+                                                    : opt.label
+                                            }
+                                        />
+                                    );
+                                })}
+                                <Button2
+                                    size="sm"
+                                    onClick={() => onChange(NONE_SENTINEL)}
+                                    title="No external provider"
                                 />
-                                No external provider
-                                <span className="ml-2 text-[10px] opacity-50">
-                                    (clock, counter, static display, etc.)
-                                </span>
-                            </span>
-                        </button>
-                    </div>
-                )}
+                                <Button2
+                                    size="sm"
+                                    onClick={() => setShowAll(true)}
+                                    title="Choose another…"
+                                />
+                            </div>
+                        </div>
+                    </ChatMessage>
+                </div>
+                {waitingComposer}
+            </div>
+        );
+    }
 
-                {!pendingType && !hasTypes && (
-                    <div
-                        className={`rounded-md border ${borderColor} ${bt.status.warning.bg} px-3 py-2 text-[11px] ${bt.status.warning.text} leading-snug`}
+    if (!showAll) {
+        const send = (text) => {
+            const value = String(text || "").trim();
+            if (!value) return;
+            setDraft("");
+            onPrompt(value);
+        };
+        return (
+            <div className={frame} data-testid="provider-start">
+                <div className="flex-1 min-h-0 overflow-y-auto flex flex-col justify-center p-4">
+                    <EmptyState
+                        icon={
+                            <FontAwesomeIcon
+                                icon="wand-magic-sparkles"
+                                className="h-6 w-6"
+                            />
+                        }
+                        title="Describe the widget you want"
+                        description="Say what it should show. The builder asks which data to use, then writes it."
                     >
-                        No provider types available. The MCP catalog may not
-                        have loaded yet, or you may be running in an offline
-                        environment. Pick "No external provider" above for a
-                        self-contained widget, or close this modal and try again
-                        once catalogs load.
+                        <Button2
+                            size="sm"
+                            title="Pick the data first…"
+                            onClick={() => setShowAll(true)}
+                        />
+                    </EmptyState>
+                </div>
+                <ChatComposer
+                    value={draft}
+                    onChange={(v) => setDraft(v)}
+                    onSend={send}
+                    placeholder="e.g. My open GitHub pull requests"
+                    ariaLabel="Describe the widget"
+                />
+            </div>
+        );
+    }
+
+    const q = filter.trim().toLowerCase();
+    const shown = q
+        ? typeOptions.filter(
+              (o) =>
+                  o.label.toLowerCase().includes(q) ||
+                  o.type.toLowerCase().includes(q)
+          )
+        : typeOptions;
+    const canGoBack = !!prompt || !!onPrompt;
+
+    return (
+        <div className={frame} data-testid="provider-list">
+            <PanelHeader
+                title="Choose the data for this widget"
+                glyph="plug"
+                onBack={canGoBack ? () => setShowAll(false) : null}
+                backLabel={prompt ? "Back to the question" : "Back"}
+            />
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 p-4">
+                <p className={`text-sm leading-snug ${bt.muted}`}>
+                    The AI writes the widget for the kind of data you pick. You
+                    choose which account in the preview.
+                </p>
+                {hasTypes ? (
+                    <>
+                        <SearchInput
+                            value={filter}
+                            onChange={(v) => setFilter(v)}
+                            placeholder="Filter…"
+                            ariaLabel="Filter data sources"
+                        />
+                        <div className="flex flex-col gap-0.5">
+                            {shown.map((opt) => (
+                                <ListRow
+                                    key={`${opt.type}|${opt.providerClass}`}
+                                    icon={rowIcon(opt.icon)}
+                                    title={opt.label}
+                                    meta={setupLine(
+                                        countInstancesOfType(
+                                            opt.type,
+                                            opt.providerClass
+                                        )
+                                    )}
+                                    onClick={() => handleTypeClick(opt)}
+                                />
+                            ))}
+                            {shown.length === 0 ? (
+                                <p className={`text-sm px-2 py-2 ${bt.muted}`}>
+                                    Nothing matches “{filter.trim()}”.
+                                </p>
+                            ) : null}
+                        </div>
+                    </>
+                ) : (
+                    <div
+                        role="alert"
+                        className={`rounded-lg border p-4 text-sm leading-snug ${bt.status.warning.bg} ${bt.status.warning.border} ${bt.text}`}
+                    >
+                        No data sources are available yet — the catalog may
+                        still be loading, or you may be offline. Pick “No
+                        external provider” below for a self-contained widget, or
+                        close the builder and try again.
                     </div>
                 )}
+                <div
+                    className={`flex flex-col gap-0.5 pt-3 border-t ${bt.border}`}
+                >
+                    <ListRow
+                        icon="circle-minus"
+                        title="No external provider"
+                        meta="Clocks, counters, static displays"
+                        onClick={() => onChange(NONE_SENTINEL)}
+                    />
+                </div>
             </div>
         </div>
     );

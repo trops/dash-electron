@@ -19,6 +19,7 @@
 jest.mock("@trops/dash-react", () => {
     const React = require("react");
     return {
+        ...require("./dashReactTestStub"),
         ThemeContext: React.createContext({ currentTheme: {} }),
         FontAwesomeIcon: ({ icon }) =>
             React.createElement(

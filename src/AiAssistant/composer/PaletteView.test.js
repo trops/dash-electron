@@ -14,26 +14,21 @@
  *     existing e2e specs that click by name keep working
  */
 
-jest.mock(
-    "@trops/dash-react",
-    () => ({
-        MenuItem: ({ children, ...rest }) => (
-            <button type="button" {...rest}>
-                {children}
-            </button>
-        ),
-        ButtonIcon: ({ ariaLabel, onClick }) => (
-            <button type="button" aria-label={ariaLabel} onClick={onClick} />
-        ),
-    }),
-    { virtual: false }
-);
+jest.mock("@trops/dash-react", () => require("../dashReactTestStub"));
 
 jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { PaletteView } from "./PaletteView";
+
+// The category ChoiceMenu (a <select> in the stub) sits inside the
+// wrapper that carries the test id.
+function categorySelect() {
+    return screen
+        .getByTestId("composer-palette-category-filter")
+        .querySelector("select");
+}
 
 describe("PaletteView — search + category filter", () => {
     test("renders without a search query and shows entries across categories", () => {
@@ -83,10 +78,7 @@ describe("PaletteView — search + category filter", () => {
 
     test("category dropdown collapses to a single section", () => {
         render(<PaletteView onPick={() => {}} onCancel={() => {}} />);
-        fireEvent.change(
-            screen.getByTestId("composer-palette-category-filter"),
-            { target: { value: "input" } }
-        );
+        fireEvent.change(categorySelect(), { target: { value: "input" } });
         expect(
             screen.getByTestId("composer-palette-pick-SearchInput")
         ).toBeInTheDocument();
@@ -102,10 +94,7 @@ describe("PaletteView — search + category filter", () => {
     test("search + category filters combine (AND)", () => {
         render(<PaletteView onPick={() => {}} onCancel={() => {}} />);
         // "search" in the input category — should only match SearchInput.
-        fireEvent.change(
-            screen.getByTestId("composer-palette-category-filter"),
-            { target: { value: "input" } }
-        );
+        fireEvent.change(categorySelect(), { target: { value: "input" } });
         fireEvent.change(screen.getByTestId("composer-palette-search"), {
             target: { value: "search" },
         });
@@ -159,12 +148,15 @@ describe("PaletteView — search + category filter", () => {
     test("clicking an entry fires onPick with the component name", () => {
         const onPick = jest.fn();
         render(<PaletteView onPick={onPick} onCancel={() => {}} />);
-        // The testid lives on the wrapper div; the actual click
-        // handler is on the (mocked) MenuItem button inside it.
+        // The testid lives on the ListRow wrapper div; the click
+        // handler is on the row button inside it.
         // Native click events don't propagate downward, so we have
         // to dispatch on the inner button.
         const wrapper = screen.getByTestId("composer-palette-pick-Heading");
-        const button = wrapper.querySelector("button");
+        const button =
+            wrapper.tagName === "BUTTON"
+                ? wrapper
+                : wrapper.querySelector("button");
         fireEvent.click(button);
         expect(onPick).toHaveBeenCalledWith("Heading");
     });
