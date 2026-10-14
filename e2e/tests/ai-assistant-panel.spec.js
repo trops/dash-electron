@@ -51,7 +51,7 @@ test("AI Assistant panel opens, structure renders, closes cleanly", async () => 
         ).toBeVisible();
         // New Chat button.
         await expect(
-            window.getByRole("button", { name: "New Chat", exact: true })
+            window.getByRole("button", { name: "New chat", exact: true })
         ).toBeVisible();
         // The chat input.
         await expect(

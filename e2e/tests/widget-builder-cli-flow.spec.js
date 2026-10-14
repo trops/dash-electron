@@ -65,6 +65,17 @@ test("CLI-backed build flow does not tour the user's project (no Bash / Read / G
         ).toBeAttached({ timeout: 10000 });
     });
 
+    await test.step("describe the widget in the builder's message box", async () => {
+        // The Build pane opens on a message box; sending asks which data
+        // to use before the chat starts.
+        const input = window.getByRole("textbox", {
+            name: /describe the widget/i,
+        });
+        await expect(input).toBeVisible({ timeout: 10000 });
+        await input.fill("build a tiny clock widget — keep it self-contained");
+        await window.getByRole("button", { name: "Send", exact: true }).click();
+    });
+
     await test.step("skip the provider (no-provider branch)", async () => {
         // The CLI lockdown flags apply to all three prompt branches,
         // so picking "skip the provider" still spawns the CLI with
@@ -76,19 +87,11 @@ test("CLI-backed build flow does not tour the user's project (no Bash / Read / G
             .first();
         await expect(skipBtn).toBeVisible({ timeout: 10000 });
         await skipBtn.click();
-        // Confirmation: the gate dismisses and the chat input becomes
-        // available.
+        // Confirmation: the gate dismisses and the chat starts with the
+        // description as its first message.
         await expect(
             window.getByRole("textbox", { name: /type a message/i })
         ).toBeVisible({ timeout: 5000 });
-    });
-
-    await test.step("send a build message", async () => {
-        const input = window.getByRole("textbox", {
-            name: /type a message/i,
-        });
-        await input.fill("build a tiny clock widget — keep it self-contained");
-        await window.getByRole("button", { name: "Send", exact: true }).click();
     });
 
     await test.step("wait for the AI response (~45s budget for real CLI call)", async () => {

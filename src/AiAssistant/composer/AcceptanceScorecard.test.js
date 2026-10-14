@@ -6,6 +6,7 @@
  * a known-good one. Smoke-tests the React rendering too.
  */
 jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
+jest.mock("@trops/dash-react", () => require("../dashReactTestStub"));
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";

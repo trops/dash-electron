@@ -35,7 +35,7 @@ describe("WidgetBuilderModal — in-builder toolbar (Open in Editor / Save Draft
     });
 
     test('"Open in editor" appears AFTER the Console tab in source order (toolbar placement)', () => {
-        const consoleTabPos = source.indexOf('data-testid="tab-console"');
+        const consoleTabPos = source.indexOf('testId="tab-console"');
         const openEditorPos = source.indexOf(
             'data-testid="builder-open-editor"'
         );

@@ -7,6 +7,12 @@
  * lets the user clear or filter to errors only.
  */
 import React, { useMemo, useState } from "react";
+import {
+    Button3,
+    Checkbox,
+    EmptyState,
+    FontAwesomeIcon,
+} from "@trops/dash-react";
 import { useBuilderTheme } from "./useBuilderTheme";
 
 function severityClasses(sev, bt) {
@@ -80,33 +86,39 @@ export const WidgetConsolePane = ({
                             </>
                         ) : null}
                     </span>
-                    <label
-                        className={`flex items-center gap-1.5 ${bt.muted} cursor-pointer hover:opacity-100`}
-                    >
-                        <input
-                            type="checkbox"
-                            checked={errorsOnly}
-                            onChange={(e) => setErrorsOnly(e.target.checked)}
-                            className="h-3 w-3"
-                        />
-                        Errors only
-                    </label>
+                    <Checkbox
+                        label="Errors only"
+                        checked={errorsOnly}
+                        onChange={(checked) => setErrorsOnly(checked)}
+                    />
                 </div>
-                <button
+                <Button3
+                    title="Clear"
+                    size="sm"
                     onClick={onClear}
-                    className={`px-2 py-1 text-xs rounded ${bt.surface} ${bt.hoverSurface} ${bt.text} transition-colors`}
-                    data-testid="console-clear"
-                >
-                    Clear
-                </button>
+                    testId="console-clear"
+                />
             </div>
             {filtered.length === 0 ? (
-                <div
-                    className={`flex-1 flex items-center justify-center ${bt.muted} text-xs`}
-                >
-                    {events.length === 0
-                        ? "No console output yet — interact with the preview to see logs."
-                        : "No errors. Toggle off 'Errors only' to see all output."}
+                <div className="flex-1 flex items-center justify-center p-4">
+                    <EmptyState
+                        icon={
+                            <FontAwesomeIcon
+                                icon="terminal"
+                                className="h-6 w-6"
+                            />
+                        }
+                        title={
+                            events.length === 0
+                                ? "No console output yet"
+                                : "No errors"
+                        }
+                        description={
+                            events.length === 0
+                                ? "Interact with the preview to see its logs here."
+                                : "Turn off Errors only to see all output."
+                        }
+                    />
                 </div>
             ) : (
                 <div className="flex-1 overflow-y-auto font-mono text-xs">
@@ -123,12 +135,12 @@ export const WidgetConsolePane = ({
                                 <span className={`${bt.muted} flex-shrink-0`}>
                                     {formatTime(evt.timestamp)}
                                 </span>
-                                <span className="uppercase text-[10px] font-semibold flex-shrink-0">
+                                <span className="uppercase font-semibold flex-shrink-0">
                                     {evt.severity}
                                 </span>
                                 {evt.source && evt.source !== "console" && (
                                     <span
-                                        className={`text-[10px] ${bt.muted} flex-shrink-0`}
+                                        className={`${bt.muted} flex-shrink-0`}
                                     >
                                         ({evt.source})
                                     </span>
@@ -143,15 +155,17 @@ export const WidgetConsolePane = ({
                                 </div>
                                 {evt.severity === "error" &&
                                     typeof onSendErrorToAI === "function" && (
-                                        <button
-                                            type="button"
-                                            onClick={() => onSendErrorToAI(evt)}
-                                            className={`flex-shrink-0 text-[10px] ${bt.accent} hover:opacity-80 underline cursor-pointer`}
-                                            data-testid="console-send-to-ai"
-                                            title="Push this error into the chat as a fix request"
-                                        >
-                                            Send error to AI
-                                        </button>
+                                        <div className="flex-shrink-0 font-sans">
+                                            <Button3
+                                                title="Send error to AI"
+                                                size="sm"
+                                                onClick={() =>
+                                                    onSendErrorToAI(evt)
+                                                }
+                                                testId="console-send-to-ai"
+                                                tooltip="Push this error into the chat as a fix request"
+                                            />
+                                        </div>
                                     )}
                             </div>
                         </div>

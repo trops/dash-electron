@@ -18,25 +18,9 @@
  */
 
 // @trops/dash-react ships ESM in dist/, which Jest can't parse via the
-// default transformIgnorePatterns. The dash-react primitives used by
-// PaletteView (MenuItem, ButtonIcon) only need to render *something*
-// for this test — the assertions are on the widget-name input which
-// lives in ComposerPaneV2 itself, not in the palette. A pair of
-// pass-through stubs is enough.
-jest.mock(
-    "@trops/dash-react",
-    () => ({
-        MenuItem: ({ children, ...rest }) => (
-            <button type="button" {...rest}>
-                {children}
-            </button>
-        ),
-        ButtonIcon: ({ ariaLabel, onClick }) => (
-            <button type="button" aria-label={ariaLabel} onClick={onClick} />
-        ),
-    }),
-    { virtual: false }
-);
+// default transformIgnorePatterns. The shared stub renders plain
+// elements (inputs, buttons) that carry the same test ids.
+jest.mock("@trops/dash-react", () => require("../dashReactTestStub"));
 
 jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
 import "@testing-library/jest-dom";

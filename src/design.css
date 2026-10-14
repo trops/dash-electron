@@ -27,6 +27,15 @@ body {
     background: var(--raised) !important;
     -webkit-backdrop-filter: var(--blur);
     backdrop-filter: var(--blur);
+    border-color: var(--hairline-strong) !important;
+}
+/* Light mode: translucent white glass vanishes into a light dashboard, so the
+   docks get the opaque surface and a soft shadow on their leading edge. */
+[data-design="aurora"][data-mode="light"] .chrome-glass,
+[data-mode="light"] [data-design="aurora"] .chrome-glass,
+[data-design="aurora"] [data-mode="light"] .chrome-glass {
+    background: var(--solid) !important;
+    box-shadow: -8px 0 24px rgba(15, 18, 30, 0.08);
 }
 
 /* Chrome rail — the thin right icon rail (AI / Bots toggles). Seamless with the
@@ -58,4 +67,9 @@ body {
     ).overflow-clip:is(.h-full, .w-full) {
     background-color: transparent !important;
     background-image: none !important;
+}
+
+/* Composer cells sit one step up from the canvas well (not pure black). */
+[data-design="aurora"] .composer-cell {
+    background: color-mix(in srgb, var(--text) 5%, var(--solid)) !important;
 }

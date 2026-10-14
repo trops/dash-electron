@@ -1,11 +1,76 @@
 /**
+ * @jest-environment jsdom
+ *
  * Drafts list summary — the first thing the USER asked for. The builder's
  * automatic greeting ("Hi, I'd like to build a new widget.") is sent as a
  * hidden user message, so it must be skipped.
  */
-jest.mock("@trops/dash-react", () => ({}), { virtual: true });
+jest.mock("@trops/dash-react", () => require("./dashReactTestStub"));
+jest.mock("./useBuilderTheme", () => require("./builderThemeStub"));
 
-import { firstUserMessageExcerpt } from "./WidgetDraftsList";
+import React from "react";
+import "@testing-library/jest-dom";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { WidgetDraftsList, firstUserMessageExcerpt } from "./WidgetDraftsList";
+
+describe("WidgetDraftsList", () => {
+    const draft = {
+        id: "d1",
+        name: "Clock",
+        updatedAt: Date.now(),
+        packageDir: "/tmp/d1",
+        chatHistory: [{ role: "user", content: "A clock" }],
+    };
+    let api;
+    beforeEach(() => {
+        api = {
+            list: jest.fn().mockResolvedValue([draft]),
+            delete: jest.fn().mockResolvedValue(true),
+        };
+        window.mainApi = { drafts: api };
+    });
+    afterEach(() => {
+        delete window.mainApi;
+    });
+
+    it("shows an empty state when there are no drafts", async () => {
+        api.list.mockResolvedValue([]);
+        render(<WidgetDraftsList onStartNew={() => {}} />);
+        expect(await screen.findByText("No drafts yet")).toBeInTheDocument();
+    });
+
+    it("lists drafts with Resume, and Build new widget starts one", async () => {
+        const onResume = jest.fn();
+        const onStartNew = jest.fn();
+        render(
+            <WidgetDraftsList onResume={onResume} onStartNew={onStartNew} />
+        );
+        expect(await screen.findByTestId("drafts-row")).toHaveTextContent(
+            "Clock"
+        );
+        fireEvent.click(screen.getByTestId("drafts-resume"));
+        expect(onResume).toHaveBeenCalledWith(draft);
+        fireEvent.click(screen.getByTestId("drafts-start-new"));
+        expect(onStartNew).toHaveBeenCalled();
+    });
+
+    it("asks before deleting a draft", async () => {
+        render(<WidgetDraftsList onStartNew={() => {}} />);
+        fireEvent.click(await screen.findByTestId("drafts-delete"));
+        expect(screen.getByText("Delete?")).toBeInTheDocument();
+        fireEvent.click(screen.getByTestId("drafts-delete-confirm"));
+        await waitFor(() => expect(api.delete).toHaveBeenCalledWith("d1"));
+        // The list reloads after the delete.
+        await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
+    });
+
+    it("disables Open in editor and Install until the draft has files", async () => {
+        api.list.mockResolvedValue([{ ...draft, packageDir: null }]);
+        render(<WidgetDraftsList onStartNew={() => {}} />);
+        expect(await screen.findByTestId("drafts-install")).toBeDisabled();
+        expect(screen.getByTestId("drafts-open-editor")).toBeDisabled();
+    });
+});
 
 describe("firstUserMessageExcerpt", () => {
     it("skips the hidden greeting", () => {

@@ -52,10 +52,13 @@ test("Settings → General renders + Debug Mode toggle works", async () => {
     });
 
     await test.step("App Info panel shows expected fields", async () => {
+        // App info: the App ID row, and the raw settings behind a
+        // disclosure (Version only shows when the app reports one).
         await expect(window.getByText("App ID")).toBeVisible();
-        await expect(window.getByText("Version")).toBeVisible();
-        await expect(window.getByText("Settings File")).toBeVisible();
-        await expect(window.getByText("@trops/dash-electron")).toBeVisible();
+        await expect(
+            window.getByText("@trops/dash-electron").first()
+        ).toBeVisible();
+        await expect(window.getByText("Show raw settings")).toBeVisible();
     });
 
     await test.step("Debug Mode toggle flips state", async () => {

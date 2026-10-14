@@ -22,6 +22,7 @@
  */
 
 import React, { useState } from "react";
+import { Button3, ButtonIcon3 } from "@trops/dash-react";
 import { getComponentSchema } from "../dashReactComponentSchemas";
 import {
     findCellLocation,
@@ -38,44 +39,53 @@ import { useBuilderTheme } from "../useBuilderTheme";
  * components visually. Hover/selection ratchet up the intensity
  * so the focused cell + its ancestors stand out.
  *
- * Kept narrow: we only color the LEFT BORDER and a tint on the
+ * Kept narrow: we only color a LEFT STRIPE and a tint on the
  * container header. The cell body stays neutral so component
- * labels and controls remain readable.
+ * labels and controls remain readable. Every hue is a theme or
+ * status token, so the stripe follows light and dark themes.
  */
-// Left-border hues are fixed (they read on light and dark); the header
-// tint and label colour come from the builder theme.
 const categoryColors = (bt) => ({
     layout: {
-        border: "border-l-purple-500",
-        headerBg: `${bt.tint}`,
+        stripe: bt.tk("bg-secondary-medium"),
+        headerBg: "",
         labelText: `${bt.accent}`,
     },
     display: {
-        border: "border-l-sky-500",
+        stripe: bt.status.info.solidBg,
         headerBg: `${bt.status.info.bg}`,
         labelText: `${bt.status.info.text}`,
     },
     input: {
-        border: "border-l-emerald-500",
+        stripe: bt.status.success.solidBg,
         headerBg: `${bt.status.success.bg}`,
         labelText: `${bt.status.success.text}`,
     },
     action: {
-        border: "border-l-amber-500",
+        stripe: bt.status.warning.solidBg,
         headerBg: `${bt.status.warning.bg}`,
         labelText: `${bt.status.warning.text}`,
     },
     feedback: {
-        border: "border-l-pink-500",
+        stripe: bt.status.error.solidBg,
         headerBg: `${bt.status.error.bg}`,
         labelText: `${bt.status.error.text}`,
     },
 });
 const fallbackColor = (bt) => ({
-    border: "border-l-gray-600",
+    stripe: bt.raised,
     headerBg: `${bt.surface}`,
     labelText: `${bt.text}`,
 });
+
+// The category hue as a thin stripe on the cell's left edge.
+function CategoryStripe({ color }) {
+    return (
+        <span
+            aria-hidden="true"
+            className={`absolute left-0 inset-y-0 w-1 rounded-l ${color.stripe}`}
+        />
+    );
+}
 
 function getCategoryColor(componentType, bt) {
     const schema = getComponentSchema(componentType);
@@ -188,12 +198,14 @@ function GridNode({
     onDragLeaveCell,
     onDropCell,
 }) {
-    const bt = useBuilderTheme();
     const targetGrid = grid.grids[gridId];
     if (!targetGrid) return null;
+    // No frame of its own: the root grid sits in the pane's canvas
+    // well, and a nested grid sits inside its container cell — a
+    // border here would box a box.
     return (
         <div
-            className={`border ${bt.border} rounded p-2 flex flex-col gap-2 h-full w-full min-h-0 min-w-0`}
+            className="flex flex-col gap-2 h-full w-full min-h-0 min-w-0"
             data-testid={`composer-grid-${gridId}`}
         >
             {targetGrid.rows.map((row, rowIdx) => {
@@ -240,27 +252,27 @@ function GridNode({
                                 />
                             ))}
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => onRemoveRow(gridId, rowIdx)}
-                            disabled={targetGrid.rows.length <= 1}
-                            className={`text-xs ${bt.muted} disabled:opacity-30 px-1`}
-                            title="Remove row"
-                            data-testid={`composer-grid-${gridId}-remove-row-${rowIdx}`}
-                        >
-                            ×
-                        </button>
+                        <span className="dr-row-actions self-center shrink-0">
+                            <ButtonIcon3
+                                icon="xmark"
+                                onClick={() => onRemoveRow(gridId, rowIdx)}
+                                disabled={targetGrid.rows.length <= 1}
+                                ariaLabel="Remove row"
+                                size="sm"
+                                testId={`composer-grid-${gridId}-remove-row-${rowIdx}`}
+                            />
+                        </span>
                     </div>
                 );
             })}
-            <button
-                type="button"
+            <Button3
+                title="+ Add row"
                 onClick={() => onAddRow(gridId)}
-                className={`shrink-0 w-full text-sm ${bt.accent} hover:opacity-80 border border-dashed ${bt.border} rounded py-2`}
-                data-testid={`composer-grid-${gridId}-add-row`}
-            >
-                + Row
-            </button>
+                size="sm"
+                block
+                className="shrink-0"
+                testId={`composer-grid-${gridId}-add-row`}
+            />
         </div>
     );
 }
@@ -460,29 +472,17 @@ function CellNode({
                 <button
                     type="button"
                     onClick={() => onRequestPalette(cell.id)}
-                    className={`flex-1 py-4 text-sm ${bt.muted} hover:opacity-80`}
+                    className={`flex-1 py-4 text-sm rounded ${bt.muted} ${bt.hoverSurface}`}
                     data-testid={`composer-cell-${cell.id}-add`}
                 >
                     + Add component
                 </button>
-                <button
-                    type="button"
-                    onClick={() => onSplitCell(cell.id)}
-                    className={`px-2 text-xs ${bt.muted} hover:opacity-80 border-l ${bt.border}`}
-                    title="Add column to the right"
-                    data-testid={`composer-cell-${cell.id}-split`}
-                >
-                    +
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onRemoveCell(cell.id)}
-                    className={`px-2 text-xs ${bt.muted} border-l ${bt.border}`}
-                    title="Remove cell"
-                    data-testid={`composer-cell-${cell.id}-remove`}
-                >
-                    ×
-                </button>
+                <CellActions
+                    cellId={cell.id}
+                    onSplitCell={onSplitCell}
+                    onRemoveCell={onRemoveCell}
+                    removeLabel="Remove cell"
+                />
             </div>
         );
     }
@@ -496,37 +496,26 @@ function CellNode({
         return (
             <div
                 {...dragProps}
-                className={`relative border border-l-4 ${color.border} ${selectionClass} rounded p-3 ${bt.surface} ${bt.hoverSurface} ${draggingOpacity}${fillClass}`}
+                className={`relative border ${selectionClass} rounded pl-4 pr-3 py-3 composer-cell ${bt.surface} ${draggingOpacity}${fillClass}`}
                 data-testid={`composer-cell-${cell.id}`}
             >
+                <CategoryStripe color={color} />
                 {dropIndicator}
                 <div className="flex items-center justify-between gap-2">
                     <button
                         type="button"
                         onClick={() => onSelectCell(cell.id)}
-                        className={`text-sm ${color.labelText} font-mono truncate hover:opacity-100 text-left flex-1`}
+                        className={`text-sm ${color.labelText} font-mono truncate text-left flex-1`}
                         data-testid={`composer-cell-${cell.id}-select`}
                     >
                         {cell.type}
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => onSplitCell(cell.id)}
-                        className={`text-xs ${bt.muted} hover:opacity-80 px-1`}
-                        title="Add column to the right"
-                        data-testid={`composer-cell-${cell.id}-split`}
-                    >
-                        +
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onRemoveCell(cell.id)}
-                        className={`text-xs ${bt.muted} px-1`}
-                        title="Remove cell"
-                        data-testid={`composer-cell-${cell.id}-remove`}
-                    >
-                        ×
-                    </button>
+                    <CellActions
+                        cellId={cell.id}
+                        onSplitCell={onSplitCell}
+                        onRemoveCell={onRemoveCell}
+                        removeLabel="Remove cell"
+                    />
                 </div>
             </div>
         );
@@ -539,41 +528,30 @@ function CellNode({
         return (
             <div
                 {...dragProps}
-                className={`relative border border-l-4 ${color.border} ${selectionClass} rounded ${bt.surface} ${draggingOpacity} h-full min-h-0 flex flex-col`}
+                className={`relative border ${selectionClass} rounded composer-cell ${bt.surface} ${draggingOpacity} h-full min-h-0 flex flex-col`}
                 data-testid={`composer-cell-${cell.id}`}
             >
+                <CategoryStripe color={color} />
                 {dropIndicator}
                 <div
-                    className={`shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-b ${bt.border} ${color.headerBg}`}
+                    className={`shrink-0 flex items-center justify-between gap-2 pl-4 pr-3 py-2 border-b ${bt.border} ${color.headerBg}`}
                 >
                     <button
                         type="button"
                         onClick={() => onSelectCell(cell.id)}
-                        className={`text-sm ${color.labelText} font-mono truncate hover:opacity-100 text-left flex-1`}
+                        className={`text-sm ${color.labelText} font-mono truncate text-left flex-1`}
                         data-testid={`composer-cell-${cell.id}-select`}
                     >
                         {cell.type}
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => onSplitCell(cell.id)}
-                        className={`text-xs ${bt.muted} hover:opacity-80 px-1`}
-                        title="Add column to the right"
-                        data-testid={`composer-cell-${cell.id}-split`}
-                    >
-                        +
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onRemoveCell(cell.id)}
-                        className={`text-xs ${bt.muted} px-1`}
-                        title="Remove container (and everything inside)"
-                        data-testid={`composer-cell-${cell.id}-remove`}
-                    >
-                        ×
-                    </button>
+                    <CellActions
+                        cellId={cell.id}
+                        onSplitCell={onSplitCell}
+                        onRemoveCell={onRemoveCell}
+                        removeLabel="Remove container (and everything inside)"
+                    />
                 </div>
-                <div className="p-2 flex-1 min-h-0 flex flex-col">
+                <div className="pl-4 pr-3 py-3 flex-1 min-h-0 flex flex-col">
                     <GridNode
                         grid={grid}
                         gridId={cell.gridId}
@@ -597,4 +575,26 @@ function CellNode({
         );
     }
     return null;
+}
+
+// Per-cell actions: add a column to the right, remove the cell.
+function CellActions({ cellId, onSplitCell, onRemoveCell, removeLabel }) {
+    return (
+        <div className="dr-row-actions flex items-center gap-1 shrink-0 self-center">
+            <ButtonIcon3
+                icon="plus"
+                onClick={() => onSplitCell(cellId)}
+                ariaLabel="Add column to the right"
+                size="sm"
+                testId={`composer-cell-${cellId}-split`}
+            />
+            <ButtonIcon3
+                icon="xmark"
+                onClick={() => onRemoveCell(cellId)}
+                ariaLabel={removeLabel}
+                size="sm"
+                testId={`composer-cell-${cellId}-remove`}
+            />
+        </div>
+    );
 }

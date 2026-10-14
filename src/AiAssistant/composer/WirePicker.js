@@ -1,4 +1,11 @@
 import React, { useMemo, useState } from "react";
+import {
+    Button,
+    Button3,
+    ButtonIcon3,
+    InputText,
+    ListRow,
+} from "@trops/dash-react";
 import { PROVIDER_API_REGISTRY } from "../providerApiRegistry";
 import { useMcpTools } from "../mcpToolsQuery";
 import { scoreMethodList } from "./wireMatching";
@@ -138,23 +145,23 @@ function ProviderTypeStep({
     // fetch.
     if (wirable.status === "loading" && wirable.types.length === 0) {
         return (
-            <div
-                className={`text-sm px-2 py-1.5 rounded border border-dashed ${bt.border} ${bt.surface} ${bt.muted}`}
+            <p
+                className={`text-sm ${bt.muted}`}
                 data-testid={`composer-wire-loading-${propName}`}
             >
                 Loading provider catalog…
-            </div>
+            </p>
         );
     }
     if (wirable.types.length === 0) {
         return (
             <div
-                className={`text-sm px-2 py-1.5 rounded border border-dashed ${bt.border} ${bt.surface} ${bt.muted}`}
+                className={`flex flex-col gap-1 text-sm ${bt.muted}`}
                 data-testid={`composer-wire-empty-${propName}`}
             >
                 No wirable provider types available.
                 {wirable.error && (
-                    <span className={`block ${bt.status.error.icon} mt-1`}>
+                    <span className={`${bt.status.error.icon}`}>
                         {wirable.error}
                     </span>
                 )}
@@ -162,81 +169,62 @@ function ProviderTypeStep({
         );
     }
     return (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-3">
             {pipeSources.length > 0 && onPipe && (
                 <div
-                    className={`rounded border ${bt.status.warning.border} ${bt.status.warning.bg} p-2`}
+                    className="flex flex-col gap-2"
                     data-testid={`composer-pipe-sources-${propName}`}
                 >
-                    <div
-                        className={`text-xs uppercase tracking-wide ${bt.status.warning.icon} mb-1.5`}
-                    >
+                    <h3 className={`text-sm font-semibold ${bt.text}`}>
                         Reuse an existing wire
-                    </div>
+                    </h3>
                     {/* Cap at ~3 visible rows with scroll for the
                         rest. Without this a widget with lots of
                         wired callbacks would push the provider list
                         below the fold and dominate the inspector. */}
-                    <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                    <div className="flex flex-col max-h-40 overflow-y-auto">
                         {pipeSources.map((src) => (
-                            <button
+                            <ListRow
                                 key={`${src.nodeId}:${src.propName}`}
-                                type="button"
+                                title={src.label}
+                                mono
                                 onClick={() => onPipe(src.nodeId, src.propName)}
-                                className={`text-left text-xs px-2 py-1.5 rounded border ${bt.status.warning.border} ${bt.status.warning.bg} ${bt.status.warning.hoverBg} ${bt.status.warning.text} hover:opacity-100 transition-colors`}
-                                data-testid={`composer-pipe-source-${propName}-${src.nodeId}-${src.propName}`}
-                            >
-                                <span className="font-mono">{src.label}</span>
-                            </button>
+                                testId={`composer-pipe-source-${propName}-${src.nodeId}-${src.propName}`}
+                            />
                         ))}
                     </div>
                 </div>
             )}
             <div
-                className={`rounded border ${bt.border} ${bt.surface} p-1 max-h-96 overflow-y-auto`}
+                className={`flex flex-col gap-2 max-h-96 overflow-y-auto ${
+                    pipeSources.length > 0 && onPipe
+                        ? `pt-3 border-t ${bt.border}`
+                        : ""
+                }`}
                 data-testid={`composer-wire-providers-${propName}`}
             >
-                <div
-                    className={`text-xs uppercase tracking-wide ${bt.muted} px-1 mb-1`}
-                >
+                <h3 className={`text-sm font-semibold ${bt.text}`}>
                     {pipeSources.length > 0 && onPipe
                         ? "Or pick a new provider"
                         : "Pick a provider type"}
-                </div>
+                </h3>
                 <div className="flex flex-col">
                     {wirable.types.map((t) => (
-                        <button
+                        <ListRow
                             key={`${t.kind}:${t.id}:${t.instanceName || ""}`}
-                            type="button"
+                            title={t.name}
+                            meta={[
+                                t.kind,
+                                t.hasConfiguredInstance ? "configured" : null,
+                                t.description,
+                            ]
+                                .filter(Boolean)
+                                .join(" · ")}
                             onClick={() => onPick(t)}
-                            className={`text-left text-sm px-2 py-1.5 rounded ${bt.hoverTint} ${bt.text} hover:opacity-80`}
-                            data-testid={`composer-wire-provider-${propName}-${
+                            testId={`composer-wire-provider-${propName}-${
                                 t.instanceName || t.id
                             }`}
-                        >
-                            <div className="flex items-center justify-between gap-2">
-                                <span className="truncate">{t.name}</span>
-                                <span
-                                    className={`text-xs ${bt.muted} shrink-0`}
-                                >
-                                    {t.kind}
-                                    {t.hasConfiguredInstance && (
-                                        <span
-                                            className={`ml-1 ${bt.status.success.icon}`}
-                                        >
-                                            ✓ configured
-                                        </span>
-                                    )}
-                                </span>
-                            </div>
-                            {t.description && (
-                                <div
-                                    className={`text-xs ${bt.muted} mt-0.5 line-clamp-2`}
-                                >
-                                    {t.description}
-                                </div>
-                            )}
-                        </button>
+                        />
                     ))}
                 </div>
             </div>
@@ -289,7 +277,7 @@ function CredentialMethodStep({
 
     return (
         <div
-            className={`rounded border ${bt.border} ${bt.surface} p-1`}
+            className="flex flex-col gap-2"
             data-testid={`composer-wire-methods-${propName}`}
         >
             <PickerHeader
@@ -298,47 +286,77 @@ function CredentialMethodStep({
                 onBack={onBack}
             />
             {ranked.length === 0 ? (
-                <div className={`text-sm ${bt.muted} px-2 py-1`}>
+                <p className={`text-sm ${bt.muted}`}>
                     No methods on this provider return a shape compatible with{" "}
-                    <code className={`${bt.muted}`}>{expectedType}</code>.
-                </div>
+                    <code>{expectedType}</code>.
+                </p>
             ) : (
                 <div className="flex flex-col">
                     {ranked.map(({ name, spec, score }) => (
-                        <button
+                        <ListRow
                             key={name}
-                            type="button"
+                            title={name}
+                            mono
+                            meta={[
+                                spec.returns &&
+                                    spec.returns.type &&
+                                    truncate(spec.returns.type, 32),
+                                score === 1 ? "approximate match" : null,
+                                spec.desc,
+                            ]
+                                .filter(Boolean)
+                                .join(" · ")}
                             onClick={() => onPick(name)}
-                            className={`text-left text-sm px-2 py-1.5 rounded ${bt.hoverTint} ${bt.text} hover:opacity-80`}
-                            data-testid={`composer-wire-method-${propName}-${name}`}
-                            title={spec.desc || ""}
-                        >
-                            <div className="flex items-center justify-between">
-                                <span className="font-mono">{name}</span>
-                                <span className={`text-xs ${bt.muted} ml-2`}>
-                                    {spec.returns &&
-                                        spec.returns.type &&
-                                        truncate(spec.returns.type, 32)}
-                                    {score === 1 && (
-                                        <span
-                                            className={`ml-1 ${bt.status.warning.icon}`}
-                                        >
-                                            ~
-                                        </span>
-                                    )}
-                                </span>
-                            </div>
-                            {spec.desc && (
-                                <div
-                                    className={`text-xs ${bt.muted} mt-0.5 line-clamp-2`}
-                                >
-                                    {spec.desc}
-                                </div>
-                            )}
-                        </button>
+                            testId={`composer-wire-method-${propName}-${name}`}
+                        />
                     ))}
                 </div>
             )}
+        </div>
+    );
+}
+
+// One clickable row per MCP tool (live list or the static catalog).
+function ToolRows({ propName, tools, onPick, testId }) {
+    return (
+        <div className="flex flex-col" data-testid={testId}>
+            {tools.map((tool) => (
+                <ListRow
+                    key={tool.name}
+                    title={tool.name}
+                    mono
+                    meta={tool.description || null}
+                    onClick={() => onPick(tool.name)}
+                    testId={`composer-wire-method-${propName}-${tool.name}`}
+                />
+            ))}
+        </div>
+    );
+}
+
+// Free-text tool name + Wire, for tools the picker can't list.
+function ToolNameInput({ propName, value, onChange, onPick, placeholder }) {
+    return (
+        <div className="flex items-center gap-2">
+            <InputText
+                value={value}
+                onChange={(v) => onChange(v)}
+                placeholder={placeholder}
+                ariaLabel="Tool name"
+                className="flex-1 min-w-0"
+                inputClassName="font-mono"
+                data-testid={`composer-wire-tool-input-${propName}`}
+            />
+            <Button
+                title="Wire"
+                onClick={() => {
+                    if (value.trim()) onPick(value.trim());
+                }}
+                disabled={!value.trim()}
+                size="sm"
+                className="shrink-0"
+                testId={`composer-wire-tool-confirm-${propName}`}
+            />
         </div>
     );
 }
@@ -391,7 +409,7 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
 
     return (
         <div
-            className={`rounded border ${bt.border} ${bt.surface} p-1`}
+            className="flex flex-col gap-2"
             data-testid={`composer-wire-methods-${propName}`}
         >
             <PickerHeader
@@ -401,172 +419,79 @@ function McpMethodStep({ propName, type, providers, onBack, onPick }) {
             />
             {!configuredInstance && knownTools && (
                 <>
-                    <div
-                        className={`text-xs ${bt.status.warning.icon} px-2 py-1`}
-                    >
+                    <p className={`text-xs ${bt.status.warning.icon}`}>
                         Approximate — configure a {type.name} provider in
                         Settings → Providers for the live tool list.
-                    </div>
-                    <div
-                        className="flex flex-col"
-                        data-testid={`composer-wire-known-tools-${propName}`}
-                    >
-                        {knownTools.map((tool) => (
-                            <button
-                                key={tool.name}
-                                type="button"
-                                onClick={() => onPick(tool.name)}
-                                className={`text-left text-sm px-2 py-1.5 rounded ${bt.hoverTint} ${bt.text} hover:opacity-80`}
-                                data-testid={`composer-wire-method-${propName}-${tool.name}`}
-                                title={tool.description || ""}
-                            >
-                                <span className="font-mono">{tool.name}</span>
-                                {tool.description && (
-                                    <div
-                                        className={`text-xs ${bt.muted} mt-0.5 line-clamp-2`}
-                                    >
-                                        {tool.description}
-                                    </div>
-                                )}
-                            </button>
-                        ))}
-                    </div>
+                    </p>
+                    <ToolRows
+                        propName={propName}
+                        tools={knownTools}
+                        onPick={onPick}
+                        testId={`composer-wire-known-tools-${propName}`}
+                    />
                 </>
             )}
             {!configuredInstance && !knownTools && (
-                <div className={`text-sm ${bt.muted} px-2 py-1 space-y-1`}>
-                    <div>
+                <div className={`flex flex-col gap-2 text-sm ${bt.muted}`}>
+                    <p>
                         No configured {type.name} provider and no static tool
                         list available. Configure one in Settings → Providers to
                         enumerate, or wire to a known tool name below.
-                    </div>
-                    <div className="flex gap-1">
-                        <input
-                            type="text"
-                            value={freeText}
-                            onChange={(e) => setFreeText(e.target.value)}
-                            placeholder="tool name"
-                            className={`flex-1 px-1.5 py-0.5 text-sm font-mono ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
-                            data-testid={`composer-wire-tool-input-${propName}`}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (freeText.trim()) onPick(freeText.trim());
-                            }}
-                            disabled={!freeText.trim()}
-                            className={`px-2 py-0.5 text-sm rounded ${bt.primaryFill}`}
-                            data-testid={`composer-wire-tool-confirm-${propName}`}
-                        >
-                            Wire
-                        </button>
-                    </div>
+                    </p>
+                    <ToolNameInput
+                        propName={propName}
+                        value={freeText}
+                        onChange={setFreeText}
+                        onPick={onPick}
+                        placeholder="tool name"
+                    />
                 </div>
             )}
             {configuredInstance && status === "loading" && (
-                <div className={`text-sm ${bt.muted} px-2 py-1`}>
+                <p className={`text-sm ${bt.muted}`}>
                     Connecting to {configuredInstance}…
-                </div>
+                </p>
             )}
             {configuredInstance && status === "error" && (
-                <div className="space-y-1">
-                    <div className="flex items-center justify-between gap-2 px-2 py-1">
+                <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
                         <span className={`text-xs ${bt.status.warning.icon}`}>
                             Couldn't reach {configuredInstance}
                             {knownTools ? " — showing approximate tools." : "."}
                         </span>
-                        <button
-                            type="button"
+                        <Button3
+                            title="Retry"
                             onClick={() => setReloadToken((n) => n + 1)}
-                            className={`text-xs px-2 py-0.5 rounded ${bt.raised} ${bt.hoverSurface} ${bt.text} shrink-0`}
-                            data-testid={`composer-wire-retry-${propName}`}
-                        >
-                            Retry
-                        </button>
-                    </div>
-                    {error && (
-                        <div className={`text-xs ${bt.muted} px-2`}>
-                            {error}
-                        </div>
-                    )}
-                    {knownTools && (
-                        <div
-                            className="flex flex-col"
-                            data-testid={`composer-wire-known-tools-${propName}`}
-                        >
-                            {knownTools.map((tool) => (
-                                <button
-                                    key={tool.name}
-                                    type="button"
-                                    onClick={() => onPick(tool.name)}
-                                    className={`text-left text-sm px-2 py-1.5 rounded ${bt.hoverTint} ${bt.text} hover:opacity-80`}
-                                    data-testid={`composer-wire-method-${propName}-${tool.name}`}
-                                    title={tool.description || ""}
-                                >
-                                    <span className="font-mono">
-                                        {tool.name}
-                                    </span>
-                                    {tool.description && (
-                                        <div
-                                            className={`text-xs ${bt.muted} mt-0.5 line-clamp-2`}
-                                        >
-                                            {tool.description}
-                                        </div>
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                    <div className="flex gap-1 px-2 pb-1">
-                        <input
-                            type="text"
-                            value={freeText}
-                            onChange={(e) => setFreeText(e.target.value)}
-                            placeholder="or type a tool name"
-                            className={`flex-1 px-1.5 py-0.5 text-sm font-mono ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
-                            data-testid={`composer-wire-tool-input-${propName}`}
+                            size="sm"
+                            className="shrink-0"
+                            testId={`composer-wire-retry-${propName}`}
                         />
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (freeText.trim()) onPick(freeText.trim());
-                            }}
-                            disabled={!freeText.trim()}
-                            className={`px-2 py-0.5 text-sm rounded ${bt.primaryFill}`}
-                            data-testid={`composer-wire-tool-confirm-${propName}`}
-                        >
-                            Wire
-                        </button>
                     </div>
+                    {error && <p className={`text-xs ${bt.muted}`}>{error}</p>}
+                    {knownTools && (
+                        <ToolRows
+                            propName={propName}
+                            tools={knownTools}
+                            onPick={onPick}
+                            testId={`composer-wire-known-tools-${propName}`}
+                        />
+                    )}
+                    <ToolNameInput
+                        propName={propName}
+                        value={freeText}
+                        onChange={setFreeText}
+                        onPick={onPick}
+                        placeholder="or type a tool name"
+                    />
                 </div>
             )}
             {configuredInstance && status === "ok" && tools.length === 0 && (
-                <div className={`text-sm ${bt.muted} px-2 py-1`}>
+                <p className={`text-sm ${bt.muted}`}>
                     No tools exposed by this server.
-                </div>
+                </p>
             )}
             {configuredInstance && status === "ok" && tools.length > 0 && (
-                <div className="flex flex-col">
-                    {tools.map((tool) => (
-                        <button
-                            key={tool.name}
-                            type="button"
-                            onClick={() => onPick(tool.name)}
-                            className={`text-left text-sm px-2 py-1.5 rounded ${bt.hoverTint} ${bt.text} hover:opacity-80`}
-                            data-testid={`composer-wire-method-${propName}-${tool.name}`}
-                            title={tool.description || ""}
-                        >
-                            <span className="font-mono">{tool.name}</span>
-                            {tool.description && (
-                                <div
-                                    className={`text-xs ${bt.muted} mt-0.5 line-clamp-2`}
-                                >
-                                    {tool.description}
-                                </div>
-                            )}
-                        </button>
-                    ))}
-                </div>
+                <ToolRows propName={propName} tools={tools} onPick={onPick} />
             )}
         </div>
     );
@@ -582,23 +507,22 @@ function PickerHeader({ title, expectedType, onBack }) {
     const showExpected =
         expectedType && expectedType !== "any" && expectedType !== "function";
     return (
-        <div className="flex items-center justify-between px-1 mb-1">
-            <div className={`text-xs uppercase tracking-wide ${bt.muted}`}>
+        <div className="flex items-center justify-between gap-2">
+            <h3 className={`text-sm font-semibold ${bt.text} min-w-0`}>
                 {title}{" "}
                 {showExpected && (
-                    <span className={`${bt.muted}`}>
+                    <span className={`font-normal ${bt.muted}`}>
                         → <code>{expectedType}</code>
                     </span>
                 )}
-            </div>
-            <button
-                type="button"
+            </h3>
+            <Button3
+                title="← Back"
                 onClick={onBack}
-                className={`text-xs ${bt.accent} hover:opacity-80`}
-                data-testid="composer-wire-back"
-            >
-                ← Back
-            </button>
+                size="sm"
+                className="shrink-0"
+                testId="composer-wire-back"
+            />
         </div>
     );
 }
@@ -669,11 +593,13 @@ export function WiredSlotSummary({
     }, [wire.providerType, wire.providerClass, wire.method, wire.args]);
 
     return (
+        // Tinted, not framed: it already sits inside the prop row's
+        // border, so sections split on hairlines instead of boxes.
         <div
-            className={`rounded border ${bt.accentBorder} ${bt.tint} ${bt.accent}`}
+            className={`rounded ${bt.tint} ${bt.accent}`}
             data-testid={`composer-wire-summary-${propName}`}
         >
-            <div className="flex items-center justify-between text-sm px-2 py-1.5">
+            <div className="flex items-center justify-between gap-2 text-sm p-3">
                 <div className="min-w-0">
                     <span className={`${bt.muted}`}>Wired to: </span>
                     <span className="font-mono">
@@ -688,28 +614,24 @@ export function WiredSlotSummary({
                         </span>
                     )}
                 </div>
-                <div className="flex items-center gap-2 ml-2 shrink-0">
-                    <button
-                        type="button"
+                <div className="flex items-center gap-1 shrink-0">
+                    <Button3
+                        title="Change"
                         onClick={onChange}
-                        className={`text-xs ${bt.accent} hover:opacity-80 underline`}
-                        data-testid={`composer-wire-change-${propName}`}
-                    >
-                        Change
-                    </button>
-                    <button
-                        type="button"
+                        size="sm"
+                        testId={`composer-wire-change-${propName}`}
+                    />
+                    <Button3
+                        title="Static"
                         onClick={onStatic}
-                        className={`text-xs ${bt.muted} hover:opacity-100 underline`}
-                        data-testid={`composer-wire-revert-${propName}`}
-                    >
-                        Static
-                    </button>
+                        size="sm"
+                        testId={`composer-wire-revert-${propName}`}
+                    />
                 </div>
             </div>
             {argNames.length > 0 && onSetArg && (
                 <div
-                    className={`px-3 py-3 border-t ${bt.accentBorder} space-y-3`}
+                    className={`p-3 border-t ${bt.border} flex flex-col gap-3`}
                     data-testid={`composer-wire-args-${propName}`}
                 >
                     {argNames.map((argName) => (
@@ -765,27 +687,30 @@ function FieldMapEditor({ propName, wire, targetType, onSetFieldMap }) {
 
     return (
         <div
-            className={`px-2 py-1.5 border-t ${bt.accentBorder} space-y-1`}
+            className={`p-3 border-t ${bt.border} flex flex-col gap-2`}
             data-testid={`composer-fieldmap-${propName}`}
         >
-            <div className={`text-xs ${bt.muted}`}>
+            <h3 className={`text-sm font-semibold ${bt.text}`}>
                 Map fields from <span className="font-mono">{wire.method}</span>
-            </div>
+            </h3>
             {targetFields.map((target) => (
                 <div
                     key={target}
                     className="flex items-center justify-between gap-2"
                     data-testid={`composer-fieldmap-row-${propName}-${target}`}
                 >
-                    <span className={`text-xs font-mono ${bt.accent}`}>
+                    <span className={`text-sm font-mono ${bt.accent}`}>
                         {target}
                     </span>
+                    {/* Native select: the source field list can run
+                        long, past what ChoiceMenu is meant for. */}
                     <select
                         value={fieldMap[target] || ""}
                         onChange={(e) =>
                             handleChange(target, e.target.value || null)
                         }
-                        className={`text-xs ${bt.surface} border ${bt.border} rounded px-1 py-0.5 ${bt.text}`}
+                        aria-label={`Source field for ${target}`}
+                        className={`dr-input text-sm ${bt.surface} border ${bt.border} rounded px-2 py-1 ${bt.text} focus:outline-none`}
                         data-testid={`composer-fieldmap-select-${propName}-${target}`}
                     >
                         <option value="">(auto)</option>
@@ -835,17 +760,21 @@ function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
     return (
         <div
             data-testid={`composer-arg-row-${propName}-${argName}`}
-            className="space-y-2"
+            className="flex flex-col gap-2"
         >
             <div className="flex items-center justify-between gap-2">
                 <span className={`text-sm font-mono ${bt.accent}`}>
                     {argName}
                 </span>
+                {/* Binding-kind pills. Icon toggles rather than
+                    SegmentedControl so each option keeps its own test
+                    id (the e2e specs click them). */}
                 <div
-                    className={`flex items-center gap-0.5 text-xs ${bt.surface} border ${bt.border} rounded p-0.5`}
+                    className="flex items-center gap-1"
+                    role="group"
+                    aria-label={`${argName} binding`}
                 >
-                    <button
-                        type="button"
+                    <ButtonIcon3
                         onClick={() =>
                             onSetArg(propName, argName, {
                                 kind: "literal",
@@ -856,17 +785,14 @@ function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
                                     "",
                             })
                         }
-                        className={`px-2 py-1 rounded ${
-                            kind === "literal"
-                                ? `${bt.tint} ${bt.accent}`
-                                : `${bt.muted} hover:opacity-100`
-                        }`}
-                        data-testid={`composer-arg-kind-literal-${propName}-${argName}`}
+                        selected={kind === "literal"}
+                        ariaPressed={kind === "literal"}
+                        size="sm"
+                        testId={`composer-arg-kind-literal-${propName}-${argName}`}
                     >
                         literal
-                    </button>
-                    <button
-                        type="button"
+                    </ButtonIcon3>
+                    <ButtonIcon3
                         onClick={() =>
                             onSetArg(propName, argName, {
                                 kind: "userConfig",
@@ -877,39 +803,32 @@ function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
                                     argName,
                             })
                         }
-                        className={`px-2 py-1 rounded ${
-                            kind === "userConfig"
-                                ? `${bt.tint} ${bt.accent}`
-                                : `${bt.muted} hover:opacity-100`
-                        }`}
-                        data-testid={`composer-arg-kind-userConfig-${propName}-${argName}`}
+                        selected={kind === "userConfig"}
+                        ariaPressed={kind === "userConfig"}
+                        size="sm"
+                        testId={`composer-arg-kind-userConfig-${propName}-${argName}`}
                     >
                         userConfig
-                    </button>
+                    </ButtonIcon3>
                     {isCallbackWire && (
-                        <button
-                            type="button"
+                        <ButtonIcon3
                             onClick={() =>
                                 onSetArg(propName, argName, {
                                     kind: "eventArg",
                                 })
                             }
-                            className={`px-2 py-1 rounded ${
-                                kind === "eventArg"
-                                    ? `${bt.tint} ${bt.accent}`
-                                    : `${bt.muted} hover:opacity-100`
-                            }`}
-                            data-testid={`composer-arg-kind-eventArg-${propName}-${argName}`}
-                            title="Pass the event handler's first argument (the input's new value, the clicked item, etc.)"
+                            selected={kind === "eventArg"}
+                            ariaPressed={kind === "eventArg"}
+                            size="sm"
+                            testId={`composer-arg-kind-eventArg-${propName}-${argName}`}
                         >
                             event
-                        </button>
+                        </ButtonIcon3>
                     )}
                 </div>
             </div>
             {kind === "literal" ? (
-                <input
-                    type="text"
+                <InputText
                     value={
                         binding && binding.kind === "literal"
                             ? typeof binding.value === "string"
@@ -917,8 +836,7 @@ function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
                                 : JSON.stringify(binding.value)
                             : ""
                     }
-                    onChange={(e) => {
-                        const raw = e.target.value;
+                    onChange={(raw) => {
                         // Try parsing as JSON first (numbers, objects,
                         // booleans). Fall back to plain string when
                         // the parse fails — that's the common case for
@@ -936,35 +854,36 @@ function ArgRow({ propName, argName, binding, isCallbackWire, onSetArg }) {
                             value,
                         });
                     }}
-                    className={`w-full px-2 py-1.5 text-sm font-mono ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
+                    ariaLabel={`${argName} value`}
+                    inputClassName="font-mono"
                     data-testid={`composer-arg-literal-input-${propName}-${argName}`}
                     placeholder='"" / 0 / [...] / true'
                 />
             ) : kind === "eventArg" ? (
-                <div
-                    className={`text-sm px-3 py-2 font-mono ${bt.accent} ${bt.surface} border ${bt.border} rounded`}
+                <p
+                    className={`text-sm font-mono ${bt.accent}`}
                     data-testid={`composer-arg-eventarg-display-${propName}-${argName}`}
                 >
                     eventArg{" "}
-                    <span className={`${bt.muted}`}>
+                    <span className={`font-sans ${bt.muted}`}>
                         (= the event handler's first arg)
                     </span>
-                </div>
+                </p>
             ) : (
-                <input
-                    type="text"
+                <InputText
                     value={
                         binding && binding.kind === "userConfig"
                             ? binding.field || ""
                             : ""
                     }
-                    onChange={(e) =>
+                    onChange={(v) =>
                         onSetArg(propName, argName, {
                             kind: "userConfig",
-                            field: e.target.value,
+                            field: v,
                         })
                     }
-                    className={`w-full px-2 py-1.5 text-sm font-mono ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
+                    ariaLabel={`${argName} userConfig field`}
+                    inputClassName="font-mono"
                     data-testid={`composer-arg-userconfig-input-${propName}-${argName}`}
                     placeholder="userConfig field name"
                 />
@@ -1004,30 +923,26 @@ export function PipedSlotSummary({ propName, wire, tree, onChange, onStatic }) {
 
     return (
         <div
-            className={`flex items-center justify-between text-sm px-2 py-1.5 rounded border ${bt.status.warning.border} ${bt.status.warning.bg} ${bt.status.warning.text}`}
+            className={`flex items-center justify-between gap-2 text-sm p-3 rounded ${bt.status.warning.bg} ${bt.status.warning.text}`}
             data-testid={`composer-pipe-summary-${propName}`}
         >
             <div className="min-w-0">
-                <span className={`${bt.muted}`}>Piped from: </span>
+                <span>Piped from: </span>
                 <span className="font-mono">{sourceLabel}</span>
             </div>
-            <div className="flex items-center gap-2 ml-2 shrink-0">
-                <button
-                    type="button"
+            <div className="flex items-center gap-1 shrink-0">
+                <Button3
+                    title="Change"
                     onClick={onChange}
-                    className={`text-xs ${bt.status.warning.icon} underline`}
-                    data-testid={`composer-pipe-change-${propName}`}
-                >
-                    Change
-                </button>
-                <button
-                    type="button"
+                    size="sm"
+                    testId={`composer-pipe-change-${propName}`}
+                />
+                <Button3
+                    title="Static"
                     onClick={onStatic}
-                    className={`text-xs ${bt.muted} hover:opacity-100 underline`}
-                    data-testid={`composer-pipe-revert-${propName}`}
-                >
-                    Static
-                </button>
+                    size="sm"
+                    testId={`composer-pipe-revert-${propName}`}
+                />
             </div>
         </div>
     );

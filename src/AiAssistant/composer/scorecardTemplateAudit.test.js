@@ -22,7 +22,7 @@
 jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
 import { SAMPLE_LAYOUTS } from "./composerSampleLayouts";
 import { emitGridWidgetCode } from "./gridEmitter";
-import { evaluateScorecard } from "./AcceptanceScorecard";
+import { evaluateScorecard } from "./scorecardChecks";
 
 describe("Compose-mode starter templates — scorecard pass guarantee", () => {
     test.each(SAMPLE_LAYOUTS.map((t) => [t.id, t]))(

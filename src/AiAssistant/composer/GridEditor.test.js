@@ -12,6 +12,7 @@
  * fires so regressions surface here before reaching the UI.
  */
 
+jest.mock("@trops/dash-react", () => require("../dashReactTestStub"));
 jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
 import React from "react";
 import { render, fireEvent, screen } from "@testing-library/react";

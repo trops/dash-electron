@@ -2,6 +2,7 @@ import React, { useCallback, useState } from "react";
 import { SCHEMA_COMPONENT_NAMES } from "../dashReactComponentSchemas";
 import { sendOneShotJson } from "./llmOneShot";
 import { useBuilderTheme } from "../useBuilderTheme";
+import { Button, Button2, Button3, Card2 } from "@trops/dash-react";
 
 /**
  * "Suggest a starting layout" button + inline form (slice 20.C5).
@@ -141,89 +142,88 @@ export function SuggestLayoutButton({
 
     if (!open) {
         return (
-            <button
-                type="button"
+            <Button2
+                title="✦ Suggest a starting layout"
                 onClick={() => setOpen(true)}
-                className={`w-full mb-2 px-2 py-1.5 text-xs rounded border ${bt.accentBorder} ${bt.tint} ${bt.accent} ${bt.hoverTint}`}
-                data-testid="composer-suggest-layout-open"
-            >
-                ✦ Suggest a starting layout
-            </button>
+                size="sm"
+                block
+                className="mb-3"
+                testId="composer-suggest-layout-open"
+            />
         );
     }
 
     return (
         <div
-            className={`mb-3 rounded border ${bt.accentBorder} ${bt.tint} p-2 space-y-2`}
+            className={`mb-3 rounded-lg border ${bt.border} p-3 flex flex-col gap-3`}
             data-testid="composer-suggest-layout-form"
         >
-            <div className="flex items-center justify-between">
-                <div
-                    className={`text-[11px] uppercase tracking-wide ${bt.accent}`}
-                >
+            <div className="flex items-center justify-between gap-2">
+                <h3 className={`text-sm font-semibold ${bt.text}`}>
                     Describe the widget
-                </div>
-                <button
-                    type="button"
+                </h3>
+                <Button3
+                    title="Cancel"
                     onClick={reset}
-                    className={`text-[10px] ${bt.muted} hover:opacity-100`}
-                    data-testid="composer-suggest-layout-close"
-                >
-                    Cancel
-                </button>
+                    size="sm"
+                    testId="composer-suggest-layout-close"
+                />
             </div>
             <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="e.g., An Algolia rules manager with a list of rules and a detail panel"
                 rows={3}
-                className={`w-full px-2 py-1 text-xs ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
+                aria-label="Describe the widget"
+                className={`dr-input w-full px-3 py-2 text-sm ${bt.surface} border ${bt.border} rounded-lg ${bt.text} resize-none focus:outline-none`}
                 data-testid="composer-suggest-layout-input"
             />
-            <button
-                type="button"
+            <Button
+                title={status === "loading" ? "Asking…" : "Suggest layouts"}
                 onClick={submit}
                 disabled={
                     status === "loading" || description.trim().length === 0
                 }
-                className={`w-full px-2 py-1 text-xs rounded ${bt.primaryFill}`}
-                data-testid="composer-suggest-layout-submit"
-            >
-                {status === "loading" ? "Asking…" : "Suggest layouts"}
-            </button>
+                block
+                testId="composer-suggest-layout-submit"
+            />
             {status === "error" && error && (
-                <div
-                    className={`text-[10px] ${bt.status.error.icon}`}
+                <p
+                    className={`text-sm ${bt.status.error.icon}`}
                     data-testid="composer-suggest-layout-error"
                 >
                     {error}
-                </div>
+                </p>
             )}
             {status === "ok" && suggestions.length > 0 && (
                 <div
-                    className="space-y-1"
+                    className="flex flex-col gap-2"
                     data-testid="composer-suggest-layout-results"
                 >
-                    <div className={`text-[10px] ${bt.muted}`}>
+                    <p className={`text-sm ${bt.muted}`}>
                         Pick one to replace the current tree:
-                    </div>
+                    </p>
                     {suggestions.map((s, i) => (
-                        <button
+                        <Card2
                             key={i}
-                            type="button"
                             onClick={() => pickSuggestion(s)}
-                            className={`block w-full text-left px-2 py-1.5 rounded border ${bt.border} ${bt.surface} ${bt.hoverAccentBorder} ${bt.hoverTint}`}
-                            data-testid={`composer-suggest-layout-pick-${i}`}
+                            ariaLabel={s.label}
+                            padding="p-3"
+                            hover
+                            className="flex flex-col gap-1 text-left"
+                            testId={`composer-suggest-layout-pick-${i}`}
                         >
-                            <div className={`text-xs ${bt.text}`}>
+                            <span
+                                className={`text-sm font-semibold ${bt.text}`}
+                            >
                                 {s.label}
-                            </div>
-                            <div
-                                className={`text-[10px] ${bt.muted} mt-0.5 font-mono`}
+                            </span>
+                            <span
+                                className={`text-xs ${bt.muted} font-mono whitespace-pre`}
                             >
                                 {summarizeTree(s.root)}
-                            </div>
-                        </button>
+                            </span>
+                        </Card2>
                     ))}
                 </div>
             )}

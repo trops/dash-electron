@@ -26,6 +26,7 @@
  * specific line.
  */
 import React, { useMemo, useState } from "react";
+import { Button2 } from "@trops/dash-react";
 import { useBuilderTheme } from "../useBuilderTheme";
 import {
     evaluateScorecard,
@@ -57,18 +58,10 @@ function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
             : row.pass === false
             ? `${bt.status.error.icon}`
             : `${bt.muted}`;
-    const rowBg =
-        row.pass === false
-            ? `${bt.status.error.bg} border ${bt.status.error.border}`
-            : row.pass === true
-            ? ""
-            : "";
-    const textTone =
-        row.pass === false
-            ? `${bt.text}`
-            : row.pass === true
-            ? `${bt.text}`
-            : `${bt.muted}`;
+    // Failing rows get a status tint (no border — the rows sit inside
+    // the preview pane, which is already a bordered surface).
+    const rowBg = row.pass === false ? `${bt.status.error.bg}` : "";
+    const textTone = row.pass === null ? `${bt.muted}` : `${bt.text}`;
     // Only failing rows get a "Send to AI" affordance — there's
     // nothing to fix on a passing or n/a row. The button is rendered
     // when the host wires an onSendToAi handler; without one, the
@@ -80,9 +73,10 @@ function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
         <li
             data-testid={`acceptance-scorecard-row-${row.index}`}
             data-pass={row.pass === null ? "na" : String(row.pass)}
-            className={`flex flex-col rounded ${rowBg}`}
+            className={`flex flex-col rounded-lg ${rowBg}`}
         >
-            <div className="flex items-start gap-1">
+            <div className="flex items-center gap-2">
+                {/* The row itself is the disclosure for its matches. */}
                 <button
                     type="button"
                     onClick={() =>
@@ -91,10 +85,11 @@ function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
                             : undefined
                     }
                     disabled={!expandable}
-                    className="flex items-start gap-3 px-2 py-1.5 text-left text-sm disabled:cursor-default flex-1 min-w-0"
+                    aria-expanded={expandable ? isOpen : undefined}
+                    className="flex items-start gap-3 px-2 py-2 text-left text-sm disabled:cursor-default flex-1 min-w-0"
                 >
                     <span
-                        className={`font-mono w-4 shrink-0 text-base leading-tight ${markerTone}`}
+                        className={`font-mono w-4 shrink-0 text-sm leading-snug ${markerTone}`}
                         aria-hidden="true"
                     >
                         {marker}
@@ -111,26 +106,26 @@ function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
                     )}
                 </button>
                 {canSendToAi && (
-                    <button
-                        type="button"
-                        data-testid={`acceptance-scorecard-row-${row.index}-send-to-ai`}
-                        onClick={() => onSendToAi(row)}
-                        className={`shrink-0 my-1 mr-1.5 px-2 py-1 rounded text-xs font-medium ${bt.primaryFill} ${bt.accent} transition-colors`}
-                        title="Ask the AI to fix this rule"
-                    >
-                        Ask AI
-                    </button>
+                    <div className="shrink-0 pr-2">
+                        <Button2
+                            size="sm"
+                            title="Ask AI"
+                            onClick={() => onSendToAi(row)}
+                            testId={`acceptance-scorecard-row-${row.index}-send-to-ai`}
+                            tooltip="Ask the AI to fix this rule"
+                        />
+                    </div>
                 )}
             </div>
             {expandable && isOpen && (
                 <ul
-                    className={`ml-9 mb-1.5 mr-2 flex flex-col gap-0.5 font-mono text-xs ${bt.status.error.text}`}
+                    className={`ml-9 mb-2 mr-2 flex flex-col gap-1 font-mono text-xs ${bt.text}`}
                     data-testid={`acceptance-scorecard-matches-${row.index}`}
                 >
                     {row.matches.map((m, i) => (
                         <li
                             key={i}
-                            className={`${bt.status.error.bg} px-2 py-0.5 rounded`}
+                            className={`${bt.surface} px-2 py-1 rounded`}
                         >
                             {m}
                         </li>
@@ -168,21 +163,19 @@ export function AcceptanceScorecard({ code, onSendToAi = null }) {
                 className="flex items-center justify-between flex-wrap gap-2"
                 data-testid="acceptance-scorecard-summary"
             >
-                <span className={`text-base font-semibold ${headlineTone}`}>
+                <span className={`text-sm font-semibold ${headlineTone}`}>
                     {headline}
                 </span>
-                <span className={`text-sm ${bt.muted}`}>
+                <span className={`text-xs ${bt.muted}`}>
                     {passCount} pass · {failCount} fail · {naCount} n/a
                 </span>
             </div>
             {failed.length > 0 && (
-                <section className="flex flex-col gap-1.5">
-                    <h4
-                        className={`text-xs uppercase tracking-wide ${bt.status.error.icon} font-semibold`}
-                    >
+                <section className="flex flex-col gap-2">
+                    <h3 className={`text-sm font-semibold ${bt.text}`}>
                         Failing
-                    </h4>
-                    <ul className="flex flex-col gap-1.5">
+                    </h3>
+                    <ul className="flex flex-col gap-1">
                         {failed.map((row) => (
                             <ScorecardRow
                                 key={row.index}
@@ -196,12 +189,10 @@ export function AcceptanceScorecard({ code, onSendToAi = null }) {
                 </section>
             )}
             {passed.length > 0 && (
-                <section className="flex flex-col gap-1">
-                    <h4
-                        className={`text-xs uppercase tracking-wide ${bt.status.success.icon} font-semibold`}
-                    >
+                <section className="flex flex-col gap-2">
+                    <h3 className={`text-sm font-semibold ${bt.text}`}>
                         Passing
-                    </h4>
+                    </h3>
                     <ul className="flex flex-col">
                         {passed.map((row) => (
                             <ScorecardRow
@@ -215,12 +206,10 @@ export function AcceptanceScorecard({ code, onSendToAi = null }) {
                 </section>
             )}
             {na.length > 0 && (
-                <section className="flex flex-col gap-1">
-                    <h4
-                        className={`text-xs uppercase tracking-wide ${bt.muted} font-semibold`}
-                    >
+                <section className="flex flex-col gap-2">
+                    <h3 className={`text-sm font-semibold ${bt.text}`}>
                         Not statically checkable
-                    </h4>
+                    </h3>
                     <ul className="flex flex-col">
                         {na.map((row) => (
                             <ScorecardRow

@@ -11,8 +11,9 @@
 import React, { useState, useContext, useEffect, useCallback } from "react";
 import {
     AlertBanner,
-    Button3,
-    FontAwesomeIcon,
+    Button2,
+    ButtonIcon3,
+    PanelHeader,
     ResizeHandle,
     ThemeContext,
     useResizableWidth,
@@ -120,9 +121,11 @@ const McpStatusChip = () => {
                             : "Dash MCP server not running"}
                     </span>
                     {!isRunning && (
-                        <Button3 size="sm" onClick={handleStartServer}>
-                            Start
-                        </Button3>
+                        <Button2
+                            size="sm"
+                            onClick={handleStartServer}
+                            title="Start"
+                        />
                     )}
                 </div>
             </AlertBanner>
@@ -157,10 +160,6 @@ export const AiAssistantPanel = ({
     const t = (key) => currentTheme?.[key] || "";
     const bgDark = "chrome-glass";
     const borderColor = t("border-primary-dark");
-    // Icon buttons: theme text, dimmed until hovered.
-    const iconButton = `rounded transition-colors opacity-70 hover:opacity-100 ${t(
-        "text-primary-medium"
-    )} ${t("hover-bg-primary-dark")}`;
 
     const settings = appContext?.settings || {};
     const providers = appContext?.providers || {};
@@ -235,16 +234,13 @@ export const AiAssistantPanel = ({
             <div
                 className={`flex flex-col items-center w-10 border-l ${borderColor} ${bgDark} shrink-0 h-screen`}
             >
-                <button
-                    onClick={() => setCollapsed(false)}
-                    className={`mt-3 p-2 ${iconButton}`}
-                    title="Open AI Assistant"
-                >
-                    <FontAwesomeIcon
+                <div className="mt-3">
+                    <ButtonIcon3
                         icon="wand-magic-sparkles"
-                        className="h-4 w-4"
+                        ariaLabel="Open AI Assistant"
+                        onClick={() => setCollapsed(false)}
                     />
-                </button>
+                </div>
             </div>
         );
     }
@@ -260,36 +256,18 @@ export const AiAssistantPanel = ({
             <div
                 className={`flex flex-col flex-1 min-w-0 ${bgDark} overflow-hidden`}
             >
-                {/* Header */}
-                <div
-                    className={`flex items-center justify-between px-3 py-1.5 border-b ${borderColor} shrink-0`}
-                >
-                    <div
-                        className={`flex items-center gap-2 opacity-70 ${t(
-                            "text-primary-medium"
-                        )}`}
-                    >
-                        <FontAwesomeIcon
-                            icon="wand-magic-sparkles"
-                            className="h-3 w-3"
-                        />
-                        <span className="text-xs font-medium uppercase tracking-wide">
-                            AI Assistant
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                        <button
+                {/* Header — the dock panels' shared PanelHeader */}
+                <PanelHeader
+                    glyph="wand-magic-sparkles"
+                    title="AI Assistant"
+                    actions={
+                        <ButtonIcon3
+                            icon="chevron-right"
+                            ariaLabel="Collapse"
                             onClick={() => setCollapsed(true)}
-                            className={`p-1 ${iconButton}`}
-                            title="Collapse"
-                        >
-                            <FontAwesomeIcon
-                                icon="chevron-right"
-                                className="h-3 w-3"
-                            />
-                        </button>
-                    </div>
-                </div>
+                        />
+                    }
+                />
 
                 {/* MCP setup banner for CLI backend */}
                 {isCliBackend && <McpStatusChip />}

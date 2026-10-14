@@ -53,6 +53,7 @@ import { PropertyInspector } from "./PropertyInspector";
 import { getComponentSchema } from "../dashReactComponentSchemas";
 import { ComposerProviderChoiceContext } from "./ComposerProviderChoiceContext";
 import { useBuilderTheme } from "../useBuilderTheme";
+import { Button, Button2, InputText } from "@trops/dash-react";
 
 /**
  * True when the component's schema exposes nothing the inspector
@@ -554,9 +555,11 @@ export function ComposerPaneV2({
                     lastProviderChoice ? lastProviderChoice.id : ""
                 }
             >
-                <div className={`px-3 py-2 border-b ${bt.border} shrink-0`}>
+                <div
+                    className={`p-3 border-b ${bt.border} shrink-0 flex flex-col gap-2`}
+                >
                     <label
-                        className={`block text-xs ${bt.muted} mb-1`}
+                        className={`text-xs ${bt.muted}`}
                         htmlFor="composer-widget-name-v2"
                     >
                         Widget name
@@ -564,32 +567,33 @@ export function ComposerPaneV2({
                     {hasEditContextCode ? (
                         // Edit mode: the name is the installed widget's
                         // identity and must not change. Show it read-only.
-                        <input
+                        <InputText
                             id="composer-widget-name-v2"
-                            type="text"
+                            ariaLabel="Widget name"
                             value={grid.widgetName}
+                            onChange={() => {}}
                             readOnly
                             disabled
                             title="The name can't be changed while editing an existing widget."
-                            className={`w-full px-2 py-1 text-sm ${bt.surface} border ${bt.border} rounded ${bt.muted} cursor-not-allowed`}
+                            className="cursor-not-allowed"
                             data-testid="composer-widget-name"
                         />
                     ) : (
-                        // Create mode: type freely, commit with the
-                        // checkmark (or Enter). Typing alone does NOT emit
-                        // or save — no per-keystroke folder churn.
+                        // Create mode: type freely, commit with Save (or
+                        // Enter). Typing alone does NOT emit or save — no
+                        // per-keystroke folder churn.
                         <>
                             <div className="flex items-center gap-2">
-                                <input
+                                <InputText
                                     id="composer-widget-name-v2"
-                                    type="text"
+                                    ariaLabel="Widget name"
                                     value={pendingName}
-                                    onChange={(e) => {
+                                    onChange={(v) => {
                                         userRenamedRef.current = true;
                                         setNameSaved(false);
                                         setNameError(null);
                                         setPendingName(
-                                            e.target.value.replace(
+                                            String(v).replace(
                                                 /[^A-Za-z0-9_]/g,
                                                 ""
                                             )
@@ -602,27 +606,25 @@ export function ComposerPaneV2({
                                         }
                                     }}
                                     placeholder="MyWidget"
-                                    className={`flex-1 px-2 py-1 text-sm ${bt.surface} border ${bt.border} rounded ${bt.text} focus:outline-none`}
+                                    className="flex-1 min-w-0"
                                     data-testid="composer-widget-name"
                                 />
-                                <button
-                                    type="button"
+                                <Button2
+                                    title="Save"
                                     onClick={commitName}
                                     disabled={
                                         !pendingName.trim() ||
                                         pendingName.trim() === grid.widgetName
                                     }
-                                    title="Save name"
-                                    aria-label="Save name"
-                                    className={`shrink-0 px-2.5 py-1 text-sm rounded ${bt.primaryFill}`}
-                                    data-testid="composer-widget-name-save"
-                                >
-                                    <span aria-hidden="true">✓</span>
-                                </button>
+                                    ariaLabel="Save name"
+                                    size="sm"
+                                    className="shrink-0"
+                                    testId="composer-widget-name-save"
+                                />
                             </div>
                             {nameError && (
                                 <p
-                                    className={`text-xs ${bt.status.error.icon} mt-1`}
+                                    className={`text-xs ${bt.status.error.icon}`}
                                     data-testid="composer-widget-name-error"
                                 >
                                     {nameError}
@@ -632,7 +634,7 @@ export function ComposerPaneV2({
                                 !nameError &&
                                 pendingName.trim() === grid.widgetName && (
                                     <p
-                                        className={`text-xs ${bt.status.success.icon} mt-1`}
+                                        className={`text-xs ${bt.status.success.icon}`}
                                     >
                                         Saved
                                     </p>
@@ -673,17 +675,13 @@ export function ComposerPaneV2({
                                 onClose={() => setSelectedCellId(null)}
                             />
                         </div>
-                        <div
-                            className={`shrink-0 border-t ${bt.border} px-3 py-3 ${bt.surface}`}
-                        >
-                            <button
-                                type="button"
+                        <div className={`shrink-0 border-t ${bt.border} p-3`}>
+                            <Button
+                                title="Done editing"
                                 onClick={() => setSelectedCellId(null)}
-                                className={`w-full px-3 py-3 text-sm font-medium rounded ${bt.primaryFill}`}
-                                data-testid="composer-inspector-done"
-                            >
-                                Done editing
-                            </button>
+                                block
+                                testId="composer-inspector-done"
+                            />
                         </div>
                     </div>
                 ) : isGridEmpty(grid) ? (
@@ -713,20 +711,24 @@ export function ComposerPaneV2({
                         providers={providers}
                     />
                 ) : (
-                    <div className="flex-1 min-h-0 flex flex-col px-3 py-2 gap-1">
-                        <div
-                            className={`text-xs uppercase tracking-wide ${bt.muted} shrink-0`}
+                    <div className="flex-1 min-h-0 flex flex-col p-3 gap-2">
+                        <h3
+                            className={`text-sm font-semibold ${bt.text} shrink-0`}
                         >
                             Composition
-                        </div>
-                        {/* Editor flexes to fill the remaining height so
-                        the runtime-mirrored sizing rules inside it
-                        (containers fill, primitives sit at content
-                        height) have an actual height to resolve
-                        against. min-h-0 lets nested grids shrink
-                        below their content's intrinsic size. */}
+                        </h3>
+                        {/* The canvas well: a recessed surface (not pure
+                        black) framing the grid. Editor flexes to fill
+                        the remaining height so the runtime-mirrored
+                        sizing rules inside it (containers fill,
+                        primitives sit at content height) have an
+                        actual height to resolve against. min-h-0 lets
+                        nested grids shrink below their content's
+                        intrinsic size. */}
                         <div
-                            className="flex-1 min-h-0 overflow-y-auto"
+                            className={`flex-1 min-h-0 overflow-y-auto p-3 ${bt.tk(
+                                "bg-primary-dark"
+                            )} border ${bt.border} rounded-lg`}
                             data-testid="composer-grid-editor-host"
                         >
                             <GridEditor

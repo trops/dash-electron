@@ -34,7 +34,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { SCENARIOS } = require("./scenarios");
-const { evaluateScorecard } = require("../composer/AcceptanceScorecard");
+const { evaluateScorecard } = require("../composer/scorecardChecks");
 
 const FIXTURE_ROOT = path.resolve(
     __dirname,

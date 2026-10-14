@@ -47,17 +47,47 @@ describe("Widget Builder — initial prompt from the Create screen", () => {
     });
 
     test("the prompt replaces the greeting and is shown in the chat", () => {
+        // startPrompt: Create's prompt, or what was typed in the gate.
         expect(modal).toMatch(
-            /: initialPrompt \|\|\s*"Hi, I'd like to build a new widget\."/
+            /const startPrompt = initialPrompt \|\| typedPrompt;/
         );
         expect(modal).toMatch(
-            /initialMessageHidden=\{\s*!\(\s*chatMode !== "discover" &&\s*!effectiveEditContext\?\.componentCode &&\s*initialPrompt\s*\)\s*\}/
+            /: startPrompt \|\|\s*"Hi, I'd like to build a new widget\."/
+        );
+        expect(modal).toMatch(
+            /initialMessageHidden=\{\s*!\(\s*chatMode !== "discover" &&\s*!effectiveEditContext\?\.componentCode &&\s*startPrompt\s*\)\s*\}/
         );
     });
 
     test("the provider gate gets the prompt, so it asks a question (2c-1)", () => {
         expect(modal).toMatch(
-            /<ChatProviderGate[\s\S]{0,1000}prompt=\{initialPrompt\}/
+            /<ChatProviderGate[\s\S]{0,1000}prompt=\{startPrompt\}\s*onPrompt=\{\(text\) => \{/
         );
+    });
+
+    test("a typed description starts an empty conversation, so ChatCore sends it", () => {
+        // ChatCore only sends initialMessage into an empty history.
+        expect(modal).toMatch(
+            /onPrompt=\{\(text\) => \{[\s\S]{0,600}localStorage\.setItem\(\s*"dash-widget-builder",\s*JSON\.stringify\(\{\s*messages: \[\],?\s*\}\)\s*\);[\s\S]{0,900}lastMsgCount\.current = 0;[\s\S]{0,200}setTypedPrompt\(text \|\| null\);/
+        );
+        // Only a description typed here can be edited (not Create's).
+        expect(modal).toMatch(
+            /canEditPrompt=\{\s*!initialPrompt && !!typedPrompt\s*\}/
+        );
+    });
+
+    test("Change only shows before code exists", () => {
+        expect(modal).toMatch(
+            /\{!detectedCode\?\.componentCode && \(\s*<Button3\s+size="sm"\s+title="Change"/
+        );
+    });
+
+    test("a typed prompt is cleared when the session starts over", () => {
+        // New chat (message-poller reset) and "Build new widget".
+        expect(
+            modal.match(
+                /setSelectedProviderForBuild\(null\);\s*setTypedPrompt\(null\);/g
+            ) || []
+        ).toHaveLength(2);
     });
 });
