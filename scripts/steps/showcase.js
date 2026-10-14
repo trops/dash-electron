@@ -63,7 +63,7 @@ module.exports = async function (page) {
     console.log("OPENED_DARK " + openedDark);
     await page.waitForTimeout(1500);
 
-    // Open the Bot Activity / assistant glass panel (robot icon on the right).
+    // Open the Bots panel (robot icon on the right rail).
     await tryClickSel('[data-icon="robot"], [data-icon="robot-astromech"]');
     await page.waitForTimeout(1500);
 

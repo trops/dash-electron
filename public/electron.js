@@ -735,6 +735,7 @@ const {
     BOTS_GET_RUNS,
     BOTS_GET_LATEST_RESULT,
     BOTS_LIST_RECENT_RUNS,
+    BOTS_LAST_RUNS,
     BOTS_LIST_DRAFTS,
     BOTS_DISMISS_DRAFT,
     BOTS_EXPORT_TEAM,
@@ -2394,6 +2395,8 @@ function createWindow() {
         logger.loggedHandle(BOTS_LIST_RECENT_RUNS, (e, msg) =>
             botController.listRecentRuns({ limit: msg && msg.limit })
         );
+        // Each bot's latest run — the dock's Bots contacts (TEAM-015).
+        logger.loggedHandle(BOTS_LAST_RUNS, () => botController.lastRuns());
         logger.loggedHandle(BOTS_STOP, (e, { botId }) =>
             botController.stop(botId)
         );

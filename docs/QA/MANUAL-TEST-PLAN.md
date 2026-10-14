@@ -59,7 +59,8 @@ The macOS build is a universal binary — same `.dmg` works on both Intel and Ap
 
 ### 0.5 Right-hand rail
 
--   [ ] The rail on the right has two buttons, **Create** and **Bot Activity** (the AI Assistant panel was retired). Click Create.
+-   [ ] The rail on the right has two buttons, **Create** and **Bots** (the AI Assistant panel was retired). Click Create.
+-   [ ] Click **Bots**: your bots as a contacts list, grouped by dashboard, with Recent / A–Z and By team. Pick a bot: its conversation opens; send it a message and the reply streams in. Switch to **Activity**, then **Back**.
 -   [ ] You can type in the Ask box; the input is enabled (whether or not the AI responds — that's tested later).
 
 If any of 0.1–0.5 fail, **stop here and file a Blocker.** The rest of the plan won't work until cold start does.

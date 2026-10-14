@@ -1,12 +1,13 @@
 /**
- * Bot Activity panel = the Bot monitor (bot-teams TEAM-011 B3): the panel is
- * a frame around dash-core's BotMonitor, fed by useBotMonitor and the dock's
- * hand-off actions. The run form, live feed and lead chat moved to the
- * Bots view.
+ * @jest-environment jsdom
+ *
+ * The dock's Bots panel (bot-teams TEAM-015): a frame around dash-core's
+ * BotContacts, fed by useBotContacts and the dock's hand-off actions; the
+ * rail's approvals count stays live while the panel is closed.
  */
 import React from "react";
 import "@testing-library/jest-dom";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { BotActivityPanel } from "./BotActivityPanel";
 
 jest.mock("@trops/dash-react", () => {
@@ -17,11 +18,13 @@ jest.mock("@trops/dash-react", () => {
     };
 });
 
-const mockMonitor = {
+const mockContacts = {
     loading: false,
+    bots: [],
     approvals: [{ id: "a1" }, { id: "a2" }],
     running: [],
-    recent: [],
+    lastRuns: {},
+    paused: new Set(),
 };
 const mockCtx = {
     workspaceData: { id: 7, name: "Kitchen Sink" },
@@ -29,16 +32,20 @@ const mockCtx = {
     openBotsView: jest.fn(),
     openBotSettings: jest.fn(),
 };
-let mockMonitorProps = null;
+let mockProps = null;
 
 jest.mock("@trops/dash-core", () => {
     const React = require("react");
     return {
         WorkspaceContext: React.createContext(null),
-        useBotMonitor: () => mockMonitor,
-        BotMonitor: (props) => {
-            mockMonitorProps = props;
-            return React.createElement("div", { "data-testid": "monitor" });
+        useBotContacts: () => mockContacts,
+        BotContacts: (props) => {
+            mockProps = props;
+            return React.createElement(
+                "button",
+                { "data-testid": "contacts", onClick: props.onCollapse },
+                "contacts"
+            );
         },
     };
 });
@@ -54,23 +61,23 @@ function renderPanel(props) {
 }
 
 beforeEach(() => {
-    mockMonitorProps = null;
+    mockProps = null;
 });
 
-test("expanded: renders the monitor with the dashboards and hand-off actions", () => {
+test("expanded: renders the contacts with the dashboards and hand-off actions", () => {
     renderPanel({ collapsed: false });
-    expect(screen.getByTestId("monitor")).toBeInTheDocument();
-    expect(mockMonitorProps.monitor).toBe(mockMonitor);
-    expect(mockMonitorProps.workspaces).toBe(mockCtx.workspaces);
-    expect(mockMonitorProps.onOpenBotsView).toBe(mockCtx.openBotsView);
-    expect(mockMonitorProps.onOpenSettings).toBe(mockCtx.openBotSettings);
+    expect(screen.getByTestId("contacts")).toBeInTheDocument();
+    expect(mockProps.contacts).toBe(mockContacts);
+    expect(mockProps.workspaces).toBe(mockCtx.workspaces);
+    expect(mockProps.onOpenBotsView).toBe(mockCtx.openBotsView);
+    expect(mockProps.onOpenSettings).toBe(mockCtx.openBotSettings);
 });
 
-test("no run form or lead chat any more", () => {
-    renderPanel({ collapsed: false });
-    expect(screen.queryByText(/Run a bot/)).toBeNull();
-    expect(screen.queryByLabelText("Bot to run")).toBeNull();
-    expect(screen.queryByText(/Ask the lead/)).toBeNull();
+test("Collapse from the panel closes it", () => {
+    const onCollapsedChange = jest.fn();
+    renderPanel({ collapsed: false, onCollapsedChange });
+    fireEvent.click(screen.getByTestId("contacts"));
+    expect(onCollapsedChange).toHaveBeenCalledWith(true);
 });
 
 test("collapsed: renders nothing but keeps the badge count live", () => {
@@ -85,6 +92,6 @@ test("collapsed: renders nothing but keeps the badge count live", () => {
 
 test("works without the dock's context (no hand-off actions)", () => {
     render(<BotActivityPanel collapsed={false} />);
-    expect(mockMonitorProps.onOpenBotsView).toBeNull();
-    expect(mockMonitorProps.onOpenSettings).toBeNull();
+    expect(mockProps.onOpenBotsView).toBeNull();
+    expect(mockProps.onOpenSettings).toBeNull();
 });

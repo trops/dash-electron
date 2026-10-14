@@ -1,13 +1,17 @@
 import React, { useContext, useEffect } from "react";
-import { ButtonIcon3, PanelHeader, ThemeContext } from "@trops/dash-react";
-import { WorkspaceContext, BotMonitor, useBotMonitor } from "@trops/dash-core";
+import { ThemeContext } from "@trops/dash-react";
+import {
+    WorkspaceContext,
+    BotContacts,
+    useBotContacts,
+} from "@trops/dash-core";
 
 /**
- * BotActivityPanel — the right slide-over for watching bots across every
- * dashboard (bot-teams TEAM-011 B3). A frame around dash-core's BotMonitor:
- * Needs you (approvals), Running now, Recent — each with a way into the
- * dashboard's Bots view (in place, or as a popout for another dashboard).
- * Starting bots, talking to them and the team lead live in the Bots view.
+ * BotActivityPanel — the dock's Bots panel (bot-teams TEAM-015): your bots as
+ * a contacts list. Pick one to chat with it or see its activity; Needs you
+ * (approvals across every dashboard) stays at the top. A frame around
+ * dash-core's BotContacts, with the dock's hand-offs into a dashboard's Bots
+ * view (in place, or as a popout) and Settings for bots on no dashboard.
  *
  * Stays mounted while collapsed (rendering nothing) so the approvals badge
  * on the dock rail stays live.
@@ -20,21 +24,17 @@ export const BotActivityPanel = ({
     const { currentTheme = {} } = useContext(ThemeContext) || {};
     const border = currentTheme["border-neutral-dark"] || "border-gray-700";
 
-    const monitor = useBotMonitor();
+    const contacts = useBotContacts();
     const {
         workspaces = [],
         openBotsView = null,
         openBotSettings = null,
     } = useContext(WorkspaceContext) || {};
 
-    const approvalsCount = monitor.approvals.length;
+    const approvalsCount = contacts.approvals.length;
     useEffect(() => {
         if (onApprovalsCount) onApprovalsCount(approvalsCount);
     }, [approvalsCount, onApprovalsCount]);
-
-    const setCollapsed = (next) => {
-        if (onCollapsedChange) onCollapsedChange(next);
-    };
 
     // AssistantDock (the only host) renders the rail + toggle button.
     if (collapsed) return null;
@@ -44,25 +44,15 @@ export const BotActivityPanel = ({
             <div
                 className={`flex flex-col flex-1 min-w-0 chrome-glass overflow-hidden border-l ${border}`}
             >
-                <PanelHeader
-                    glyph="robot"
-                    title="Bot activity"
-                    actions={
-                        <ButtonIcon3
-                            icon="chevron-right"
-                            ariaLabel="Collapse"
-                            onClick={() => setCollapsed(true)}
-                        />
+                <BotContacts
+                    contacts={contacts}
+                    workspaces={workspaces}
+                    onOpenBotsView={openBotsView}
+                    onOpenSettings={openBotSettings}
+                    onCollapse={() =>
+                        onCollapsedChange && onCollapsedChange(true)
                     }
                 />
-                <div className="flex-1 overflow-y-auto">
-                    <BotMonitor
-                        monitor={monitor}
-                        workspaces={workspaces}
-                        onOpenBotsView={openBotsView}
-                        onOpenSettings={openBotSettings}
-                    />
-                </div>
             </div>
         </div>
     );
