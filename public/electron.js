@@ -704,6 +704,7 @@ const {
     BOTS_GET_SPEND,
     BOTS_RESUME_BUDGET,
     BOTS_BUDGET_STATUS,
+    BOTS_SPENDING_SUMMARY,
     BOTS_LIST_RUNNING,
     BOTS_PAUSE_ALL,
     BOTS_RESUME_ALL,
@@ -2420,6 +2421,10 @@ function createWindow() {
         // Every bot's budget picture — the Bots panel (US-019).
         logger.loggedHandle(BOTS_BUDGET_STATUS, () =>
             botController.budgetStatus()
+        );
+        // This month's spending — the Spending view and budget fields (US-019).
+        logger.loggedHandle(BOTS_SPENDING_SUMMARY, () =>
+            botController.spendingSummary()
         );
 
         // --- Bot Factory background / pause controls (Slice 6b) ---

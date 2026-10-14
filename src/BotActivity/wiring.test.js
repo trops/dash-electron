@@ -44,6 +44,12 @@ describe("Bot Activity panel mount (AssistantDock)", () => {
         expect(dashSrc).toMatch(/renderAiAssistant=\{<AssistantDock \/>\}/);
     });
 
+    it("registers the spending-summary channel (US-019 slice B)", () => {
+        expect(electronSrc).toMatch(
+            /loggedHandle\(BOTS_SPENDING_SUMMARY, \(\) =>\s*botController\.spendingSummary\(\)\s*\)/
+        );
+    });
+
     it("registers the budget-status channel for the Bots panel (US-019)", () => {
         expect(electronSrc).toMatch(
             /loggedHandle\(BOTS_BUDGET_STATUS, \(\) =>\s*botController\.budgetStatus\(\)\s*\)/
