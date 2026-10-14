@@ -5,7 +5,8 @@ import { BotActivityPanel } from "../BotActivity/BotActivityPanel";
 
 /**
  * AssistantDock — one right-hand rail hosting the slide-over panels: Create
- * (plus) on top and Bot Activity (robot) beneath it.
+ * (plus) on top and Bots (robot, your bots as a contacts list — bot-teams
+ * TEAM-015) beneath it.
  *
  * The dock owns a single rail and controls each panel's collapsed state, so
  * only one panel is expanded at a time. Both panels stay mounted while
@@ -73,7 +74,7 @@ export const AssistantDock = () => {
                 {railButton(
                     "bots",
                     "robot",
-                    "Bot Activity",
+                    "Bots",
                     approvals > 0 ? (
                         <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
                             {approvals}

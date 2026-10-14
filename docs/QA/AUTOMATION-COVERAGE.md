@@ -47,17 +47,17 @@ Then in `afterAll`, restore everything in reverse order. The integration spec ve
 
 ## Section 0 — Pre-flight (12 items)
 
-| #      | Item                                                  | Status | Spec file                    | Mocks                | Diff |
-| ------ | ----------------------------------------------------- | ------ | ---------------------------- | -------------------- | ---- |
-| 0.2a   | App opens to Welcome panel                            | ✅     | `empty-state.spec.js`        | —                    | S    |
-| 0.2b   | No red console errors on launch                       | ✅     | `app-launch.spec.js`         | —                    | S    |
-| 0.2c   | Title bar shows "Dash"                                | ✅     | `app-launch.spec.js`         | —                    | S    |
-| 0.3a   | Sign in via Cognito hosted UI                         | 🔴     | —                            | (real OAuth)         | —    |
-| 0.3b   | Username appears under Account                        | 🟡     | `account-signin.spec.js`     | auth-token-injector  | M    |
-| 0.3c   | Owned packages list renders                           | 🟡     | `account-signin.spec.js`     | auth + mock-registry | M    |
-| 0.4a-c | Discover lists populate (widgets/dashboards/themes)   | 🟡     | `discover-tabs.spec.js`      | mock-registry        | S    |
-| 0.5a   | Right rail: Create + Bot Activity (Assistant retired) | 🟡     | —                            | —                    | S    |
-| 0.5b   | Input is enabled                                      | 🟡     | `ai-assistant-mount.spec.js` | —                    | S    |
+| #      | Item                                                | Status | Spec file                    | Mocks                | Diff |
+| ------ | --------------------------------------------------- | ------ | ---------------------------- | -------------------- | ---- |
+| 0.2a   | App opens to Welcome panel                          | ✅     | `empty-state.spec.js`        | —                    | S    |
+| 0.2b   | No red console errors on launch                     | ✅     | `app-launch.spec.js`         | —                    | S    |
+| 0.2c   | Title bar shows "Dash"                              | ✅     | `app-launch.spec.js`         | —                    | S    |
+| 0.3a   | Sign in via Cognito hosted UI                       | 🔴     | —                            | (real OAuth)         | —    |
+| 0.3b   | Username appears under Account                      | 🟡     | `account-signin.spec.js`     | auth-token-injector  | M    |
+| 0.3c   | Owned packages list renders                         | 🟡     | `account-signin.spec.js`     | auth + mock-registry | M    |
+| 0.4a-c | Discover lists populate (widgets/dashboards/themes) | 🟡     | `discover-tabs.spec.js`      | mock-registry        | S    |
+| 0.5a   | Right rail: Create + Bots (Assistant retired)       | 🟡     | `bot-activity-panel.spec.js` | —                    | S    |
+| 0.5b   | Input is enabled                                    | 🟡     | `ai-assistant-mount.spec.js` | —                    | S    |
 
 **Net: 9 of 12 automatable; 1 hard (real OAuth handshake).** The 0.1 download row has no checkboxes — humans must confirm artifact existence on the GitHub release page.
 

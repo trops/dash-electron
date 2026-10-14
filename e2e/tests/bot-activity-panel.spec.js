@@ -2,14 +2,13 @@ const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp } = require("../helpers/electron-app");
 
 /**
- * Bot Activity — panel mounts cleanly (Slice 7-Activity)
+ * Bots — the dock panel mounts cleanly (bot-teams TEAM-015)
  *
- * Smoke-test for the Bot Activity slide-over: the shared AssistantDock's
- * "Bot Activity" rail button opens the panel, the run control + empty feed
- * render, and it collapses again. Doesn't exercise a live bot run
- * (needs a configured Anthropic provider); the IPC round-trip and the
- * feed reducer are covered separately (runFeed.test.js + the Slice-4b
- * bots IPC smoke).
+ * Smoke-test for the dock's Bots panel: the rail's Bots button opens it, the
+ * contacts controls render (search, Recent / A–Z, By team) — on a fresh
+ * install with no bots it says so — and it collapses again. Chatting with a
+ * bot needs a configured AI; that path is covered by dash-core's BotContacts
+ * and BotChat tests.
  */
 
 let electronApp;
@@ -26,22 +25,25 @@ test.afterAll(async () => {
     await closeApp(electronApp, { tempUserData });
 });
 
-test("Bot Activity panel opens, structure renders, closes cleanly", async () => {
-    await test.step("panel opens via the dock's Bot Activity button", async () => {
-        await window
-            .getByRole("button", { name: "Bot Activity", exact: true })
-            .click();
+test("Bots panel opens, contacts controls render, closes cleanly", async () => {
+    await test.step("panel opens via the dock's Bots button", async () => {
+        await window.getByRole("button", { name: "Bots", exact: true }).click();
         await window.waitForTimeout(1000);
-        await expect(window.getByText("BOT ACTIVITY").first()).toBeVisible({
+        await expect(window.getByTestId("bot-contacts")).toBeVisible({
             timeout: 5000,
         });
     });
 
-    await test.step("run control + empty feed render", async () => {
-        await expect(window.getByText("Run a bot").first()).toBeVisible({
-            timeout: 5000,
-        });
-        await expect(window.getByText("No run yet").first()).toBeVisible({
+    await test.step("search, sort and grouping render; no bots yet", async () => {
+        await expect(window.getByLabel("Search bots")).toBeVisible();
+        await expect(
+            window.getByRole("radio", { name: "Recent", exact: true })
+        ).toBeVisible();
+        await expect(
+            window.getByRole("radio", { name: "A–Z", exact: true })
+        ).toBeVisible();
+        await expect(window.getByText("By team").first()).toBeVisible();
+        await expect(window.getByText("No bots yet").first()).toBeVisible({
             timeout: 5000,
         });
     });
@@ -52,10 +54,7 @@ test("Bot Activity panel opens, structure renders, closes cleanly", async () => 
             .click();
         await window.waitForTimeout(500);
         await expect(
-            window.getByRole("button", {
-                name: "Bot Activity",
-                exact: true,
-            })
+            window.getByRole("button", { name: "Bots", exact: true })
         ).toBeVisible({ timeout: 5000 });
     });
 });

@@ -73,3 +73,10 @@ describe("AssistantDock — the AI Assistant panel is retired (create-entry 5e-2
         );
     });
 });
+
+describe("AssistantDock — the robot panel is called Bots (TEAM-015)", () => {
+    it("labels the rail button Bots", () => {
+        assert.match(src, /"robot",\s*"Bots",/);
+        assert.doesNotMatch(src, /"Bot Activity"/);
+    });
+});

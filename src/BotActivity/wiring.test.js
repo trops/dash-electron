@@ -44,7 +44,13 @@ describe("Bot Activity panel mount (AssistantDock)", () => {
         expect(dashSrc).toMatch(/renderAiAssistant=\{<AssistantDock \/>\}/);
     });
 
-    it("the dock hosts the Bot monitor panel — not the retired AI Assistant (5e-2c)", () => {
+    it("the panel registers the last-runs channel for the contacts (TEAM-015)", () => {
+        expect(electronSrc).toMatch(
+            /loggedHandle\(BOTS_LAST_RUNS, \(\) => botController\.lastRuns\(\)\)/
+        );
+    });
+
+    it("the dock hosts the Bots panel — not the retired AI Assistant (5e-2c)", () => {
         expect(dockSrc).toMatch(/import \{ BotActivityPanel \}/);
         expect(dockSrc).toMatch(/<BotActivityPanel\s/);
         expect(dockSrc).not.toMatch(/AiAssistantPanel/);
