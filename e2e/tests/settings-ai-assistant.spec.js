@@ -2,7 +2,8 @@ const { test, expect } = require("@playwright/test");
 const { launchApp, closeApp } = require("../helpers/electron-app");
 
 /**
- * Settings → AI Assistant — backend + model pickers
+ * Settings → AI — backend + model pickers (the section was "AI Assistant"
+ * until the Assistant panel was retired, create-entry 5e-2c)
  *
  * Verifies the pane renders both combo boxes (Backend, Model), the
  * defaults match the documented options, and switching backend works.
@@ -25,8 +26,8 @@ test.afterAll(async () => {
     await closeApp(electronApp, { tempUserData });
 });
 
-test("Settings → AI Assistant renders backend + model pickers", async () => {
-    await test.step("open Settings → AI Assistant", async () => {
+test("Settings → AI renders backend + model pickers", async () => {
+    await test.step("open Settings → AI", async () => {
         await window
             .locator("aside")
             .getByText("Account", { exact: true })
@@ -38,7 +39,7 @@ test("Settings → AI Assistant renders backend + model pickers", async () => {
             .click();
         await window.waitForTimeout(1000);
         await window
-            .getByRole("button", { name: "AI Assistant", exact: true })
+            .getByRole("button", { name: "AI", exact: true })
             .first()
             .click();
         await window.waitForTimeout(500);

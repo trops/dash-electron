@@ -47,17 +47,17 @@ Then in `afterAll`, restore everything in reverse order. The integration spec ve
 
 ## Section 0 — Pre-flight (12 items)
 
-| #      | Item                                                | Status | Spec file                    | Mocks                | Diff |
-| ------ | --------------------------------------------------- | ------ | ---------------------------- | -------------------- | ---- |
-| 0.2a   | App opens to Welcome panel                          | ✅     | `empty-state.spec.js`        | —                    | S    |
-| 0.2b   | No red console errors on launch                     | ✅     | `app-launch.spec.js`         | —                    | S    |
-| 0.2c   | Title bar shows "Dash"                              | ✅     | `app-launch.spec.js`         | —                    | S    |
-| 0.3a   | Sign in via Cognito hosted UI                       | 🔴     | —                            | (real OAuth)         | —    |
-| 0.3b   | Username appears under Account                      | 🟡     | `account-signin.spec.js`     | auth-token-injector  | M    |
-| 0.3c   | Owned packages list renders                         | 🟡     | `account-signin.spec.js`     | auth + mock-registry | M    |
-| 0.4a-c | Discover lists populate (widgets/dashboards/themes) | 🟡     | `discover-tabs.spec.js`      | mock-registry        | S    |
-| 0.5a   | AI Assistant panel mounts                           | 🟡     | `ai-assistant-mount.spec.js` | —                    | S    |
-| 0.5b   | Input is enabled                                    | 🟡     | `ai-assistant-mount.spec.js` | —                    | S    |
+| #      | Item                                                  | Status | Spec file                    | Mocks                | Diff |
+| ------ | ----------------------------------------------------- | ------ | ---------------------------- | -------------------- | ---- |
+| 0.2a   | App opens to Welcome panel                            | ✅     | `empty-state.spec.js`        | —                    | S    |
+| 0.2b   | No red console errors on launch                       | ✅     | `app-launch.spec.js`         | —                    | S    |
+| 0.2c   | Title bar shows "Dash"                                | ✅     | `app-launch.spec.js`         | —                    | S    |
+| 0.3a   | Sign in via Cognito hosted UI                         | 🔴     | —                            | (real OAuth)         | —    |
+| 0.3b   | Username appears under Account                        | 🟡     | `account-signin.spec.js`     | auth-token-injector  | M    |
+| 0.3c   | Owned packages list renders                           | 🟡     | `account-signin.spec.js`     | auth + mock-registry | M    |
+| 0.4a-c | Discover lists populate (widgets/dashboards/themes)   | 🟡     | `discover-tabs.spec.js`      | mock-registry        | S    |
+| 0.5a   | Right rail: Create + Bot Activity (Assistant retired) | 🟡     | —                            | —                    | S    |
+| 0.5b   | Input is enabled                                      | 🟡     | `ai-assistant-mount.spec.js` | —                    | S    |
 
 **Net: 9 of 12 automatable; 1 hard (real OAuth handshake).** The 0.1 download row has no checkboxes — humans must confirm artifact existence on the GitHub release page.
 
@@ -275,20 +275,20 @@ The existing `mcp-provider-status.spec.js` already verifies status for one provi
 | 5b  | Folders CRUD                               | 🟡     | `settings-folders.spec.js`       | —                           | S    |
 | 5c  | Notifications global + per-widget toggle   | 🟡     | `settings-notifications.spec.js` | —                           | S    |
 | 5d  | MCP Server toggle, copy token, port change | 🟡     | `settings-mcp-server.spec.js`    | —                           | S    |
-| 5e  | AI Assistant backend switch                | 🟡     | `settings-ai-assistant.spec.js`  | —                           | S    |
+| 5e  | Settings › AI backend switch               | 🟡     | `settings-ai-assistant.spec.js`  | —                           | S    |
 | 5f  | Sign out → sign in (different account)     | 🟡     | `account-switch.spec.js`         | auth-token-injector         | M    |
 
 **Net: 6 of 6.**
 
 ---
 
-## Section 6 — AI Assistant (5 items)
+## Section 6 — AI in Create and the Widget Builder (5 items; the AI Assistant panel was retired in create-entry 5e-2c)
 
 | #   | Item                                       | Status | Spec file                                    | Mocks                           | Diff |
 | --- | ------------------------------------------ | ------ | -------------------------------------------- | ------------------------------- | ---- |
 | 6a  | Streaming response renders without flicker | 🟡     | `ai-streaming.spec.js`                       | mock-llm (SSE)                  | L    |
 | 6b  | Tool-call blocks render expand/collapse    | 🟡     | `ai-tool-calls.spec.js`                      | mock-llm with tool_use response | L    |
-| 6c  | [1]-[6] menu shortcuts dispatch correctly  | 🟡     | `ai-menu-shortcuts.spec.js`                  | mock-llm                        | L    |
+| 6c  | Create Ask: Dash team and a lead answer    | 🟡     | —                                            | mock-llm                        | L    |
 | 6d  | Widget Builder install via builder         | 🟡     | `widget-builder.spec.js` (shared with §2.1d) | mock-llm                        | L    |
 | 6e  | Provider picker above preview              | 🟡     | `widget-builder.spec.js`                     | —                               | S    |
 
@@ -312,17 +312,17 @@ The existing `mcp-provider-status.spec.js` already verifies status for one provi
 
 ## Roll-up
 
-| Section         |   Total | Already auto | Auto with new specs | Manual only |
-| --------------- | ------: | -----------: | ------------------: | ----------: |
-| 0. Pre-flight   |      12 |            3 |                   8 |           1 |
-| 1. Dashboards   |      33 |            2 |                  30 |           1 |
-| 2. Widgets      |      24 |            0 |                  24 |           0 |
-| 3. Themes       |       8 |            2 |                   6 |           0 |
-| 4. Providers    |      22 |            1 |                  20 |           1 |
-| 5. Settings     |       6 |            0 |                   6 |           0 |
-| 6. AI Assistant |       5 |            0 |                   5 |           0 |
-| 7. Lifecycle    |       5 |            0 |                   2 |           3 |
-| **Total**       | **115** |        **8** |             **101** |       **6** |
+| Section                 |   Total | Already auto | Auto with new specs | Manual only |
+| ----------------------- | ------: | -----------: | ------------------: | ----------: |
+| 0. Pre-flight           |      12 |            3 |                   8 |           1 |
+| 1. Dashboards           |      33 |            2 |                  30 |           1 |
+| 2. Widgets              |      24 |            0 |                  24 |           0 |
+| 3. Themes               |       8 |            2 |                   6 |           0 |
+| 4. Providers            |      22 |            1 |                  20 |           1 |
+| 5. Settings             |       6 |            0 |                   6 |           0 |
+| 6. AI (Create, Builder) |       5 |            0 |                   5 |           0 |
+| 7. Lifecycle            |       5 |            0 |                   2 |           3 |
+| **Total**               | **115** |        **8** |             **101** |       **6** |
 
 **~95% reachable. The 6 manual-only items: real OAuth (×2), auto-update prompt, native macOS menus, Squirrel installer, "looks right" cosmetic.**
 
@@ -336,7 +336,7 @@ This is the recommended sequence so each new mock layer pays for itself before t
 2. **Auth-token injector** (~25 items) — pattern is already in `registry-theme-install.spec.js` lines 41-51; promote it to a helper.
 3. **File-dialog override** (~10 items) — patch `dialog.showOpenDialog` / `showSaveDialog` via `electronApp.evaluate()` so import/export specs can run headless.
 4. **Mock-MCP transport** (~12 items) — stub the MCP `Client.connect` / `tools.list` / `tools.call` methods so the catalog and provider-status specs run without real servers.
-5. **Mock-LLM SSE server** (~6 items) — local HTTP server speaking the Anthropic streaming format with prompt-keyed canned responses. Pays for AI Assistant + builder.
+5. **Mock-LLM SSE server** (~6 items) — local HTTP server speaking the Anthropic streaming format with prompt-keyed canned responses. Pays for Create's AI + builder.
 
 After steps 1-3 land we'd be at ~75/115 (~65%) automated. Steps 4-5 take us to ~95/115 (~83%).
 

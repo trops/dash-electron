@@ -44,7 +44,6 @@ describe("Widget Builder — no hard-coded palette colours", () => {
         "ChatProviderGate.js",
         "CheckerCard.js",
         "WidgetCredentialPermissionModal.js",
-        "AiAssistantPanel.js",
         "composer/ComposerPaneV2.js",
         "composer/GridEditor.js",
         "composer/PaletteView.js",

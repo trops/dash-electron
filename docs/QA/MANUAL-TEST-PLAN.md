@@ -57,10 +57,10 @@ The macOS build is a universal binary — same `.dmg` works on both Intel and Ap
 -   [ ] Same for Settings → **Dashboards** → **Discover**.
 -   [ ] Same for Settings → **Themes** → **Discover**.
 
-### 0.5 AI Assistant mounts
+### 0.5 Right-hand rail
 
--   [ ] Right side of the window has an AI Assistant panel (or a button to open it). Click to open.
--   [ ] You can type a prompt; the input is enabled (whether or not the LLM responds — that's tested later).
+-   [ ] The rail on the right has two buttons, **Create** and **Bot Activity** (the AI Assistant panel was retired). Click Create.
+-   [ ] You can type in the Ask box; the input is enabled (whether or not the AI responds — that's tested later).
 
 If any of 0.1–0.5 fail, **stop here and file a Blocker.** The rest of the plan won't work until cold start does.
 
@@ -140,7 +140,7 @@ Open the gear icon on the dashboard header (in edit mode).
 -   [ ] **From registry** — Settings → Widgets → Discover → Install.
 -   [ ] **From a local zip** — Settings → Widgets → Install Widgets → Install from File → pick a widget zip.
 -   [ ] **From a folder** — Install Widgets → Load from Folder → pick a folder containing one or more widget packages. Non-widget folders are skipped, not failed.
--   [ ] **From scratch (AI builder)** — open AI Assistant → Create Widget. Prompt for something simple (e.g., "a clock"). The live preview pane updates as the model writes code. Click **Install** at the bottom — it lands in Settings → Widgets under `@ai-built/<name>`.
+-   [ ] **From scratch (AI builder)** — open Create → Type: Widget. Prompt for something simple (e.g., "a clock"). The live preview pane updates as the model writes code. Click **Install** at the bottom — it lands in Settings → Widgets under `@ai-built/<name>`.
 -   [ ] **Remix** — open the AI builder against an existing widget; ask for a small change; install. The remix preserves attribution to the original.
 
 ### 2.2 Configure
@@ -253,17 +253,16 @@ Pick one OAuth-gated provider (Google Drive is the canonical one):
 -   [ ] **Folders** — create a folder with name and icon (icon picker has search). Rename it. Move a dashboard into it. Delete the folder; confirmation says how many dashboards live there.
 -   [ ] **Notifications** — toggle global on/off. Pick a widget that emits notifications, toggle the per-widget setting, verify the change.
 -   [ ] **MCP Server (Settings tab)** — toggle the embedded server on. Copy the auth token. Change the port; restart; verify the new port.
--   [ ] **AI Assistant (Settings tab)** — switch backend Claude Code CLI ↔ Anthropic API. The model picker updates accordingly.
+-   [ ] **AI (Settings tab)** — switch backend Claude Code CLI ↔ Anthropic API. The model picker updates accordingly.
 -   [ ] **Account** — sign out (token cleared). Sign back in (different account is fine, or the same one). Owned-packages list reflects the signed-in user.
 
 ---
 
-## 6. AI Assistant — ~15 min
+## 6. AI in Create and the Widget Builder — ~15 min
 
--   [ ] Type a prompt; response streams in without flicker.
--   [ ] Tool-call blocks render and can be expanded/collapsed.
--   [ ] Use one of the [1]–[6] menu shortcuts the assistant offers on first response (Dashboards / Widgets / Themes / Providers / Layouts / Setup). The assistant performs the action against the right surface.
--   [ ] Open the Widget Builder from the assistant. Code → live preview → Install. The new widget shows up in `@ai-built/<name>`.
+-   [ ] Create's Ask box: ask about your dashboards; the answer streams in without flicker. Pick a team lead in **To:** and ask it something.
+-   [ ] Ask to add a widget to a dashboard you have: you get a plan headed "Changes to <dashboard> · not made yet"; nothing changes until **Make these changes**.
+-   [ ] Create → Type: Widget opens the Widget Builder. Code → live preview → Install. The new widget shows up in `@ai-built/<name>`.
 -   [ ] Provider picker above the preview pane lets you choose a provider for each declared provider type the widget needs.
 
 ---

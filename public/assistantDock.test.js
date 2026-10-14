@@ -45,3 +45,31 @@ describe("AssistantDock — Create (4e-2)", () => {
         assert.doesNotMatch(src, /hover:bg-white\/10/);
     });
 });
+
+describe("AssistantDock — the AI Assistant panel is retired (create-entry 5e-2c)", () => {
+    it("has no wand button and doesn't mount the Assistant", () => {
+        assert.doesNotMatch(src, /AiAssistantPanel/);
+        assert.doesNotMatch(src, /wand-magic-sparkles/);
+        assert.doesNotMatch(src, /"AI Assistant"/);
+    });
+    it("the rail is Create, then Bot Activity", () => {
+        const create = src.indexOf('railButton("create"');
+        const bots = src.indexOf('"bots",\n                    "robot"');
+        assert.ok(create > 0 && bots > create);
+        assert.equal(src.split("railButton(").length - 1, 2); // the two rail buttons
+    });
+    it("the panel file is gone", () => {
+        assert.equal(
+            fs.existsSync(
+                path.join(
+                    __dirname,
+                    "..",
+                    "src",
+                    "AiAssistant",
+                    "AiAssistantPanel.js"
+                )
+            ),
+            false
+        );
+    });
+});

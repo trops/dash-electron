@@ -35,7 +35,7 @@ Framework-level PRDs are in [@trops/dash-core](https://github.com/trops/dash-cor
 
 ## Quality Assurance
 
--   **[QA/MANUAL-TEST-PLAN.md](./QA/MANUAL-TEST-PLAN.md)** - End-to-end manual test checklist organized by topic (Dashboards, Widgets, Themes, Providers, Settings, AI Assistant, App Lifecycle)
+-   **[QA/MANUAL-TEST-PLAN.md](./QA/MANUAL-TEST-PLAN.md)** - End-to-end manual test checklist organized by topic (Dashboards, Widgets, Themes, Providers, Settings, AI in Create and the Widget Builder, App Lifecycle)
 -   **[QA/REPORT-TEMPLATE.md](./QA/REPORT-TEMPLATE.md)** - Copy-paste template for filing a QA finding
 -   **[QA/AUTOMATION-COVERAGE.md](./QA/AUTOMATION-COVERAGE.md)** - Per-item map from the manual plan to Playwright specs (existing or proposed) and the mocks each one needs
 

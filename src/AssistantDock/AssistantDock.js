@@ -1,19 +1,18 @@
 import React, { useState, useContext, useEffect } from "react";
 import { ThemeContext, ButtonIcon2 } from "@trops/dash-react";
 import { CreateDockPanel } from "@trops/dash-core";
-import { AiAssistantPanel } from "../AiAssistant/AiAssistantPanel";
 import { BotActivityPanel } from "../BotActivity/BotActivityPanel";
 
 /**
- * AssistantDock — one right-hand rail hosting BOTH slide-over panels: the AI
- * Assistant (wand) on top and Bot Activity (robot) stacked beneath it.
+ * AssistantDock — one right-hand rail hosting the slide-over panels: Create
+ * (plus) on top and Bot Activity (robot) beneath it.
  *
- * Previously each panel rendered its own full-height rail, so mounted as
- * siblings their toggles sat side by side. This dock owns a single rail and
- * controls each panel's collapsed state, so only one panel is expanded at a
- * time and the two toggles stack vertically. Both panels stay mounted while
- * collapsed (returning null) so their subscriptions — and the approvals badge —
- * stay live.
+ * The dock owns a single rail and controls each panel's collapsed state, so
+ * only one panel is expanded at a time. Both panels stay mounted while
+ * collapsed so their subscriptions — and the approvals badge — stay live.
+ *
+ * The AI Assistant panel (wand) was retired in create-entry 5e-2c: asking and
+ * making things both happen in Create.
  *
  * Create (plus, create-entry CRE-007 AC1, phase 4e-2): a plan conversation
  * folded out of the Create modal carries on here; with nothing folded the
@@ -25,7 +24,7 @@ export const AssistantDock = () => {
     const borderColor =
         currentTheme?.["border-primary-dark"] || "border-gray-700";
 
-    const [open, setOpen] = useState(null); // null | "create" | "ai" | "bots"
+    const [open, setOpen] = useState(null); // null | "create" | "bots"
     const [approvals, setApprovals] = useState(0);
 
     const toggle = (which) => setOpen((cur) => (cur === which ? null : which));
@@ -67,16 +66,10 @@ export const AssistantDock = () => {
                 onCollapsedChange={(c) => setOpen(c ? null : "bots")}
                 onApprovalsCount={setApprovals}
             />
-            <AiAssistantPanel
-                docked
-                collapsed={open !== "ai"}
-                onCollapsedChange={(c) => setOpen(c ? null : "ai")}
-            />
             <div
                 className={`chrome-rail flex flex-col items-center w-12 border-l ${borderColor} ${bgDark} shrink-0 h-screen gap-2 pt-3`}
             >
                 {railButton("create", "plus", "Create")}
-                {railButton("ai", "wand-magic-sparkles", "AI Assistant")}
                 {railButton(
                     "bots",
                     "robot",
