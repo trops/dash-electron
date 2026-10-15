@@ -78,3 +78,15 @@ describe("Bots view popouts (Dash.js, TEAM-011 B3)", () => {
         expect(dashSrc).toMatch(/popoutBotTab=\{search\.get\("tab"\)\}/);
     });
 });
+
+describe("Main window start-up (electron.js)", () => {
+    it("opens on Dash's background, hidden until the page has painted", () => {
+        expect(electronSrc).toMatch(
+            /backgroundColor: "#0a0b10",\s+show: false,/
+        );
+        expect(electronSrc).toMatch(
+            /shownWindow\.once\("ready-to-show", revealWindow\)/
+        );
+        expect(electronSrc).toMatch(/setTimeout\(revealWindow, 5000\)/);
+    });
+});

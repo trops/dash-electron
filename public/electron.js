@@ -825,6 +825,11 @@ function createWindow() {
         minWidth: 1024,
         minHeight: 768,
         fullscreen: false,
+        // Dash's own background (dash-react --bg) from the first frame, and
+        // hidden until the page has painted — otherwise the window opens on
+        // Electron's default gray before the app draws.
+        backgroundColor: "#0a0b10",
+        show: false,
         webPreferences: {
             preload: path.join(__dirname, "preload.js"),
             nodeIntegration: false,
@@ -838,6 +843,16 @@ function createWindow() {
         },
     });
     applyWindowHardening(mainWindow);
+    const shownWindow = mainWindow;
+    const revealWindow = () => {
+        if (!shownWindow.isDestroyed() && !shownWindow.isVisible()) {
+            shownWindow.show();
+        }
+    };
+    shownWindow.once("ready-to-show", revealWindow);
+    // Never leave Dash invisible if the first paint doesn't come (a page
+    // that failed to load still shows its error).
+    setTimeout(revealWindow, 5000);
 
     mainWindow.loadURL(
         isDev
