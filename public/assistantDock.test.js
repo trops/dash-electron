@@ -80,3 +80,17 @@ describe("AssistantDock — the robot panel is called Bots (TEAM-015)", () => {
         assert.doesNotMatch(src, /"Bot Activity"/);
     });
 });
+
+describe("AssistantDock — a clicked bot notification opens the bot (US-018 AC5)", () => {
+    it("takes the open request on mount and when told, opening the Bots panel", () => {
+        assert.match(src, /const req = await b\.takeOpenRequest\(\);/);
+        assert.match(
+            src,
+            /if \(req && req\.botId\) \{\s+setOpen\("bots"\);\s+setOpenRequest\(\{ botId: req\.botId \}\);/
+        );
+        assert.match(src, /b\.onOpenRequest\(take\)/);
+    });
+    it("hands the request to the Bots panel", () => {
+        assert.match(src, /openRequest=\{openRequest\}/);
+    });
+});

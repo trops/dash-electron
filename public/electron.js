@@ -706,6 +706,7 @@ const {
     BOTS_BUDGET_STATUS,
     BOTS_SPENDING_SUMMARY,
     BOTS_AUDIT_LOG,
+    BOTS_TAKE_OPEN_REQUEST,
     BOTS_LIST_RUNNING,
     BOTS_PAUSE_ALL,
     BOTS_RESUME_ALL,
@@ -757,6 +758,7 @@ const {
 // login-item management so scheduled bots keep running with the window closed.
 const { createBotTray, updateBotTray, destroyBotTray } = require("./botTray");
 const { botsWantBackground } = require("./botBackground");
+const { createBotNotifier } = require("./botNotify");
 const { resolveAppIdentifier } = require("./appIdentifier");
 // package.json sits one level above public/electron.js (the "main" entry) in
 // dev and inside the packaged app.asar. Missing → resolveAppIdentifier's
@@ -2446,6 +2448,10 @@ function createWindow() {
         logger.loggedHandle(BOTS_AUDIT_LOG, (e, filters) =>
             botController.auditLog(filters || {})
         );
+        // The bot a clicked notification asked to open (US-018 AC5).
+        logger.loggedHandle(BOTS_TAKE_OPEN_REQUEST, () =>
+            botController.takeOpenRequest()
+        );
 
         // --- Bot Factory background / pause controls (Slice 6b) ---
         logger.loggedHandle(BOTS_LIST_RUNNING, () =>
@@ -3185,6 +3191,13 @@ app.whenReady().then(() => {
 
     // --- Bot Factory lifecycle ---
     botController.init({
+        // Failed runs and budget at 80% / over as OS notifications
+        // (US-018 AC5, US-019 AC3); a click opens the bot.
+        notify: createBotNotifier({
+            notificationController,
+            isDashFocused: () => !!BrowserWindow.getFocusedWindow(),
+            openBot: openBotFromNotification,
+        }),
         getWindows: () => BrowserWindow.getAllWindows(),
         getMainWindow: () => mainWindow,
         mcpController,
@@ -3225,6 +3238,7 @@ app.whenReady().then(() => {
             notificationController,
             getMainWindow: () => mainWindow,
             openDash: () => showMainWindow(),
+            openBot: openBotFromNotification,
             onQuit: () => {
                 const quit = () => {
                     forceQuitConfirmed = true;
@@ -3253,6 +3267,20 @@ app.whenReady().then(() => {
 // --- Bot Factory background-mode helpers (Slice 6b) ---
 
 /** Show + focus the main window, recreating it if it was closed. */
+/**
+ * A bot notification was clicked: ask the dock to open that bot, and bring
+ * Dash up — reopening its window if it was closed (US-018 AC5). A new window
+ * takes the request once its dock is up.
+ */
+function openBotFromNotification(botId) {
+    try {
+        botController.requestOpen(botId);
+    } catch (_e) {
+        // Opening Dash still helps.
+    }
+    showMainWindow();
+}
+
 function showMainWindow() {
     if (mainWindow && !mainWindow.isDestroyed()) {
         if (mainWindow.isMinimized()) mainWindow.restore();

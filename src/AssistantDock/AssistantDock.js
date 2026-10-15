@@ -30,6 +30,31 @@ export const AssistantDock = () => {
 
     const toggle = (which) => setOpen((cur) => (cur === which ? null : which));
 
+    // A clicked bot notification opens that bot (US-018 AC5). A window that
+    // was reopened for the click takes the request once mounted; an open one
+    // is told.
+    const [openRequest, setOpenRequest] = useState(null);
+    useEffect(() => {
+        const b = window.mainApi && window.mainApi.bots;
+        if (!b || typeof b.takeOpenRequest !== "function") return undefined;
+        const take = async () => {
+            try {
+                const req = await b.takeOpenRequest();
+                if (req && req.botId) {
+                    setOpen("bots");
+                    setOpenRequest({ botId: req.botId });
+                }
+            } catch (_e) {
+                // Nothing to open.
+            }
+        };
+        take();
+        const id = b.onOpenRequest ? b.onOpenRequest(take) : null;
+        return () => {
+            if (id != null && b.removeListener) b.removeListener(id);
+        };
+    }, []);
+
     // Folding a plan out of the Create modal opens the Create panel.
     useEffect(() => {
         const onFold = () => setOpen("create");
@@ -66,6 +91,7 @@ export const AssistantDock = () => {
                 collapsed={open !== "bots"}
                 onCollapsedChange={(c) => setOpen(c ? null : "bots")}
                 onApprovalsCount={setApprovals}
+                openRequest={openRequest}
             />
             <div
                 className={`chrome-rail flex flex-col items-center w-12 border-l ${borderColor} ${bgDark} shrink-0 h-screen gap-2 pt-3`}
