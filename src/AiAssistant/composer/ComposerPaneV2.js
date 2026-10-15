@@ -254,7 +254,12 @@ export function ComposerPaneV2({
         }
         if (typeof onEmitRef.current === "function") {
             if (hasEditContextCode && isGridEmpty(grid)) return;
-            onEmitRef.current(emitGridWidgetCode(grid));
+            // `empty` tells the builder not to save the placeholder
+            // as a draft.
+            onEmitRef.current({
+                ...emitGridWidgetCode(grid),
+                empty: isGridEmpty(grid),
+            });
         }
     }, [grid, hasEditContextCode]);
 
@@ -299,6 +304,16 @@ export function ComposerPaneV2({
                 if (userRenamedRef.current) return;
                 const taken = new Set();
                 for (const c of configs) {
+                    // A draft's folder is registered like a widget, but
+                    // drafts' names come from drafts.list below (which
+                    // leaves out this session's own draft) — counting
+                    // the folder too bumped the name on every remount.
+                    if (
+                        /^@ai-built\/draft-/i.test(
+                            String(c?.widgetPackage || "")
+                        )
+                    )
+                        continue;
                     if (c?.componentName)
                         taken.add(String(c.componentName).toLowerCase());
                     if (c?.widgetPackage) {

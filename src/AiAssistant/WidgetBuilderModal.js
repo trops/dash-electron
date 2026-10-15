@@ -1808,6 +1808,8 @@ ${
         if (!isOpen) return;
         if (effectiveEditContext) return; // remix path doesn't auto-save
         if (!detectedCode?.componentCode) return;
+        // Compose's empty placeholder isn't worth a draft.
+        if (detectedCode.emptyGrid) return;
         let id = draftSessionIdRef.current;
         if (!id) {
             id =
@@ -1886,6 +1888,7 @@ ${
         isOpen,
         effectiveEditContext,
         detectedCode?.componentCode,
+        detectedCode?.emptyGrid,
         detectedCode?.configCode,
         detectedCode?.files,
     ]);
@@ -6221,6 +6224,7 @@ ${
                                                     code.componentCode,
                                                 configCode: code.configCode,
                                                 files: code.files || null,
+                                                emptyGrid: !!code.empty,
                                             });
                                             compilePreview(code).catch(
                                                 () => {}

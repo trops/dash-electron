@@ -425,3 +425,31 @@ describe("ComposerPaneV2 — explicit name confirm (no per-keystroke churn)", ()
         ).not.toBeInTheDocument();
     });
 });
+
+describe("ComposerPaneV2 — drafts (draft cleanup)", () => {
+    test("components registered from draft folders don't count as taken", async () => {
+        installMainApi(
+            jest.fn().mockResolvedValue([
+                {
+                    componentName: "ComposedWidget",
+                    widgetPackage: "@ai-built/draft-1782438308083-2ohecu",
+                },
+                {
+                    componentName: "ComposedWidget2",
+                    widgetPackage: "@ai-built/draft-1782438308083-2ohecu",
+                },
+            ])
+        );
+        render(<ComposerPaneV2 />);
+        const input = screen.getByTestId("composer-widget-name");
+        await new Promise((r) => setTimeout(r, 20));
+        expect(input.value).toBe("ComposedWidget");
+    });
+
+    test("the empty placeholder is emitted marked empty", async () => {
+        const onEmit = jest.fn();
+        render(<ComposerPaneV2 onEmit={onEmit} />);
+        await waitFor(() => expect(onEmit).toHaveBeenCalled());
+        expect(onEmit.mock.calls[0][0].empty).toBe(true);
+    });
+});
