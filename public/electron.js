@@ -3221,9 +3221,12 @@ app.whenReady().then(() => {
             getMainWindow: () => mainWindow,
             openDash: () => showMainWindow(),
             onQuit: () => {
-                forceQuitConfirmed = true;
-                destroyBotTray();
-                app.quit();
+                const quit = () => {
+                    forceQuitConfirmed = true;
+                    destroyBotTray();
+                    app.quit();
+                };
+                if (holdQuitForRunningBots(quit)) quit();
             },
         });
         syncLoginItem();
@@ -3288,12 +3291,80 @@ function syncBackgroundMode() {
     syncLoginItem();
 }
 
+// Quitting while bots are mid-run (US-018 AC6): set once the user has
+// chosen to stop them (or they finished), so the re-fired quit goes through.
+let botRunsQuitConfirmed = false;
+
+/**
+ * Ask before quitting while bots are mid-run (US-018 AC6): stop them —
+ * saved as "Interrupted" — and quit, quit when they finish, or cancel.
+ * Synchronous, so a caller in `before-quit` can still preventDefault.
+ * @param {() => void} quit         quits for real once the runs are dealt with
+ * @param {() => void} [onCancel]   e.g. reopen a window that was closed
+ * @returns {boolean} true when quitting can go ahead now
+ */
+function holdQuitForRunningBots(quit, onCancel = null) {
+    if (botRunsQuitConfirmed || process.env.DASH_E2E === "1") return true;
+    let running = [];
+    try {
+        running = botController.listRunning() || [];
+    } catch (_e) {
+        running = [];
+    }
+    if (!running.length) return true;
+    const names = running.map((r) => r.name);
+    const opts = {
+        type: "warning",
+        buttons: ["Stop them and quit", "Quit when they finish", "Cancel"],
+        defaultId: 1,
+        cancelId: 2,
+        title: "Bots are running",
+        message:
+            running.length === 1
+                ? `${names[0]} is still running.`
+                : `${running.length} bots are still running.`,
+        detail:
+            running.length === 1
+                ? "If you stop it now, its run is saved as Interrupted."
+                : `${names.join(
+                      ", "
+                  )}.\n\nIf you stop them now, their runs are saved as Interrupted.`,
+    };
+    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+    const choice = win
+        ? dialog.showMessageBoxSync(win, opts)
+        : dialog.showMessageBoxSync(opts);
+    if (choice === 0) {
+        botRunsQuitConfirmed = true;
+        botController
+            .interruptAll()
+            .catch((err) =>
+                logger.warn("[bots] interrupt on quit failed", err.message)
+            )
+            .finally(quit);
+    } else if (choice === 1) {
+        botController.whenIdle().then(() => {
+            botRunsQuitConfirmed = true;
+            quit();
+        });
+    } else if (onCancel) {
+        onCancel();
+    }
+    return false;
+}
+
 // Phase 2B unsaved-changes guard for app quit (Cmd+Q / File → Quit /
 // dock context-menu quit). Same shape as the window `close` handler
 // above. The renderer-side dirty flag is read via executeJavaScript;
 // E2E runs bypass; once the user discards, `forceQuitConfirmed` short-
 // circuits subsequent fires triggered by app.quit()/before-quit cycling.
 app.on("before-quit", async (e) => {
+    // Bots mid-run come first, before any await — preventDefault only
+    // holds while this handler is still synchronous.
+    if (!holdQuitForRunningBots(() => app.quit())) {
+        e.preventDefault();
+        return;
+    }
     if (forceQuitConfirmed) return;
     if (process.env.DASH_E2E === "1") return;
     if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -3342,6 +3413,19 @@ app.on("window-all-closed", () => {
     }
     if (background) {
         updateBotTray();
+        return;
+    }
+
+    // Closing the last window quits on Windows/Linux — ask first when bots
+    // are mid-run (US-018 AC6), before their MCP servers are stopped below.
+    // Cancel brings the window back rather than leaving Dash invisible.
+    if (
+        process.platform !== "darwin" &&
+        !holdQuitForRunningBots(
+            () => app.quit(),
+            () => createWindow()
+        )
+    ) {
         return;
     }
 
