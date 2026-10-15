@@ -86,7 +86,7 @@ describe("AssistantDock — a clicked bot notification opens the bot (US-018 AC5
         assert.match(src, /const req = await b\.takeOpenRequest\(\);/);
         assert.match(
             src,
-            /if \(req && req\.botId\) \{\s+setOpen\("bots"\);\s+setOpenRequest\(\{ botId: req\.botId \}\);/
+            /if \(req\) \{\s+setOpen\("bots"\);\s+setOpenRequest\(\{ botId: req\.botId \|\| null \}\);/
         );
         assert.match(src, /b\.onOpenRequest\(take\)/);
     });

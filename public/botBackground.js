@@ -53,4 +53,59 @@ function describeTrayState(state = {}) {
     return { summary, pauseLabel, badge };
 }
 
-module.exports = { botsWantBackground, describeTrayState };
+/**
+ * What background mode should do now, from the bot settings (US-018 AC1-AC4):
+ * stay in the tray when the last window closes, keep a hidden login item, and
+ * hold the power blocker between runs. All need a scheduled bot and the
+ * "keep bots running" setting; keep-awake also needs AC power.
+ *
+ * @param {{ bots: Array, settings?: object, onBattery?: boolean }} args
+ * @returns {{ stayInTray: boolean, openAtLogin: boolean, keepAwake: boolean }}
+ */
+function backgroundPlan({ bots, settings, onBattery = false } = {}) {
+    const s = settings || {};
+    const on = botsWantBackground(bots) && s.background !== false;
+    return {
+        stayInTray: on,
+        openAtLogin: on && s.startAtLogin !== false,
+        keepAwake: on && s.keepAwake === true && !onBattery,
+    };
+}
+
+const MAX_TRAY_APPROVALS = 5;
+
+/**
+ * The tray's waiting approvals (US-018 AC2): "<bot> wants <tool>", each
+ * opening its bot; past five, a count.
+ *
+ * @param {Array<{id: string, request?: object}>} approvals
+ * @returns {Array<{label: string, botId: (string|null)}>}
+ */
+function approvalMenuItems(approvals) {
+    const list = (Array.isArray(approvals) ? approvals : []).filter(
+        (a) => a && a.id
+    );
+    const items = list.slice(0, MAX_TRAY_APPROVALS).map((a) => {
+        const req = a.request || {};
+        return {
+            label: `${req.botName || "A bot"} wants ${
+                req.toolName || "to use a tool"
+            }`,
+            botId: req.botId || null,
+        };
+    });
+    if (list.length > MAX_TRAY_APPROVALS) {
+        items.push({
+            label: `${list.length - MAX_TRAY_APPROVALS} more waiting`,
+            botId: null,
+        });
+    }
+    return items;
+}
+
+module.exports = {
+    botsWantBackground,
+    describeTrayState,
+    backgroundPlan,
+    approvalMenuItems,
+};

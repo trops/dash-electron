@@ -40,9 +40,10 @@ export const AssistantDock = () => {
         const take = async () => {
             try {
                 const req = await b.takeOpenRequest();
-                if (req && req.botId) {
+                // No bot (the tray's Open Bots panel) opens the list.
+                if (req) {
                     setOpen("bots");
-                    setOpenRequest({ botId: req.botId });
+                    setOpenRequest({ botId: req.botId || null });
                 }
             } catch (_e) {
                 // Nothing to open.
