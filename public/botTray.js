@@ -46,6 +46,7 @@ function trayIcon() {
  *   notificationController: object,
  *   getMainWindow: () => (Electron.BrowserWindow|null),
  *   openDash: () => void,
+ *   openBot?: (botId: string) => void,
  *   onQuit: () => void,
  * }} injected
  */
@@ -153,6 +154,11 @@ function notifyApprovals(approvals, notificationController, getMainWindow) {
                 (req.toolName || "A bot action") +
                 " is waiting for your approval.",
             data: { approvalId: a.id },
+            // Opens the bot, whose chat holds the approval (US-018 AC5).
+            onClick: () => {
+                if (deps && deps.openBot && req.botId) deps.openBot(req.botId);
+                else if (deps && deps.openDash) deps.openDash();
+            },
         });
     }
     // Drop ids for approvals that have been resolved so the set can't grow

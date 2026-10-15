@@ -20,6 +20,8 @@ export const BotActivityPanel = ({
     collapsed = true,
     onCollapsedChange,
     onApprovalsCount,
+    // { botId } from a clicked notification — opens that bot.
+    openRequest = null,
 } = {}) => {
     const { currentTheme = {} } = useContext(ThemeContext) || {};
     const border = currentTheme["border-neutral-dark"] || "border-gray-700";
@@ -49,6 +51,7 @@ export const BotActivityPanel = ({
                     workspaces={workspaces}
                     onOpenBotsView={openBotsView}
                     onOpenSettings={openBotSettings}
+                    openRequest={openRequest}
                     onCollapse={() =>
                         onCollapsedChange && onCollapsedChange(true)
                     }
