@@ -227,14 +227,49 @@ function getDraftPackageDir(draftId, _widgetName) {
  * shape the existing widget-builder pipeline uses. Returns the
  * absolute package dir.
  *
- * Idempotent: existing files in the package dir whose paths aren't in
- * the new files[] are LEFT IN PLACE (so external editor sessions that
- * added utility files survive an AI re-iteration that didn't touch
- * them). Files whose paths ARE in the new payload are overwritten.
+ * A save holds the draft as it is now: component files directly in
+ * widgets/ (*.js, *.dash.js) that aren't in the new files[] are removed,
+ * and so is the old dist/ bundle, so an earlier name (ComposedWidget,
+ * ComposedWidget2, …) doesn't linger as another widget — or ship when
+ * the draft is installed. Anything else (helpers in widgets/ subfolders,
+ * files outside widgets/) is left in place for external editor
+ * sessions. An empty or missing files[] removes nothing. Files whose
+ * paths ARE in the new payload are overwritten.
  */
+function removeStaleWidgetFiles(packageDir, files) {
+    const keep = new Set(
+        files
+            .filter((f) => f && typeof f.path === "string")
+            .map((f) => f.path.replace(/^\/+/, ""))
+    );
+    const widgetsDir = path.join(packageDir, "widgets");
+    try {
+        for (const entry of fs.readdirSync(widgetsDir, {
+            withFileTypes: true,
+        })) {
+            if (!entry.isFile() || !/\.js$/.test(entry.name)) continue;
+            if (keep.has(`widgets/${entry.name}`)) continue;
+            fs.rmSync(path.join(widgetsDir, entry.name), { force: true });
+        }
+    } catch (_) {
+        // No widgets/ yet — nothing to clean.
+    }
+    try {
+        fs.rmSync(path.join(packageDir, "dist"), {
+            recursive: true,
+            force: true,
+        });
+    } catch (_) {
+        // Best-effort — the bundle is rebuilt on the next load anyway.
+    }
+}
+
 function materializePackageDir(draftId, widgetName, files) {
     const packageDir = getDraftPackageDir(draftId, widgetName);
     fs.mkdirSync(packageDir, { recursive: true });
+    if (Array.isArray(files) && files.length) {
+        removeStaleWidgetFiles(packageDir, files);
+    }
     if (Array.isArray(files)) {
         for (const f of files) {
             if (

@@ -275,7 +275,11 @@ test("readPackageDirCode reads componentCode + configCode + files back", async (
         const code = readPackageDirCode(pkg, "ReadMe");
         assert.equal(code.componentCode, "comp");
         assert.equal(code.configCode, "cfg");
-        assert.equal(code.files.length, 3);
+        // The three widget files (package.json carries the draft flag).
+        assert.equal(
+            code.files.filter((f) => f.path.startsWith("widgets/")).length,
+            3
+        );
         const helperFile = code.files.find(
             (f) => f.path === "widgets/utils/helper.js"
         );
@@ -342,5 +346,45 @@ test("deleteDraft removes the package dir along with the metadata", async () => 
         // The @ai-built parent dir may or may not exist; we only care
         // that this draft's specific dir is gone.
         void widgetsDir;
+    });
+});
+
+test("materializePackageDir drops widget files the new save doesn't have", async () => {
+    await withTmpFile(() => {
+        const pkg = materializePackageDir("draft-pile1", "ComposedWidget", [
+            { path: "widgets/ComposedWidget.js", content: "a" },
+            { path: "widgets/ComposedWidget.dash.js", content: "a" },
+            { path: "widgets/utils/helper.js", content: "util" },
+        ]);
+        fs.mkdirSync(path.join(pkg, "dist"), { recursive: true });
+        fs.writeFileSync(path.join(pkg, "dist", "index.cjs.js"), "old bundle");
+        fs.writeFileSync(path.join(pkg, "notes.md"), "mine");
+
+        materializePackageDir("draft-pile1", "ComposedWidget", [
+            { path: "widgets/ComposedWidget2.js", content: "b" },
+            { path: "widgets/ComposedWidget2.dash.js", content: "b" },
+        ]);
+        const left = fs.readdirSync(path.join(pkg, "widgets")).sort();
+        assert.deepEqual(left, [
+            "ComposedWidget2.dash.js",
+            "ComposedWidget2.js",
+            "utils",
+        ]);
+        // Helpers in subfolders and files outside widgets/ stay.
+        assert.ok(fs.existsSync(path.join(pkg, "widgets/utils/helper.js")));
+        assert.ok(fs.existsSync(path.join(pkg, "notes.md")));
+        // The old bundle goes, so it's rebuilt from what's there now.
+        assert.ok(!fs.existsSync(path.join(pkg, "dist", "index.cjs.js")));
+    });
+});
+
+test("materializePackageDir with no files removes nothing", async () => {
+    await withTmpFile(() => {
+        const pkg = materializePackageDir("draft-keep1", "Keep", [
+            { path: "widgets/Keep.js", content: "a" },
+        ]);
+        materializePackageDir("draft-keep1", "Keep", []);
+        materializePackageDir("draft-keep1", "Keep", null);
+        assert.ok(fs.existsSync(path.join(pkg, "widgets/Keep.js")));
     });
 });
