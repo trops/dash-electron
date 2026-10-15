@@ -705,6 +705,7 @@ const {
     BOTS_RESUME_BUDGET,
     BOTS_BUDGET_STATUS,
     BOTS_SPENDING_SUMMARY,
+    BOTS_AUDIT_LOG,
     BOTS_LIST_RUNNING,
     BOTS_PAUSE_ALL,
     BOTS_RESUME_ALL,
@@ -2440,6 +2441,10 @@ function createWindow() {
         // This month's spending — the Spending view and budget fields (US-019).
         logger.loggedHandle(BOTS_SPENDING_SUMMARY, () =>
             botController.spendingSummary()
+        );
+        // The saved audit log — Manage › Bots › Log (US-003 AC5, US-014 AC9).
+        logger.loggedHandle(BOTS_AUDIT_LOG, (e, filters) =>
+            botController.auditLog(filters || {})
         );
 
         // --- Bot Factory background / pause controls (Slice 6b) ---

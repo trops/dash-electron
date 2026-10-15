@@ -50,6 +50,12 @@ describe("Bot Activity panel mount (AssistantDock)", () => {
         );
     });
 
+    it("registers the audit-log channel for Manage › Bots › Log (US-003 AC5)", () => {
+        expect(electronSrc).toMatch(
+            /loggedHandle\(BOTS_AUDIT_LOG, \(e, filters\) =>\s*botController\.auditLog\(filters \|\| \{\}\)\s*\)/
+        );
+    });
+
     it("registers the budget-status channel for the Bots panel (US-019)", () => {
         expect(electronSrc).toMatch(
             /loggedHandle\(BOTS_BUDGET_STATUS, \(\) =>\s*botController\.budgetStatus\(\)\s*\)/
