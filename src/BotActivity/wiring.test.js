@@ -90,3 +90,26 @@ describe("Main window start-up (electron.js)", () => {
         expect(electronSrc).toMatch(/setTimeout\(revealWindow, 5000\)/);
     });
 });
+
+describe("Quitting with bots mid-run (electron.js, US-018 AC6)", () => {
+    it("asks before quitting: stop them, quit when they finish, or cancel", () => {
+        expect(electronSrc).toMatch(
+            /function holdQuitForRunningBots\(quit, onCancel = null\)/
+        );
+        expect(electronSrc).toMatch(/botController\.listRunning\(\)/);
+        expect(electronSrc).toMatch(
+            /\["Stop them and quit", "Quit when they finish", "Cancel"\]/
+        );
+        expect(electronSrc).toMatch(/\.interruptAll\(\)/);
+        expect(electronSrc).toMatch(/botController\.whenIdle\(\)/);
+    });
+
+    it("checks before any await in before-quit, and from the tray's Quit", () => {
+        expect(electronSrc).toMatch(
+            /app\.on\("before-quit", async \(e\) => \{\s+(\/\/[^\n]*\s+)*if \(!holdQuitForRunningBots\(\(\) => app\.quit\(\)\)\) \{\s+e\.preventDefault\(\);/
+        );
+        expect(electronSrc).toMatch(
+            /if \(holdQuitForRunningBots\(quit\)\) quit\(\);/
+        );
+    });
+});
