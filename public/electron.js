@@ -757,7 +757,7 @@ const {
 // Bot Factory background mode (Slice 6b): system tray, powerSaveBlocker, and
 // login-item management so scheduled bots keep running with the window closed.
 const { createBotTray, updateBotTray, destroyBotTray } = require("./botTray");
-const { botsWantBackground } = require("./botBackground");
+const { backgroundPlan } = require("./botBackground");
 const { createBotNotifier } = require("./botNotify");
 const { resolveAppIdentifier } = require("./appIdentifier");
 // package.json sits one level above public/electron.js (the "main" entry) in
@@ -2519,9 +2519,11 @@ function createWindow() {
         logger.loggedHandle(BOTS_GET_SETTINGS, () =>
             botController.getBotSettings()
         );
-        logger.loggedHandle(BOTS_SET_SETTINGS, (e, msg) =>
-            botController.setBotSettings(msg && msg.patch)
-        );
+        logger.loggedHandle(BOTS_SET_SETTINGS, (e, msg) => {
+            const saved = botController.setBotSettings(msg && msg.patch);
+            syncBackgroundMode();
+            return saved;
+        });
         logger.loggedHandle(BOTS_ASK_LEAD, (e, msg) =>
             botController.askLead(msg && msg.botId, msg && msg.question, {
                 continueConversation: !!(msg && msg.continueConversation),
@@ -3239,6 +3241,7 @@ app.whenReady().then(() => {
             getMainWindow: () => mainWindow,
             openDash: () => showMainWindow(),
             openBot: openBotFromNotification,
+            keepAwake: () => currentBackgroundPlan().keepAwake,
             onQuit: () => {
                 const quit = () => {
                     forceQuitConfirmed = true;
@@ -3262,6 +3265,9 @@ app.whenReady().then(() => {
         schedulerController.handleResume();
         botController.handleResume();
     });
+    // Keep-awake only holds on AC power (US-018 AC4).
+    powerMonitor.on("on-ac", () => updateBotTray());
+    powerMonitor.on("on-battery", () => updateBotTray());
 });
 
 // --- Bot Factory background-mode helpers (Slice 6b) ---
@@ -3291,20 +3297,40 @@ function showMainWindow() {
     }
 }
 
+function isOnBattery() {
+    try {
+        const { powerMonitor } = require("electron");
+        return typeof powerMonitor.isOnBatteryPower === "function"
+            ? powerMonitor.isOnBatteryPower()
+            : !!powerMonitor.onBatteryPower;
+    } catch (_e) {
+        // Unknown: treat as on battery, so keep-awake doesn't drain it.
+        return true;
+    }
+}
+
+/** Background mode now, from the bots and their settings (US-018 AC1-AC4). */
+function currentBackgroundPlan() {
+    try {
+        return backgroundPlan({
+            bots: botController.list(),
+            settings: botController.getBotSettings(),
+            onBattery: isOnBattery(),
+        });
+    } catch (_e) {
+        return { stayInTray: false, openAtLogin: false, keepAwake: false };
+    }
+}
+
 /**
- * Keep the OS login item in sync with background need (US-018): auto-launch so
- * scheduled bots survive reboot, and drop the login item when no scheduled bot
- * remains. macOS + Windows only; skipped under E2E.
+ * Keep the OS login item in sync with background mode (US-018 AC3): a hidden
+ * login item while a bot has a schedule and "Start Dash at login" is on, and
+ * none otherwise. macOS + Windows only; skipped under E2E.
  */
 function syncLoginItem() {
     if (process.env.DASH_E2E === "1") return;
     if (process.platform !== "darwin" && process.platform !== "win32") return;
-    let want = false;
-    try {
-        want = botsWantBackground(botController.list());
-    } catch (_e) {
-        want = false;
-    }
+    const want = currentBackgroundPlan().openAtLogin;
     try {
         // Only touch the login item on an actual transition — a redundant call
         // (e.g. false→false on every launch with no scheduled bots) still hits
@@ -3317,7 +3343,7 @@ function syncLoginItem() {
     }
 }
 
-/** Refresh the tray menu + login item after the bot set changes. */
+/** Refresh the tray, power blocker and login item after bots or settings change. */
 function syncBackgroundMode() {
     if (process.env.DASH_E2E === "1") return;
     updateBotTray();
@@ -3432,17 +3458,13 @@ app.on("window-all-closed", () => {
     logger.logLifecycle("window-all-closed");
 
     // Bot Factory background mode (Slice 6b, US-018 / FR-016): if any bot has a
-    // schedule, keep Dash resident in the tray with its bot scheduler + MCP
+    // schedule and "Keep bots running" is on, keep Dash resident in the tray with its bot scheduler + MCP
     // servers warm — skip the teardown/quit below — so scheduled runs still
     // fire and can use their tools while no window is open. A tray "Quit" sets
     // forceQuitConfirmed, so it always falls through to a real quit.
     let background = false;
     if (process.env.DASH_E2E !== "1" && !forceQuitConfirmed) {
-        try {
-            background = botsWantBackground(botController.list());
-        } catch (_e) {
-            background = false;
-        }
+        background = currentBackgroundPlan().stayInTray;
     }
     if (background) {
         updateBotTray();

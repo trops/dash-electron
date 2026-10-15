@@ -16,7 +16,7 @@
 
 const path = require("path");
 const { Tray, Menu, nativeImage, powerSaveBlocker } = require("electron");
-const { describeTrayState } = require("./botBackground");
+const { describeTrayState, approvalMenuItems } = require("./botBackground");
 
 const REFRESH_MS = 4000;
 
@@ -46,7 +46,8 @@ function trayIcon() {
  *   notificationController: object,
  *   getMainWindow: () => (Electron.BrowserWindow|null),
  *   openDash: () => void,
- *   openBot?: (botId: string) => void,
+ *   openBot?: (botId: (string|null)) => void,
+ *   keepAwake?: () => boolean,
  *   onQuit: () => void,
  * }} injected
  */
@@ -85,7 +86,8 @@ function updateBotTray() {
         // Controller not ready yet — leave defaults.
     }
 
-    syncPowerBlocker(running.length > 0);
+    // Runs in progress, or "keep awake for scheduled bots" (US-018 AC4).
+    syncPowerBlocker(running.length > 0 || wantKeepAwake());
     notifyApprovals(approvals, notificationController, getMainWindow);
 
     if (!tray) return;
@@ -103,9 +105,28 @@ function updateBotTray() {
             template.push({ label: `● ${b.name}`, enabled: false });
         }
     }
+    // Waiting approvals: a click opens the bot, whose chat holds it.
+    const waiting = approvalMenuItems(approvals);
+    if (waiting.length) {
+        template.push({ type: "separator" });
+        for (const item of waiting) {
+            template.push(
+                item.botId
+                    ? {
+                          label: item.label,
+                          click: () => deps.openBot && deps.openBot(item.botId),
+                      }
+                    : { label: item.label, enabled: false }
+            );
+        }
+    }
     template.push(
         { type: "separator" },
         { label: "Open Dash", click: () => deps.openDash() },
+        {
+            label: "Open Bots panel",
+            click: () => deps.openBot && deps.openBot(null),
+        },
         {
             label: pauseLabel,
             click: () => {
@@ -122,6 +143,14 @@ function updateBotTray() {
         { label: "Quit Dash", click: () => deps.onQuit() }
     );
     tray.setContextMenu(Menu.buildFromTemplate(template));
+}
+
+function wantKeepAwake() {
+    try {
+        return !!(deps && deps.keepAwake && deps.keepAwake());
+    } catch (_e) {
+        return false;
+    }
 }
 
 function syncPowerBlocker(active) {

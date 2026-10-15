@@ -114,11 +114,63 @@ describe("electron.js / botTray.js wiring (US-018 AC5, US-019 AC3)", () => {
     it("approval notifications open their bot too", () => {
         assert.match(
             electronSrc,
-            /openBot: openBotFromNotification,\s+onQuit:/
+            /openBot: openBotFromNotification,\s+keepAwake: [^\n]+\s+onQuit:/
         );
         assert.match(
             traySrc,
             /onClick: \(\) => \{\s+if \(deps && deps\.openBot && req\.botId\) deps\.openBot\(req\.botId\);/
+        );
+    });
+});
+
+describe("background-mode settings in the main process (US-018 AC1-AC4)", () => {
+    const fs = require("fs");
+    const path = require("path");
+    const electronSrc = fs.readFileSync(
+        path.join(__dirname, "electron.js"),
+        "utf8"
+    );
+    const traySrc = fs.readFileSync(path.join(__dirname, "botTray.js"), "utf8");
+
+    it("closing the last window, the login item and the tray follow backgroundPlan", () => {
+        assert.match(
+            electronSrc,
+            /function currentBackgroundPlan\(\) \{[\s\S]{0,400}backgroundPlan\(\{\s+bots: botController\.list\(\),\s+settings: botController\.getBotSettings\(\),\s+onBattery: isOnBattery\(\),/
+        );
+        assert.match(
+            electronSrc,
+            /background = currentBackgroundPlan\(\)\.stayInTray;/
+        );
+        assert.match(
+            electronSrc,
+            /want = currentBackgroundPlan\(\)\.openAtLogin;/
+        );
+        assert.match(
+            electronSrc,
+            /keepAwake: \(\) => currentBackgroundPlan\(\)\.keepAwake,/
+        );
+    });
+
+    it("saving the settings and plugging in or out re-sync", () => {
+        assert.match(
+            electronSrc,
+            /loggedHandle\(BOTS_SET_SETTINGS, \(e, msg\) => \{\s+const saved = botController\.setBotSettings\(msg && msg\.patch\);\s+syncBackgroundMode\(\);\s+return saved;/
+        );
+        assert.match(
+            electronSrc,
+            /powerMonitor\.on\("on-ac", \(\) => updateBotTray\(\)\);\s+powerMonitor\.on\("on-battery", \(\) => updateBotTray\(\)\);/
+        );
+    });
+
+    it("the tray holds the blocker while running or keeping awake, lists approvals and opens the Bots panel", () => {
+        assert.match(
+            traySrc,
+            /syncPowerBlocker\(running\.length > 0 \|\| wantKeepAwake\(\)\);/
+        );
+        assert.match(traySrc, /approvalMenuItems\(approvals\)/);
+        assert.match(
+            traySrc,
+            /label: "Open Bots panel",\s+click: \(\) => deps\.openBot && deps\.openBot\(null\),/
         );
     });
 });
