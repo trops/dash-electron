@@ -10,7 +10,8 @@ import {
 /**
  * The Widget Builder as the Create screen shows it (create-entry PRD CRE-005
  * AC1), registered with dash-core's setWidgetBuilderRenderer. Create passes
- * { initialPrompt, resumeDraftId, onClose }.
+ * { initialPrompt, resumeDraftId, onClose, setLeaveGuard } — the builder
+ * registers a leave guard Create awaits before ← Back / × (unsaved work).
  *
  * It does what Dash.js does around the builder's own window: clears the last
  * chat before the builder mounts (unless a draft is resumed), holds off
@@ -27,6 +28,8 @@ export function makeEmbeddedWidgetBuilder(registerBundle) {
         initialPrompt = null,
         resumeDraftId = null,
         onClose = null,
+        // Create waits on this before ← Back / × (unsaved work).
+        setLeaveGuard = null,
     }) {
         const installedRef = useRef(null);
         const finishedRef = useRef(false);
@@ -104,6 +107,7 @@ export function makeEmbeddedWidgetBuilder(registerBundle) {
                 editContext={null}
                 resumeDraftId={resumeDraftId}
                 initialPrompt={initialPrompt}
+                setLeaveGuard={setLeaveGuard}
             />
         );
     }

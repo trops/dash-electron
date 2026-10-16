@@ -11,6 +11,7 @@ const {
     ensureConfigDefaultExport,
     fixComponentImport,
     componentExports,
+    claimConfigIdentity,
 } = require("./lib/widgetImportFixes.cjs");
 
 // The component the AI wrote in the 2026-10-11 runs.
@@ -153,5 +154,42 @@ describe("prepareWidgetConfig", () => {
         });
         assert.deepEqual(out.fixes, []);
         assert.equal(out.source, src);
+    });
+});
+
+describe("claimConfigIdentity — a copy's config names its own package", () => {
+    const COPY = `import { AlgoliaHits } from "./AlgoliaHits";
+const widgetDefinition = {
+    packageName: "algolia-search",
+    scope: "trops",
+    id: "trops.algolia-search.AlgoliaHits",
+    name: "AlgoliaHits",
+    userConfig: { id: { type: "text", defaultValue: "" } },
+};
+export default widgetDefinition;
+`;
+    it("rewrites id, scope and packageName to the installing package", () => {
+        const r = claimConfigIdentity(COPY, {
+            scope: "ai-built",
+            packageName: "algoliahits",
+            componentName: "AlgoliaHits",
+        });
+        assert.match(r.source, /packageName: "algoliahits"/);
+        assert.match(r.source, /scope: "ai-built"/);
+        assert.match(r.source, /id: "ai-built\.algoliahits\.AlgoliaHits"/);
+        assert.doesNotMatch(r.source, /trops/);
+        // A setting that happens to be called id is left alone.
+        assert.match(r.source, /userConfig: \{ id: \{ type: "text"/);
+        assert.deepEqual(r.changed.sort(), ["id", "packageName", "scope"]);
+    });
+    it("a config that names none of them is left as it is", () => {
+        const plain = 'export default { component: "Hello", type: "widget" };';
+        const r = claimConfigIdentity(plain, {
+            scope: "ai-built",
+            packageName: "hello",
+            componentName: "Hello",
+        });
+        assert.equal(r.source, plain);
+        assert.deepEqual(r.changed, []);
     });
 });

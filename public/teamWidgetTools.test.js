@@ -65,6 +65,22 @@ function setup(over = {}) {
             calls.compile.push(msg);
             return over.compileResult || { success: true, bundleSource: "x" };
         },
+        // A whole-package compile (the install's): records what the folder held.
+        compileWidget: async (dir) => {
+            calls.packageCompile = (calls.packageCompile || []).concat({
+                files: fs.readdirSync(path.join(dir, "widgets")).sort(),
+                hits: fs.existsSync(path.join(dir, "widgets", "Boost.js"))
+                    ? fs.readFileSync(
+                          path.join(dir, "widgets", "Boost.js"),
+                          "utf8"
+                      )
+                    : null,
+            });
+            if (over.packageCompileError)
+                throw new Error(over.packageCompileError);
+            return path.join(dir, "dist", "index.cjs.js");
+        },
+        getPackagePath: (name) => (over.packagePaths || {})[name] || null,
     });
     return { tools, calls, installed };
 }
@@ -281,8 +297,16 @@ describe("the Widget Builder's IPC handlers use lib/aiBuild.cjs", () => {
             /loggedHandle\("widget:ai-build", async \(e, message\) =>\s*aiBuild\(message, \{ windows \}\)/
         );
     });
-    it("botController gets the team's widget tools", () => {
-        assert.match(main, /widgetTools: createTeamWidgetTools\(\{/);
+    it("botController and the Widget Builder's checks share the team's widget tools", () => {
+        assert.match(
+            main,
+            /teamWidgetToolsInstance = createTeamWidgetTools\(\{/
+        );
+        assert.match(main, /widgetTools: teamWidgetTools\(\),/);
+        assert.match(
+            main,
+            /"widget:check-draft"[\s\S]{0,120}teamWidgetTools\(\)\.checkDraft\(/
+        );
     });
 });
 
@@ -365,5 +389,87 @@ describe("scorecardSummary must-fix items (Create build fixes 3)", () => {
         assert.ok(
             sc.failed.some((f) => !f.mustFix && /^Title uses/.test(f.item))
         );
+    });
+});
+
+describe("checkDraft — the Widget Builder's unsaved code, checked before it's saved", () => {
+    function packageDir() {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "zz-pkg-"));
+        fs.mkdirSync(path.join(dir, "widgets"));
+        fs.writeFileSync(path.join(dir, "widgets", "Boost.js"), "old");
+        fs.writeFileSync(path.join(dir, "widgets", "Boost.dash.js"), "old cfg");
+        fs.writeFileSync(
+            path.join(dir, "widgets", "sharedConfig.js"),
+            "shared"
+        );
+        fs.writeFileSync(
+            path.join(dir, "dash.json"),
+            JSON.stringify({ name: "x", version: "1.0.0" })
+        );
+        return dir;
+    }
+
+    it("compiles the unsaved code inside a copy of its package, runs the checks, keeps the result for the Checker", async () => {
+        const pkg = packageDir();
+        try {
+            const { tools, calls } = setup({
+                packagePaths: { "@trops/boost": pkg },
+            });
+            const res = await tools.checkDraft({
+                widgetName: "Boost",
+                componentCode: KEYS_COMPONENT,
+                configCode: KEYS_CONFIG,
+                sourcePackage: "@trops/boost",
+            });
+            assert.equal(res.success, true);
+            assert.equal(res.widgetName, "draft:Boost");
+            assert.deepEqual(res.compile, { ok: true });
+            // The package's shared file was there; the unsaved code was written.
+            assert.deepEqual(calls.packageCompile[0].files, [
+                "Boost.dash.js",
+                "Boost.js",
+                "sharedConfig.js",
+            ]);
+            assert.equal(calls.packageCompile[0].hits, KEYS_COMPONENT);
+            assert.ok(res.problems.some((p) => /adminApiKey/.test(p)));
+            // The installed package itself is untouched.
+            assert.equal(
+                fs.readFileSync(path.join(pkg, "widgets", "Boost.js"), "utf8"),
+                "old"
+            );
+            // The Checker's check_widget reads it by the draft name.
+            const again = await tools.check({ name: "draft:Boost" });
+            assert.equal(again.widgetName, "draft:Boost");
+            assert.deepEqual(again.problems, res.problems);
+            assert.equal(again.componentCode, KEYS_COMPONENT);
+        } finally {
+            fs.rmSync(pkg, { recursive: true, force: true });
+        }
+    });
+
+    it("a compile failure is the result, not a throw; a new widget has no package to copy", async () => {
+        const { tools, calls } = setup({
+            packageCompileError:
+                "The widget didn't build:\n- Boost.js: Unexpected token",
+        });
+        const res = await tools.checkDraft({
+            widgetName: "Boost",
+            componentCode: GOOD_COMPONENT,
+            configCode: GOOD_CONFIG,
+        });
+        assert.equal(res.success, true);
+        assert.equal(res.compile.ok, false);
+        assert.match(res.compile.error, /Unexpected token/);
+        assert.deepEqual(calls.packageCompile[0].files, [
+            "Boost.dash.js",
+            "Boost.js",
+        ]);
+    });
+
+    it("checking a draft that was never staged says so", async () => {
+        const { tools } = setup();
+        const res = await tools.check({ name: "draft:Nope" });
+        assert.equal(res.success, false);
+        assert.match(res.error, /check it again from the Widget Builder/);
     });
 });

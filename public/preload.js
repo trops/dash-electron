@@ -105,7 +105,8 @@ const extendedApi = {
             appId,
             remixMeta,
             files,
-            selectedProvider
+            selectedProvider,
+            updateOriginal
         ) =>
             ipcRenderer.invoke("widget:ai-build", {
                 widgetName,
@@ -130,7 +131,16 @@ const extendedApi = {
                 // actual type+class. Shape: { type, providerClass } or
                 // { sentinel: "none" } or null.
                 selectedProvider,
+                // "Update original" on a widget from one of the user's own
+                // packages: that package's name — it's rebuilt and
+                // reinstalled in place, not copied to @ai-built.
+                updateOriginal: updateOriginal || null,
             }),
+        // The unsaved code, checked before it's saved: compiled inside a
+        // copy of its package, code checks + checklist; the Checker reads
+        // it as "draft:<Name>".
+        checkDraft: (message) =>
+            ipcRenderer.invoke("widget:check-draft", message),
         readSources: (widgetName, componentName) =>
             ipcRenderer.invoke("widget:read-sources", {
                 widgetName,

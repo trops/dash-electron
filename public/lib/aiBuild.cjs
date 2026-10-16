@@ -14,7 +14,10 @@
 
 // Config fix-ups before compiling: a missing export default, a component
 // import that doesn't match its export, a missing type: "widget".
-const { prepareWidgetConfig } = require("./widgetImportFixes.cjs");
+const {
+    prepareWidgetConfig,
+    claimConfigIdentity,
+} = require("./widgetImportFixes.cjs");
 
 // The primary widget component's source in a multi-file payload, else the
 // legacy componentCode.
@@ -469,6 +472,103 @@ async function compilePreview(message) {
 // --- AI Widget Builder: Install ---
 // Compiles AI-generated widget code and installs to @ai-built/ scope.
 // Called from the Widget Builder modal UI — the LLM never touches the filesystem.
+/**
+ * Rebuild one of the user's own packages with an edited widget and
+ * reinstall it in place (Widget Builder "Update original"). The whole
+ * package is copied so its shared files and other widgets come along; npm
+ * libraries come from the app's own (dash-core widgetCompiler). The
+ * installed package is untouched until the new build compiled, and is put
+ * back if installing it fails. → { success, widgetName, updated, version }
+ */
+async function updateOriginalPackage({
+    packageName,
+    widgetName,
+    componentCode,
+    configCode,
+    cellContext,
+    windows,
+}) {
+    const path = require("path");
+    const fs = require("fs");
+    const os = require("os");
+    const {
+        prepareUpdateBuild,
+        installWithBackup,
+    } = require("./packageUpdate.cjs");
+    const core = require("@trops/dash-core/electron");
+    const registry = core.widgetRegistry.getWidgetRegistry();
+    const existing = registry.getWidget(packageName);
+    if (!existing?.path || !fs.existsSync(existing.path)) {
+        return {
+            success: false,
+            error: `${packageName} isn't installed here, so it can't be updated. Remix it as a new widget instead.`,
+        };
+    }
+    const buildDir = path.join(
+        os.tmpdir(),
+        `dash-ai-update-${widgetName}-${Date.now()}`
+    );
+    try {
+        // The edited config keeps naming this package (the AI may have
+        // changed its id, scope or packageName).
+        const scoped = /^@([^/]+)\/([^/]+)$/.exec(packageName);
+        const ownConfig = scoped
+            ? claimConfigIdentity(configCode, {
+                  scope: scoped[1],
+                  packageName: scoped[2],
+                  componentName: widgetName,
+              }).source
+            : configCode;
+        const { version } = prepareUpdateBuild({
+            sourcePath: existing.path,
+            buildDir,
+            widgetName,
+            componentCode,
+            configCode: ownConfig,
+        });
+        await core.widgetCompiler.compileWidget(buildDir);
+        if (!fs.existsSync(path.join(buildDir, "dist", "index.cjs.js"))) {
+            return {
+                success: false,
+                error: "Compilation produced no output. Check for syntax errors.",
+            };
+        }
+        const manifest = path.join(buildDir, "dash.json");
+        const config = await installWithBackup({
+            packagePath: existing.path,
+            backupRoot: path.join(os.tmpdir(), "dash-widget-update-backups"),
+            install: () =>
+                registry.installFromLocalPath(
+                    packageName,
+                    buildDir,
+                    true,
+                    fs.existsSync(manifest) ? manifest : null
+                ),
+        });
+        if (!cellContext) {
+            for (const win of windows) {
+                if (!win.isDestroyed()) {
+                    win.webContents.send("widget:installed", {
+                        widgetName: packageName,
+                        config,
+                    });
+                }
+            }
+        }
+        return {
+            success: true,
+            widgetName: packageName,
+            updated: true,
+            version,
+        };
+    } catch (err) {
+        console.error("[widget:ai-build] Update original failed:", err);
+        return { success: false, error: err.message };
+    } finally {
+        fs.rmSync(buildDir, { recursive: true, force: true });
+    }
+}
+
 async function aiBuild(message, { windows = [] } = {}) {
     const {
         widgetName,
@@ -504,7 +604,30 @@ async function aiBuild(message, { windows = [] } = {}) {
     if (configPrep.fixes.length) {
         console.log("[widget-config] Auto-fixed:", configPrep.fixes.join("; "));
     }
-    const configCode = configPrep.source;
+    let configCode = configPrep.source;
+    // "Update original" on a widget from one of the user's own packages
+    // (not @ai-built): rebuild that package with the edit and reinstall it
+    // under its own name — never an @ai-built copy.
+    const updateOriginal = String(message.updateOriginal || "").trim();
+    if (updateOriginal && !updateOriginal.startsWith("@ai-built/")) {
+        return updateOriginalPackage({
+            packageName: updateOriginal,
+            widgetName,
+            componentCode,
+            configCode,
+            cellContext,
+            windows,
+        });
+    }
+    // The config names its own package: a copy of another package's
+    // widget otherwise keeps the original's id and the app would treat
+    // it as the original.
+    const ownIdentity = {
+        scope: "ai-built",
+        packageName: widgetName.toLowerCase(),
+        componentName: widgetName,
+    };
+    configCode = claimConfigIdentity(configCode, ownIdentity).source;
     // If the renderer also packaged the primary widget's
     // .dash.js into files[], snap that copy too so the on-disk
     // file matches.
@@ -523,14 +646,17 @@ async function aiBuild(message, { windows = [] } = {}) {
                   );
                   return {
                       ...f,
-                      content: prepareWidgetConfig(sn.source, {
-                          componentSource: primaryComponentOf(
-                              files,
-                              widgetName,
-                              componentCode
-                          ),
-                          componentName: widgetName,
-                      }).source,
+                      content: claimConfigIdentity(
+                          prepareWidgetConfig(sn.source, {
+                              componentSource: primaryComponentOf(
+                                  files,
+                                  widgetName,
+                                  componentCode
+                              ),
+                              componentName: widgetName,
+                          }).source,
+                          ownIdentity
+                      ).source,
                   };
               }
               return f;
