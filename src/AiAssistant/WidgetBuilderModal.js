@@ -59,8 +59,17 @@ import { ChatProviderGate, typeLabel } from "./ChatProviderGate";
 import { WidgetDraftsList, firstUserMessageExcerpt } from "./WidgetDraftsList";
 import { builderTheme, useBuilderTheme } from "./useBuilderTheme";
 import { WidgetConsolePane } from "./WidgetConsolePane";
-import { CheckerCard } from "./CheckerCard";
-import { checkRequestText, fixRequestText } from "./teamCheck";
+import { ChecksStatus } from "./ChecksStatus";
+import { UnsavedWorkPrompt } from "./UnsavedWorkPrompt";
+import {
+    codeKeyOf,
+    fastCheckProblems,
+    verdictOf,
+    draftCheckRequest,
+    checksFixRequest,
+    MAX_CHECK_FIXES,
+    userAskOf,
+} from "./draftCheck";
 import { ComposerPane } from "./composer/ComposerPane";
 import { ComposerPaneV2 } from "./composer/ComposerPaneV2";
 // Slice 19G.2: installWidgetConsoleCapture is no longer wired into
@@ -942,6 +951,22 @@ const BuilderTab = ({
     </button>
 );
 
+/**
+ * A widget's category from its package manifest (dash.json): the widget's
+ * own entry, else the package's. null when neither says.
+ */
+function categoryFromManifest(manifest, componentName) {
+    if (!manifest || typeof manifest !== "object") return null;
+    const bare = String(componentName || "")
+        .split(".")
+        .pop();
+    const entry = (
+        Array.isArray(manifest.widgets) ? manifest.widgets : []
+    ).find((w) => w && w.name === bare);
+    const category = (entry && entry.category) || manifest.category || null;
+    return typeof category === "string" && category ? category : null;
+}
+
 export const WidgetBuilderModal = ({
     isOpen,
     setIsOpen,
@@ -963,6 +988,9 @@ export const WidgetBuilderModal = ({
     // header (← Back, ×) stands in for them. Closing still goes through
     // setIsOpen(false), which the host maps to "finish, then close Create".
     embedded = false,
+    // Create's leave guard (embedded): the builder registers a function
+    // Create awaits before ← Back / × — it asks about unsaved work.
+    setLeaveGuard = null,
 }) => {
     // The modal renders outside DashboardStage's context tree, so
     // ThemeContext and AppContext are empty here. We bridge them via
@@ -1204,6 +1232,9 @@ export const WidgetBuilderModal = ({
     const [remixName, setRemixName] = useState("");
     // "update" = overwrite original in-place, "remix" = create new copy
     const [editMode, setEditMode] = useState("remix");
+    // The edit's mode (update or remix) has been set from ownership for
+    // this edit — checks wait for it (the default "remix" is a placeholder).
+    const [editModeSettled, setEditModeSettled] = useState(false);
 
     // ── Drafts state ──────────────────────────────────────────────
     // viewMode: "drafts" → show the WidgetDraftsList entry view.
@@ -1760,6 +1791,9 @@ ${
         if (!isOpen) {
             draftSessionIdRef.current = null;
             resumedDraftRef.current = null;
+            setSavedCode(null);
+            setLeavePrompt(null);
+            setEditModeSettled(false);
             // Reset to loading sentinel so the next open shows the loading
             // skeleton instead of whatever view was active when last closed.
             setViewMode(null);
@@ -1796,17 +1830,17 @@ ${
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
-    // Auto-save the in-flight widget whenever a parseable AI response
-    // produces componentCode. We persist BOTH the latest code and the
+    // Save the in-flight widget as a draft — only when the user asks
+    // (Save as draft, or Save as draft when leaving with unsaved work), so
+    // drafts don't pile up. We persist BOTH the latest code and the
     // chat history (read from the same localStorage key ChatCore
     // uses), so resuming restores the conversation exactly. Same
     // session = same draft id (one row updated, not piled up). The
     // first save of a session generates the id; subsequent saves
     // reuse it via draftSessionIdRef. A draft we resumed from reuses
-    // its id via resumedDraftRef so we don't duplicate the row.
-    useEffect(() => {
-        if (!isOpen) return;
-        if (effectiveEditContext) return; // remix path doesn't auto-save
+    // its id via resumedDraftRef so we don't duplicate the row. An
+    // edit's draft remembers what it edits (editOf). → whether it saved.
+    const saveDraft = useCallback(async () => {
         if (!detectedCode?.componentCode) return;
         // Compose's empty placeholder isn't worth a draft.
         if (detectedCode.emptyGrid) return;
@@ -1861,6 +1895,19 @@ ${
             chatHistory,
             pickedProvider: selectedProviderForBuildRef.current,
             mode: "ai",
+            // Editing an installed widget: what it edits, so resuming
+            // the draft edits that widget again.
+            editOf: effectiveEditContext
+                ? {
+                      originalPackage:
+                          effectiveEditContext.originalPackage || null,
+                      originalComponentName:
+                          effectiveEditContext.originalComponentName || null,
+                      originalWidgetId:
+                          effectiveEditContext.originalWidgetId || null,
+                      manifest: effectiveEditContext.manifest || null,
+                  }
+                : null,
             // Compose-mode persistence: stash the live tree + the
             // active chat mode so resuming restores the composer
             // back to the user's last composition (not just the
@@ -1875,23 +1922,85 @@ ${
         // onto the draft entry. Track save state on the parent so the
         // toolbar's "Saving / Saved Xs ago" indicator can render.
         setDraftSaveState("saving");
-        Promise.resolve(window.mainApi?.drafts?.save?.(draft, files))
-            .then(() => {
-                setDraftSaveState("saved");
-                setDraftLastSavedAt(Date.now());
-            })
-            .catch((err) => {
-                console.warn("[WidgetBuilder] draft save failed:", err);
-                setDraftSaveState("error");
+        try {
+            await window.mainApi?.drafts?.save?.(draft, files);
+            setDraftSaveState("saved");
+            setDraftLastSavedAt(Date.now());
+            setSavedCode({
+                componentCode: detectedCode.componentCode,
+                configCode: detectedCode.configCode || "",
             });
-    }, [
-        isOpen,
-        effectiveEditContext,
-        detectedCode?.componentCode,
-        detectedCode?.emptyGrid,
-        detectedCode?.configCode,
-        detectedCode?.files,
-    ]);
+            return true;
+        } catch (err) {
+            console.warn("[WidgetBuilder] draft save failed:", err);
+            setDraftSaveState("error");
+            return false;
+        }
+    }, [effectiveEditContext, detectedCode]);
+
+    // Unsaved work: code that differs from what was last kept — the
+    // installed widget being edited, a resumed or saved draft, or an
+    // install. Compose's empty grid isn't work.
+    const [savedCode, setSavedCode] = useState(null);
+    const hasUnsavedWork =
+        !!detectedCode?.componentCode &&
+        !detectedCode.emptyGrid &&
+        !installStatus?.success &&
+        (!savedCode ||
+            savedCode.componentCode !== detectedCode.componentCode ||
+            (savedCode.configCode || "") !== (detectedCode.configCode || ""));
+    const hasUnsavedWorkRef = useRef(false);
+    hasUnsavedWorkRef.current = hasUnsavedWork;
+
+    // Leaving with unsaved work asks: Save as draft / Discard / Keep
+    // editing. → whether to leave.
+    const [leavePrompt, setLeavePrompt] = useState(null);
+    const leavePromptRef = useRef(null);
+    leavePromptRef.current = leavePrompt;
+    const askLeave = useCallback(
+        () => new Promise((resolve) => setLeavePrompt({ resolve })),
+        []
+    );
+    const answerLeave = useCallback(
+        async (choice) => {
+            const prompt = leavePrompt;
+            if (!prompt) return;
+            let leave = choice === "discard";
+            if (choice === "save") leave = (await saveDraft()) === true;
+            setLeavePrompt(null);
+            prompt.resolve(leave);
+        },
+        [leavePrompt, saveDraft]
+    );
+    const requestClose = useCallback(async () => {
+        if (leavePromptRef.current) return;
+        if (hasUnsavedWorkRef.current && !(await askLeave())) return;
+        setIsOpen(false);
+    }, [askLeave, setIsOpen]);
+    // The builder window's own dismissal (outside click, Escape): the same
+    // check. A click on the prompt is "outside" the window, so while the
+    // prompt is up the window stays.
+    const dismissFrame = useCallback(
+        (open) => {
+            if (open) setIsOpen(true);
+            else requestClose();
+        },
+        [setIsOpen, requestClose]
+    );
+    // Inside Create: Create's ← Back and × wait for this.
+    useEffect(() => {
+        if (typeof setLeaveGuard !== "function") return undefined;
+        // While the prompt is up, Create's own dismissal (a click on the
+        // prompt counts as outside its window) waits.
+        setLeaveGuard(() =>
+            leavePromptRef.current
+                ? false
+                : hasUnsavedWorkRef.current
+                ? askLeave()
+                : true
+        );
+        return () => setLeaveGuard(null);
+    }, [setLeaveGuard, askLeave]);
 
     // Probe Claude CLI / esbuild / @ai-built dir on every modal open so
     // we can surface failures BEFORE the user tries to compile and hits
@@ -2343,6 +2452,12 @@ ${
                         return;
                     }
 
+                    // The AI is replying while the last saved message is a
+                    // user's (theirs, the greeting, a fix request).
+                    const lastSaved = msgs[msgs.length - 1];
+                    const replying = !!lastSaved && lastSaved.role === "user";
+                    setAiReplying((r) => (r === replying ? r : replying));
+
                     // Reset manualEdit when user sends a new message
                     if (msgs.length !== lastMsgCount.current) {
                         lastMsgCount.current = msgs.length;
@@ -2473,12 +2588,22 @@ ${
             // user already has).
             setChatMode("build");
 
-            // Pre-fill the category picker from the original config so the user
-            // can install the remix without re-picking. Falls through to null
-            // (forcing a pick) if the original widget had no category declared.
-            const existing = extractCategoryFromConfigCode(
-                editContext.configCode
-            );
+            // Nothing's changed yet: the installed code is what's kept.
+            setSavedCode({
+                componentCode: editContext.componentCode || "",
+                configCode: editContext.configCode || "",
+            });
+
+            // Pre-fill the category picker from the original config (else
+            // its package's manifest) so the user can install without
+            // re-picking. Falls through to null when neither says: then the
+            // user picks one (the registry organizes widgets by category).
+            const existing =
+                extractCategoryFromConfigCode(editContext.configCode) ||
+                categoryFromManifest(
+                    editContext.manifest,
+                    editContext.originalComponentName
+                );
             if (existing && VALID_CATEGORIES.includes(existing)) {
                 setSelectedCategory(existing);
             }
@@ -2513,6 +2638,7 @@ ${
     useEffect(() => {
         if (!isRemixMode || !registryChecked) return;
         setEditMode(isOwner ? "update" : "remix");
+        setEditModeSettled(true);
     }, [isRemixMode, isOwner, registryChecked]);
 
     const compilePreview = useCallback(
@@ -2885,39 +3011,6 @@ ${
 
     // Send a build-error fix request to this builder's chat. Hidden: it's
     // the builder talking to the AI, not the user.
-    // The Dash team's Checker on the widget just installed (create-entry
-    // CRE-011 AC5): null | { phase, run?, reason?, soFar?, widgetName }.
-    const [teamCheck, setTeamCheck] = useState(null);
-    const [teamCheckKept, setTeamCheckKept] = useState(false);
-    // "Let Builder fix it" asks so far this session (at most MAX_TEAM_FIXES).
-    const teamFixesRef = useRef(0);
-    const startTeamCheck = useCallback((widgetName) => {
-        if (!widgetName || !window.mainApi?.bots?.listDashTeam) return;
-        setTeamCheckKept(false);
-        setTeamCheck({ phase: "checking", widgetName, soFar: "" });
-        runTeamRole("checker", checkRequestText(widgetName), {
-            onText: (soFar) =>
-                setTeamCheck((c) =>
-                    c && c.widgetName === widgetName && c.phase === "checking"
-                        ? { ...c, soFar }
-                        : c
-                ),
-        }).then((res) => {
-            setTeamCheck((c) =>
-                c && c.widgetName === widgetName
-                    ? res.skipped
-                        ? { phase: "skipped", reason: res.reason, widgetName }
-                        : {
-                              phase:
-                                  res.status === "failed" ? "failed" : "done",
-                              run: res,
-                              widgetName,
-                          }
-                    : c
-            );
-        });
-    }, []);
-
     const sendFixRequest = useCallback((content, { hidden }) => {
         try {
             window.dispatchEvent(
@@ -2933,6 +3026,174 @@ ${
             /* ignore */
         }
     }, []);
+
+    // Checked while it's written (Widget Builder edit fixes; draftCheck.js):
+    // each new version that compiles gets the fast checks — built inside its
+    // package, code checks, must-fix checklist — then the Dash team's
+    // Checker on it as draft:<Name>. Problems go back to the AI (hidden,
+    // like build errors), at most MAX_CHECK_FIXES times before the user
+    // speaks again. Install waits for a pass of this exact code.
+    const [draftCheck, setDraftCheck] = useState(null);
+    // The AI is still replying (the chat's last saved message is a user's —
+    // theirs, the greeting, or a fix request): nothing counts as checked.
+    const [aiReplying, setAiReplying] = useState(false);
+    const draftCheckRef = useRef(null);
+    draftCheckRef.current = draftCheck;
+    const checkFixesRef = useRef(0);
+    const checkRunRef = useRef(0);
+    const currentCodeKey = codeKeyOf(detectedCode);
+    const editedName = (effectiveEditContext?.originalComponentName || "")
+        .split(".")
+        .pop();
+    // The name the code is checked (and, for an update, installed) under.
+    const checkName =
+        isRemixMode &&
+        editMode === "update" &&
+        editedName &&
+        editedName !== "ComposedWidget"
+            ? editedName
+            : widgetName;
+    // Update original with nothing changed yet: nothing to save, so
+    // nothing to check (a remix can be installed unchanged, so it is).
+    const unchangedUpdate =
+        isRemixMode &&
+        editMode === "update" &&
+        !!effectiveEditContext?.componentCode &&
+        effectiveEditContext.componentCode === detectedCode?.componentCode &&
+        (effectiveEditContext.configCode || "") ===
+            (detectedCode?.configCode || "");
+    const checkPassed =
+        !aiReplying &&
+        !unchangedUpdate &&
+        !!draftCheck &&
+        draftCheck.key === currentCodeKey &&
+        draftCheck.phase === "passed";
+    useEffect(() => {
+        if (!isOpen || !currentCodeKey || detectedCode?.emptyGrid) return;
+        if (isCompiling || previewError || !previewComponent) return;
+        if (installStatus?.success || !checkName) return;
+        // Update or remix isn't known until ownership is checked.
+        if (isRemixMode && !editModeSettled) return;
+        if (unchangedUpdate || aiReplying) {
+            // A check that no longer applies is dropped.
+            checkRunRef.current += 1;
+            if (draftCheckRef.current) setDraftCheck(null);
+            return;
+        }
+        if (draftCheckRef.current?.key === currentCodeKey) return;
+        const key = currentCodeKey;
+        const name = checkName;
+        const run = ++checkRunRef.current;
+        const stale = () => run !== checkRunRef.current;
+        const code = detectedCode;
+        const sendBack = (lines, review) => {
+            if (checkFixesRef.current < MAX_CHECK_FIXES) {
+                checkFixesRef.current += 1;
+                setDraftCheck({
+                    key,
+                    phase: "fixing",
+                    lines,
+                    review,
+                    fixes: checkFixesRef.current,
+                });
+                const content = checksFixRequest(
+                    name,
+                    review ? [...lines, review] : lines
+                );
+                lastAutoFixTextRef.current = content;
+                sendFixRequest(content, { hidden: true });
+            } else {
+                setDraftCheck({ key, phase: "failed", lines, review });
+            }
+        };
+        setDraftCheck({ key, phase: "checking" });
+        (async () => {
+            let result;
+            try {
+                result = await window.mainApi?.widgetBuilder?.checkDraft?.({
+                    widgetName: name,
+                    componentCode: code.componentCode,
+                    configCode: code.configCode || "",
+                    sourcePackage:
+                        effectiveEditContext?.originalPackage || null,
+                });
+            } catch (err) {
+                result = { success: false, error: err?.message || String(err) };
+            }
+            if (stale()) return;
+            if (result === undefined) {
+                setDraftCheck({
+                    key,
+                    phase: "passed",
+                    reviewSkipped: "the checks aren't available here",
+                });
+                return;
+            }
+            const lines = fastCheckProblems(result);
+            if (lines.length) {
+                sendBack(lines, null);
+                return;
+            }
+            setDraftCheck({ key, phase: "reviewing" });
+            // What the user asked for, from the builder's chat.
+            let asked = "";
+            try {
+                const raw = localStorage.getItem("dash-widget-builder");
+                asked = userAskOf(raw ? JSON.parse(raw)?.messages : []);
+            } catch {
+                asked = "";
+            }
+            const res = await runTeamRole(
+                "checker",
+                draftCheckRequest(name, asked)
+            );
+            if (stale()) return;
+            if (res.skipped) {
+                setDraftCheck({
+                    key,
+                    phase: "passed",
+                    reviewSkipped: res.reason,
+                });
+                return;
+            }
+            const verdict = verdictOf(res.output);
+            if (verdict === "PASSED") {
+                checkFixesRef.current = 0;
+                setDraftCheck({ key, phase: "passed" });
+                return;
+            }
+            if (!verdict && res.status === "failed" && !res.output) {
+                setDraftCheck({
+                    key,
+                    phase: "passed",
+                    reviewSkipped: `the Checker couldn't run (${
+                        res.error || "no answer"
+                    })`,
+                });
+                return;
+            }
+            sendBack(
+                [
+                    verdict
+                        ? "The Checker found problems:"
+                        : "The Checker didn't reach a verdict:",
+                ],
+                String(res.output || "").trim()
+            );
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        isOpen,
+        currentCodeKey,
+        isCompiling,
+        previewError,
+        previewComponent,
+        installStatus,
+        checkName,
+        unchangedUpdate,
+        aiReplying,
+        editModeSettled,
+    ]);
 
     // Build errors go back to the AI by themselves (phase 2d), up to
     // MAX_AUTO_FIX times in a row; the user sees the error only when the
@@ -2968,6 +3229,7 @@ ${
         if (payload && payload.text === lastAutoFixTextRef.current) return;
         autoFixStateRef.current = resetAutoFix();
         setAutoFix({ status: "idle", attempt: 0 });
+        checkFixesRef.current = 0;
     }, []);
 
     // Resume an in-progress draft. Triggered by the `resumeDraftId`
@@ -3008,6 +3270,18 @@ ${
                 files: Array.isArray(full.files) ? full.files : [],
             };
             setDetectedCode(restoredCode);
+            setSavedCode({
+                componentCode: restoredCode.componentCode || "",
+                configCode: restoredCode.configCode || "",
+            });
+            // A draft of an edit edits that widget again.
+            if (full.editOf) {
+                setEditContextOverride({
+                    ...full.editOf,
+                    componentCode: restoredCode.componentCode,
+                    configCode: restoredCode.configCode,
+                });
+            }
             if (restoredCode.componentCode) {
                 compilePreview(restoredCode).catch(() => {});
             }
@@ -3437,9 +3711,13 @@ ${
     const handleInstall = useCallback(
         async (opts = {}) => {
             if (!detectedCode.componentCode || !widgetName) return;
-            // Category is required — install button is disabled until picked, but
-            // guard here too in case this is invoked programmatically.
+            // Category is required — the registry organizes widgets by it.
+            // Prefilled from the widget (config, else its package); the
+            // install button is disabled until picked, but guard here too in
+            // case this is invoked programmatically.
             if (!selectedCategory) return;
+            // Only code that passed the checks is saved.
+            if (!checkPassed) return;
 
             // Determine install name based on edit mode:
             //   "update" → keep original name (overwrites source in-place)
@@ -3640,7 +3918,13 @@ ${
                     finalFiles,
                     // Provider the user pre-selected — main process
                     // auto-corrects any drift in the AI's config to match.
-                    selectedProviderForBuild
+                    selectedProviderForBuild,
+                    // Update original on one of the user's own packages:
+                    // that package is rebuilt in place (lib/aiBuild.cjs),
+                    // not copied to @ai-built.
+                    isRemixMode && editMode === "update"
+                        ? effectiveEditContext?.originalPackage || null
+                        : null
                 );
                 if (result?.success) {
                     // The widget is now installed — its draft is no longer
@@ -3655,11 +3939,18 @@ ${
                         draftSessionIdRef.current = null;
                         resumedDraftRef.current = null;
                     }
+                    setSavedCode({
+                        componentCode: detectedCode.componentCode,
+                        configCode: detectedCode.configCode || "",
+                    });
                     setInstallStatus({
                         success: true,
                         widgetName: result.widgetName,
+                        // Update original on the user's own package: its
+                        // new local version.
+                        updated: !!result.updated,
+                        version: result.version || null,
                     });
-                    startTeamCheck(result.widgetName);
                     if (onInstalled) {
                         // Pass the canonical scoped component id (e.g.
                         // "ai-built.mywidget.MyWidget") — that's the key
@@ -3700,7 +3991,7 @@ ${
             editMode,
             remixName,
             selectedProviderForBuild,
-            startTeamCheck,
+            checkPassed,
         ]
     );
 
@@ -3763,7 +4054,7 @@ ${
         ? {}
         : {
               isOpen,
-              setIsOpen,
+              setIsOpen: dismissFrame,
               width: "w-11/12",
               height: "h-5/6",
               surfaceClass: `${bgDark} ${borderColor}`,
@@ -3815,7 +4106,7 @@ ${
                             <ButtonIcon3
                                 icon="xmark"
                                 ariaLabel="Close"
-                                onClick={() => setIsOpen(false)}
+                                onClick={requestClose}
                             />
                         }
                     />
@@ -4209,8 +4500,7 @@ ${
                                 their in-flight draft without leaving
                                 the modal to find the drafts list. */}
                                 {detectedCode.componentCode &&
-                                    !effectiveEditContext &&
-                                    draftSessionIdRef.current && (
+                                    !detectedCode.emptyGrid && (
                                         <div className="ml-auto flex items-center gap-2">
                                             {editorOpenError && (
                                                 <span
@@ -4226,6 +4516,8 @@ ${
                                                     ? "Saving draft…"
                                                     : draftSaveState === "error"
                                                     ? "Save failed"
+                                                    : hasUnsavedWork
+                                                    ? "Unsaved changes"
                                                     : draftLastSavedAt
                                                     ? `Draft saved ${Math.max(
                                                           0,
@@ -4240,36 +4532,15 @@ ${
                                             <span data-testid="builder-save-draft">
                                                 <Button3
                                                     size="sm"
-                                                    onClick={() => {
-                                                        // Re-fire the auto-save
-                                                        // effect by re-setting
-                                                        // detectedCode to its
-                                                        // current value. The
-                                                        // useEffect deps include
-                                                        // componentCode/configCode/
-                                                        // files (by reference) so a
-                                                        // new object identity is
-                                                        // enough to retrigger.
-                                                        setDetectedCode(
-                                                            (prev) => ({
-                                                                ...prev,
-                                                            })
-                                                        );
-                                                    }}
+                                                    onClick={saveDraft}
                                                     disabled={
                                                         draftSaveState ===
-                                                        "saving"
+                                                            "saving" ||
+                                                        !hasUnsavedWork
                                                     }
-                                                    tooltip="Force a draft save now"
-                                                >
-                                                    <span className="flex items-center gap-2">
-                                                        <FontAwesomeIcon
-                                                            icon="save"
-                                                            className="h-3 w-3"
-                                                        />
-                                                        Save Draft
-                                                    </span>
-                                                </Button3>
+                                                    tooltip="Keep this work in Drafts to come back to"
+                                                    title="Save as draft"
+                                                />
                                             </span>
                                             <span data-testid="builder-open-editor">
                                                 <Button3
@@ -5617,16 +5888,31 @@ ${
                                                         <div className="flex items-center gap-3 shrink-0">
                                                             {/* Say why Install is
                                                             greyed out. */}
-                                                            {!selectedCategory && (
-                                                                <span
-                                                                    data-testid="install-category-hint"
-                                                                    className={`text-xs ${chromeMuted}`}
-                                                                >
-                                                                    Pick a
-                                                                    category to
-                                                                    install
-                                                                </span>
-                                                            )}
+                                                            <ChecksStatus
+                                                                check={
+                                                                    draftCheck &&
+                                                                    draftCheck.key ===
+                                                                        currentCodeKey
+                                                                        ? draftCheck
+                                                                        : null
+                                                                }
+                                                                bt={bt}
+                                                                waiting={
+                                                                    aiReplying
+                                                                }
+                                                            />
+                                                            {checkPassed &&
+                                                                !selectedCategory && (
+                                                                    <span
+                                                                        data-testid="install-category-hint"
+                                                                        className={`text-xs ${chromeMuted}`}
+                                                                    >
+                                                                        Pick a
+                                                                        category
+                                                                        to
+                                                                        install
+                                                                    </span>
+                                                                )}
                                                             <ChoiceMenu
                                                                 label="Category"
                                                                 value={
@@ -5650,6 +5936,7 @@ ${
                                                                     handleInstall
                                                                 }
                                                                 disabled={
+                                                                    !checkPassed ||
                                                                     !selectedCategory ||
                                                                     (isRemixMode &&
                                                                         editMode ===
@@ -5657,7 +5944,9 @@ ${
                                                                         !remixName)
                                                                 }
                                                                 tooltip={
-                                                                    !selectedCategory
+                                                                    !checkPassed
+                                                                        ? "Waiting for the checks to pass"
+                                                                        : !selectedCategory
                                                                         ? "Pick a category first"
                                                                         : editMode ===
                                                                               "remix" &&
@@ -5712,7 +6001,12 @@ ${
                                                             installStatus.widgetName
                                                         }
                                                     </span>{" "}
-                                                    {isRemixMode
+                                                    {installStatus.updated
+                                                        ? `was updated to version ${
+                                                              installStatus.version ||
+                                                              "(local)"
+                                                          }. Your dashboards use it now; publish a new version from the Widgets page to share it.`
+                                                        : isRemixMode
                                                         ? editMode === "update"
                                                             ? "has been updated in place."
                                                             : "has been swapped into your dashboard."
@@ -5721,34 +6015,6 @@ ${
                                                         : "now appears in your Widgets list."}
                                                 </p>
                                             </div>
-                                            <CheckerCard
-                                                check={teamCheck}
-                                                fixes={teamFixesRef.current}
-                                                bt={bt}
-                                                kept={teamCheckKept}
-                                                onKeep={() =>
-                                                    setTeamCheckKept(true)
-                                                }
-                                                onFix={() => {
-                                                    const answer =
-                                                        teamCheck?.run
-                                                            ?.output || "";
-                                                    teamFixesRef.current += 1;
-                                                    // Back to the builder with
-                                                    // the code kept; the chat
-                                                    // rewrites it, the user
-                                                    // installs the update.
-                                                    setInstallStatus(null);
-                                                    setTeamCheck(null);
-                                                    sendFixRequest(
-                                                        fixRequestText(
-                                                            installStatus.widgetName,
-                                                            answer
-                                                        ),
-                                                        { hidden: false }
-                                                    );
-                                                }}
-                                            />
                                             <div className="flex gap-3">
                                                 <Button
                                                     size="sm"
@@ -6438,7 +6704,7 @@ ${
                                                     }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
                                                         effectiveEditContext.configCode ||
                                                         ""
-                                                    }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above. CRITICAL: PRESERVE every existing \`userConfig\` field EXACTLY as written — including its \`defaultValue\`, \`displayName\`, \`instructions\`, and \`required\` — unless the user explicitly asks to change that specific field. Never drop or blank out a \`userConfig\` \`defaultValue\` the user authored.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
+                                                    }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above. CRITICAL: PRESERVE every existing \`userConfig\` field EXACTLY as written — including its \`defaultValue\`, \`displayName\`, \`instructions\`, and \`required\` — unless the user explicitly asks to change that specific field. Never drop or blank out a \`userConfig\` \`defaultValue\` the user authored. KEEP every import of the package's own files (e.g. \`import algoliaProviderConfig from "./algoliaProviderConfig"\`) exactly as written — those files are part of the widget's package and are included when it builds; never inline, rewrite or remove them, and never add settings that ask for API keys: the widget's provider connection supplies them.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
                                                 }
                                                 // Hand-off path: user
                                                 // composed a widget in
@@ -6504,6 +6770,12 @@ ${
                 stacking issues. Self-managing isOpen via the
                 `pendingInstallContext` state so it only mounts when
                 the install flow has actually paused for consent. */}
+                {/* Leaving with unsaved work (Close here, or Create's
+                Back / Close): keep it as a draft, drop it, or stay. */}
+                <UnsavedWorkPrompt
+                    open={!!leavePrompt}
+                    onAnswer={answerLeave}
+                />
                 <WidgetCredentialPermissionModal
                     isOpen={!!pendingInstallContext}
                     packageName={pendingInstallContext?.packageName || ""}

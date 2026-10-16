@@ -147,8 +147,46 @@ function prepareWidgetConfig(configSource, opts = {}) {
     return { source: typed.source, fixes };
 }
 
+/**
+ * A widget's config names the package it's installed in: its id, scope
+ * and packageName (when it declares them) are rewritten to that package.
+ * A copy of another package's widget otherwise keeps the original's id
+ * and the app would treat it as the original. Only string values are
+ * touched (a setting called id is an object). → { source, changed }.
+ */
+function claimConfigIdentity(
+    configSource,
+    { scope, packageName, componentName }
+) {
+    let source = String(configSource || "");
+    const changed = [];
+    const want = {
+        id: `${scope}.${packageName}.${componentName}`,
+        scope,
+        packageName,
+    };
+    for (const field of ["id", "scope", "packageName"]) {
+        // field: "value" | 'value' | `value`, at the start of a line or
+        // after whitespace, { or , — so a name like userId isn't matched.
+        const re = new RegExp(
+            "(^|[\\s{,])(" + field + "\\s*:\\s*)([\"'`])([^\"'`]*)\\3",
+            "m"
+        );
+        const m = re.exec(source);
+        if (!m) continue;
+        if (m[4] === want[field]) continue;
+        source =
+            source.slice(0, m.index) +
+            `${m[1]}${m[2]}${m[3]}${want[field]}${m[3]}` +
+            source.slice(m.index + m[0].length);
+        changed.push(field);
+    }
+    return { source, changed };
+}
+
 module.exports = {
     prepareWidgetConfig,
+    claimConfigIdentity,
     ensureConfigDefaultExport,
     fixComponentImport,
     componentExports,

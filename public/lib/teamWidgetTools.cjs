@@ -7,6 +7,9 @@
  *       code checks → compile → install into @ai-built/ (aiBuild.cjs).
  *       An update only ever replaces an @ai-built/ widget; its old config is
  *       kept so check() can compare.
+ *   checkDraft({ widgetName, componentCode, configCode, sourcePackage })
+ *       the Widget Builder's unsaved code: compiled inside a copy of its
+ *       package, code checks + scorecard; kept as "draft:<Name>".
  *   check({ name })
  *       compile + code checks (incl. a connection's widget asking for keys)
  *       + scorecard (must-fix misses marked) for an installed widget, plus the
@@ -124,6 +127,8 @@ function scorecardSummary(componentCode) {
  *   skillPath: the Widget Builder's SKILL.md — a path, or paths to try in
  *     order (the app folder differs between dev, packaged and test runs)
  *   aiBuild / compilePreview: optional overrides (tests)
+ *   compileWidget(dir) / getPackagePath(name): the whole-package compile
+ *     and an installed package's folder — dash-core's by default
  */
 function createTeamWidgetTools(deps) {
     // name → the config before the Builder's last update of it (this run of
@@ -131,6 +136,87 @@ function createTeamWidgetTools(deps) {
     const previousConfigs = new Map();
     const buildWidget = deps.aiBuild || aiBuild;
     const compile = deps.compilePreview || compilePreview;
+    const compilePackage =
+        deps.compileWidget ||
+        ((dir) =>
+            require("@trops/dash-core/electron").widgetCompiler.compileWidget(
+                dir
+            ));
+    const packagePath =
+        deps.getPackagePath ||
+        ((name) => {
+            const w = deps.getRegistry().getWidget(name);
+            return w && w.path && fs.existsSync(w.path) ? w.path : null;
+        });
+    // "draft:<Name>" → the Widget Builder's last check of its unsaved code,
+    // for the Checker's check_widget.
+    const drafts = new Map();
+
+    /**
+     * The Widget Builder's unsaved code, checked before anything is saved:
+     * compiled inside a copy of its package (shared files and all — the
+     * install's own build), then the code checks and the checklist. Kept as
+     * "draft:<Name>" for the Checker. The installed package isn't touched.
+     */
+    async function checkDraft({
+        widgetName,
+        componentCode,
+        configCode,
+        sourcePackage = null,
+    } = {}) {
+        const name = String(widgetName || "").trim();
+        if (!WIDGET_NAME.test(name) || !componentCode) {
+            return { success: false, error: "Which widget, with what code?" };
+        }
+        const path = require("path");
+        const os = require("os");
+        const dir = path.join(os.tmpdir(), `dash-check-${name}-${Date.now()}`);
+        try {
+            const from = sourcePackage ? packagePath(sourcePackage) : null;
+            if (from) {
+                fs.cpSync(from, dir, { recursive: true });
+                for (const stale of ["dist", "index.cjs.js", "index.cjs.css"]) {
+                    fs.rmSync(path.join(dir, stale), {
+                        recursive: true,
+                        force: true,
+                    });
+                }
+            }
+            fs.mkdirSync(path.join(dir, "widgets"), { recursive: true });
+            fs.writeFileSync(
+                path.join(dir, "widgets", `${name}.js`),
+                componentCode
+            );
+            fs.writeFileSync(
+                path.join(dir, "widgets", `${name}.dash.js`),
+                configCode || ""
+            );
+            let compiled = { ok: true };
+            try {
+                await compilePackage(dir);
+            } catch (err) {
+                compiled = {
+                    ok: false,
+                    error: (err && err.message) || "didn't compile",
+                };
+            }
+            const result = {
+                success: true,
+                widgetName: `draft:${name}`,
+                componentName: name,
+                compile: compiled,
+                problems: codeProblems(componentCode, configCode || ""),
+                scorecard: scorecardSummary(componentCode),
+                componentCode,
+                configCode: configCode || "",
+                previousConfigCode: null,
+            };
+            drafts.set(result.widgetName, result);
+            return result;
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    }
 
     async function build({
         name,
@@ -209,6 +295,14 @@ function createTeamWidgetTools(deps) {
     async function check({ name } = {}) {
         const widgetName = String(name || "").trim();
         if (!widgetName) return { success: false, error: "Which widget?" };
+        if (widgetName.startsWith("draft:")) {
+            return (
+                drafts.get(widgetName) || {
+                    success: false,
+                    error: `${widgetName} hasn't been checked yet — check it again from the Widget Builder.`,
+                }
+            );
+        }
         const src = await deps.readWidgetSources({ widgetName });
         if (!src || !src.success) {
             return {
@@ -267,7 +361,7 @@ function createTeamWidgetTools(deps) {
         return { rules, tools };
     }
 
-    return { build, check, guide };
+    return { build, check, checkDraft, guide };
 }
 
 module.exports = {

@@ -797,6 +797,37 @@ const { setupJitConsentHandlers } =
  */
 
 let windows = new Set();
+
+// The Dash team's widget hooks — build, check, guide — shared by the team's
+// bots and the Widget Builder's checks of unsaved code (CRE-011; Widget
+// Builder edit fixes). Made on first use.
+let teamWidgetToolsInstance = null;
+function teamWidgetTools() {
+    if (!teamWidgetToolsInstance) {
+        teamWidgetToolsInstance = createTeamWidgetTools({
+            getRegistry: () =>
+                require("@trops/dash-core/electron").widgetRegistry.getWidgetRegistry(),
+            readWidgetSources: (args) =>
+                require("@trops/dash-core/electron").widgetRegistry.readWidgetSources(
+                    args
+                ),
+            getWindows: () => windows,
+            // The app folder in dev and packaged runs; next to public/ when
+            // Electron is started on public/electron.js directly (tests).
+            skillPath: [app.getAppPath(), path.join(__dirname, "..")].map(
+                (root) =>
+                    path.join(
+                        root,
+                        ".claude",
+                        "skills",
+                        "dash-widget-builder",
+                        "SKILL.md"
+                    )
+            ),
+        });
+    }
+    return teamWidgetToolsInstance;
+}
 let mainWindow = null;
 
 // Phase 2B unsaved-changes guard: set to true once the user has
@@ -2940,6 +2971,14 @@ function createWindow() {
             compilePreview(message)
         );
 
+        // --- AI Widget Builder: check the unsaved code ---
+        // Compiled inside a copy of its package and run through the code
+        // checks before anything is saved; kept as "draft:<Name>" for the
+        // Checker (Widget Builder edit fixes).
+        logger.loggedHandle("widget:check-draft", async (e, message) =>
+            teamWidgetTools().checkDraft(message || {})
+        );
+
         // --- AI Widget Builder: Install ---
         // Compiles AI-generated widget code and installs to @ai-built/ scope.
         // Called from the Widget Builder modal UI — the LLM never touches the filesystem.
@@ -3209,27 +3248,7 @@ app.whenReady().then(() => {
         appId: resolveAppIdentifier(process.env, readPackageName()),
         // The Dash team's Builder and Checker build and check widgets with
         // the Widget Builder's own compile, install and checks (CRE-011).
-        widgetTools: createTeamWidgetTools({
-            getRegistry: () =>
-                require("@trops/dash-core/electron").widgetRegistry.getWidgetRegistry(),
-            readWidgetSources: (args) =>
-                require("@trops/dash-core/electron").widgetRegistry.readWidgetSources(
-                    args
-                ),
-            getWindows: () => windows,
-            // The app folder in dev and packaged runs; next to public/ when
-            // Electron is started on public/electron.js directly (tests).
-            skillPath: [app.getAppPath(), path.join(__dirname, "..")].map(
-                (root) =>
-                    path.join(
-                        root,
-                        ".claude",
-                        "skills",
-                        "dash-widget-builder",
-                        "SKILL.md"
-                    )
-            ),
-        }),
+        widgetTools: teamWidgetTools(),
     });
 
     // --- Bot Factory background mode: tray + login item (Slice 6b) ---

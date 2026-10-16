@@ -156,4 +156,10 @@ describe("EmbeddedWidgetBuilder", () => {
         expect(onClose).toHaveBeenCalledTimes(1);
         expect(finalizeWidgetBuilderSession).toHaveBeenCalledTimes(1);
     });
+
+    test("Create's leave guard reaches the builder (unsaved work asks before Back / Close)", () => {
+        const setLeaveGuard = jest.fn();
+        render(<EmbeddedWidgetBuilder setLeaveGuard={setLeaveGuard} />);
+        expect(mockLastProps.setLeaveGuard).toBe(setLeaveGuard);
+    });
 });

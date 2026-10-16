@@ -24,6 +24,7 @@ import { DebugConsole } from "./DebugConsole";
 // AI Assistant + Bot Activity slide-over panels, hosted in a shared rail.
 import { AssistantDock } from "./AssistantDock/AssistantDock";
 import { WidgetBuilderModal } from "./AiAssistant/WidgetBuilderModal";
+import { ownWidgetIdentity } from "./AiAssistant/widgetIdentity";
 import { InstallExternalMcpModal } from "./AiAssistant/InstallExternalMcpModal";
 import { WidgetMcpConsentModal } from "./AiAssistant/WidgetMcpConsentModal";
 import { JitConsentModal } from "./AiAssistant/JitConsentModal";
@@ -410,8 +411,19 @@ function registerBundleConfigs(
             // first won. With scoped ids both register cleanly under
             // distinct keys; ComponentManager's bare-name fallback (with
             // packageId hint) routes legacy lookups correctly.
-            const scopedId = makeScopedComponentId(widgetName, key);
+            // A package registers only its own widgets: the id, scope and
+            // packageName come from the package being loaded, not from what
+            // its .dash.js claims (widgetIdentity.js).
+            const own = ownWidgetIdentity(widgetName, key, config);
+            const scopedId = own
+                ? own.id
+                : makeScopedComponentId(widgetName, key);
             const registrationKey = scopedId || key;
+            if (own && own.claimed) {
+                console.warn(
+                    `[Dash.js] ${widgetName}: a widget claims "${own.claimed}" — registered as its own "${own.id}"`
+                );
+            }
 
             if (
                 !replaceExisting &&
@@ -424,8 +436,12 @@ function registerBundleConfigs(
             }
 
             config.id = scopedId || config.id;
+            if (own) {
+                config.scope = own.scope;
+                config.packageName = own.packageName;
+            }
             config._sourcePackage = widgetName;
-            config._bareName = key;
+            config._bareName = own ? own.bare : key;
             if (regEntry) {
                 if (!config.package)
                     config.package = regEntry.displayName || regEntry.name;

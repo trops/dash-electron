@@ -94,23 +94,5 @@ describe("the builder gets the rules from the main process", () => {
     });
 });
 
-describe("the Checker after an install (CRE-011 AC5, slice 4)", () => {
-    const modal = fs.readFileSync(
-        path.join(__dirname, "WidgetBuilderModal.js"),
-        "utf8"
-    );
-    test("a successful install starts the Checker on the installed widget", () => {
-        expect(modal).toMatch(
-            /widgetName: result\.widgetName,\s*\}\);\s*startTeamCheck\(result\.widgetName\);/
-        );
-        expect(modal).toMatch(
-            /runTeamRole\("checker", checkRequestText\(widgetName\)/
-        );
-    });
-    test("the success screen shows the Checker card; a fix goes back to the chat", () => {
-        expect(modal).toMatch(/<CheckerCard[\s\S]{0,200}check=\{teamCheck\}/);
-        expect(modal).toMatch(
-            /fixRequestText\(\s*installStatus\.widgetName,\s*answer\s*\),\s*\{ hidden: false \}/
-        );
-    });
-});
+// The Checker after an install was replaced by checks while the code is
+// written (WidgetBuilderModal.checkFirst.test.js).
