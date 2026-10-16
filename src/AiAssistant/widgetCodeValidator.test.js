@@ -13,6 +13,7 @@ import {
     buildNoModalCorrectionMessage,
     validateComponentReferences,
     buildComponentReferenceCorrectionMessage,
+    validateProviderCredentials,
 } from "./widgetCodeValidator";
 
 describe("validateProviderApiUsage — accepts real methods", () => {
@@ -588,5 +589,85 @@ describe("validateEventPublishing — api.publishEvent isn't heard (4d-2)", () =
         expect(msg).toMatch(/Re-emit BOTH code blocks/);
         expect(msg).toMatch(/const \{ publishEvent \} = useWidgetEvents\(\);/);
         expect(msg).toMatch(/Never call `api\.publishEvent`/);
+    });
+});
+
+// A widget that declares a connection but asks the user for keys and calls
+// the service itself (Create build fixes 3 — the user's Attribute Boost).
+const KEYS_CONFIG = `export default {
+  component: "AttributeBoost",
+  type: "widget",
+  providers: [{ type: "algolia", providerClass: "mcp", required: true }],
+  userConfig: {
+    appId: { type: "text", defaultValue: "", displayName: "Algolia App ID" },
+    adminApiKey: { type: "text", defaultValue: "", displayName: "Admin API Key" },
+    searchApiKey: { type: "text", defaultValue: "", displayName: "Search API Key" },
+    workingIndexName: { type: "text", defaultValue: "", displayName: "Working Index Name" },
+    sortKey: { type: "text", defaultValue: "", displayName: "Sort key" },
+    tokenLimit: { type: "number", defaultValue: 10, displayName: "Token limit" },
+  },
+};`;
+const KEYS_COMPONENT = `export default function AttributeBoost({ appId, searchApiKey, workingIndexName }) {
+  const run = async () => {
+    const res = await fetch(
+      \`https://\${appId}-dsn.algolia.net/1/indexes/\${workingIndexName}/query\`,
+      { headers: { "X-Algolia-API-Key": searchApiKey } }
+    );
+    return res.json();
+  };
+  return null;
+}`;
+
+describe("validateProviderCredentials — a connection's widget never asks for keys", () => {
+    test("flags key settings and a direct fetch to the connected service", () => {
+        const res = validateProviderCredentials(KEYS_COMPONENT, KEYS_CONFIG);
+        expect(res.ok).toBe(false);
+        const settings = res.errors
+            .filter((e) => e.kind === "setting")
+            .map((e) => e.name);
+        expect(settings).toEqual(
+            expect.arrayContaining(["adminApiKey", "searchApiKey", "appId"])
+        );
+        // Names that only look like keys are left alone.
+        expect(settings).not.toContain("sortKey");
+        expect(settings).not.toContain("tokenLimit");
+        expect(settings).not.toContain("workingIndexName");
+        const direct = res.errors.find((e) => e.kind === "fetch");
+        expect(direct).toBeTruthy();
+        expect(direct.provider).toBe("algolia");
+        expect(direct.line).toBe(3);
+        for (const e of res.errors) expect(e.suggestion).toMatch(/connection/);
+    });
+
+    test("an App ID alone isn't flagged when the widget goes through the connection", () => {
+        const config = KEYS_CONFIG.replace(/\s+adminApiKey:.*\n/, "\n").replace(
+            /\s+searchApiKey:.*\n/,
+            "\n"
+        );
+        const component = `export default function W() { window.mainApi.algolia.search({}); return null; }`;
+        expect(validateProviderCredentials(component, config)).toEqual({
+            ok: true,
+            errors: [],
+        });
+    });
+
+    test("a widget with no connection may ask for its own key", () => {
+        const config = `export default {
+  component: "Weather",
+  userConfig: { apiKey: { type: "text", defaultValue: "" } },
+};`;
+        const component = `export default function Weather({ apiKey }) { fetch(\`https://api.openweathermap.org/data?appid=\${apiKey}\`); return null; }`;
+        expect(validateProviderCredentials(component, config).ok).toBe(true);
+    });
+
+    test("empty or missing code is ok", () => {
+        expect(validateProviderCredentials("", "")).toEqual({
+            ok: true,
+            errors: [],
+        });
+        expect(validateProviderCredentials(null, undefined)).toEqual({
+            ok: true,
+            errors: [],
+        });
     });
 });

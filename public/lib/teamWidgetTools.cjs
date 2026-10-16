@@ -8,7 +8,8 @@
  *       An update only ever replaces an @ai-built/ widget; its old config is
  *       kept so check() can compare.
  *   check({ name })
- *       compile + code checks + scorecard for an installed widget, plus the
+ *       compile + code checks (incl. a connection's widget asking for keys)
+ *       + scorecard (must-fix misses marked) for an installed widget, plus the
  *       config from before its last update (dash-core compares the two).
  *   guide({ providers })
  *       the Widget Builder's rules (SKILL.md) and the known tool names for
@@ -26,8 +27,12 @@ const checks = require("./widgetChecks.cjs");
 const WIDGET_NAME = /^[A-Z][A-Za-z0-9]{1,48}$/;
 const AI_SCOPE = "@ai-built/";
 
-/** The Widget Builder's code checks on component source → problems. */
-function codeProblems(componentCode) {
+/**
+ * The Widget Builder's code checks on a widget's source → problems. With
+ * its .dash.js config, a widget that has a connection is also checked for
+ * asking the user for keys or calling the service itself.
+ */
+function codeProblems(componentCode, configCode = "") {
     const problems = [];
     const api = checks.validateProviderApiUsage(componentCode);
     if (!api.ok) {
@@ -75,16 +80,37 @@ function codeProblems(componentCode) {
             );
         }
     }
+    const creds = checks.validateProviderCredentials(componentCode, configCode);
+    if (!creds.ok) {
+        for (const e of creds.errors) {
+            problems.push(
+                e.kind === "setting"
+                    ? `setting "${e.name}" asks for a key the ${e.provider} connection already provides — ${e.suggestion}`
+                    : `line ${e.line}: calls ${e.provider} directly with fetch — ${e.suggestion}`
+            );
+        }
+    }
     return problems;
 }
 
-/** Scorecard rows → { failed: [item], passed: n, notCheckable: n }. */
+// Checklist items a data widget must get right — the Checker fails it
+// without them. The rest (titles, spacing, primitives) are things to improve.
+const MUST_FIX = [/^Loading state/, /^Error state/];
+
+/**
+ * Scorecard rows → { failed: [{ item, matches, mustFix }], passed: n,
+ * notCheckable: n }.
+ */
 function scorecardSummary(componentCode) {
     const rows = checks.evaluateScorecard(componentCode);
     return {
         failed: rows
             .filter((r) => r.pass === false)
-            .map((r) => ({ item: r.item, matches: r.matches.slice(0, 3) })),
+            .map((r) => ({
+                item: r.item,
+                matches: r.matches.slice(0, 3),
+                mustFix: MUST_FIX.some((re) => re.test(r.item)),
+            })),
         passed: rows.filter((r) => r.pass === true).length,
         notCheckable: rows.filter((r) => r.pass === null).length,
     };
@@ -141,7 +167,7 @@ function createTeamWidgetTools(deps) {
             };
         }
         // The Widget Builder's checks first — never install code that fails them.
-        const problems = codeProblems(componentCode);
+        const problems = codeProblems(componentCode, configCode);
         if (problems.length) {
             return {
                 success: false,
@@ -207,7 +233,7 @@ function createTeamWidgetTools(deps) {
                           error:
                               (compiled && compiled.error) || "didn't compile",
                       },
-            problems: codeProblems(src.componentCode),
+            problems: codeProblems(src.componentCode, src.configCode || ""),
             scorecard: scorecardSummary(src.componentCode),
             configCode: src.configCode || "",
             previousConfigCode: previousConfigs.has(widgetName)
