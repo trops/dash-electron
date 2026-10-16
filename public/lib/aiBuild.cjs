@@ -911,16 +911,10 @@ async function aiBuild(message, { windows = [] } = {}) {
             };
         }
 
-        // Install to @ai-built/ scope — clean up any stale install first
+        // Install to @ai-built/ scope. No early delete: the install replaces
+        // the old one only after the package passes its checks — a refusal
+        // keeps the installed widget.
         const scopedName = `@ai-built/${widgetName.toLowerCase()}`;
-        const installDir = path.join(
-            registry.getCachePath(),
-            "@ai-built",
-            widgetName.toLowerCase()
-        );
-        if (fs.existsSync(installDir)) {
-            fs.rmSync(installDir, { recursive: true, force: true });
-        }
         const config = await registry.installFromLocalPath(
             scopedName,
             buildDir,

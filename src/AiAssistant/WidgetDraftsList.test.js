@@ -64,11 +64,18 @@ describe("WidgetDraftsList", () => {
         await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
     });
 
-    it("disables Open in editor and Install until the draft has files", async () => {
+    it("disables Open in editor until the draft has files", async () => {
         api.list.mockResolvedValue([{ ...draft, packageDir: null }]);
         render(<WidgetDraftsList onStartNew={() => {}} />);
-        expect(await screen.findByTestId("drafts-install")).toBeDisabled();
-        expect(screen.getByTestId("drafts-open-editor")).toBeDisabled();
+        expect(await screen.findByTestId("drafts-open-editor")).toBeDisabled();
+    });
+
+    // Install gate (consolidation Phase 1a): a draft is installed from the
+    // Widget Builder, after its checks — Resume, then Install there.
+    it("has no Install — Resume is the way to install a draft", async () => {
+        render(<WidgetDraftsList onStartNew={() => {}} />);
+        expect(await screen.findByTestId("drafts-resume")).toBeInTheDocument();
+        expect(screen.queryByTestId("drafts-install")).toBeNull();
     });
 });
 

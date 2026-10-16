@@ -176,6 +176,7 @@ const { parseBotsOptions, popoutHashRoute } = require("./lib/popoutRoute.cjs");
 // The Widget Builder's compile + install (also used by the Dash team).
 const { compilePreview, aiBuild } = require("./lib/aiBuild.cjs");
 const { createTeamWidgetTools } = require("./lib/teamWidgetTools.cjs");
+const { installGate } = require("./lib/installGate.cjs");
 
 const { updateElectronApp } = require("update-electron-app");
 
@@ -801,6 +802,16 @@ let windows = new Set();
 // The Dash team's widget hooks — build, check, guide — shared by the team's
 // bots and the Widget Builder's checks of unsaved code (CRE-011; Widget
 // Builder edit fixes). Made on first use.
+/** The Dash team's Checker bot, or null (not set up). */
+async function dashTeamChecker() {
+    try {
+        const team = (await botController.listDashTeam()) || [];
+        return team.find((b) => b && b.role === "checker") || null;
+    } catch (_e) {
+        return null;
+    }
+}
+
 let teamWidgetToolsInstance = null;
 function teamWidgetTools() {
     if (!teamWidgetToolsInstance) {
@@ -2204,6 +2215,9 @@ function createWindow() {
 
         // --- Widget System ---
         setupWidgetRegistryHandlers();
+        // Every package install runs the widget code checks on the staged
+        // package first; a failure refuses it (consolidation Phase 1a).
+        widgetRegistry.setInstallGate(installGate);
         // Grants from declared permissions are keyed by provider type;
         // dash-core saves them under the user's provider names (the key
         // tool calls are checked against), so it needs the provider list.
@@ -2358,13 +2372,21 @@ function createWindow() {
         });
         logger.loggedHandle(
             BOTS_RUN,
-            (e, { botId, prompt, continueConversation, planId }) =>
+            async (e, { botId, prompt, continueConversation, planId }) => {
                 // A reply in the Bots view continues the bot's conversation;
                 // a Dash team run inside a Create plan gets its memory (4e-1).
-                botController.run(botId, prompt, {
-                    continueConversation: !!continueConversation,
-                    planId: planId || null,
-                })
+                const run = () =>
+                    botController.run(botId, prompt, {
+                        continueConversation: !!continueConversation,
+                        planId: planId || null,
+                    });
+                // The Checker's verdict on a Widget Builder draft is read
+                // from its own run, here — the install trusts nothing else.
+                const checker = await dashTeamChecker();
+                return checker && checker.id === botId
+                    ? teamWidgetTools().reviewRun(prompt, run)
+                    : run();
+            }
         );
         // Bots view (TEAM-011): a bot's run history.
         logger.loggedHandle(BOTS_GET_RUNS, (e, msg) =>
@@ -2798,50 +2820,8 @@ function createWindow() {
                 packageDir: draft.packageDir,
             };
         });
-        // Promote a draft to an installed widget: rename its package
-        // dir from <name>-draft-<id> to <name>, register via the
-        // widget registry, then drop the draft entry (without
-        // removing the now-installed dir — clear packageDir first).
-        logger.loggedHandle("drafts:install", async (e, { id }) => {
-            const draft = widgetDrafts.getDraft(id);
-            if (!draft) return { success: false, error: "draft not found" };
-            if (!draft.packageDir) {
-                return {
-                    success: false,
-                    error: "draft has no package dir on disk yet",
-                };
-            }
-            const widgetName = draft.componentName || draft.name;
-            try {
-                const installedDir = widgetDrafts.promoteDraftPackage(
-                    draft.packageDir,
-                    widgetName
-                );
-                const dashCoreRegistry =
-                    require("@trops/dash-core/electron").widgetRegistry;
-                const registry = dashCoreRegistry.getWidgetRegistry();
-                const scopedName = `@ai-built/${(
-                    widgetName || ""
-                ).toLowerCase()}`;
-                const config = await registry.installFromLocalPath(
-                    scopedName,
-                    installedDir,
-                    true,
-                    path.join(installedDir, "dash.json")
-                );
-                // Clear packageDir so deleteDraft's dir-cleanup
-                // doesn't try to rm what's now an installed widget,
-                // then drop the metadata entry.
-                widgetDrafts.saveDraft({ ...draft, packageDir: null });
-                widgetDrafts.deleteDraft(id);
-                return { success: true, widgetName: scopedName, config };
-            } catch (err) {
-                return {
-                    success: false,
-                    error: err?.message || String(err),
-                };
-            }
-        });
+        // No drafts:install: a draft is installed from the Widget Builder
+        // (Resume), after its checks (consolidation Phase 1a).
 
         // --- AI Assistant: Health Check ---
         // Probes whether the bits the AI Assistant + Widget Builder need
@@ -2982,9 +2962,26 @@ function createWindow() {
         // --- AI Widget Builder: Install ---
         // Compiles AI-generated widget code and installs to @ai-built/ scope.
         // Called from the Widget Builder modal UI — the LLM never touches the filesystem.
-        logger.loggedHandle("widget:ai-build", async (e, message) =>
-            aiBuild(message, { windows })
-        );
+        // Only the exact code that passed the checks and the Checker is
+        // installed (consolidation Phase 1a); the package's code checks run
+        // again on the final package as it's installed (the install gate).
+        logger.loggedHandle("widget:ai-build", async (e, message) => {
+            const msg = message || {};
+            const checker = await dashTeamChecker();
+            const allowed = teamWidgetTools().installAllowed({
+                checkName: msg.checkName,
+                installName: msg.widgetName,
+                componentCode: msg.componentCode,
+                files: msg.files,
+                checkerUnavailable: !checker
+                    ? "the Checker isn't set up"
+                    : checker.paused
+                    ? `the ${checker.name || "Checker"} is paused`
+                    : null,
+            });
+            if (!allowed.ok) return { success: false, error: allowed.error };
+            return aiBuild(msg, { windows });
+        });
     } // end ipcHandlersRegistered guard
 
     windows.add(mainWindow);

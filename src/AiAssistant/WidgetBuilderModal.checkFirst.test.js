@@ -65,3 +65,29 @@ describe("install only after a pass", () => {
         );
     });
 });
+
+// Install gate (consolidation Phase 1a): nothing counts as checked unless
+// the checks ran; the main process re-checks the install against them.
+describe("no pass without a check", () => {
+    test("checks that aren't available, or a Checker that couldn't run, fail — with Check again", () => {
+        expect(src).not.toMatch(
+            /reviewSkipped: \"the checks aren't available here\"/
+        );
+        expect(src).not.toMatch(/reviewSkipped: \`the Checker couldn't run/);
+        expect(src).toMatch(/canRetry: true/);
+        expect(src).toMatch(/onRetry=\{\s*retryCheck\s*\}/);
+    });
+    test("only a paused or missing Checker skips the review", () => {
+        expect(src).toMatch(
+            /res\.skipped && \(!res\.bot \|\| res\.bot\.paused\)/
+        );
+    });
+    test("the helper files are checked, and the install names what was checked", () => {
+        expect(src).toMatch(
+            /checkDraft\?\.\(\{[\s\S]{0,500}files: code\.files/
+        );
+        expect(src).toMatch(
+            /aiBuild\([\s\S]{0,1600}checked under[\s\S]{0,160}checkName\s*\);/
+        );
+    });
+});

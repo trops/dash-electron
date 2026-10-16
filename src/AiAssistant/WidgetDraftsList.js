@@ -59,14 +59,12 @@ export function firstUserMessageExcerpt(chatHistory) {
 export const WidgetDraftsList = ({
     onResume,
     onStartNew,
-    onInstalled,
     onOpenedInEditor,
 }) => {
     const [drafts, setDrafts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-    const [installingId, setInstallingId] = useState(null);
-    const [installError, setInstallError] = useState(null);
+    const [actionError, setActionError] = useState(null);
     const [openingEditorId, setOpeningEditorId] = useState(null);
     const bt = useBuilderTheme();
 
@@ -102,7 +100,7 @@ export const WidgetDraftsList = ({
     const handleOpenInEditor = useCallback(
         async (draft) => {
             setOpeningEditorId(draft.id);
-            setInstallError(null);
+            setActionError(null);
             try {
                 const result = await window.mainApi?.drafts?.openInEditor?.(
                     draft.id
@@ -112,44 +110,15 @@ export const WidgetDraftsList = ({
                         onOpenedInEditor(draft);
                     }
                 } else {
-                    setInstallError(
-                        result?.error || "Couldn't open the editor"
-                    );
+                    setActionError(result?.error || "Couldn't open the editor");
                 }
             } catch (err) {
-                setInstallError(err?.message || String(err));
+                setActionError(err?.message || String(err));
             } finally {
                 setOpeningEditorId(null);
             }
         },
         [onOpenedInEditor]
-    );
-
-    const handleInstall = useCallback(
-        async (draft) => {
-            setInstallingId(draft.id);
-            setInstallError(null);
-            try {
-                const result = await window.mainApi?.drafts?.install?.(
-                    draft.id
-                );
-                if (result?.success) {
-                    if (typeof onInstalled === "function") {
-                        onInstalled(result.widgetName, draft.componentName);
-                    }
-                    await refresh();
-                } else {
-                    setInstallError(
-                        result?.error || "Install failed (no error reported)"
-                    );
-                }
-            } catch (err) {
-                setInstallError(err?.message || String(err));
-            } finally {
-                setInstallingId(null);
-            }
-        },
-        [refresh, onInstalled]
     );
 
     const noFilesYet =
@@ -188,12 +157,12 @@ export const WidgetDraftsList = ({
                     testId="drafts-start-new"
                 />
             </div>
-            {installError && (
+            {actionError && (
                 <div
                     role="alert"
                     className={`px-4 py-2 border-b text-sm ${bt.status.error.bg} ${bt.status.error.border} ${bt.status.error.text}`}
                 >
-                    Install failed: {installError}
+                    {actionError}
                 </div>
             )}
             {drafts.length === 0 ? (
@@ -218,8 +187,6 @@ export const WidgetDraftsList = ({
                         const isConfirming = confirmDeleteId === draft.id;
                         const editorOff =
                             openingEditorId === draft.id || !draft.packageDir;
-                        const installOff =
-                            installingId === draft.id || !draft.packageDir;
                         return (
                             <li
                                 key={draft.id}
@@ -279,25 +246,6 @@ export const WidgetDraftsList = ({
                                                             : "Open this widget's package in your editor (VS Code if available)"
                                                     }
                                                     testId="drafts-open-editor"
-                                                />
-                                                <Button3
-                                                    title={
-                                                        installingId ===
-                                                        draft.id
-                                                            ? "Installing…"
-                                                            : "Install"
-                                                    }
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        handleInstall(draft)
-                                                    }
-                                                    disabled={installOff}
-                                                    tooltip={
-                                                        !draft.packageDir
-                                                            ? noFilesYet
-                                                            : "Install this widget"
-                                                    }
-                                                    testId="drafts-install"
                                                 />
                                                 <Button3
                                                     title="Delete"

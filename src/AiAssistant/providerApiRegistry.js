@@ -138,6 +138,15 @@ export const PROVIDER_API_REGISTRY = {
                 sampleShape: null,
             },
         },
+        // From dash-core's default API (preload spreads ...defaultMainApi.algolia).
+        createBatchesFromFile: {
+            args: ["filepath", "batchFilepath", "batchSize"],
+            desc: "Split a JSON file of records into batch files of `batchSize` records under `batchFilepath` (inside the allowed data folder). Progress and completion arrive as events.",
+            returns: {
+                type: "void",
+                sampleShape: null,
+            },
+        },
         getSettings: {
             args: [
                 "providerHash",

@@ -6,7 +6,9 @@
  *
  * @param {object|null} check  { phase: "checking" | "reviewing" | "fixing"
  *   | "passed" | "failed", lines?: string[], review?: string,
- *   fixes?: number, reviewSkipped?: string }
+ *   fixes?: number, reviewSkipped?: string, canRetry?: boolean }
+ *   canRetry: the check couldn't run (not a problem in the code) — offer
+ *   Check again (onRetry).
  * @param {object} bt  the builder theme (useBuilderTheme)
  * @param {boolean} waiting  the AI is still replying — nothing counts yet
  */
@@ -16,7 +18,7 @@ import { MAX_CHECK_FIXES } from "./draftCheck";
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-export function ChecksStatus({ check, bt, waiting = false }) {
+export function ChecksStatus({ check, bt, waiting = false, onRetry = null }) {
     const [showReview, setShowReview] = useState(false);
     if (waiting) {
         return (
@@ -72,9 +74,22 @@ export function ChecksStatus({ check, bt, waiting = false }) {
                             · {l}
                         </span>
                     ))}
-                    <span className={bt.muted}>
-                        Ask for changes in the chat, or save it as a draft.
-                    </span>
+                    {check.canRetry && onRetry ? (
+                        <div className="flex items-center gap-2">
+                            <Button3
+                                size="sm"
+                                title="Check again"
+                                onClick={onRetry}
+                            />
+                            <span className={bt.muted}>
+                                or save it as a draft.
+                            </span>
+                        </div>
+                    ) : (
+                        <span className={bt.muted}>
+                            Ask for changes in the chat, or save it as a draft.
+                        </span>
+                    )}
                     {check.review ? (
                         <div className="flex flex-col gap-1">
                             <div>

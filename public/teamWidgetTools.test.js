@@ -294,7 +294,8 @@ describe("the Widget Builder's IPC handlers use lib/aiBuild.cjs", () => {
         );
         assert.match(
             main,
-            /loggedHandle\("widget:ai-build", async \(e, message\) =>\s*aiBuild\(message, \{ windows \}\)/
+            // After installAllowed (consolidation Phase 1a).
+            /loggedHandle\("widget:ai-build", async \(e, message\) => \{[\s\S]{0,900}return aiBuild\(msg, \{ windows \}\);/
         );
     });
     it("botController and the Widget Builder's checks share the team's widget tools", () => {

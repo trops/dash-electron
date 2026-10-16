@@ -64,6 +64,41 @@ describe("ChecksStatus", () => {
         expect(screen.queryByRole("button", { name: /anyway/i })).toBeNull();
     });
 
+    // Install gate (consolidation Phase 1a): a check that couldn't run
+    // isn't a pass — it can be run again.
+    test("a check that couldn't run offers Check again", () => {
+        const onRetry = jest.fn();
+        render(
+            <ChecksStatus
+                check={{
+                    phase: "failed",
+                    lines: ["The Checker couldn't run (no answer)."],
+                    canRetry: true,
+                }}
+                bt={bt}
+                onRetry={onRetry}
+            />
+        );
+        expect(screen.getByTestId("draft-check-status")).toHaveTextContent(
+            /Not ready to install/
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+        expect(onRetry).toHaveBeenCalledTimes(1);
+    });
+
+    test("problems in the code don't offer Check again — they need changes", () => {
+        render(
+            <ChecksStatus
+                check={{ phase: "failed", lines: ["x"] }}
+                bt={bt}
+                onRetry={() => {}}
+            />
+        );
+        expect(
+            screen.queryByRole("button", { name: "Check again" })
+        ).toBeNull();
+    });
+
     test("while the AI is replying, that's what it says — whatever the last check was", () => {
         render(<ChecksStatus check={{ phase: "passed" }} waiting bt={bt} />);
         expect(screen.getByTestId("draft-check-status")).toHaveTextContent(
