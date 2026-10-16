@@ -223,6 +223,173 @@ export function validateEventPublishing(componentCode) {
     return { ok: errors.length === 0, errors };
 }
 
+/**
+ * A widget that declares a connection (the config's `providers`) gets its
+ * credentials from that connection. It must not ask the user to paste keys
+ * into its settings, or call the service itself with fetch — the Builder
+ * did both for a user's Attribute Boost while the Algolia connection sat
+ * unused (create-entry, Create build fixes 3). A widget with no connection
+ * may ask for its own key.
+ *
+ * Flags: a setting named like a credential (apiKey, adminApiKey, secret,
+ * accessToken, password, credentials — not sortKey or tokenLimit); a fetch
+ * whose URL names a connected service; and, alongside such a fetch, an App
+ * ID setting.
+ *
+ * Returns: { ok, errors: [{ kind: "setting", name, line, provider,
+ * suggestion } | { kind: "fetch", line, snippet, provider, suggestion }] }.
+ */
+const KEY_QUALIFIERS = new Set([
+    "api",
+    "access",
+    "private",
+    "secret",
+    "admin",
+    "search",
+    "auth",
+    "client",
+    "write",
+    "read",
+]);
+const SECRET_WORDS = new Set([
+    "secret",
+    "password",
+    "passwd",
+    "credential",
+    "credentials",
+    "token",
+]);
+
+function nameParts(name) {
+    return String(name)
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .split(/[\s_-]+/)
+        .map((p) => p.toLowerCase())
+        .filter(Boolean);
+}
+
+function isCredentialName(name) {
+    const parts = nameParts(name);
+    const last = parts[parts.length - 1];
+    if (SECRET_WORDS.has(last)) return true;
+    if (parts.join("") === "apikey") return true;
+    return (
+        last === "key" &&
+        parts.length > 1 &&
+        KEY_QUALIFIERS.has(parts[parts.length - 2])
+    );
+}
+
+function isAppIdName(name) {
+    const joined = nameParts(name).join("");
+    return joined === "appid" || joined === "applicationid";
+}
+
+/** The provider types a .dash.js config declares. */
+function declaredProviderTypes(configCode) {
+    const block = /providers\s*:\s*\[([\s\S]*?)\]/.exec(configCode);
+    if (!block) return [];
+    return [...block[1].matchAll(/type\s*:\s*["'`]([\w.-]+)["'`]/g)].map(
+        (m) => m[1]
+    );
+}
+
+/** The top-level keys of a config's userConfig, with where they are. */
+function userConfigKeys(configCode) {
+    const start = /userConfig\s*:\s*\{/.exec(configCode);
+    if (!start) return [];
+    const keys = [];
+    let depth = 0;
+    let quote = null;
+    let expectKey = false;
+    for (
+        let i = start.index + start[0].length - 1;
+        i < configCode.length;
+        i++
+    ) {
+        const ch = configCode[i];
+        if (quote) {
+            if (ch === "\\") i++;
+            else if (ch === quote) quote = null;
+            continue;
+        }
+        if (depth === 1 && expectKey) {
+            const key = /^\s*["']?([A-Za-z_$][\w$]*)["']?\s*:/.exec(
+                configCode.slice(i, i + 200)
+            );
+            if (key) {
+                keys.push({ name: key[1], index: i + key[0].indexOf(key[1]) });
+                expectKey = false;
+                i += key[0].length - 1;
+                continue;
+            }
+        }
+        if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+        else if (ch === "{" || ch === "[" || ch === "(") {
+            depth++;
+            if (depth === 1) expectKey = true;
+        } else if (ch === "}" || ch === "]" || ch === ")") {
+            depth--;
+            if (depth === 0) break;
+        } else if (ch === "," && depth === 1) expectKey = true;
+    }
+    return keys;
+}
+
+function namesService(url, type) {
+    const t = String(type).toLowerCase();
+    const words = [t, t.replace(/[-_.]/g, ""), t.split(/[-_.]/)[0]];
+    const u = url.toLowerCase();
+    return words.some((w) => w.length > 2 && u.includes(w));
+}
+
+const FETCH_PATTERN = /\bfetch\s*\(\s*(`[^`]*`|"[^"]*"|'[^']*')/g;
+
+export function validateProviderCredentials(componentCode, configCode) {
+    const config = typeof configCode === "string" ? configCode : "";
+    const code = typeof componentCode === "string" ? componentCode : "";
+    const types = declaredProviderTypes(config);
+    if (!types.length) return { ok: true, errors: [] };
+    const via = (type) =>
+        `window.mainApi.${type}.* or useMcpProvider("${type}")`;
+    const errors = [];
+    for (const m of code.matchAll(FETCH_PATTERN)) {
+        const type = types.find((t) => namesService(m[1], t));
+        if (!type) continue;
+        errors.push({
+            kind: "fetch",
+            line: lineOf(code, m.index),
+            snippet: m[0].replace(/\s+/g, " ").slice(0, 80),
+            provider: type,
+            suggestion: `Don't call ${type} with fetch and pasted keys — go through the ${type} connection (${via(
+                type
+            )}).`,
+        });
+    }
+    const callsDirectly = errors.length > 0;
+    const type = types[0];
+    for (const key of userConfigKeys(config)) {
+        if (
+            !isCredentialName(key.name) &&
+            !(callsDirectly && isAppIdName(key.name))
+        ) {
+            continue;
+        }
+        errors.push({
+            kind: "setting",
+            name: key.name,
+            line: lineOf(config, key.index),
+            provider: type,
+            suggestion: `Remove the "${
+                key.name
+            }" setting: the ${type} connection already holds the credentials — call the service through the connection (${via(
+                type
+            )}).`,
+        });
+    }
+    return { ok: errors.length === 0, errors };
+}
+
 /** The chat correction for a widget that publishes with api.publishEvent. */
 export function buildEventPublishingCorrectionMessage(errors) {
     if (!errors || errors.length === 0) return "";

@@ -11,6 +11,7 @@ export {
     validateNoBotCalls,
     validateEventPublishing,
     validateComponentReferences,
+    validateProviderCredentials,
     buildAiCorrectionMessage,
     buildNoModalCorrectionMessage,
     buildNoBotCallsCorrectionMessage,

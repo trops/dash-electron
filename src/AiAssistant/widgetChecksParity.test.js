@@ -8,6 +8,7 @@ import {
     validateNoModalUsage,
     validateNoBotCalls,
     validateComponentReferences,
+    validateProviderCredentials,
 } from "./widgetCodeValidator";
 import { evaluateScorecard } from "./composer/scorecardChecks";
 import { getKnownToolsForType } from "./composer/mcpKnownTools";
@@ -48,4 +49,14 @@ describe("widgetChecks.cjs matches src/AiAssistant", () => {
             getKnownToolsForType("gmail")
         );
     });
+});
+
+test("widgetChecks.cjs has the same connection-credentials check", () => {
+    const config = `export default { providers: [{ type: "algolia" }], userConfig: { adminApiKey: { type: "text" } } };`;
+    const code =
+        "export default function W(){ fetch('https://x.algolia.net/1/keys'); return null; }";
+    expect(generated.validateProviderCredentials(code, config)).toEqual(
+        validateProviderCredentials(code, config)
+    );
+    expect(generated.validateProviderCredentials(code, config).ok).toBe(false);
 });

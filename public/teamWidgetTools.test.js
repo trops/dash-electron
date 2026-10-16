@@ -11,6 +11,7 @@ const path = require("path");
 const {
     createTeamWidgetTools,
     codeProblems,
+    scorecardSummary,
 } = require("./lib/teamWidgetTools.cjs");
 
 const GOOD_COMPONENT = `import React from "react";
@@ -282,5 +283,87 @@ describe("the Widget Builder's IPC handlers use lib/aiBuild.cjs", () => {
     });
     it("botController gets the team's widget tools", () => {
         assert.match(main, /widgetTools: createTeamWidgetTools\(\{/);
+    });
+});
+
+// Create build fixes 3: a widget with a connection never asks for keys, and
+// a data widget must show loading and errors.
+const KEYS_CONFIG = `export default {
+    component: "Boost",
+    type: "widget",
+    providers: [{ type: "algolia", providerClass: "mcp", required: true }],
+    userConfig: { adminApiKey: { type: "text", defaultValue: "" } },
+};
+`;
+const KEYS_COMPONENT = `import React from "react";
+import { Panel } from "@trops/dash-react";
+export default function Boost({ adminApiKey }) {
+    const save = () => fetch("https://x.algolia.net/1/rules", { headers: { "X-Algolia-API-Key": adminApiKey } });
+    return <Panel />;
+}
+`;
+
+describe("connection credentials (Create build fixes 3)", () => {
+    it("codeProblems names the key setting and the direct call", () => {
+        const p = codeProblems(KEYS_COMPONENT, KEYS_CONFIG);
+        assert.ok(
+            p.some((x) =>
+                /setting "adminApiKey" asks for a key the algolia connection already provides/.test(
+                    x
+                )
+            ),
+            p.join("\n")
+        );
+        assert.ok(
+            p.some((x) => /line 4: calls algolia directly with fetch/.test(x)),
+            p.join("\n")
+        );
+        assert.deepEqual(codeProblems(GOOD_COMPONENT, GOOD_CONFIG), []);
+    });
+
+    it("build refuses it before installing", async () => {
+        const { tools, calls } = setup();
+        const res = await tools.build({
+            name: "Boost",
+            componentCode: KEYS_COMPONENT,
+            configCode: KEYS_CONFIG,
+        });
+        assert.equal(res.success, false);
+        assert.ok(res.problems.some((x) => /adminApiKey/.test(x)));
+        assert.equal(calls.build.length, 0);
+    });
+
+    it("check reports it", async () => {
+        const { tools } = setup({
+            installed: {
+                "@ai-built/boost": {
+                    componentName: "Boost",
+                    componentCode: KEYS_COMPONENT,
+                    configCode: KEYS_CONFIG,
+                },
+            },
+        });
+        const res = await tools.check({ name: "@ai-built/boost" });
+        assert.ok(res.problems.some((x) => /directly with fetch/.test(x)));
+    });
+});
+
+describe("scorecardSummary must-fix items (Create build fixes 3)", () => {
+    it("a data widget missing loading and error states must fix them; style misses are notes", () => {
+        const code = `export default function W() { window.mainApi.algolia.search({}); return <div>x</div>; }`;
+        const sc = scorecardSummary(code);
+        const must = sc.failed.filter((f) => f.mustFix).map((f) => f.item);
+        assert.ok(
+            must.some((i) => /^Loading state/.test(i)),
+            must.join("\n")
+        );
+        assert.ok(
+            must.some((i) => /^Error state/.test(i)),
+            must.join("\n")
+        );
+        assert.equal(must.length, 2);
+        assert.ok(
+            sc.failed.some((f) => !f.mustFix && /^Title uses/.test(f.item))
+        );
     });
 });
