@@ -1,11 +1,8 @@
 /**
- * Installing a draft from the builder's drafts list hands the host the same
- * arguments as a fresh AI build: (scoped component id, package name).
- *
- * WidgetDraftsList reports (package, bare component name). Passed through
- * as-is, Dash.js read the bundle for the bare name and placed the package
- * name as the cell's component, so a draft installed from an empty cell
- * didn't land. Static source pins, like the other builder tests.
+ * Drafts aren't installed from the builder's drafts list (consolidation
+ * Phase 1a — that skipped the checks): Resume opens the draft in the
+ * builder, whose Install runs only after the code passed. Static source
+ * pins, like the other builder tests.
  */
 const fs = require("fs");
 const path = require("path");
@@ -15,14 +12,15 @@ const modal = fs.readFileSync(
     "utf8"
 );
 
-describe("Widget Builder — installing a draft from the list", () => {
-    test("maps (package, component) to (scoped component id, package)", () => {
-        expect(modal).toMatch(
-            /onInstalled=\{\(packageName, componentName\) => \{[\s\S]{0,1200}onInstalled\(\s*packageName\s*\?\s*makeScopedComponentId\(\s*packageName,\s*componentName\s*\)\s*:\s*componentName,\s*packageName\s*\)/
-        );
+describe("Widget Builder — drafts are installed only after their checks", () => {
+    test("the drafts list is given no install callback", () => {
+        const at = modal.indexOf("<WidgetDraftsList");
+        expect(at).toBeGreaterThan(-1);
+        const tag = modal.slice(at, modal.indexOf("/>", at));
+        expect(tag).not.toMatch(/onInstalled=/);
     });
 
-    test("the fresh AI build passes the same shape", () => {
+    test("the fresh AI build hands the host (scoped component id, package)", () => {
         expect(modal).toMatch(
             /onInstalled\(scopedRegistryId, result\.widgetName\);/
         );

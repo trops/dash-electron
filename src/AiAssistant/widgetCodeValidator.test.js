@@ -133,22 +133,11 @@ describe("validateProviderApiUsage — rejects hallucinated methods", () => {
     });
 
     test("does not flag patterns that aren't actually a mainApi call", () => {
-        // A local variable named `mainApi` shouldn't trip — but we
-        // only filter for the actual member-access pattern, so a
-        // local with the same shape is the user's responsibility.
-        // The realistic noise we DO want to ignore: comments
-        // mentioning the API by name, and string literals.
-        // Comments and string literals aren't excluded by this
-        // simple matcher; we accept that as the noise floor.
-        // Confirm the matcher still flags strings.
+        // Comments and string literals are skipped (codeOnly, install
+        // gate 2026-10-16): a string that only names a method isn't a call.
         const code = `const note = "window.mainApi.algolia.fake(...)";`;
         const result = validateProviderApiUsage(code);
-        // This IS a hallucination match by our matcher because
-        // it's the literal pattern. Future iteration could parse,
-        // but the prompt-side fix is "the AI shouldn't write this
-        // pattern in strings either."
-        expect(result.errors).toHaveLength(1);
-        expect(result.errors[0].method).toBe("fake");
+        expect(result.errors).toHaveLength(0);
     });
 });
 
@@ -669,5 +658,49 @@ describe("validateProviderCredentials — a connection's widget never asks for k
             ok: true,
             errors: [],
         });
+    });
+});
+
+// The checks read code, not comments or text (install gate, 2026-10-16:
+// three installed packages were flagged for words in a doc comment, a
+// template string and a comment).
+describe("checks ignore comments and strings", () => {
+    test("a component named in a comment or a template string isn't flagged", () => {
+        const code = `/**
+ * Wraps everything inside a single <InstantSearch> instance.
+ */
+import { Panel } from "@trops/dash-react";
+const block = (id) => \`<MERMAID_BLOCK id="\${id}"/>\`;
+export default function W() { return <Panel>{block(1)}</Panel>; }
+`;
+        expect(validateComponentReferences(code)).toEqual({
+            ok: true,
+            errors: [],
+        });
+    });
+    test("a provider method named in a comment isn't flagged; a real call still is", () => {
+        const comment = `// Uses window.mainApi.algolia.notARealMethod() later.
+export default function W() { return null; }`;
+        expect(validateProviderApiUsage(comment).ok).toBe(true);
+        const real = `export default function W() { window.mainApi.algolia.notARealMethod(); return null; }`;
+        expect(validateProviderApiUsage(real).ok).toBe(false);
+    });
+    test("an apostrophe in JSX text doesn't hide a later line", () => {
+        const code = `export default function W() {
+    return (
+        <div>
+            <p>Don't panic</p>
+            <Bogus />
+        </div>
+    );
+}`;
+        const res = validateComponentReferences(code);
+        expect(res.errors.map((e) => [e.name, e.line])).toEqual([["Bogus", 5]]);
+    });
+    test("a Modal or a bot call in a comment isn't flagged", () => {
+        const code = `// Don't use <Modal> or window.mainApi.bots.run() here.
+export default function W() { return null; }`;
+        expect(validateNoModalUsage(code).ok).toBe(true);
+        expect(validateNoBotCalls(code).ok).toBe(true);
     });
 });

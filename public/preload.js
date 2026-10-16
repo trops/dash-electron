@@ -106,7 +106,8 @@ const extendedApi = {
             remixMeta,
             files,
             selectedProvider,
-            updateOriginal
+            updateOriginal,
+            checkName
         ) =>
             ipcRenderer.invoke("widget:ai-build", {
                 widgetName,
@@ -135,6 +136,9 @@ const extendedApi = {
                 // packages: that package's name — it's rebuilt and
                 // reinstalled in place, not copied to @ai-built.
                 updateOriginal: updateOriginal || null,
+                // The name its code was checked under ("draft:<Name>"): only
+                // that exact checked code is installed.
+                checkName: checkName || null,
             }),
         // The unsaved code, checked before it's saved: compiled inside a
         // copy of its package, code checks + checklist; the Checker reads
@@ -179,7 +183,6 @@ const extendedApi = {
         save: (draft, files) =>
             ipcRenderer.invoke("drafts:save", { draft, files }),
         delete: (id) => ipcRenderer.invoke("drafts:delete", { id }),
-        install: (id) => ipcRenderer.invoke("drafts:install", { id }),
         openInEditor: (id) => ipcRenderer.invoke("drafts:openInEditor", { id }),
     },
     debug: {

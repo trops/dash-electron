@@ -143,6 +143,15 @@ const PROVIDER_API_REGISTRY = {
                 sampleShape: null,
             },
         },
+        // From dash-core's default API (preload spreads ...defaultMainApi.algolia).
+        createBatchesFromFile: {
+            args: ["filepath", "batchFilepath", "batchSize"],
+            desc: "Split a JSON file of records into batch files of `batchSize` records under `batchFilepath` (inside the allowed data folder). Progress and completion arrive as events.",
+            returns: {
+                type: "void",
+                sampleShape: null,
+            },
+        },
         getSettings: {
             args: [
                 "providerHash",
@@ -477,7 +486,7 @@ function validateProviderApiUsage(componentCode) {
     const callPattern =
         /\b(?:window\s*\.\s*)?mainApi\s*\.\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\.\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g;
 
-    const matches = componentCode.matchAll(callPattern);
+    const matches = codeOnly(componentCode).matchAll(callPattern);
     for (const m of matches) {
         const service = m[1];
         const method = m[2];
@@ -513,6 +522,95 @@ function validateProviderApiUsage(componentCode) {
  * Given the index of a match in the source, return the 1-based
  * line number it lives on. Cheap; we count newlines from start.
  */
+
+/**
+ * The code without its comments, quoted strings or template text — each
+ * character blanked to a space, line breaks kept so line numbers stay
+ * right — so the checks don't flag words in a doc comment or a string
+ * (install gate, 2026-10-16). A '…' or "…" string ends at its line (an
+ * apostrophe in JSX text can't hide the lines after it); template
+ * expressions (${…}) stay code. keepStrings: blank comments only (a check
+ * that reads a string, e.g. mainApi["bots"]).
+ */
+function codeOnly(source, { keepStrings = false } = {}) {
+    const src = String(source || "");
+    const out = src.split("");
+    const blank = (i) => {
+        if (out[i] !== "\n") out[i] = " ";
+    };
+    // Stack of modes: "code" (inside ${…} keeps a brace depth) or "tpl".
+    const stack = [{ mode: "code", depth: 0 }];
+    let i = 0;
+    while (i < src.length) {
+        const top = stack[stack.length - 1];
+        const c = src[i];
+        const n = src[i + 1];
+        if (top.mode === "tpl") {
+            if (c === "\\") {
+                blank(i);
+                if (i + 1 < src.length) blank(i + 1);
+                i += 2;
+            } else if (c === "`") {
+                stack.pop();
+                i += 1;
+            } else if (c === "$" && n === "{") {
+                stack.push({ mode: "code", depth: 0 });
+                i += 2;
+            } else {
+                blank(i);
+                i += 1;
+            }
+            continue;
+        }
+        // code
+        if (c === "/" && n === "/") {
+            while (i < src.length && src[i] !== "\n") blank(i++);
+            continue;
+        }
+        if (c === "/" && n === "*") {
+            blank(i);
+            blank(i + 1);
+            i += 2;
+            while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) {
+                blank(i++);
+            }
+            if (i < src.length) {
+                blank(i);
+                blank(i + 1);
+                i += 2;
+            }
+            continue;
+        }
+        if (!keepStrings && (c === "'" || c === '"')) {
+            i += 1;
+            while (i < src.length && src[i] !== c && src[i] !== "\n") {
+                if (src[i] === "\\" && src[i + 1] !== "\n") blank(i++);
+                blank(i++);
+            }
+            if (src[i] === c) i += 1;
+            continue;
+        }
+        if (!keepStrings && c === "`") {
+            stack.push({ mode: "tpl" });
+            i += 1;
+            continue;
+        }
+        if (stack.length > 1) {
+            if (c === "{") top.depth += 1;
+            else if (c === "}") {
+                if (top.depth === 0) {
+                    stack.pop();
+                    i += 1;
+                    continue;
+                }
+                top.depth -= 1;
+            }
+        }
+        i += 1;
+    }
+    return out.join("");
+}
+
 function lineOf(source, idx) {
     let n = 1;
     for (let i = 0; i < idx; i++) {
@@ -568,7 +666,7 @@ function validateNoModalUsage(componentCode) {
     // after the tag name to avoid false positives on identifiers
     // like `ModalContent`, `DialogTrigger`, etc.
     const tagPattern = /<(Modal|Dialog|Drawer)(?=[\s/>])/g;
-    const matches = componentCode.matchAll(tagPattern);
+    const matches = codeOnly(componentCode).matchAll(tagPattern);
     for (const m of matches) {
         const tag = m[1];
         if (seen.has(tag)) continue;
@@ -607,8 +705,9 @@ function validateNoBotCalls(componentCode) {
     }
     const errors = [];
     const seenLines = new Set();
+    const code = codeOnly(componentCode, { keepStrings: true });
     for (const re of BOT_CALL_PATTERNS) {
-        for (const m of componentCode.matchAll(re)) {
+        for (const m of code.matchAll(re)) {
             const line = lineOf(componentCode, m.index);
             if (seenLines.has(line)) continue;
             seenLines.add(line);
@@ -639,7 +738,9 @@ function validateEventPublishing(componentCode) {
         return { ok: true, errors: [] };
     }
     const errors = [];
-    for (const m of componentCode.matchAll(RAW_PUBLISH_PATTERN)) {
+    for (const m of codeOnly(componentCode, { keepStrings: true }).matchAll(
+        RAW_PUBLISH_PATTERN
+    )) {
         errors.push({
             line: lineOf(componentCode, m.index),
             snippet: m[0].replace(/\s*\($/, ""),
@@ -906,7 +1007,7 @@ function validateComponentReferences(componentCode) {
     // Capture the root identifier (everything up to whitespace, `>`,
     // `/`, or `.`).
     const tagPattern = /<([A-Z][A-Za-z0-9_$]*)(?=[\s/>.])/g;
-    const matches = componentCode.matchAll(tagPattern);
+    const matches = codeOnly(componentCode).matchAll(tagPattern);
     for (const m of matches) {
         const name = m[1];
         if (declared.has(name)) continue;

@@ -3041,6 +3041,13 @@ ${
     draftCheckRef.current = draftCheck;
     const checkFixesRef = useRef(0);
     const checkRunRef = useRef(0);
+    // "Check again" after a check that couldn't run.
+    const [checkAttempt, setCheckAttempt] = useState(0);
+    const retryCheck = useCallback(() => {
+        checkRunRef.current += 1;
+        setDraftCheck(null);
+        setCheckAttempt((n) => n + 1);
+    }, []);
     const currentCodeKey = codeKeyOf(detectedCode);
     const editedName = (effectiveEditContext?.originalComponentName || "")
         .split(".")
@@ -3116,16 +3123,21 @@ ${
                     configCode: code.configCode || "",
                     sourcePackage:
                         effectiveEditContext?.originalPackage || null,
+                    // Helper files beside the widget are built with it.
+                    files: code.files || [],
                 });
             } catch (err) {
                 result = { success: false, error: err?.message || String(err) };
             }
             if (stale()) return;
+            // A check that couldn't run isn't a pass (consolidation
+            // Phase 1a) — it can be run again.
             if (result === undefined) {
                 setDraftCheck({
                     key,
-                    phase: "passed",
-                    reviewSkipped: "the checks aren't available here",
+                    phase: "failed",
+                    lines: ["The checks aren't available here."],
+                    canRetry: true,
                 });
                 return;
             }
@@ -3148,11 +3160,21 @@ ${
                 draftCheckRequest(name, asked)
             );
             if (stale()) return;
-            if (res.skipped) {
+            // Only a paused or missing Checker skips its review.
+            if (res.skipped && (!res.bot || res.bot.paused)) {
                 setDraftCheck({
                     key,
                     phase: "passed",
                     reviewSkipped: res.reason,
+                });
+                return;
+            }
+            if (res.skipped) {
+                setDraftCheck({
+                    key,
+                    phase: "failed",
+                    lines: [`The Checker didn't run (${res.reason}).`],
+                    canRetry: true,
                 });
                 return;
             }
@@ -3165,10 +3187,13 @@ ${
             if (!verdict && res.status === "failed" && !res.output) {
                 setDraftCheck({
                     key,
-                    phase: "passed",
-                    reviewSkipped: `the Checker couldn't run (${
-                        res.error || "no answer"
-                    })`,
+                    phase: "failed",
+                    lines: [
+                        `The Checker couldn't run (${
+                            res.error || "no answer"
+                        }).`,
+                    ],
+                    canRetry: true,
                 });
                 return;
             }
@@ -3193,6 +3218,7 @@ ${
         unchangedUpdate,
         aiReplying,
         editModeSettled,
+        checkAttempt,
     ]);
 
     // Build errors go back to the AI by themselves (phase 2d), up to
@@ -3924,7 +3950,10 @@ ${
                     // not copied to @ai-built.
                     isRemixMode && editMode === "update"
                         ? effectiveEditContext?.originalPackage || null
-                        : null
+                        : null,
+                    // The name the code was checked under — the main process
+                    // installs only that exact checked code.
+                    checkName
                 );
                 if (result?.success) {
                     // The widget is now installed — its draft is no longer
@@ -3992,6 +4021,7 @@ ${
             remixName,
             selectedProviderForBuild,
             checkPassed,
+            checkName,
         ]
     );
 
@@ -4163,27 +4193,6 @@ ${
                 {viewMode === "drafts" && (
                     <div className="flex-1 min-h-0 overflow-hidden">
                         <WidgetDraftsList
-                            onInstalled={(packageName, componentName) => {
-                                // Hand off to the modal's normal post-install
-                                // flow so the dashboard picks up the new
-                                // widget. Same callback — and the same
-                                // (scoped component id, package) arguments —
-                                // the modal's "Install" button uses after a
-                                // fresh AI build. The list reports the
-                                // package and the bare component name.
-                                if (typeof onInstalled === "function") {
-                                    onInstalled(
-                                        packageName
-                                            ? makeScopedComponentId(
-                                                  packageName,
-                                                  componentName
-                                              )
-                                            : componentName,
-                                        packageName
-                                    );
-                                }
-                                setIsOpen(false);
-                            }}
                             onOpenedInEditor={() => {
                                 // Editor handoff is a clean break — close
                                 // the modal so the in-pane editor doesn't
@@ -5897,6 +5906,9 @@ ${
                                                                         : null
                                                                 }
                                                                 bt={bt}
+                                                                onRetry={
+                                                                    retryCheck
+                                                                }
                                                                 waiting={
                                                                     aiReplying
                                                                 }

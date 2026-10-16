@@ -58,6 +58,10 @@ function methodsDefinedDirectly(blockBody) {
     return names;
 }
 
+// Algolia methods the preload gets from dash-core's defaultMainApi (not
+// written in preload.js itself) — e.g. AlgoliaBatchManagerWidget uses it.
+const FROM_DASH_CORE_DEFAULTS = ["createBatchesFromFile"];
+
 describe("providerApiRegistry — drift against public/preload.js", () => {
     test("preload exposes an `algolia: { … }` block we can read", () => {
         const block = extractObjectBlock(preloadSource, "algolia");
@@ -68,6 +72,10 @@ describe("providerApiRegistry — drift against public/preload.js", () => {
     test("every algolia method in the registry exists in preload", () => {
         const block = extractObjectBlock(preloadSource, "algolia");
         const preloadNames = new Set(methodsDefinedDirectly(block));
+        // preload spreads dash-core's defaults (...defaultMainApi.algolia);
+        // these come from there.
+        expect(block).toMatch(/\.\.\.defaultMainApi\.algolia/);
+        for (const n of FROM_DASH_CORE_DEFAULTS) preloadNames.add(n);
         const fictional = Object.keys(PROVIDER_API_REGISTRY.algolia).filter(
             (n) => !preloadNames.has(n)
         );

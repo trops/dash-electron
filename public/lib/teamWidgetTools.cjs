@@ -7,9 +7,15 @@
  *       code checks → compile → install into @ai-built/ (aiBuild.cjs).
  *       An update only ever replaces an @ai-built/ widget; its old config is
  *       kept so check() can compare.
- *   checkDraft({ widgetName, componentCode, configCode, sourcePackage })
- *       the Widget Builder's unsaved code: compiled inside a copy of its
- *       package, code checks + scorecard; kept as "draft:<Name>".
+ *   checkDraft({ widgetName, componentCode, configCode, sourcePackage, files })
+ *       the Widget Builder's unsaved code (and its helper files): compiled
+ *       inside a copy of its package, code checks + scorecard; kept as
+ *       "draft:<Name>".
+ *   reviewRun(prompt, run) / installAllowed({ checkName, installName,
+ *       componentCode, files, checkerUnavailable })
+ *       the Checker's verdict on a draft, read from its own run; and whether
+ *       the Widget Builder may install — only the exact code that passed
+ *       (consolidation Phase 1a).
  *   check({ name })
  *       compile + code checks (incl. a connection's widget asking for keys)
  *       + scorecard (must-fix misses marked) for an installed widget, plus the
@@ -28,6 +34,41 @@ const { compilePreview, aiBuild } = require("./aiBuild.cjs");
 const checks = require("./widgetChecks.cjs");
 
 const WIDGET_NAME = /^[A-Z][A-Za-z0-9]{1,48}$/;
+// A helper file the Widget Builder wrote beside the widget: widgets/<file>.
+const HELPER_PATH =
+    /^widgets\/[A-Za-z0-9_][A-Za-z0-9_.-]*\.(?:js|jsx|json|css)$/;
+
+/** "PASSED" / "FAILED" at the end of the Checker's answer, or null. */
+function verdictOf(output) {
+    const m = /VERDICT:\s*(PASSED|FAILED)/i.exec(String(output || ""));
+    return m ? m[1].toUpperCase() : null;
+}
+
+/**
+ * files[] without the widget's own component and config (by name, or by
+ * content — an export the Builder renames keeps its old path), sorted.
+ */
+function helperFiles(files, names, primaryContents = []) {
+    const own = new Set(primaryContents.filter(Boolean));
+    const primary = new Set();
+    for (const n of names.filter(Boolean)) {
+        for (const ext of [".js", ".jsx", ".dash.js"]) {
+            primary.add(`widgets/${n}${ext}`);
+        }
+    }
+    return (Array.isArray(files) ? files : [])
+        .filter(
+            (f) =>
+                f &&
+                typeof f.path === "string" &&
+                typeof f.content === "string" &&
+                HELPER_PATH.test(f.path) &&
+                !primary.has(f.path) &&
+                !own.has(f.content)
+        )
+        .map((f) => ({ path: f.path, content: f.content }))
+        .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
 const AI_SCOPE = "@ai-built/";
 
 /**
@@ -151,6 +192,7 @@ function createTeamWidgetTools(deps) {
     // "draft:<Name>" → the Widget Builder's last check of its unsaved code,
     // for the Checker's check_widget.
     const drafts = new Map();
+    let draftStamp = 0;
 
     /**
      * The Widget Builder's unsaved code, checked before anything is saved:
@@ -163,8 +205,10 @@ function createTeamWidgetTools(deps) {
         componentCode,
         configCode,
         sourcePackage = null,
+        files = [],
     } = {}) {
         const name = String(widgetName || "").trim();
+        const helpers = helperFiles(files, [name], [componentCode, configCode]);
         if (!WIDGET_NAME.test(name) || !componentCode) {
             return { success: false, error: "Which widget, with what code?" };
         }
@@ -191,6 +235,9 @@ function createTeamWidgetTools(deps) {
                 path.join(dir, "widgets", `${name}.dash.js`),
                 configCode || ""
             );
+            for (const h of helpers) {
+                fs.writeFileSync(path.join(dir, h.path), h.content);
+            }
             let compiled = { ok: true };
             try {
                 await compilePackage(dir);
@@ -209,8 +256,10 @@ function createTeamWidgetTools(deps) {
                 scorecard: scorecardSummary(componentCode),
                 componentCode,
                 configCode: configCode || "",
+                files: helpers,
                 previousConfigCode: null,
             };
+            Object.defineProperty(result, "stamp", { value: ++draftStamp });
             drafts.set(result.widgetName, result);
             return result;
         } finally {
@@ -336,6 +385,87 @@ function createTeamWidgetTools(deps) {
         };
     }
 
+    /**
+     * A Dash team Checker run (botController.run): when it reviews a draft
+     * ("draft:<Name>" in its request), its verdict is kept with that draft —
+     * unless the draft was checked again while it ran.
+     */
+    async function reviewRun(prompt, run) {
+        const m = /\bdraft:([A-Z][A-Za-z0-9]{1,48})\b/.exec(
+            String(prompt || "")
+        );
+        const key = m ? `draft:${m[1]}` : null;
+        const before = key ? drafts.get(key) : null;
+        const record = await run();
+        const now = key ? drafts.get(key) : null;
+        if (before && now && now.stamp === before.stamp) {
+            Object.defineProperty(now, "review", {
+                value: {
+                    verdict: verdictOf(record && record.output),
+                    status: (record && record.status) || null,
+                },
+                configurable: true,
+            });
+        }
+        return record;
+    }
+
+    /**
+     * May the Widget Builder install this? Only the exact code (and helper
+     * files) that passed the code checks and the Checker — a remix's export
+     * rename aside. checkerUnavailable: why the Checker couldn't review
+     * (paused, not set up) — checked code then goes through, saying so.
+     */
+    function installAllowed({
+        checkName,
+        installName,
+        componentCode,
+        files = [],
+        checkerUnavailable = null,
+    } = {}) {
+        const draft = drafts.get(`draft:${String(checkName || "")}`);
+        if (!draft) {
+            return {
+                ok: false,
+                error: "This widget hasn't been checked yet — wait for the check to finish.",
+            };
+        }
+        if (!draft.compile.ok || draft.problems.length) {
+            return {
+                ok: false,
+                error: "It didn't pass its checks — fix them first.",
+            };
+        }
+        // The Builder may rename the default export (remix name; the
+        // widget's own name over ComposedWidget) — every other byte must match.
+        const unnamed = (code) =>
+            String(code || "").replace(
+                /(export\s+default\s+function\s+)[A-Za-z_$][\w$]*/,
+                "$1__Widget__"
+            );
+        const sameCode =
+            unnamed(componentCode) === unnamed(draft.componentCode);
+        const sameHelpers =
+            JSON.stringify(
+                helperFiles(files, [checkName, installName], [componentCode])
+            ) === JSON.stringify(draft.files);
+        if (!sameCode || !sameHelpers) {
+            return {
+                ok: false,
+                error: "The code changed after it was checked — wait for it to be checked again.",
+            };
+        }
+        const verdict = draft.review && draft.review.verdict;
+        if (verdict === "PASSED") return { ok: true, reviewSkipped: null };
+        if (verdict !== "FAILED" && checkerUnavailable) {
+            return { ok: true, reviewSkipped: String(checkerUnavailable) };
+        }
+        return {
+            ok: false,
+            error: "The Checker hasn't passed it yet — wait for its review, or use Check again.",
+        };
+    }
+
     function guide({ providers = [] } = {}) {
         let rules = null;
         const candidates = Array.isArray(deps.skillPath)
@@ -361,7 +491,7 @@ function createTeamWidgetTools(deps) {
         return { rules, tools };
     }
 
-    return { build, check, checkDraft, guide };
+    return { build, check, checkDraft, reviewRun, installAllowed, guide };
 }
 
 module.exports = {
