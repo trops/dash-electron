@@ -582,12 +582,20 @@ function codeOnly(source, { keepStrings = false } = {}) {
             continue;
         }
         if (!keepStrings && (c === "'" || c === '"')) {
+            const start = i;
             i += 1;
             while (i < src.length && src[i] !== c && src[i] !== "\n") {
                 if (src[i] === "\\" && src[i + 1] !== "\n") blank(i++);
                 blank(i++);
             }
-            if (src[i] === c) i += 1;
+            if (src[i] === c) {
+                i += 1;
+            } else {
+                // Not closed on its line, so not a string (an apostrophe
+                // in JSX text): keep the rest of the line as code.
+                for (let k = start + 1; k < i; k++) out[k] = src[k];
+                i = start + 1;
+            }
             continue;
         }
         if (!keepStrings && c === "`") {

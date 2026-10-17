@@ -704,3 +704,16 @@ export default function W() { return null; }`;
         expect(validateNoBotCalls(code).ok).toBe(true);
     });
 });
+
+// An apostrophe in JSX text isn't a string: the rest of the line is still
+// checked (consolidation Phase 1a-2).
+describe("codeOnly — apostrophes in JSX text", () => {
+    test("a Modal after an apostrophe on the same line is still found", () => {
+        const code = `<Panel><p>Don't worry</p><Modal isOpen={true} setIsOpen={() => {}}>x</Modal></Panel>`;
+        expect(validateNoModalUsage(code).ok).toBe(false);
+    });
+    test("a real string on one line is still skipped", () => {
+        const code = `const note = 'use <Modal> sparingly';`;
+        expect(validateNoModalUsage(code).ok).toBe(true);
+    });
+});

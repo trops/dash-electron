@@ -271,10 +271,9 @@ describe("installGate — the code checks for every package install", () => {
             "HelloWidget.dash.js": CONFIG,
             "helpers.js": HELPER.content,
         });
-        assert.deepEqual(await installGate(dir, { widgetName: "@x/hello" }), {
-            ok: true,
-            problems: [],
-        });
+        const res = await installGate(dir, { widgetName: "@x/hello" });
+        assert.equal(res.ok, true);
+        assert.deepEqual(res.problems, []);
     });
     it("lists each widget's problems by name", async () => {
         const dir = pkg({
@@ -294,6 +293,7 @@ describe("installGate — the code checks for every package install", () => {
         assert.deepEqual(await installGate(dir, {}), {
             ok: true,
             problems: [],
+            sourceFiles: 0,
         });
     });
 });
@@ -337,5 +337,253 @@ describe("a refused AI-built update keeps the installed widget (aiBuild.cjs)", (
         assert.ok(at > -1);
         const install = src.indexOf("registry.installFromLocalPath(", at);
         assert.doesNotMatch(src.slice(at, install), /rmSync/);
+    });
+});
+
+// Phase 1a-2: every file in the package is checked; helper files in
+// subfolders are checked and compared; Update original installs the
+// checked helpers; the app builds what it installs; startup checks.
+describe("installGate — every widget file, at any depth", () => {
+    function pkg(files) {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "zz-gate-"));
+        for (const [rel, content] of Object.entries(files)) {
+            const abs = path.join(dir, "widgets", rel);
+            fs.mkdirSync(path.dirname(abs), { recursive: true });
+            fs.writeFileSync(abs, content);
+        }
+        return dir;
+    }
+    const MODAL = COMPONENT.replace("<Panel>", "<Modal>").replace(
+        "</Panel>",
+        "</Modal>"
+    );
+    it("a widget in a subfolder is checked", async () => {
+        const res = await installGate(
+            pkg({
+                "nested/HelloWidget.js": MODAL,
+                "nested/HelloWidget.dash.js": CONFIG,
+            })
+        );
+        assert.equal(res.ok, false);
+        assert.ok(res.problems.every((p) => p.startsWith("HelloWidget: ")));
+    });
+    it("a helper file is checked, named by its path", async () => {
+        const res = await installGate(
+            pkg({
+                "HelloWidget.js": COMPONENT,
+                "HelloWidget.dash.js": CONFIG,
+                "lib/Popup.js": MODAL,
+            })
+        );
+        assert.equal(res.ok, false);
+        assert.ok(res.problems.length >= 1);
+        assert.ok(
+            res.problems.every((p) => p.startsWith("widgets/lib/Popup.js: "))
+        );
+    });
+    it("tests and stories aren't widget code", async () => {
+        const res = await installGate(
+            pkg({
+                "HelloWidget.js": COMPONENT,
+                "HelloWidget.dash.js": CONFIG,
+                "HelloWidget.test.js": MODAL,
+                "__tests__/x.js": MODAL,
+                "HelloWidget.stories.js": MODAL,
+            })
+        );
+        assert.equal(res.ok, true);
+        assert.deepEqual(res.problems, []);
+    });
+});
+
+describe("checkDraft and installAllowed — helper files in subfolders", () => {
+    const LIB = {
+        path: "widgets/lib/format.js",
+        content: "export const f = 1;",
+    };
+    it("a subfolder helper is written into the package it compiles", async () => {
+        const { tools } = setup();
+        const res = await checkHello(tools, { files: [HELPER, LIB] });
+        assert.equal(res.compile.ok, true);
+        assert.deepEqual(res.files, [HELPER, LIB]);
+    });
+    it("a helper outside widgets/ is written and compared too", async () => {
+        const { tools } = setup();
+        const UTIL = {
+            path: "utils/math.js",
+            content: "export const two = 2;",
+        };
+        const res = await checkHello(tools, { files: [HELPER, UTIL] });
+        assert.deepEqual(res.files, [UTIL, HELPER]);
+    });
+    it("a helper's problems are the draft's problems", async () => {
+        const { tools } = setup();
+        const res = await checkHello(tools, {
+            files: [
+                HELPER,
+                {
+                    path: "widgets/lib/Popup.js",
+                    content:
+                        'import { Modal } from "@trops/dash-react";\nexport const P = () => <Modal isOpen={true} setIsOpen={() => {}}>x</Modal>;',
+                },
+            ],
+        });
+        assert.ok(
+            res.problems.some((p) => p.startsWith("widgets/lib/Popup.js: "))
+        );
+    });
+    it("a subfolder helper changed after the check → refused", async () => {
+        const { tools } = setup();
+        await checkHello(tools, { files: [HELPER, LIB] });
+        await tools.reviewRun(PROMPT, checker("PASSED"));
+        const base = {
+            checkName: "HelloWidget",
+            installName: "HelloWidget",
+            componentCode: COMPONENT,
+        };
+        assert.equal(
+            tools.installAllowed({ ...base, files: [HELPER, LIB] }).ok,
+            true
+        );
+        const res = tools.installAllowed({
+            ...base,
+            files: [HELPER, { ...LIB, content: "export const f = 2;" }],
+        });
+        assert.equal(res.ok, false);
+        assert.match(res.error, /changed after it was checked/);
+    });
+});
+
+describe("Update original installs the checked helper files (aiBuild.cjs)", () => {
+    const src = fs.readFileSync(
+        path.join(__dirname, "lib", "aiBuild.cjs"),
+        "utf8"
+    );
+    const fn = src.slice(
+        src.indexOf("async function updateOriginalPackage("),
+        src.indexOf("async function aiBuild(")
+    );
+    it("writes them into the build", () => {
+        assert.match(fn, /files,/);
+        assert.match(
+            fn,
+            /writeAiFiles\(\s*buildDir,\s*helperFiles\(files, \[widgetName\], \[componentCode, configCode\]\)/
+        );
+    });
+    it("aiBuild passes files[] to it", () => {
+        assert.match(src, /updateOriginalPackage\(\{[\s\S]{0,400}\bfiles,/);
+    });
+});
+
+describe("the app builds what it installs (aiBuild.cjs)", () => {
+    const src = fs.readFileSync(
+        path.join(__dirname, "lib", "aiBuild.cjs"),
+        "utf8"
+    );
+    it("its own test build is removed, so the install gate builds the checked code", () => {
+        const installs = src.match(
+            /fs\.rmSync\(path\.join\(buildDir, "dist"\)[\s\S]{0,1200}?installFromLocalPath\(/g
+        );
+        assert.equal((installs || []).length, 2);
+    });
+});
+
+describe("the app checks installed widgets at startup (electron.js)", () => {
+    const main = fs.readFileSync(path.join(__dirname, "electron.js"), "utf8");
+    it("runs checkInstalled after the gate is set", () => {
+        assert.match(
+            main,
+            /widgetRegistry\.setInstallGate\(installGate\);[\s\S]{0,600}\.checkInstalled\(\)/
+        );
+    });
+    it("an install that skipped the Checker's review says so in the log", () => {
+        assert.match(main, /allowed\.reviewSkipped/);
+    });
+});
+
+// Review fixes (Phase 1a-2): the whole package, not just widgets/.
+describe("installGate — the whole package's code", () => {
+    function pkgAt(files) {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "zz-gate-"));
+        for (const [rel, content] of Object.entries(files)) {
+            const abs = path.join(dir, rel);
+            fs.mkdirSync(path.dirname(abs), { recursive: true });
+            fs.writeFileSync(abs, content);
+        }
+        return dir;
+    }
+    const MODAL = COMPONENT.replace("<Panel>", "<Modal>").replace(
+        "</Panel>",
+        "</Modal>"
+    );
+    it("shared code beside widgets/ is checked", async () => {
+        const res = await installGate(
+            pkgAt({
+                "widgets/HelloWidget.js": COMPONENT,
+                "widgets/HelloWidget.dash.js": CONFIG,
+                "utils/Popup.js": MODAL,
+            })
+        );
+        assert.equal(res.ok, false);
+        assert.ok(res.problems.every((p) => p.startsWith("utils/Popup.js: ")));
+    });
+    it("a widget kept under its own folder is checked", async () => {
+        const res = await installGate(
+            pkgAt({
+                "Hello/widgets/HelloWidget.js": MODAL,
+                "Hello/widgets/HelloWidget.dash.js": CONFIG,
+            })
+        );
+        assert.equal(res.ok, false);
+        assert.ok(res.problems.every((p) => p.startsWith("HelloWidget: ")));
+    });
+    it("builds, bundles and node_modules aren't source", async () => {
+        const res = await installGate(
+            pkgAt({
+                "widgets/HelloWidget.js": COMPONENT,
+                "widgets/HelloWidget.dash.js": CONFIG,
+                "dist/index.cjs.js": MODAL,
+                "index.js": MODAL,
+                "index.cjs.js": MODAL,
+                "node_modules/x/index.js": MODAL,
+            })
+        );
+        assert.equal(res.ok, true);
+        assert.equal(res.sourceFiles, 1);
+    });
+    it("a package with only a build has no source to check", async () => {
+        const res = await installGate(
+            pkgAt({ "dist/index.cjs.js": "module.exports = {};" })
+        );
+        assert.deepEqual(res, { ok: true, problems: [], sourceFiles: 0 });
+    });
+    it("a test or story file a widget imports is checked", async () => {
+        const res = await installGate(
+            pkgAt({
+                "widgets/HelloWidget.js": COMPONENT.replace(
+                    'import { label } from "./helpers";',
+                    'import { label } from "./helpers";\nimport { Popup } from "./lib/Popup.stories";'
+                ),
+                "widgets/HelloWidget.dash.js": CONFIG,
+                "widgets/lib/Popup.stories.js": MODAL,
+                "widgets/lib/Other.test.js": MODAL,
+            })
+        );
+        assert.equal(res.ok, false);
+        assert.ok(
+            res.problems.every((p) =>
+                p.startsWith("widgets/lib/Popup.stories.js: ")
+            )
+        );
+    });
+});
+
+describe("packages registered by the startup check reach the screen (electron.js)", () => {
+    const main = fs.readFileSync(path.join(__dirname, "electron.js"), "utf8");
+    it("each one is announced like an install", () => {
+        assert.match(
+            main,
+            /\.checkInstalled\(\)[\s\S]{0,900}s\.registered[\s\S]{0,400}"widget:installed"/
+        );
     });
 });

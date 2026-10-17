@@ -2218,6 +2218,41 @@ function createWindow() {
         // Every package install runs the widget code checks on the staged
         // package first; a failure refuses it (consolidation Phase 1a).
         widgetRegistry.setInstallGate(installGate);
+        // Check installed widgets once, and again when they change (Phase 1a-2):
+        // one that fails is flagged on the Widgets page and keeps working; one
+        // found on disk that isn't registered is registered only if it passes.
+        widgetRegistry
+            .getWidgetRegistry()
+            .checkInstalled()
+            .then((s) => {
+                // Packages found on disk are registered only now — tell
+                // the screen, as an install would.
+                for (const name of s.registered) {
+                    const config = widgetRegistry
+                        .getWidgetRegistry()
+                        .getWidget(name);
+                    for (const win of BrowserWindow.getAllWindows()) {
+                        if (!win.isDestroyed()) {
+                            win.webContents.send("widget:installed", {
+                                widgetName: name,
+                                config,
+                            });
+                        }
+                    }
+                }
+                if (
+                    s.checked.length ||
+                    s.registered.length ||
+                    s.refused.length
+                ) {
+                    console.log(
+                        `[install-gate] startup check: ${s.checked.length} checked, ${s.failed.length} flagged, ${s.registered.length} found and registered, ${s.refused.length} found and refused`
+                    );
+                }
+            })
+            .catch((e) =>
+                console.warn("[install-gate] startup check failed:", e.message)
+            );
         // Grants from declared permissions are keyed by provider type;
         // dash-core saves them under the user's provider names (the key
         // tool calls are checked against), so it needs the provider list.
@@ -2980,6 +3015,11 @@ function createWindow() {
                     : null,
             });
             if (!allowed.ok) return { success: false, error: allowed.error };
+            if (allowed.reviewSkipped) {
+                console.log(
+                    `[install-gate] ${msg.widgetName} passed its code checks; the Checker's review was skipped: ${allowed.reviewSkipped}`
+                );
+            }
             return aiBuild(msg, { windows });
         });
     } // end ipcHandlersRegistered guard
