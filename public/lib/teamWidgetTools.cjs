@@ -183,6 +183,9 @@ function createTeamWidgetTools(deps) {
     // for the Checker's check_widget.
     const drafts = new Map();
     let draftStamp = 0;
+    // During a Checker run (reviewRun): the drafts it ran check_widget on,
+    // each with its stamp at the check — the verdict counts only for those.
+    let reviewing = null;
 
     /**
      * The Widget Builder's unsaved code, checked before anything is saved:
@@ -204,7 +207,10 @@ function createTeamWidgetTools(deps) {
         }
         const path = require("path");
         const os = require("os");
-        const dir = path.join(os.tmpdir(), `dash-check-${name}-${Date.now()}`);
+        // Its own folder: two checks of one widget at once never share one.
+        const dir = fs.mkdtempSync(
+            path.join(os.tmpdir(), `dash-check-${name}-`)
+        );
         try {
             const from = sourcePackage ? packagePath(sourcePackage) : null;
             if (from) {
@@ -296,7 +302,7 @@ function createTeamWidgetTools(deps) {
                 error: `There's no ${scoped} to update — only widgets the AI built can be updated.`,
             };
         }
-        // The Widget Builder's checks first — never install code that fails them.
+        // The Widget Builder's checks first — a draft that fails them isn't kept.
         const problems = codeProblems(componentCode, configCode);
         if (problems.length) {
             return {
@@ -305,17 +311,36 @@ function createTeamWidgetTools(deps) {
                 problems,
             };
         }
+        // Written as a draft — nothing is installed until the Checker passes
+        // it (consolidation Phase 1b). Built inside a copy of the widget's
+        // package when it updates one, the same as the install's build.
+        const draft = await checkDraft({
+            widgetName: name,
+            componentCode,
+            configCode,
+            sourcePackage: update ? scoped : null,
+        });
+        if (!draft || !draft.success) {
+            return {
+                success: false,
+                error: (draft && draft.error) || "The build failed.",
+            };
+        }
+        if (!draft.compile.ok) {
+            return {
+                success: false,
+                error: `It didn't build: ${draft.compile.error}`,
+            };
+        }
         if (update) {
             const before = await deps.readWidgetSources({ widgetName: scoped });
             if (before && before.success) {
-                previousConfigs.set(scoped, before.configCode || "");
+                draft.previousConfigCode = before.configCode || "";
             }
         }
-        const result = await buildWidget(
-            {
-                widgetName: name,
-                componentCode,
-                configCode,
+        // What installing it takes, once it passes.
+        Object.defineProperty(draft, "install", {
+            value: {
                 description,
                 // { type, providerClass } snaps the config's providers to
                 // what the user has; anything else leaves it as written.
@@ -323,27 +348,88 @@ function createTeamWidgetTools(deps) {
                     provider && provider.type && provider.providerClass
                         ? provider
                         : null,
+                scoped,
+            },
+        });
+        return { success: true, widgetName: draft.widgetName, package: scoped };
+    }
+
+    /**
+     * Install a draft the Checker passed (a plan build's Install step;
+     * place_widget with a draft) — exactly the code that was checked, as
+     * @ai-built/<name>. Refused when it was never written, didn't pass its
+     * code checks, or the Checker hasn't passed this exact version.
+     */
+    async function installDraft({ name } = {}) {
+        const key = String(name || "").trim();
+        const draft = drafts.get(key);
+        if (!draft) {
+            return {
+                success: false,
+                error: `There's no ${key} to install — build_widget writes it first.`,
+            };
+        }
+        if (!draft.install) {
+            return {
+                success: false,
+                error: `${key} was changed in the Widget Builder since the Builder wrote it — build it again with build_widget.`,
+            };
+        }
+        // Installed already: it's that widget now (never installed twice —
+        // a newer version would be overwritten with this one).
+        if (draft.installedAs) {
+            return {
+                success: true,
+                widgetName: draft.installedAs,
+                already: true,
+            };
+        }
+        if (!draft.compile.ok || draft.problems.length) {
+            return {
+                success: false,
+                error: `${key} didn't pass its checks — fix them and build it again.`,
+            };
+        }
+        if (!draft.review || draft.review.verdict !== "PASSED") {
+            return {
+                success: false,
+                error: `${key} hasn't passed the Checker yet — ask the Checker to check ${key}.`,
+            };
+        }
+        const result = await buildWidget(
+            {
+                widgetName: draft.componentName,
+                componentCode: draft.componentCode,
+                configCode: draft.configCode,
+                description: draft.install.description,
+                selectedProvider: draft.install.selectedProvider,
             },
             { windows: deps.getWindows() }
         );
         if (!result || !result.success) {
-            if (update) previousConfigs.delete(scoped);
             return {
                 success: false,
-                error: (result && result.error) || "The build failed.",
+                error: (result && result.error) || "The install failed.",
             };
         }
-        return { success: true, widgetName: result.widgetName || scoped };
+        const widgetName = result.widgetName || draft.install.scoped;
+        if (draft.previousConfigCode != null) {
+            previousConfigs.set(widgetName, draft.previousConfigCode);
+        }
+        Object.defineProperty(draft, "installedAs", { value: widgetName });
+        return { success: true, widgetName };
     }
 
     async function check({ name } = {}) {
         const widgetName = String(name || "").trim();
         if (!widgetName) return { success: false, error: "Which widget?" };
         if (widgetName.startsWith("draft:")) {
+            const draft = drafts.get(widgetName);
+            if (draft && reviewing) reviewing.set(widgetName, draft.stamp);
             return (
-                drafts.get(widgetName) || {
+                draft || {
                     success: false,
-                    error: `${widgetName} hasn't been checked yet — check it again from the Widget Builder.`,
+                    error: `${widgetName} hasn't been written or checked yet.`,
                 }
             );
         }
@@ -385,22 +471,35 @@ function createTeamWidgetTools(deps) {
      * ("draft:<Name>" in its request), its verdict is kept with that draft —
      * unless the draft was checked again while it ran.
      */
+    /**
+     * A Checker run: its verdict is recorded on the draft it ran check_widget
+     * on — only when it checked exactly one, and that draft hasn't changed
+     * since (a verdict never lands on a draft named in the request but not
+     * checked, nor authorizes a rewrite). `prompt` is the request (kept for
+     * the callers; the check itself decides which draft).
+     */
     async function reviewRun(prompt, run) {
-        const m = /\bdraft:([A-Z][A-Za-z0-9]{1,48})\b/.exec(
-            String(prompt || "")
-        );
-        const key = m ? `draft:${m[1]}` : null;
-        const before = key ? drafts.get(key) : null;
-        const record = await run();
-        const now = key ? drafts.get(key) : null;
-        if (before && now && now.stamp === before.stamp) {
-            Object.defineProperty(now, "review", {
-                value: {
-                    verdict: verdictOf(record && record.output),
-                    status: (record && record.status) || null,
-                },
-                configurable: true,
-            });
+        const outer = reviewing;
+        const seen = new Map();
+        reviewing = seen;
+        let record;
+        try {
+            record = await run();
+        } finally {
+            reviewing = outer;
+        }
+        if (seen.size === 1) {
+            const [[key, stamp]] = [...seen];
+            const now = drafts.get(key);
+            if (now && now.stamp === stamp) {
+                Object.defineProperty(now, "review", {
+                    value: {
+                        verdict: verdictOf(record && record.output),
+                        status: (record && record.status) || null,
+                    },
+                    configurable: true,
+                });
+            }
         }
         return record;
     }
@@ -486,7 +585,15 @@ function createTeamWidgetTools(deps) {
         return { rules, tools };
     }
 
-    return { build, check, checkDraft, reviewRun, installAllowed, guide };
+    return {
+        build,
+        check,
+        checkDraft,
+        installDraft,
+        reviewRun,
+        installAllowed,
+        guide,
+    };
 }
 
 module.exports = {
