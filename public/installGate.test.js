@@ -57,10 +57,17 @@ const checkHello = (tools, extra = {}) =>
         files: [HELPER],
         ...extra,
     });
-const checker = (verdict) => async () => ({
-    status: "completed",
-    output: `Looks right.\n\nVERDICT: ${verdict}`,
-});
+// The Checker runs check_widget on the draft it reviews; its verdict
+// counts only for that draft (Phase 1b).
+const checker =
+    (verdict, tools, name = "draft:HelloWidget") =>
+    async () => {
+        if (tools) await tools.check({ name });
+        return {
+            status: "completed",
+            output: `Looks right.\n\nVERDICT: ${verdict}`,
+        };
+    };
 const PROMPT =
     "Check the widget being written in the Widget Builder: run check_widget on draft:HelloWidget …";
 
@@ -88,7 +95,7 @@ describe("the Checker's verdict comes from its own run", () => {
     it("a PASSED run of the Checker on draft:<Name> is recorded", async () => {
         const { tools } = setup();
         await checkHello(tools);
-        const record = await tools.reviewRun(PROMPT, checker("PASSED"));
+        const record = await tools.reviewRun(PROMPT, checker("PASSED", tools));
         assert.equal(record.status, "completed");
         assert.equal(
             tools.check({ name: "draft:HelloWidget" }) instanceof Promise,
@@ -124,7 +131,7 @@ describe("the Checker's verdict comes from its own run", () => {
         const { tools } = setup();
         const record = await tools.reviewRun(
             "Check the dashboard",
-            checker("PASSED")
+            checker("PASSED", tools)
         );
         assert.equal(record.status, "completed");
     });
@@ -134,7 +141,7 @@ describe("installAllowed — only the exact checked code is installed", () => {
     async function passed() {
         const s = setup();
         await checkHello(s.tools);
-        await s.tools.reviewRun(PROMPT, checker("PASSED"));
+        await s.tools.reviewRun(PROMPT, checker("PASSED", s.tools));
         return s.tools;
     }
     const ask = (tools, over = {}) =>
@@ -190,7 +197,7 @@ describe("installAllowed — only the exact checked code is installed", () => {
             configCode: CONFIG,
             files: [HELPER],
         });
-        await tools.reviewRun(PROMPT, checker("PASSED"));
+        await tools.reviewRun(PROMPT, checker("PASSED", tools));
         // The Builder renames the export back to the widget's name.
         assert.equal(ask(tools, { componentCode: COMPONENT }).ok, true);
     });
@@ -219,7 +226,7 @@ describe("installAllowed — only the exact checked code is installed", () => {
     it("a FAILED verdict → refused", async () => {
         const { tools } = setup();
         await checkHello(tools);
-        await tools.reviewRun(PROMPT, checker("FAILED"));
+        await tools.reviewRun(PROMPT, checker("FAILED", tools));
         assert.equal(ask(tools).ok, false);
     });
     it("failing code checks → refused, even with a passing review", async () => {
@@ -233,7 +240,7 @@ describe("installAllowed — only the exact checked code is installed", () => {
             configCode: CONFIG,
             files: [HELPER],
         });
-        await tools.reviewRun(PROMPT, checker("PASSED"));
+        await tools.reviewRun(PROMPT, checker("PASSED", tools));
         const res = ask(tools, {
             componentCode: COMPONENT.replace("<Panel>", "<Modal>").replace(
                 "</Panel>",
@@ -435,7 +442,7 @@ describe("checkDraft and installAllowed — helper files in subfolders", () => {
     it("a subfolder helper changed after the check → refused", async () => {
         const { tools } = setup();
         await checkHello(tools, { files: [HELPER, LIB] });
-        await tools.reviewRun(PROMPT, checker("PASSED"));
+        await tools.reviewRun(PROMPT, checker("PASSED", tools));
         const base = {
             checkName: "HelloWidget",
             installName: "HelloWidget",

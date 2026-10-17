@@ -86,7 +86,8 @@ function setup(over = {}) {
 }
 
 describe("build", () => {
-    it("checks, then compiles and installs a new widget", async () => {
+    // Phase 1b: a draft — installed only once the Checker passes it.
+    it("checks a new widget and writes it as a draft", async () => {
         const { tools, calls } = setup();
         const res = await tools.build({
             name: "HelloWidget",
@@ -95,10 +96,10 @@ describe("build", () => {
         });
         assert.deepEqual(res, {
             success: true,
-            widgetName: "@ai-built/hellowidget",
+            widgetName: "draft:HelloWidget",
+            package: "@ai-built/hellowidget",
         });
-        assert.equal(calls.build.length, 1);
-        assert.equal(calls.build[0].selectedProvider, null);
+        assert.equal(calls.build.length, 0);
     });
 
     it("refuses bad names and missing code", async () => {
@@ -171,6 +172,29 @@ describe("build", () => {
             configCode: GOOD_CONFIG,
             provider: "gmail",
         });
+        // …kept for the install, once the Checker passes each.
+        await tools.reviewRun(
+            "Check draft:HelloWidget.",
+            async () => (
+                await tools.check({ name: "draft:HelloWidget" }),
+                {
+                    status: "completed",
+                    output: "VERDICT: PASSED",
+                }
+            )
+        );
+        await tools.reviewRun(
+            "Check draft:OtherWidget.",
+            async () => (
+                await tools.check({ name: "draft:OtherWidget" }),
+                {
+                    status: "completed",
+                    output: "VERDICT: PASSED",
+                }
+            )
+        );
+        await tools.installDraft({ name: "draft:HelloWidget" });
+        await tools.installDraft({ name: "draft:OtherWidget" });
         assert.deepEqual(calls.build[0].selectedProvider, {
             type: "gmail",
             providerClass: "mcp",
@@ -206,6 +230,17 @@ describe("check", () => {
             configCode: newConfig,
             update: true,
         });
+        await tools.reviewRun(
+            "Check draft:HelloWidget.",
+            async () => (
+                await tools.check({ name: "draft:HelloWidget" }),
+                {
+                    status: "completed",
+                    output: "VERDICT: PASSED",
+                }
+            )
+        );
+        await tools.installDraft({ name: "draft:HelloWidget" });
         installed.get("@ai-built/hellowidget").configCode = newConfig;
         res = await tools.check({ name: "@ai-built/hellowidget" });
         assert.equal(res.previousConfigCode, GOOD_CONFIG);
@@ -471,6 +506,241 @@ describe("checkDraft — the Widget Builder's unsaved code, checked before it's 
         const { tools } = setup();
         const res = await tools.check({ name: "draft:Nope" });
         assert.equal(res.success, false);
-        assert.match(res.error, /check it again from the Widget Builder/);
+        assert.match(res.error, /hasn't been written or checked yet/);
+    });
+});
+
+// Create's plan builds install only what the Checker passed (consolidation
+// Phase 1b): build_widget writes a draft; installDraft installs a draft the
+// Checker passed, exactly as it was checked.
+describe("build writes a draft — nothing is installed (Phase 1b)", () => {
+    it("a new widget is checked and kept as draft:<Name>, not installed", async () => {
+        const { tools, calls } = setup();
+        const res = await tools.build({
+            name: "HelloWidget",
+            componentCode: GOOD_COMPONENT,
+            configCode: GOOD_CONFIG,
+        });
+        assert.equal(res.success, true);
+        assert.equal(res.widgetName, "draft:HelloWidget");
+        assert.equal(res.package, "@ai-built/hellowidget");
+        assert.equal(calls.build.length, 0, "nothing installed");
+        const checked = await tools.check({ name: "draft:HelloWidget" });
+        assert.equal(checked.success, true);
+        assert.equal(checked.compile.ok, true);
+        assert.deepEqual(checked.problems, []);
+    });
+
+    it("code that doesn't build isn't kept: the build says why", async () => {
+        const { tools, calls } = setup({
+            packageCompileError: "Unexpected token",
+        });
+        const res = await tools.build({
+            name: "HelloWidget",
+            componentCode: GOOD_COMPONENT,
+            configCode: GOOD_CONFIG,
+        });
+        assert.equal(res.success, false);
+        assert.match(res.error, /Unexpected token/);
+        assert.equal(calls.build.length, 0);
+    });
+
+    it("an update leaves the installed widget alone, and keeps its config for the Checker", async () => {
+        const OLD_CONFIG = GOOD_CONFIG.replace(
+            'defaultValue: "Hello"',
+            'defaultValue: "Old"'
+        );
+        const { tools, calls } = setup({
+            installed: {
+                "@ai-built/hellowidget": {
+                    componentName: "HelloWidget",
+                    componentCode: GOOD_COMPONENT,
+                    configCode: OLD_CONFIG,
+                },
+            },
+        });
+        const res = await tools.build({
+            name: "HelloWidget",
+            componentCode: GOOD_COMPONENT,
+            configCode: GOOD_CONFIG,
+            update: true,
+        });
+        assert.equal(res.success, true);
+        assert.equal(calls.build.length, 0);
+        const checked = await tools.check({ name: "draft:HelloWidget" });
+        assert.equal(checked.previousConfigCode, OLD_CONFIG);
+    });
+});
+
+describe("installDraft — only a draft the Checker passed", () => {
+    const PROMPT = "Check draft:HelloWidget. Run check_widget …";
+    let current = null;
+    const verdict = (v) => async () => {
+        await current.check({ name: "draft:HelloWidget" });
+        return {
+            status: "completed",
+            output: `Looks fine.\n\nVERDICT: ${v}`,
+        };
+    };
+    async function built(over) {
+        const t = setup(over);
+        current = t.tools;
+        await t.tools.build({
+            name: "HelloWidget",
+            componentCode: GOOD_COMPONENT,
+            configCode: GOOD_CONFIG,
+            description: "Says hello",
+            provider: { type: "gmail", providerClass: "mcp" },
+        });
+        return t;
+    }
+
+    it("a draft that was never written is refused", async () => {
+        const { tools } = setup();
+        const res = await tools.installDraft({ name: "draft:Nope" });
+        assert.equal(res.success, false);
+        assert.match(res.error, /draft:Nope/);
+    });
+
+    it("not reviewed yet → refused", async () => {
+        const { tools, calls } = await built();
+        const res = await tools.installDraft({ name: "draft:HelloWidget" });
+        assert.equal(res.success, false);
+        assert.match(res.error, /hasn't passed the Checker/);
+        assert.equal(calls.build.length, 0);
+    });
+
+    it("a FAILED review → refused", async () => {
+        const { tools, calls } = await built();
+        await tools.reviewRun(PROMPT, verdict("FAILED"));
+        const res = await tools.installDraft({ name: "draft:HelloWidget" });
+        assert.equal(res.success, false);
+        assert.equal(calls.build.length, 0);
+    });
+
+    it("a PASSED review installs exactly what was checked, as @ai-built/<name>", async () => {
+        const { tools, calls } = await built();
+        await tools.reviewRun(PROMPT, verdict("PASSED"));
+        const res = await tools.installDraft({ name: "draft:HelloWidget" });
+        assert.equal(res.success, true);
+        assert.equal(res.widgetName, "@ai-built/hellowidget");
+        assert.equal(calls.build.length, 1);
+        assert.equal(calls.build[0].widgetName, "HelloWidget");
+        assert.equal(calls.build[0].componentCode, GOOD_COMPONENT);
+        assert.equal(calls.build[0].configCode, GOOD_CONFIG);
+        assert.equal(calls.build[0].description, "Says hello");
+        assert.deepEqual(calls.build[0].selectedProvider, {
+            type: "gmail",
+            providerClass: "mcp",
+        });
+    });
+
+    it("code written again after the review → refused until it's checked again", async () => {
+        const { tools, calls } = await built();
+        await tools.reviewRun(PROMPT, verdict("PASSED"));
+        await tools.build({
+            name: "HelloWidget",
+            componentCode: GOOD_COMPONENT.replace("Hello", "Hi"),
+            configCode: GOOD_CONFIG,
+        });
+        const res = await tools.installDraft({ name: "draft:HelloWidget" });
+        assert.equal(res.success, false);
+        assert.equal(calls.build.length, 0);
+    });
+});
+
+// Review fixes (Phase 1b).
+describe("a verdict counts only for the draft the Checker checked", () => {
+    const run = (tools, names, v) => async () => {
+        for (const name of names) await tools.check({ name });
+        return { status: "completed", output: `VERDICT: ${v}` };
+    };
+    async function two() {
+        const t = setup();
+        for (const name of ["HelloWidget", "OtherWidget"]) {
+            await t.tools.build({
+                name,
+                componentCode: GOOD_COMPONENT,
+                configCode: GOOD_CONFIG,
+            });
+        }
+        return t;
+    }
+    it("a request naming two drafts records the verdict on the one checked", async () => {
+        const { tools } = await two();
+        await tools.reviewRun(
+            "draft:HelloWidget failed; the Builder rewrote it as draft:OtherWidget — check that",
+            run(tools, ["draft:OtherWidget"], "PASSED")
+        );
+        assert.equal(
+            (await tools.installDraft({ name: "draft:HelloWidget" })).success,
+            false
+        );
+        assert.equal(
+            (await tools.installDraft({ name: "draft:OtherWidget" })).success,
+            true
+        );
+    });
+    it("a run that checked two drafts records nothing", async () => {
+        const { tools } = await two();
+        await tools.reviewRun(
+            "check draft:HelloWidget and draft:OtherWidget",
+            run(tools, ["draft:HelloWidget", "draft:OtherWidget"], "PASSED")
+        );
+        assert.equal(
+            (await tools.installDraft({ name: "draft:HelloWidget" })).success,
+            false
+        );
+    });
+    it("a run that never checked a draft records nothing", async () => {
+        const { tools } = await two();
+        await tools.reviewRun(
+            "check draft:HelloWidget",
+            run(tools, [], "PASSED")
+        );
+        assert.equal(
+            (await tools.installDraft({ name: "draft:HelloWidget" })).success,
+            false
+        );
+    });
+});
+
+describe("a draft is installed once", () => {
+    it("installing it again doesn't run the install again", async () => {
+        const { tools, calls } = setup();
+        await tools.build({
+            name: "HelloWidget",
+            componentCode: GOOD_COMPONENT,
+            configCode: GOOD_CONFIG,
+        });
+        await tools.reviewRun("Check draft:HelloWidget.", async () => {
+            await tools.check({ name: "draft:HelloWidget" });
+            return { status: "completed", output: "VERDICT: PASSED" };
+        });
+        const first = await tools.installDraft({ name: "draft:HelloWidget" });
+        const again = await tools.installDraft({ name: "draft:HelloWidget" });
+        assert.equal(first.success, true);
+        assert.deepEqual(again, {
+            success: true,
+            widgetName: "@ai-built/hellowidget",
+            already: true,
+        });
+        assert.equal(calls.build.length, 1);
+    });
+    it("a draft the Widget Builder replaced says so", async () => {
+        const { tools } = setup();
+        await tools.build({
+            name: "HelloWidget",
+            componentCode: GOOD_COMPONENT,
+            configCode: GOOD_CONFIG,
+        });
+        await tools.checkDraft({
+            widgetName: "HelloWidget",
+            componentCode: GOOD_COMPONENT,
+            configCode: GOOD_CONFIG,
+        });
+        const res = await tools.installDraft({ name: "draft:HelloWidget" });
+        assert.equal(res.success, false);
+        assert.match(res.error, /changed in the Widget Builder/);
     });
 });
