@@ -113,6 +113,33 @@ function validateAiFilePath(rawPath) {
 }
 
 /**
+ * files[] without the widget's own component and config (by name, or by
+ * content — an export the Builder renames keeps its old path), sorted:
+ * the helper files the Widget Builder checks, compares and installs. Any
+ * path writeAiFiles accepts (widgets/ subfolders and other package files
+ * included — consolidation Phase 1a-2).
+ */
+function helperFiles(files, names, primaryContents = []) {
+    const own = new Set(primaryContents.filter(Boolean));
+    const primary = new Set();
+    for (const n of names.filter(Boolean)) {
+        for (const ext of [".js", ".jsx", ".dash.js"]) {
+            primary.add(`widgets/${n}${ext}`);
+        }
+    }
+    const helpers = [];
+    for (const f of Array.isArray(files) ? files : []) {
+        if (!f || typeof f.path !== "string") continue;
+        const v = validateAiFilePath(f.path);
+        if (!v.ok || primary.has(v.normalized) || own.has(f.content)) continue;
+        helpers.push({ path: v.normalized, content: f.content });
+    }
+    return helpers.sort((a, b) =>
+        a.path < b.path ? -1 : a.path > b.path ? 1 : 0
+    );
+}
+
+/**
  * Write each entry of files[] into stagingDir after path
  * validation. Returns the count written and the list of skipped
  * entries with reasons. Throws only on FS errors — invalid
@@ -485,6 +512,7 @@ async function updateOriginalPackage({
     widgetName,
     componentCode,
     configCode,
+    files,
     cellContext,
     windows,
 }) {
@@ -526,6 +554,11 @@ async function updateOriginalPackage({
             componentCode,
             configCode: ownConfig,
         });
+        // The helper files that were checked with the edit go in too.
+        writeAiFiles(
+            buildDir,
+            helperFiles(files, [widgetName], [componentCode, configCode])
+        );
         await core.widgetCompiler.compileWidget(buildDir);
         if (!fs.existsSync(path.join(buildDir, "dist", "index.cjs.js"))) {
             return {
@@ -533,6 +566,12 @@ async function updateOriginalPackage({
                 error: "Compilation produced no output. Check for syntax errors.",
             };
         }
+        // That build only proved it compiles: the install gate builds the
+        // checked code itself, so it's recorded as built by Dash.
+        fs.rmSync(path.join(buildDir, "dist"), {
+            recursive: true,
+            force: true,
+        });
         const manifest = path.join(buildDir, "dash.json");
         const config = await installWithBackup({
             packagePath: existing.path,
@@ -615,6 +654,7 @@ async function aiBuild(message, { windows = [] } = {}) {
             widgetName,
             componentCode,
             configCode,
+            files,
             cellContext,
             windows,
         });
@@ -910,6 +950,12 @@ async function aiBuild(message, { windows = [] } = {}) {
                 error: "Compilation produced no output. Check for syntax errors.",
             };
         }
+        // That build only proved it compiles: the install gate builds the
+        // checked code itself, so it's recorded as built by Dash.
+        fs.rmSync(path.join(buildDir, "dist"), {
+            recursive: true,
+            force: true,
+        });
 
         // Install to @ai-built/ scope. No early delete: the install replaces
         // the old one only after the package passes its checks — a refusal
@@ -955,5 +1001,6 @@ module.exports = {
     primaryComponentOf,
     validateAiFilePath,
     writeAiFiles,
+    helperFiles,
     snapProvidersToSelection,
 };

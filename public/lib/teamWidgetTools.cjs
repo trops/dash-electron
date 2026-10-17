@@ -30,13 +30,10 @@
 "use strict";
 
 const fs = require("fs");
-const { compilePreview, aiBuild } = require("./aiBuild.cjs");
+const { compilePreview, aiBuild, helperFiles } = require("./aiBuild.cjs");
 const checks = require("./widgetChecks.cjs");
 
 const WIDGET_NAME = /^[A-Z][A-Za-z0-9]{1,48}$/;
-// A helper file the Widget Builder wrote beside the widget: widgets/<file>.
-const HELPER_PATH =
-    /^widgets\/[A-Za-z0-9_][A-Za-z0-9_.-]*\.(?:js|jsx|json|css)$/;
 
 /** "PASSED" / "FAILED" at the end of the Checker's answer, or null. */
 function verdictOf(output) {
@@ -45,30 +42,23 @@ function verdictOf(output) {
 }
 
 /**
- * files[] without the widget's own component and config (by name, or by
- * content — an export the Builder renames keeps its old path), sorted.
+ * Problems in the helper files' code, named by each file's path. Tests and
+ * stories are skipped unless includeTests (the install gate passes it for
+ * the ones a widget imports).
  */
-function helperFiles(files, names, primaryContents = []) {
-    const own = new Set(primaryContents.filter(Boolean));
-    const primary = new Set();
-    for (const n of names.filter(Boolean)) {
-        for (const ext of [".js", ".jsx", ".dash.js"]) {
-            primary.add(`widgets/${n}${ext}`);
+function helperProblems(helpers, { includeTests = false } = {}) {
+    const problems = [];
+    for (const h of helpers || []) {
+        if (!/\.(?:js|jsx)$/.test(h.path)) continue;
+        if (!includeTests && NOT_WIDGET_CODE.test(h.path)) continue;
+        for (const p of codeProblems(String(h.content || ""), "")) {
+            problems.push(`${h.path}: ${p}`);
         }
     }
-    return (Array.isArray(files) ? files : [])
-        .filter(
-            (f) =>
-                f &&
-                typeof f.path === "string" &&
-                typeof f.content === "string" &&
-                HELPER_PATH.test(f.path) &&
-                !primary.has(f.path) &&
-                !own.has(f.content)
-        )
-        .map((f) => ({ path: f.path, content: f.content }))
-        .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    return problems;
 }
+// Tests and stories ship in some packages but aren't widget code.
+const NOT_WIDGET_CODE = /(?:^|\/)__tests__\/|\.(?:test|spec|stories)\.[jt]sx?$/;
 const AI_SCOPE = "@ai-built/";
 
 /**
@@ -236,7 +226,9 @@ function createTeamWidgetTools(deps) {
                 configCode || ""
             );
             for (const h of helpers) {
-                fs.writeFileSync(path.join(dir, h.path), h.content);
+                const target = path.join(dir, h.path);
+                fs.mkdirSync(path.dirname(target), { recursive: true });
+                fs.writeFileSync(target, h.content);
             }
             let compiled = { ok: true };
             try {
@@ -252,7 +244,10 @@ function createTeamWidgetTools(deps) {
                 widgetName: `draft:${name}`,
                 componentName: name,
                 compile: compiled,
-                problems: codeProblems(componentCode, configCode || ""),
+                problems: [
+                    ...codeProblems(componentCode, configCode || ""),
+                    ...helperProblems(helpers),
+                ],
                 scorecard: scorecardSummary(componentCode),
                 componentCode,
                 configCode: configCode || "",
@@ -497,6 +492,8 @@ function createTeamWidgetTools(deps) {
 module.exports = {
     createTeamWidgetTools,
     codeProblems,
+    helperProblems,
+    NOT_WIDGET_CODE,
     scorecardSummary,
     AI_SCOPE,
 };
