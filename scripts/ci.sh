@@ -83,7 +83,7 @@ node scripts/audit-ipc-surface.js --check
 # Phase 5A regression pins — IPC payload validation + warn-only bundle lint
 step "Running Phase 5A unit tests (IPC validators + bundle lint)"
 node --test scripts/ipcValidators.test.js
-node --test scripts/bundleSecurityLint.test.js
+node --test scripts/bundleSecurityLint.test.js scripts/libraryImports.test.js
 
 # Bot Factory background-mode helpers (Slice 6b): pure tray/login-item logic
 step "Running Bot Factory background-mode tests (Slice 6b)"

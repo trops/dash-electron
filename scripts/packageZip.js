@@ -19,6 +19,7 @@ const fs = require("fs");
 const path = require("path");
 const AdmZip = require("adm-zip");
 const { scanPackagePermissions } = require("./lib/packagePermissions.cjs");
+const { libraryDependencies } = require("./lib/libraryImports.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const DIST_DIR = path.join(ROOT, "dist");
@@ -301,21 +302,46 @@ function main() {
     // check reads dash.permissions from the zip's package.json to ask for
     // new tools before installing (zips from the in-app publish carry one).
     const permissions = scanPackagePermissions(effectiveWidgetsDir);
-    if (permissions) {
+    // The libraries the package imports, with the versions installed here:
+    // installers download them and build its checked source with them
+    // (consolidation Phase 1a-3).
+    const libs = libraryDependencies(effectiveWidgetsDir, [
+        path.join(ROOT, "node_modules"),
+    ]);
+    if (libs.missing.length) {
+        console.error(
+            `Error: the package imports ${libs.missing.join(
+                ", "
+            )}, which isn't installed in this repo — install it (npm install) so its version can be recorded.`
+        );
+        process.exit(1);
+    }
+    const hasLibraries = Object.keys(libs.dependencies).length > 0;
+    if (permissions || hasLibraries) {
         const zipPackageJson = {
             name: zipBaseName,
             version,
-            dash: { permissions },
+            ...(permissions ? { dash: { permissions } } : {}),
+            ...(hasLibraries ? { dependencies: libs.dependencies } : {}),
         };
         zip.addFile(
             "package.json",
             Buffer.from(JSON.stringify(zipPackageJson, null, 2))
         );
-        console.log(
-            `  Permissions: ${Object.entries(permissions.mcp)
-                .map(([server, p]) => `${server} (${p.tools.join(", ")})`)
-                .join("; ")}`
-        );
+        if (permissions) {
+            console.log(
+                `  Permissions: ${Object.entries(permissions.mcp)
+                    .map(([server, p]) => `${server} (${p.tools.join(", ")})`)
+                    .join("; ")}`
+            );
+        }
+        if (hasLibraries) {
+            console.log(
+                `  Libraries: ${Object.entries(libs.dependencies)
+                    .map(([n, v]) => `${n}@${v}`)
+                    .join(", ")}`
+            );
+        }
     }
 
     // Write ZIP
