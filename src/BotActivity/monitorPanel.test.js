@@ -2,8 +2,8 @@
  * @jest-environment jsdom
  *
  * The dock's Bots panel (bot-teams TEAM-015): a frame around dash-core's
- * BotContacts, fed by useBotContacts and the dock's hand-off actions; the
- * rail's approvals count stays live while the panel is closed.
+ * BotContacts, fed by useBotContacts and the dashboards list; the rail's
+ * approvals count stays live while the panel is closed.
  */
 import React from "react";
 import "@testing-library/jest-dom";
@@ -29,8 +29,6 @@ const mockContacts = {
 const mockCtx = {
     workspaceData: { id: 7, name: "Kitchen Sink" },
     workspaces: [{ id: 7, name: "Kitchen Sink" }],
-    openBotsView: jest.fn(),
-    openBotSettings: jest.fn(),
 };
 let mockProps = null;
 
@@ -64,13 +62,15 @@ beforeEach(() => {
     mockProps = null;
 });
 
-test("expanded: renders the contacts with the dashboards and hand-off actions", () => {
-    renderPanel({ collapsed: false });
+test("expanded: renders the contacts with the dashboards", () => {
+    renderPanel({ collapsed: false, openRequest: { botId: "b1" } });
     expect(screen.getByTestId("contacts")).toBeInTheDocument();
     expect(mockProps.contacts).toBe(mockContacts);
     expect(mockProps.workspaces).toBe(mockCtx.workspaces);
-    expect(mockProps.onOpenBotsView).toBe(mockCtx.openBotsView);
-    expect(mockProps.onOpenSettings).toBe(mockCtx.openBotSettings);
+    expect(mockProps.openRequest).toEqual({ botId: "b1" });
+    // A bot opens its page in the app's modal (dash-core NAV-016 AC5).
+    expect(mockProps.onOpenBotsView).toBeUndefined();
+    expect(mockProps.onOpenSettings).toBeUndefined();
 });
 
 test("Collapse from the panel closes it", () => {
@@ -90,8 +90,7 @@ test("collapsed: renders nothing but keeps the badge count live", () => {
     expect(onApprovalsCount).toHaveBeenCalledWith(2);
 });
 
-test("works without the dock's context (no hand-off actions)", () => {
+test("works without the dock's context", () => {
     render(<BotActivityPanel collapsed={false} />);
-    expect(mockProps.onOpenBotsView).toBeNull();
-    expect(mockProps.onOpenSettings).toBeNull();
+    expect(mockProps.workspaces).toEqual([]);
 });
