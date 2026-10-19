@@ -4,9 +4,9 @@ import { CreateDockPanel } from "@trops/dash-core";
 import { BotActivityPanel } from "../BotActivity/BotActivityPanel";
 
 /**
- * AssistantDock — one right-hand rail hosting the slide-over panels: Create
- * (plus) on top and Bots (robot, your bots as a contacts list — bot-teams
- * TEAM-015) beneath it.
+ * AssistantDock — one right-hand rail hosting the slide-over panels: Bots
+ * (robot, your bots as a contacts list — bot-teams TEAM-015), and Create when
+ * a plan is folded into it.
  *
  * The dock owns a single rail and controls each panel's collapsed state, so
  * only one panel is expanded at a time. Both panels stay mounted while
@@ -15,9 +15,10 @@ import { BotActivityPanel } from "../BotActivity/BotActivityPanel";
  * The AI Assistant panel (wand) was retired in create-entry 5e-2c: asking and
  * making things both happen in Create.
  *
- * Create (plus, create-entry CRE-007 AC1, phase 4e-2): a plan conversation
- * folded out of the Create modal carries on here; with nothing folded the
- * panel shows Recent. A fold (`dash:create-fold`) opens it.
+ * Create (create-entry CRE-007 AC1, phase 4e-2): a plan conversation folded
+ * out of the Create modal carries on here. A fold (`dash:create-fold`) opens
+ * it; there's no rail button for it — the left nav's Create is the one door
+ * to making things (consolidation Phase 2a), and asking moved into Create.
  */
 export const AssistantDock = () => {
     const { currentTheme } = useContext(ThemeContext) || {};
@@ -97,7 +98,6 @@ export const AssistantDock = () => {
             <div
                 className={`chrome-rail flex flex-col items-center w-12 border-l ${borderColor} ${bgDark} shrink-0 h-screen gap-2 pt-3`}
             >
-                {railButton("create", "plus", "Create")}
                 {railButton(
                     "bots",
                     "robot",

@@ -1,7 +1,8 @@
 /**
  * assistantDock.test.js — the right-hand dock hosts Create (create-entry
- * CRE-007 AC1, phase 4e-2): a third rail button, one always-mounted
- * CreateDockPanel, and a fold from the Create modal opens it.
+ * CRE-007 AC1, phase 4e-2): one always-mounted CreateDockPanel, and a fold
+ * from the Create modal opens it. Since consolidation Phase 2a it has no rail
+ * button — the left nav's Create is the one door.
  */
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
@@ -33,7 +34,6 @@ describe("AssistantDock — Create (4e-2)", () => {
         assert.match(src, /const onFold = \(\) => setOpen\("create"\);/);
     });
     it("rail buttons are labelled for screen readers", () => {
-        assert.match(src, /\{railButton\("create", "plus", "Create"\)\}/);
         // dash-react ButtonIcon2: ariaLabel → aria-label, ariaPressed →
         // aria-pressed.
         assert.match(src, /<ButtonIcon2[\s\S]*?ariaLabel=\{label\}/);
@@ -52,11 +52,11 @@ describe("AssistantDock — the AI Assistant panel is retired (create-entry 5e-2
         assert.doesNotMatch(src, /wand-magic-sparkles/);
         assert.doesNotMatch(src, /"AI Assistant"/);
     });
-    it("the rail is Create, then Bot Activity", () => {
-        const create = src.indexOf('railButton("create"');
-        const bots = src.indexOf('"bots",\n                    "robot"');
-        assert.ok(create > 0 && bots > create);
-        assert.equal(src.split("railButton(").length - 1, 2); // the two rail buttons
+    it("the rail is Bots only — no Create button (Phase 2a)", () => {
+        assert.doesNotMatch(src, /railButton\("create"/);
+        assert.match(src, /railButton\(\s*"bots",\s*"robot"/);
+        // The one rail button.
+        assert.equal(src.split("railButton(").length - 1, 1);
     });
     it("the panel file is gone", () => {
         assert.equal(
