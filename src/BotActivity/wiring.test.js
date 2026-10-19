@@ -74,6 +74,15 @@ describe("Bot Activity panel mount (AssistantDock)", () => {
         expect(dockSrc).not.toMatch(/AiAssistantPanel/);
         expect(dockSrc).toMatch(/onApprovalsCount=\{setApprovals\}/);
     });
+
+    it("the rail is Bots only; a folded plan still opens Create (Phase 2a)", () => {
+        expect(dockSrc).not.toMatch(/railButton\("create"/);
+        expect(dockSrc).toMatch(/railButton\(\s*"bots"/);
+        expect(dockSrc).toMatch(
+            /addEventListener\("dash:create-fold", onFold\)/
+        );
+        expect(dockSrc).toMatch(/<CreateDockPanel\s/);
+    });
 });
 
 describe("Bots view popouts (Dash.js, TEAM-011 B3)", () => {
