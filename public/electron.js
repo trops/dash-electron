@@ -1351,6 +1351,9 @@ function createWindow() {
                 message.appId,
                 message.data
             );
+            // A failed write returns { error } — nothing was saved, so don't
+            // tell other windows it was.
+            if (result && result.error) return result;
             // Broadcast to all windows so popouts can refresh
             for (const win of windows) {
                 if (!win.isDestroyed()) {
