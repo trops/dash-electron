@@ -31,6 +31,7 @@
 
 const fs = require("fs");
 const { compilePreview, aiBuild, helperFiles } = require("./aiBuild.cjs");
+const { prepareWidgetConfig } = require("./widgetImportFixes.cjs");
 const checks = require("./widgetChecks.cjs");
 
 const WIDGET_NAME = /^[A-Z][A-Za-z0-9]{1,48}$/;
@@ -227,9 +228,15 @@ function createTeamWidgetTools(deps) {
                 path.join(dir, "widgets", `${name}.js`),
                 componentCode
             );
+            // The same config fixes the install makes (type: "widget", the
+            // export, the component import) — so the draft compiles and
+            // previews as it will install.
             fs.writeFileSync(
                 path.join(dir, "widgets", `${name}.dash.js`),
-                configCode || ""
+                prepareWidgetConfig(configCode || "", {
+                    componentSource: componentCode,
+                    componentName: name,
+                }).source
             );
             for (const h of helpers) {
                 const target = path.join(dir, h.path);
@@ -237,8 +244,15 @@ function createTeamWidgetTools(deps) {
                 fs.writeFileSync(target, h.content);
             }
             let compiled = { ok: true };
+            let bundleSource = null;
             try {
                 await compilePackage(dir);
+                // Kept for the user's preview before install (cell builds,
+                // consolidation Phase 2b) — the very code that was checked.
+                const out = path.join(dir, "dist", "index.cjs.js");
+                if (fs.existsSync(out)) {
+                    bundleSource = fs.readFileSync(out, "utf8");
+                }
             } catch (err) {
                 compiled = {
                     ok: false,
@@ -261,6 +275,10 @@ function createTeamWidgetTools(deps) {
                 previousConfigCode: null,
             };
             Object.defineProperty(result, "stamp", { value: ++draftStamp });
+            // Not part of what the Checker reads; only previewDraft hands it out.
+            Object.defineProperty(result, "bundleSource", {
+                value: bundleSource,
+            });
             drafts.set(result.widgetName, result);
             return result;
         } finally {
@@ -585,10 +603,38 @@ function createTeamWidgetTools(deps) {
         return { rules, tools };
     }
 
+    /**
+     * A checked draft's compiled code, for the user's preview before it's
+     * installed (cell builds, consolidation Phase 2b): { success,
+     * bundleSource, componentName, configCode } or { success: false, error }.
+     */
+    function previewDraft({ name } = {}) {
+        const key = String(name || "").trim();
+        const draft = drafts.get(key);
+        if (!draft) {
+            return {
+                success: false,
+                error: `${
+                    key || "That draft"
+                } isn't here any more — build it again.`,
+            };
+        }
+        if (!draft.bundleSource) {
+            return { success: false, error: "That draft didn't compile." };
+        }
+        return {
+            success: true,
+            bundleSource: draft.bundleSource,
+            componentName: draft.componentName,
+            configCode: draft.configCode || "",
+        };
+    }
+
     return {
         build,
         check,
         checkDraft,
+        previewDraft,
         installDraft,
         reviewRun,
         installAllowed,

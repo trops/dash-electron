@@ -145,6 +145,11 @@ const extendedApi = {
         // it as "draft:<Name>".
         checkDraft: (message) =>
             ipcRenderer.invoke("widget:check-draft", message),
+        // A team draft's compiled code, for the preview before it's installed
+        // (Create's cell builds): { success, bundleSource, componentName,
+        // configCode }.
+        previewDraft: (name) =>
+            ipcRenderer.invoke("widget:preview-draft", { name }),
         readSources: (widgetName, componentName) =>
             ipcRenderer.invoke("widget:read-sources", {
                 widgetName,
