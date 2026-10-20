@@ -743,8 +743,6 @@ const {
     BOTS_GET_LATEST_RESULT,
     BOTS_LIST_RECENT_RUNS,
     BOTS_LAST_RUNS,
-    BOTS_LIST_DRAFTS,
-    BOTS_DISMISS_DRAFT,
     BOTS_EXPORT_TEAM,
     BOTS_PREVIEW_TEAM_IMPORT,
     BOTS_INSTALL_TEAM,
@@ -2438,14 +2436,6 @@ function createWindow() {
         // widget that opens later still shows it.
         logger.loggedHandle(BOTS_GET_LATEST_RESULT, (e, msg) =>
             botController.getLatestResult(msg && msg.eventType)
-        );
-        // Bot monitor (TEAM-011 B3): the latest runs across every bot.
-        // Lead drafts (TEAM-005): bots a team lead proposed, awaiting review.
-        logger.loggedHandle(BOTS_LIST_DRAFTS, (e, msg) =>
-            botController.listDrafts(msg && msg.workspaceId)
-        );
-        logger.loggedHandle(BOTS_DISMISS_DRAFT, (e, msg) =>
-            botController.dismissDraft(msg && msg.draftId)
         );
         // Team export/import (TEAM-006/007, slice 1): a dashboard's team as
         // a .team.json — save, pick + check, and install (re-validated).
