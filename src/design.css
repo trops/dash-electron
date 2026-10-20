@@ -50,8 +50,10 @@ body {
    a single color. Make those full-height containers transparent so the mesh
    shows through behind the glass cards — the mockup's depth. Scoped to
    full-size containers (overflow-clip + h-full), so modals/inputs keep their
-   fills. The fill follows the theme's neutral palette (gray/slate/zinc/…), so
-   every dark-neutral variant is covered. */
+   fills — a modal's own surface (.dr-modal-surface, which is full-size inside
+   its dialog) is left out, or the page behind showed through it. The fill
+   follows the theme's neutral palette (gray/slate/zinc/…), so every
+   dark-neutral variant is covered. */
 [data-design="aurora"]
     :is(
         .bg-gray-950,
@@ -64,7 +66,7 @@ body {
         .bg-neutral-900,
         .bg-stone-950,
         .bg-stone-900
-    ).overflow-clip:is(.h-full, .w-full) {
+    ).overflow-clip:is(.h-full, .w-full):not(.dr-modal-surface) {
     background-color: transparent !important;
     background-image: none !important;
 }
