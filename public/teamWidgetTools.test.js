@@ -69,6 +69,12 @@ function setup(over = {}) {
         compileWidget: async (dir) => {
             calls.packageCompile = (calls.packageCompile || []).concat({
                 files: fs.readdirSync(path.join(dir, "widgets")).sort(),
+                configs: fs
+                    .readdirSync(path.join(dir, "widgets"))
+                    .filter((n) => n.endsWith(".dash.js"))
+                    .map((n) =>
+                        fs.readFileSync(path.join(dir, "widgets", n), "utf8")
+                    ),
                 hits: fs.existsSync(path.join(dir, "widgets", "Boost.js"))
                     ? fs.readFileSync(
                           path.join(dir, "widgets", "Boost.js"),
@@ -78,6 +84,13 @@ function setup(over = {}) {
             });
             if (over.packageCompileError)
                 throw new Error(over.packageCompileError);
+            if (over.bundleOut) {
+                fs.mkdirSync(path.join(dir, "dist"), { recursive: true });
+                fs.writeFileSync(
+                    path.join(dir, "dist", "index.cjs.js"),
+                    over.bundleOut
+                );
+            }
             return path.join(dir, "dist", "index.cjs.js");
         },
         getPackagePath: (name) => (over.packagePaths || {})[name] || null,
@@ -742,5 +755,77 @@ describe("a draft is installed once", () => {
         const res = await tools.installDraft({ name: "draft:HelloWidget" });
         assert.equal(res.success, false);
         assert.match(res.error, /changed in the Widget Builder/);
+    });
+});
+
+// Consolidation Phase 2b: a cell build shows the user the checked draft,
+// running, before anything is installed.
+describe("previewDraft — the checked draft's code, for the preview", () => {
+    it("hands out exactly the bundle that was checked", async () => {
+        const { tools } = setup({ bundleOut: "module.exports = 'built';" });
+        await tools.build({
+            name: "HelloWidget",
+            componentCode: GOOD_COMPONENT,
+            configCode: GOOD_CONFIG,
+        });
+        const res = tools.previewDraft({ name: "draft:HelloWidget" });
+        assert.equal(res.success, true);
+        assert.equal(res.bundleSource, "module.exports = 'built';");
+        assert.equal(res.componentName, "HelloWidget");
+        assert.equal(res.configCode, GOOD_CONFIG);
+        // Not part of what the Checker reads.
+        assert.equal(
+            Object.keys(tools.check({ name: "draft:HelloWidget" })).includes(
+                "bundleSource"
+            ),
+            false
+        );
+    });
+    // Found live: a new widget's config without type: "widget" compiled to a
+    // bundle the preview found no widget in ("0 configs found").
+    it("compiles the config with the install's fixes", async () => {
+        const { tools, calls } = setup({ bundleOut: "x" });
+        await tools.checkDraft({
+            widgetName: "HelloWidget",
+            componentCode: GOOD_COMPONENT,
+            configCode:
+                'import HelloWidget from "./HelloWidget";\nexport default { name: "HelloWidget", component: HelloWidget };',
+        });
+        const written = calls.packageCompile.slice(-1)[0].configs[0];
+        assert.match(written, /type:\s*"widget"/);
+    });
+    it("says when the draft is gone or didn't compile", async () => {
+        const { tools } = setup({ packageCompileError: "syntax" });
+        assert.equal(
+            tools.previewDraft({ name: "draft:Nope" }).error,
+            "draft:Nope isn't here any more — build it again."
+        );
+        await tools.checkDraft({
+            widgetName: "HelloWidget",
+            componentCode: GOOD_COMPONENT,
+            configCode: GOOD_CONFIG,
+        });
+        assert.equal(
+            tools.previewDraft({ name: "draft:HelloWidget" }).error,
+            "That draft didn't compile."
+        );
+    });
+    it("is reachable from the renderer", () => {
+        const src = fs.readFileSync(
+            path.join(__dirname, "electron.js"),
+            "utf8"
+        );
+        assert.match(
+            src,
+            /"widget:preview-draft"[\s\S]{0,120}teamWidgetTools\(\)\.previewDraft\(/
+        );
+        const preload = fs.readFileSync(
+            path.join(__dirname, "preload.js"),
+            "utf8"
+        );
+        assert.match(
+            preload,
+            /previewDraft: \(name\) =>\s*ipcRenderer\.invoke\("widget:preview-draft", \{ name \}\)/
+        );
     });
 });

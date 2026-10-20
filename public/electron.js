@@ -732,6 +732,8 @@ const {
     BOTS_FIX_PLAN_BUILD,
     BOTS_RETRY_PLAN_BUILD,
     BOTS_RESUME_PLAN_BUILD,
+    BOTS_APPROVE_PLAN_STEP,
+    BOTS_REVISE_PLAN_STEP,
     BOTS_REMOVE_PLAN_BUILD,
     CREATE_RECENT_LIST,
     CREATE_RECENT_GET,
@@ -2657,6 +2659,21 @@ function createWindow() {
         logger.loggedHandle(BOTS_RESUME_PLAN_BUILD, (e, msg) =>
             botController.resumePlanBuild(msg && msg.buildId)
         );
+        // A cell build's preview (consolidation Phase 2b).
+        logger.loggedHandle(BOTS_APPROVE_PLAN_STEP, (e, msg) =>
+            botController.approvePlanStep(
+                msg && msg.buildId,
+                msg && msg.stepId,
+                (msg && msg.inputs) || {}
+            )
+        );
+        logger.loggedHandle(BOTS_REVISE_PLAN_STEP, (e, msg) =>
+            botController.revisePlanStep(
+                msg && msg.buildId,
+                msg && msg.stepId,
+                msg && msg.note
+            )
+        );
         logger.loggedHandle(BOTS_REMOVE_PLAN_BUILD, (e, msg) =>
             botController.removePlanBuild(msg && msg.buildId)
         );
@@ -2995,6 +3012,11 @@ function createWindow() {
         // Checker (Widget Builder edit fixes).
         logger.loggedHandle("widget:check-draft", async (e, message) =>
             teamWidgetTools().checkDraft(message || {})
+        );
+        // A checked draft's compiled code, for the user's preview before it's
+        // installed (Create's cell builds, consolidation Phase 2b).
+        logger.loggedHandle("widget:preview-draft", async (e, message) =>
+            teamWidgetTools().previewDraft(message || {})
         );
 
         // --- AI Widget Builder: Install ---
