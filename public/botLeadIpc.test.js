@@ -17,10 +17,16 @@ const CHANNELS = {
     BOTS_GET_SETTINGS: "botController.getBotSettings(",
     BOTS_SET_SETTINGS: "botController.setBotSettings(",
     BOTS_ASK_LEAD: "botController.askLead(",
-    // Lead drafts (TEAM-005)
-    BOTS_LIST_DRAFTS: "botController.listDrafts(",
-    BOTS_DISMISS_DRAFT: "botController.dismissDraft(",
 };
+
+// Lead drafts (TEAM-005) are gone — the lead hands off to the Dash team
+// (consolidation Phase 2c-2).
+it("has no drafts IPC", () => {
+    assert.doesNotMatch(
+        src,
+        /BOTS_LIST_DRAFTS|BOTS_DISMISS_DRAFT|botController\.(listDrafts|dismissDraft)/
+    );
+});
 
 describe("team lead IPC handlers", () => {
     for (const [channel, call] of Object.entries(CHANNELS)) {
