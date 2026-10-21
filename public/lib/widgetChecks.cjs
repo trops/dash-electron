@@ -301,6 +301,7 @@ const DASH_REACT_COMPONENTS = new Set([
     "Accordion",
     "Accordion2",
     "Accordion3",
+    "ActionMenu",
     "Alert",
     "Alert2",
     "Alert3",
