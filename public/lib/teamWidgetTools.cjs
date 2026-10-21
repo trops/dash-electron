@@ -3,10 +3,16 @@
  * (create-entry PRD CRE-011, slice 3b-1), handed over in
  * botController.init({ widgetTools }):
  *
- *   build({ name, componentCode, configCode, description, provider, update })
- *       code checks → compile → install into @ai-built/ (aiBuild.cjs).
- *       An update only ever replaces an @ai-built/ widget; its old config is
- *       kept so check() can compare.
+ *   build({ name, componentCode, configCode, description, provider, update,
+ *           edit })
+ *       code checks → compile → a draft, installed into @ai-built/
+ *       (aiBuild.cjs) once the Checker passed it. An update only ever
+ *       replaces an @ai-built/ widget; its old config is kept so check() can
+ *       compare. During a change to one widget the user has (edit, from
+ *       dash-core — consolidation Phase 3) the build is held to that widget:
+ *       in place it keeps its name and is built inside a copy of its own
+ *       package (installed with Update original); as new, it's built in a
+ *       copy of that package and installed as a remix of it.
  *   checkDraft({ widgetName, componentCode, configCode, sourcePackage, files })
  *       the Widget Builder's unsaved code (and its helper files): compiled
  *       inside a copy of its package, code checks + scorecard; kept as
@@ -61,6 +67,19 @@ function helperProblems(helpers, { includeTests = false } = {}) {
 // Tests and stories ship in some packages but aren't widget code.
 const NOT_WIDGET_CODE = /(?:^|\/)__tests__\/|\.(?:test|spec|stories)\.[jt]sx?$/;
 const AI_SCOPE = "@ai-built/";
+
+/**
+ * The team writes settings the documented way: userConfig as an object
+ * keyed by setting name. Dash reads a list too (installed widgets keep
+ * working), so this holds the team's builds only — not the install gate.
+ */
+function configProblems(configCode) {
+    return /\buserConfig\s*:\s*\[/.test(String(configCode || ""))
+        ? [
+              'userConfig is a list — write it as an object keyed by setting name, e.g. userConfig: { title: { type: "text", displayName: "Title", defaultValue: "Counter" } }',
+          ]
+        : [];
+}
 
 /**
  * The Widget Builder's code checks on a widget's source → problems. With
@@ -293,7 +312,19 @@ function createTeamWidgetTools(deps) {
         description = "",
         provider = null,
         update = false,
+        edit = null,
     } = {}) {
+        if (edit) {
+            return buildChange({
+                name,
+                componentCode,
+                configCode,
+                description,
+                provider,
+                update,
+                edit,
+            });
+        }
         if (!WIDGET_NAME.test(String(name || ""))) {
             return {
                 success: false,
@@ -321,7 +352,10 @@ function createTeamWidgetTools(deps) {
             };
         }
         // The Widget Builder's checks first — a draft that fails them isn't kept.
-        const problems = codeProblems(componentCode, configCode);
+        const problems = [
+            ...codeProblems(componentCode, configCode),
+            ...configProblems(configCode),
+        ];
         if (problems.length) {
             return {
                 success: false,
@@ -373,12 +407,147 @@ function createTeamWidgetTools(deps) {
     }
 
     /**
+     * A change to one widget the user has (consolidation Phase 3): the
+     * Builder's build, held to edit = { package, componentName, mode,
+     * aiBuilt } (worked out in dash-core from what's installed). In place,
+     * it keeps the widget's name and compiles inside a copy of its package;
+     * as new, a new @ai-built name, compiled in a copy of that package and
+     * installed as a remix of it. The draft remembers the change, so only
+     * that change's preview installs it.
+     */
+    async function buildChange({
+        name,
+        componentCode,
+        configCode,
+        description,
+        provider,
+        update,
+        edit,
+    }) {
+        const inPlace = edit.mode === "update";
+        const pkg = String(edit.package || "");
+        const own = String(edit.componentName || "");
+        if (!WIDGET_NAME.test(String(name || ""))) {
+            return {
+                success: false,
+                error: "The widget name must be PascalCase letters and numbers, e.g. GmailUnreadCount.",
+            };
+        }
+        if (inPlace && name !== own) {
+            return {
+                success: false,
+                error: `This change goes into ${own} itself: build it with name "${own}" and update: true.`,
+            };
+        }
+        if (!inPlace && update) {
+            return {
+                success: false,
+                error: `This change is saved as a new widget — ${own} stays as it is. Build it under a new name, without update.`,
+            };
+        }
+        if (!componentCode || !configCode) {
+            return {
+                success: false,
+                error: "Both the component code and the .dash.js config are needed.",
+            };
+        }
+        if (!deps.getRegistry().getWidget(pkg)) {
+            return {
+                success: false,
+                error: `${pkg} isn't installed here any more.`,
+            };
+        }
+        const scoped = inPlace ? pkg : `${AI_SCOPE}${name.toLowerCase()}`;
+        if (
+            inPlace &&
+            edit.aiBuilt &&
+            scoped !== `${AI_SCOPE}${own.toLowerCase()}`
+        ) {
+            return {
+                success: false,
+                error: `${own} shares its package with other widgets, so it can't be changed in place here — save the change as a new widget.`,
+            };
+        }
+        if (!inPlace && deps.getRegistry().getWidget(scoped)) {
+            return {
+                success: false,
+                error: `${scoped} already exists — pick another name for the new widget.`,
+            };
+        }
+        const problems = [
+            ...codeProblems(componentCode, configCode),
+            ...configProblems(configCode),
+        ];
+        if (problems.length) {
+            return {
+                success: false,
+                error: "The code didn't pass the widget checks; fix these and build again.",
+                problems,
+            };
+        }
+        // Built inside a copy of the widget's package either way — its other
+        // files come along, as they will when it's installed.
+        const draft = await checkDraft({
+            widgetName: name,
+            componentCode,
+            configCode,
+            sourcePackage: pkg,
+        });
+        if (!draft || !draft.success) {
+            return {
+                success: false,
+                error: (draft && draft.error) || "The build failed.",
+            };
+        }
+        if (!draft.compile.ok) {
+            return {
+                success: false,
+                error: `It didn't build: ${draft.compile.error}`,
+            };
+        }
+        const before = await deps.readWidgetSources({
+            widgetName: pkg,
+            componentName: own,
+        });
+        // In place, the Checker compares it with the widget as it was.
+        if (inPlace && before && before.success) {
+            draft.previousConfigCode = before.configCode || "";
+        }
+        const manifest = (before && before.manifest) || {};
+        Object.defineProperty(draft, "install", {
+            value: {
+                description,
+                selectedProvider:
+                    provider && provider.type && provider.providerClass
+                        ? provider
+                        : null,
+                scoped,
+                // Which change this draft is: only its preview installs it.
+                edit: { package: pkg, mode: edit.mode },
+                // Update original on the user's own package (not @ai-built).
+                updateOriginal: inPlace && !edit.aiBuilt ? pkg : null,
+                remixMeta: inPlace
+                    ? null
+                    : {
+                          remixedFrom: {
+                              package: pkg,
+                              component: own,
+                              author: manifest.author || "Unknown",
+                              version: manifest.version || "1.0.0",
+                          },
+                      },
+            },
+        });
+        return { success: true, widgetName: draft.widgetName, package: scoped };
+    }
+
+    /**
      * Install a draft the Checker passed (a plan build's Install step;
      * place_widget with a draft) — exactly the code that was checked, as
      * @ai-built/<name>. Refused when it was never written, didn't pass its
      * code checks, or the Checker hasn't passed this exact version.
      */
-    async function installDraft({ name } = {}) {
+    async function installDraft({ name, edit = null } = {}) {
         const key = String(name || "").trim();
         const draft = drafts.get(key);
         if (!draft) {
@@ -391,6 +560,25 @@ function createTeamWidgetTools(deps) {
             return {
                 success: false,
                 error: `${key} was changed in the Widget Builder since the Builder wrote it — build it again with build_widget.`,
+            };
+        }
+        // A change's draft installs only from that change's preview, and a
+        // change installs only its own draft (consolidation Phase 3).
+        const made = draft.install.edit || null;
+        if (
+            (made || edit) &&
+            !(
+                made &&
+                edit &&
+                made.package === edit.package &&
+                made.mode === edit.mode
+            )
+        ) {
+            return {
+                success: false,
+                error: made
+                    ? `${key} is a change to ${made.package} — it's installed from its preview in Create.`
+                    : `${key} wasn't built as this change — build it again.`,
             };
         }
         // Installed already: it's that widget now (never installed twice —
@@ -421,6 +609,14 @@ function createTeamWidgetTools(deps) {
                 configCode: draft.configCode,
                 description: draft.install.description,
                 selectedProvider: draft.install.selectedProvider,
+                // A change (Phase 3): in place on the user's own package, or
+                // a new widget made from it.
+                ...(draft.install.updateOriginal
+                    ? { updateOriginal: draft.install.updateOriginal }
+                    : {}),
+                ...(draft.install.remixMeta
+                    ? { remixMeta: draft.install.remixMeta }
+                    : {}),
             },
             { windows: deps.getWindows() }
         );
@@ -626,6 +822,8 @@ function createTeamWidgetTools(deps) {
             success: true,
             bundleSource: draft.bundleSource,
             componentName: draft.componentName,
+            // Its code, for the preview's Code and What changed (Phase 3).
+            componentCode: draft.componentCode || "",
             configCode: draft.configCode || "",
         };
     }
@@ -645,6 +843,7 @@ function createTeamWidgetTools(deps) {
 module.exports = {
     createTeamWidgetTools,
     codeProblems,
+    configProblems,
     helperProblems,
     NOT_WIDGET_CODE,
     scorecardSummary,

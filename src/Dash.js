@@ -589,8 +589,10 @@ class App extends React.Component {
             }
         });
 
-        // Listen for "Edit with AI" — reads source and opens builder in remix mode
-        window.addEventListener("dash:edit-widget-with-ai", async (e) => {
+        // "Edit the code yourself" (consolidation Phase 3) — reads the source
+        // and opens the Widget Builder on it, by hand. Change with AI goes to
+        // Create instead (dash-core's DashboardStage hears that event).
+        window.addEventListener("dash:edit-widget-code", async (e) => {
             const detail = e.detail || {};
             const {
                 widgetComponentName,
@@ -707,6 +709,32 @@ class App extends React.Component {
                 },
                 widgetBuilderEditContext: editContext,
             });
+        });
+
+        // A change made in place through Create (Change with AI, Phase 3):
+        // its new code replaces the old wherever it runs, without a reload.
+        window.addEventListener("dash:widget-changed", async (e) => {
+            const { package: pkg, component } = (e && e.detail) || {};
+            if (!pkg) return;
+            try {
+                const bundle = await window.mainApi.widgets.readBundle(pkg);
+                if (bundle?.success) {
+                    registerBundleConfigs(pkg, bundle.source, null, {
+                        replaceExisting: true,
+                    });
+                }
+            } catch (err) {
+                console.warn("[Dash] Reloading a changed widget:", err);
+            }
+            window.dispatchEvent(new Event("dash:widgets-updated"));
+            // Only the instances of that widget remount (WidgetRenderer).
+            if (component) {
+                window.dispatchEvent(
+                    new CustomEvent("dash:widget-installed", {
+                        detail: { widgetName: component },
+                    })
+                );
+            }
         });
 
         // Listen for widget installation events (hot reload)
