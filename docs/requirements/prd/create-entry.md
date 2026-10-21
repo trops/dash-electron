@@ -112,8 +112,8 @@ Decided 2026-10-10: editing uses the same full-screen modal; no scope toggle —
 -   [x] AC1: Edit shows the whole dashboard on the left (with page tabs for paged dashboards), every widget plus a **Bots on this dashboard** row showing each bot's model and cost this month.
 -   [x] AC2: Nothing selected = the dashboard. Clicking a widget or bot selects it. Selecting a widget highlights the bot that feeds it; selecting a bot highlights the widgets it feeds; unrelated items dim.
 -   [x] AC3: The header breadcrumb ("Inbox triage › Important emails · widget") shows the selection; clicking the dashboard name goes back.
--   [x] AC4 (dash-core #718 v0.1.733): Selecting while on **Add** or a settings tab opens the selection's settings (widget: Settings; bot: Instructions). Only Ask AI stays on Ask AI. A by-hand user never lands in a chat by clicking.
--   [x] AC5 (widget: Settings / Listeners / Providers / Code inline — dash-core #718; bot: Instructions / Runs / Access, one form, staged for the dashboard's Save with keepLatest — dash-core #719; notifications/schedule behind "More settings…"): The selection's no-chat tabs: widget Settings, Listeners, Code; bot Instructions, Runs, Access; dashboard Theme. (Layout is the left side itself.)
+-   [x] AC4 (dash-core #718 v0.1.733): Selecting while on **Add** or a settings tab opens the selection's settings (widget: Settings; bot: Instructions). Only Ask AI stays on Ask AI. A by-hand user never lands in a chat by clicking. _(Phase 3P: the Ask AI tab is gone — see CRE-015.)_
+-   [x] AC5 (widget: Settings / Listeners / Providers / Code inline — dash-core #718; bot: Instructions / Runs / Access, one form, staged for the dashboard's Save with keepLatest — dash-core #719; notifications/schedule behind "More settings…"): The selection's no-chat tabs: widget Settings, Listeners, Code; bot Instructions, Runs, Access; dashboard Theme. (Layout is the left side itself.) _(Phase 3P: a widget's settings are one stacked panel, notifications and schedule included, and "More settings…" and the Configure dialog are gone — see CRE-015.)_
 -   [x] AC6: All changes — by hand or by AI, to widgets, bots or layout — are **staged** until Save. Bot hints say "applies after you save".
 -   [x] AC7: **Cancel** confirms, listing what will be discarded and what is kept (registry installs stay installed).
 -   [~] AC8: Adding bots or widgets through Ask AI comes back as a plan (needs CRE-003; until then Ask AI changes one selected widget or bot). _(Partly, consolidation Phase 3: Ask AI on a selected widget is **Change this widget with AI** — a Dash team plan for that widget (CRE-014); on an empty cell it's a plan for one widget (Phase 2b). Adding bots through Ask AI isn't a plan yet.)_
@@ -239,6 +239,27 @@ As a user, I change a widget I have by saying what I want, and see the change ru
 
 ---
 
+### CRE-015: One place to edit a widget (P0)
+
+**Status:** Implemented — consolidation Phase 3P (dash-core #785 v0.1.800, #786 v0.1.801; dash-react #74 v1.0.80), 2026-10-21
+
+Mockup: https://claude.ai/artifact/FhBmbzetEzqn4Xm1X73GPb
+
+As a user editing a dashboard, everything about one widget is in one place, and there is one way to change it.
+
+-   [x] AC1: Selecting a widget opens one stacked panel, read top to bottom: its name and whose it is ("Built by AI · yours", "From the registry · by acme"), a ⋯ menu (Move to another cell, Split side by side, Split top and bottom, Remove), one **Change <widget>** button, then **Settings**, **Connections**, **Listens for**, **Notifications** and **Schedule** (when the widget has them) and **Advanced: raw settings**. Each section says so when it's empty ("Counter doesn't use any.").
+-   [x] AC2: **Listens for** lists each wiring ("Query changed — From Algolia Search Box", × to stop) and adds one with **+ Listen for another widget** (widgets' and bots' events). It shows for every widget — the rule no longer hides it for widgets the Dash team, bots or the MCP tool placed (they're saved typed as widgets; cells saved without a type are typed on load).
+-   [x] AC3: One **Change <widget>** door everywhere — the panel, the card's ⋮ menu, a crashed widget's **Fix <widget>** (with the error and its cell), and the Widgets page (one per widget). It opens Create › Change: the Dash team, or **Or change it without AI: Edit the code yourself** for your own widgets (the Widget Builder, by hand, with the cell). Change waits while edits wait for Save ("Save or cancel your 1 change first.") and isn't offered for built-in widgets. The Ask AI tab is gone.
+-   [x] AC4: The card's ⋮ menu: Edit in panel, Change <widget>, Move, Split ×2, Remove — no dialogs (dash-react ActionMenu, neutral, replacing the coloured MenuItem fills).
+-   [x] AC5: Every change waits for the dashboard's Save, notifications and schedule included (they used to save at once, even on Cancel): they apply after the dashboard has saved; a failed save keeps them waiting; Cancel drops them and lists them.
+-   [x] AC6: The Configure dialog is retired: headers, footer badges and old layouts select the widget in the panel at the asked-for section.
+-   [x] AC7: Dashboard Config is the whole-dashboard view: Widgets shows one widget's summary and **Edit in panel** (its changes stay as unsaved dashboard changes, then the widget opens in the panel on its page); Listeners is a map of who listens to whom and Notifications a list, each row with Edit in panel; Providers keeps setting one connection for many widgets; "All widgets" keeps bulk settings.
+-   [x] AC8: Raw settings edits are kept (they used to be dropped on Save).
+
+**Implementation notes:** dash-core `Dashboard/WidgetPanel.js`, `ListensFor.js`, `widgetPanelText.js`, `pendingSettings.js` (store + context; applied in `handleSaveWorkspaceComplete`), `configHandOff.js`, `ConfigLists.js`; `utils/widgetSections.js` (`showsListeners`, `panelSections`); `EditPanel`, `WidgetCardHeader` → ActionMenu; `LayoutBuilder` edit actions guarded by scope and page (uuids repeat across pages and the sidebar), `LayoutPageContext`; `LayoutBuilderConfigModal` and `WidgetConfigPanel` deleted. No dashboards used the old flex layout (0 of 82 checked).
+
+---
+
 ## Phases
 
 1. **Edit modal, by hand first (P0):** the full-screen Edit with select-to-edit, Add (drag/click, registry install & add), selection settings tabs, staged Save/Cancel with confirm, page tabs; the pencil, Add widget and Edit with AI route into it. Ask AI changes one selected widget or bot (today's builders). (CRE-006, CRE-008 edit rows, CRE-010, CRE-013)
@@ -278,6 +299,7 @@ As a user, I change a widget I have by saying what I want, and see the change ru
 | 0.1     | 2026-10-10 | John Giatropoulos | Draft for discussion, with mockup                                                                                                                                                                                                                                                          |
 | 0.3     | 2026-10-11 | John Giatropoulos | Phase 1 shipped; phase 2a (start screen, Widget/Bot types, no-AI row, entry points) implemented; follow-ups listed                                                                                                                                                                         |
 | 0.2     | 2026-10-10 | John Giatropoulos | Select-to-edit; one edit mode (Add / Ask AI); reuse before building; fresh-eyes review applied (no-AI start, approvals before Build, failure/Stop, staged Cancel, states, a11y); Dash team (CRE-011); cost and model visibility (CRE-012); phases reordered around a smaller first version |
+| 1.0     | 2026-10-21 | John Giatropoulos | Consolidation Phase 3P: one place to edit a widget (CRE-015) — one stacked panel, one Change door (AI or by hand), Ask AI tab and Configure dialog removed, notifications and schedule wait for Save, Dashboard Config hands a widget to the panel                                         |
 | 0.9     | 2026-10-20 | John Giatropoulos | Consolidation Phase 3a: Change with AI goes through the Dash team (CRE-014) — Scout, Planner, Builder draft, Checker, preview with code and what changed; in place for your own widgets, else a new widget                                                                                 |
 | 0.8     | 2026-10-20 | John Giatropoulos | Consolidation Phase 2c-2: team leads hand making things to the Dash team (Plan this with the Dash team), with the team's context; lead drafts removed                                                                                                                                      |
 | 0.7     | 2026-10-20 | John Giatropoulos | Consolidation Phase 2c-1: Create › Bot goes through the Dash team — Scout (your bots and registry ones), one-bot plan, checked, saved paused, Try it now / Turn on; Where picks its dashboard                                                                                              |
