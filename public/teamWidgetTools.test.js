@@ -11,6 +11,7 @@ const path = require("path");
 const {
     createTeamWidgetTools,
     codeProblems,
+    configProblems,
     scorecardSummary,
 } = require("./lib/teamWidgetTools.cjs");
 
@@ -827,5 +828,31 @@ describe("previewDraft — the checked draft's code, for the preview", () => {
             preload,
             /previewDraft: \(name\) =>\s*ipcRenderer\.invoke\("widget:preview-draft", \{ name \}\)/
         );
+    });
+});
+
+describe("settings shape (consolidation Phase 3 live test)", () => {
+    const LIST_CONFIG = GOOD_CONFIG.replace(
+        'userConfig: { title: { type: "text", defaultValue: "Hello" } }',
+        'userConfig: [{ key: "title", label: "Title", type: "text" }]'
+    );
+
+    it("configProblems names a list-shaped userConfig, not the object", () => {
+        assert.match(configProblems(LIST_CONFIG)[0], /userConfig is a list/);
+        assert.deepEqual(configProblems(GOOD_CONFIG), []);
+        assert.deepEqual(configProblems(undefined), []);
+    });
+
+    it("the team's build refuses it; the install gate's checks don't", async () => {
+        const { tools, calls } = setup();
+        const res = await tools.build({
+            name: "HelloWidget",
+            componentCode: GOOD_COMPONENT,
+            configCode: LIST_CONFIG,
+        });
+        assert.equal(res.success, false);
+        assert.ok(res.problems.some((x) => /userConfig is a list/.test(x)));
+        assert.equal(calls.build.length, 0);
+        assert.deepEqual(codeProblems(GOOD_COMPONENT, LIST_CONFIG), []);
     });
 });
