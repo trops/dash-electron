@@ -26,19 +26,15 @@
  * specific line.
  */
 import React, { useMemo, useState } from "react";
-import { Button2 } from "@trops/dash-react";
 import { useBuilderTheme } from "../useBuilderTheme";
-import {
-    evaluateScorecard,
-    buildScorecardChatMessage,
-} from "./scorecardChecks";
+import { evaluateScorecard } from "./scorecardChecks";
 
 // The checks themselves (no React) — shared with the main process.
-export { evaluateScorecard, buildScorecardChatMessage };
+export { evaluateScorecard };
 
 // Group rows by status for the rendered scorecard. Failed rules show
-// first (most actionable — these are the things the user wants to fix
-// or ask the AI to fix), then passed (confirmation), then n/a
+// first (most actionable — these are the things the user wants to fix),
+// then passed (confirmation), then n/a
 // (informational, can't be statically verified).
 function groupRowsByStatus(rows) {
     const failed = rows.filter((r) => r.pass === false);
@@ -47,7 +43,7 @@ function groupRowsByStatus(rows) {
     return { failed, passed, na };
 }
 
-function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
+function ScorecardRow({ row, expanded, onToggle }) {
     const bt = useBuilderTheme();
     const expandable = row.pass === false && row.matches.length > 0;
     const isOpen = expanded === row.index;
@@ -62,12 +58,6 @@ function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
     // the preview pane, which is already a bordered surface).
     const rowBg = row.pass === false ? `${bt.status.error.bg}` : "";
     const textTone = row.pass === null ? `${bt.muted}` : `${bt.text}`;
-    // Only failing rows get a "Send to AI" affordance — there's
-    // nothing to fix on a passing or n/a row. The button is rendered
-    // when the host wires an onSendToAi handler; without one, the
-    // scorecard stays read-only (e.g. when embedded somewhere that
-    // doesn't have a chat panel to push to).
-    const canSendToAi = row.pass === false && typeof onSendToAi === "function";
 
     return (
         <li
@@ -105,17 +95,6 @@ function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
                         </span>
                     )}
                 </button>
-                {canSendToAi && (
-                    <div className="shrink-0 pr-2">
-                        <Button2
-                            size="sm"
-                            title="Ask AI"
-                            onClick={() => onSendToAi(row)}
-                            testId={`acceptance-scorecard-row-${row.index}-send-to-ai`}
-                            tooltip="Ask the AI to fix this rule"
-                        />
-                    </div>
-                )}
             </div>
             {expandable && isOpen && (
                 <ul
@@ -136,7 +115,7 @@ function ScorecardRow({ row, expanded, onToggle, onSendToAi }) {
     );
 }
 
-export function AcceptanceScorecard({ code, onSendToAi = null }) {
+export function AcceptanceScorecard({ code }) {
     const bt = useBuilderTheme();
     const rows = useMemo(() => evaluateScorecard(code || ""), [code]);
     const [expanded, setExpanded] = useState(null);
@@ -155,7 +134,7 @@ export function AcceptanceScorecard({ code, onSendToAi = null }) {
             ? totalChecked === 0
                 ? "Awaiting widget code"
                 : `All ${totalChecked} statically-checkable rules pass`
-            : `${failCount} of ${totalChecked} rules failing — fix these or ask the AI to`;
+            : `${failCount} of ${totalChecked} rules failing — fix these in the Code tab`;
 
     return (
         <div data-testid="acceptance-scorecard" className="flex flex-col gap-3">
@@ -182,7 +161,6 @@ export function AcceptanceScorecard({ code, onSendToAi = null }) {
                                 row={row}
                                 expanded={expanded}
                                 onToggle={setExpanded}
-                                onSendToAi={onSendToAi}
                             />
                         ))}
                     </ul>

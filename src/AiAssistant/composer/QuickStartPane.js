@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from "react";
 import {
-    Button,
     Button2,
     Button3,
     Card2,
@@ -8,18 +7,6 @@ import {
     FontAwesomeIcon,
     ListRow,
 } from "@trops/dash-react";
-import {
-    SCHEMA_COMPONENT_NAMES,
-    DASH_REACT_COMPONENT_SCHEMAS,
-} from "../dashReactComponentSchemas";
-import { sendOneShotJson } from "./llmOneShot";
-import { WIDGET_CONVENTIONS } from "./widgetConventions";
-import {
-    makeEmptyGrid,
-    addRow,
-    setCellComponent,
-    isContainer,
-} from "./gridLayout";
 import { INTENTS, getSampleLayoutsForIntent } from "./composerSampleLayouts";
 import { useWirableTypes } from "./wirableTypes";
 import { useBuilderTheme } from "../useBuilderTheme";
@@ -42,49 +29,32 @@ const EMPTY_PROVIDERS = {};
  *     answers ONE question instead of scanning a 4-card sample grid
  *     + an AI form + an escape hatch (which the flat list felt like).
  *
- *   Step 2 — show only the starters that match the chosen intent,
- *     plus an AI prompt scoped to that intent (the system prompt
- *     gets the intent's `aiHint` so suggestions match the flavor).
+ *   Step 2 — show only the starters that match the chosen intent.
  *     A Back button returns to step 1. The "Start blank" escape
  *     hatch is reachable from both steps.
  *
- * Apply path is unchanged: AI suggestions go through tree→grid
- * conversion; sample layouts call their own `buildGrid()` mutator
- * chain. Either way the final grid is handed to `onApplyGrid`,
- * which fires `onChange`/`onEmit` via ComposerPaneV2's setGrid
- * effect.
+ * Sample layouts call their own `buildGrid()` mutator chain; the grid is
+ * handed to `onApplyGrid`, which fires `onChange`/`onEmit` via
+ * ComposerPaneV2's setGrid effect. Describing the widget instead goes to
+ * the Dash team (`onAskDashTeam`) — the builder has no AI of its own.
  */
 export function QuickStartPane({
     onApplyGrid,
     onRequestPalette,
     seedCellId,
-    apiKey,
-    model,
-    backend = "claude-code",
     providers = EMPTY_PROVIDERS,
+    // (text) → the builder closes and Create opens on it. Optional.
+    onAskDashTeam = null,
 }) {
     const bt = useBuilderTheme();
     // null = step 1 (pick intent). Set to an intent id ("search", etc)
-    // to advance to step 2 (tailored starters + AI prompt).
+    // to advance to step 2 (tailored starters).
     const [intent, setIntent] = useState(null);
     // Only meaningful when intent === "provider". Carries the picked
     // provider's wirable-type record ({id, name, kind, description, …})
-    // so the AI scaffold can name-drop the provider in its prompt.
+    // so the starters can be ranked for it.
     const [providerChoice, setProviderChoice] = useState(null);
-    const [aiOpen, setAiOpen] = useState(false);
-    const [description, setDescription] = useState("");
-    const [status, setStatus] = useState("idle");
-    const [error, setError] = useState(null);
-    const [suggestions, setSuggestions] = useState([]);
     const wirable = useWirableTypes(providers);
-
-    const resetAi = useCallback(() => {
-        setAiOpen(false);
-        setDescription("");
-        setStatus("idle");
-        setError(null);
-        setSuggestions([]);
-    }, []);
 
     const goBack = useCallback(() => {
         if (intent === "provider" && providerChoice) {
@@ -92,13 +62,11 @@ export function QuickStartPane({
             // the way to intent picker. One level at a time is more
             // forgiving for accidental picks.
             setProviderChoice(null);
-            resetAi();
             return;
         }
         setIntent(null);
         setProviderChoice(null);
-        resetAi();
-    }, [intent, providerChoice, resetAi]);
+    }, [intent, providerChoice]);
 
     const currentIntent =
         intent && INTENTS.find((i) => i.id === intent) ? intent : null;
@@ -112,86 +80,6 @@ export function QuickStartPane({
     const intentSamples = currentIntent
         ? getSampleLayoutsForIntent(currentIntent, providerChoice)
         : [];
-
-    const submitAi = useCallback(async () => {
-        if (description.trim().length === 0) return;
-        setStatus("loading");
-        setError(null);
-        setSuggestions([]);
-        try {
-            // Retry once with a strict-mode prompt on no-JSON failures
-            // (matches the existing SuggestLayoutButton behavior — the
-            // common failure mode is a chatty preamble).
-            const promptArgs = {
-                intentHint: intentObj && intentObj.aiHint,
-                providerHint: buildProviderHint(providerChoice),
-            };
-            // Inline the provider context into the user message too.
-            // The system prompt is sometimes downweighted by agent
-            // backends (Claude Code with MCP), so duplicating the
-            // binding directly above the user's words keeps the
-            // model anchored on "this widget uses Algolia / Slack /
-            // …" instead of asking for clarification.
-            const wrappedUserMessage = providerChoice
-                ? `[Widget must use the "${providerChoice.name}" provider —` +
-                  `interpret ambiguous terms in that context.]\n\n` +
-                  description
-                : description;
-            let result;
-            try {
-                result = await sendOneShotJson({
-                    model,
-                    apiKey,
-                    backend,
-                    systemPrompt: buildSystemPrompt(promptArgs),
-                    userMessage: wrappedUserMessage,
-                });
-            } catch (firstErr) {
-                const isNoJson = /JSON block|parse error/i.test(
-                    firstErr?.message || ""
-                );
-                if (!isNoJson) throw firstErr;
-                result = await sendOneShotJson({
-                    model,
-                    apiKey,
-                    backend,
-                    systemPrompt: buildSystemPrompt({
-                        ...promptArgs,
-                        retry: true,
-                    }),
-                    userMessage: wrappedUserMessage,
-                });
-            }
-            const items =
-                result &&
-                Array.isArray(result.suggestions) &&
-                result.suggestions
-                    .map((s) => sanitizeSuggestion(s))
-                    .filter(Boolean);
-            if (!items || items.length === 0) {
-                throw new Error("Model returned no valid layout suggestions.");
-            }
-            setSuggestions(items);
-            setStatus("ok");
-        } catch (err) {
-            setError(err.message || String(err));
-            setStatus("error");
-        }
-    }, [description, model, apiKey, backend, intentObj, providerChoice]);
-
-    const pickSuggestion = useCallback(
-        (suggestion) => {
-            const grid = treeToGrid(suggestion);
-            if (!grid) return;
-            // Phase D — forward the providerChoice along with the grid.
-            // ComposerPaneV2 stashes it in state + exposes via context
-            // for future auto-wire consumers. Today's behavior is
-            // unchanged; this is plumbing only.
-            onApplyGrid(grid, providerChoice);
-            resetAi();
-        },
-        [onApplyGrid, resetAi, providerChoice]
-    );
 
     const applySample = useCallback(
         (layout) => {
@@ -212,12 +100,7 @@ export function QuickStartPane({
                 <ProviderPicker
                     intentObj={intentObj}
                     wirable={wirable}
-                    onPick={(p) => {
-                        setProviderChoice(p);
-                        // Auto-open the AI form on provider pick —
-                        // the AI is the whole point of this branch.
-                        setAiOpen(true);
-                    }}
+                    onPick={(p) => setProviderChoice(p)}
                     onBack={goBack}
                 />
             ) : (
@@ -227,16 +110,6 @@ export function QuickStartPane({
                     providerChoice={providerChoice}
                     onBack={goBack}
                     onApplySample={applySample}
-                    aiOpen={aiOpen}
-                    setAiOpen={setAiOpen}
-                    description={description}
-                    setDescription={setDescription}
-                    status={status}
-                    error={error}
-                    suggestions={suggestions}
-                    submitAi={submitAi}
-                    pickSuggestion={pickSuggestion}
-                    resetAi={resetAi}
                 />
             )}
 
@@ -252,6 +125,13 @@ export function QuickStartPane({
                     title="Or start blank — pick a single component"
                 />
             </div>
+            {typeof onAskDashTeam === "function" && (
+                <AskDashTeam
+                    key={currentIntent || "start"}
+                    onAsk={onAskDashTeam}
+                    withText={!!currentIntent}
+                />
+            )}
         </div>
     );
 }
@@ -400,16 +280,6 @@ function IntentDetail({
     providerChoice,
     onBack,
     onApplySample,
-    aiOpen,
-    setAiOpen,
-    description,
-    setDescription,
-    status,
-    error,
-    suggestions,
-    submitAi,
-    pickSuggestion,
-    resetAi,
 }) {
     const bt = useBuilderTheme();
     // When the user is in the provider branch and has picked a
@@ -471,430 +341,57 @@ function IntentDetail({
                     ))}
                 </div>
             )}
-
-            <AiForm
-                aiOpen={aiOpen}
-                setAiOpen={setAiOpen}
-                description={description}
-                setDescription={setDescription}
-                status={status}
-                error={error}
-                suggestions={suggestions}
-                submitAi={submitAi}
-                pickSuggestion={pickSuggestion}
-                resetAi={resetAi}
-            />
         </div>
     );
 }
 
-function AiForm({
-    aiOpen,
-    setAiOpen,
-    description,
-    setDescription,
-    status,
-    error,
-    suggestions,
-    submitAi,
-    pickSuggestion,
-    resetAi,
-}) {
+// Compose's door to the Dash team (consolidation Phase 3b): the builder
+// has no AI of its own, so describing a widget hands it to Create. The first
+// step offers the link; a kind's step takes the description too.
+function AskDashTeam({ onAsk, withText }) {
     const bt = useBuilderTheme();
-    if (!aiOpen) {
+    const [text, setText] = useState("");
+    if (!withText) {
         return (
-            <div data-testid="composer-quick-start-ai">
-                <Button2
-                    block
-                    size="sm"
-                    onClick={() => setAiOpen(true)}
-                    testId="composer-quick-start-ai-open"
-                >
-                    <span className="flex items-center gap-2">
-                        <FontAwesomeIcon
-                            icon="wand-magic-sparkles"
-                            className="h-3 w-3"
-                        />
-                        Or describe it and let AI lay it out
-                    </span>
-                </Button2>
-            </div>
+            <Button3
+                size="sm"
+                onClick={() => onAsk("")}
+                testId="composer-quick-start-ask-team"
+            >
+                <span className="flex items-center gap-2">
+                    Rather describe it? Ask the Dash team
+                    <FontAwesomeIcon icon="arrow-right" className="h-3 w-3" />
+                </span>
+            </Button3>
         );
     }
     return (
-        <Card2
-            padding="p-4"
-            className="flex flex-col gap-3"
-            testId="composer-quick-start-ai"
+        <div
+            className="flex flex-col gap-2"
+            data-testid="composer-quick-start-ask-team-form"
         >
-            <div className="flex items-center justify-between gap-2">
-                <h3 className={`text-sm font-semibold ${bt.text}`}>
-                    Describe the widget
-                </h3>
-                <Button3
-                    size="sm"
-                    onClick={resetAi}
-                    testId="composer-quick-start-ai-close"
-                    title="Cancel"
-                />
-            </div>
+            <h3 className={`text-sm font-semibold ${bt.text}`}>
+                Rather describe it?
+            </h3>
             <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g., Search Algolia indices, show matching docs in a list"
-                aria-label="Describe the widget"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="e.g., A lookup box for order numbers that shows the order's status"
+                aria-label="Describe the widget for the Dash team"
                 rows={3}
                 className={`dr-input w-full px-3 py-2 text-sm ${bt.surface} border ${bt.border} rounded-lg ${bt.text} resize-none focus:outline-none`}
-                data-testid="composer-quick-start-ai-input"
+                data-testid="composer-quick-start-ask-team-input"
             />
-            <Button
-                block
+            <Button2
                 size="sm"
-                onClick={submitAi}
-                disabled={
-                    status === "loading" || description.trim().length === 0
-                }
-                testId="composer-quick-start-ai-submit"
-                title={status === "loading" ? "Asking…" : "Lay it out with AI"}
-            />
-            {status === "error" && error && (
-                <p
-                    role="alert"
-                    className={`text-sm ${bt.status.error.text}`}
-                    data-testid="composer-quick-start-ai-error"
-                >
-                    {error}
-                </p>
-            )}
-            {status === "ok" && suggestions.length > 0 && (
-                <div
-                    className="flex flex-col gap-2"
-                    data-testid="composer-quick-start-ai-results"
-                >
-                    <p className={`text-sm ${bt.muted}`}>
-                        Pick a suggestion to apply:
-                    </p>
-                    {suggestions.map((s, i) => (
-                        <Card2
-                            key={i}
-                            onClick={() => pickSuggestion(s)}
-                            ariaLabel={s.label}
-                            testId={`composer-quick-start-ai-pick-${i}`}
-                            padding="p-3"
-                            hover
-                            className="flex flex-col gap-1 text-left"
-                        >
-                            <span
-                                className={`text-sm font-semibold ${bt.text}`}
-                            >
-                                {s.label}
-                            </span>
-                            <span
-                                className={`text-xs ${bt.muted} font-mono whitespace-pre`}
-                            >
-                                {summarizeTree(s.root)}
-                            </span>
-                        </Card2>
-                    ))}
-                </div>
-            )}
-        </Card2>
+                onClick={() => onAsk(text.trim())}
+                testId="composer-quick-start-ask-team"
+            >
+                <span className="flex items-center gap-2">
+                    Ask the Dash team
+                    <FontAwesomeIcon icon="arrow-right" className="h-3 w-3" />
+                </span>
+            </Button2>
+        </div>
     );
-}
-
-/**
- * Convert the AI's tree-shape suggestion into a grid using the same
- * mutators the user-driven flow uses. Each child of a container node
- * becomes its own row in the container's inner grid (stack-friendly
- * default; users can re-arrange via the variant picker + drag/drop).
- *
- * Children of a non-container node are silently dropped — the schema
- * (via `isContainer`) is the authority on what can hold children.
- * Returns null if `tree.root` isn't a usable container.
- */
-export function treeToGrid(tree) {
-    if (!tree || !tree.root) return null;
-    let g = makeEmptyGrid(
-        typeof tree.widgetName === "string" ? tree.widgetName : undefined
-    );
-    const seedCellId = g.grids[g.rootGridId].rows[0].cells[0];
-    g = placeNode(g, seedCellId, tree.root);
-    return g;
-}
-
-function placeNode(g, cellId, node) {
-    if (!node || typeof node.type !== "string") return g;
-    g = setCellComponent(g, cellId, node.type, node.props || {});
-    const placed = g.cells[cellId];
-    if (
-        !placed ||
-        placed.kind !== "container" ||
-        !placed.gridId ||
-        !Array.isArray(node.children) ||
-        node.children.length === 0
-    ) {
-        return g;
-    }
-    const innerGridId = placed.gridId;
-    // setCellComponent seeded the inner grid with one row + empty
-    // cell. Place the first child there; for the rest, addRow then
-    // place into the new row's cell.
-    const seedInner = g.grids[innerGridId].rows[0].cells[0];
-    g = placeNode(g, seedInner, node.children[0]);
-    for (let i = 1; i < node.children.length; i += 1) {
-        g = addRow(g, innerGridId);
-        const newRow = g.grids[innerGridId].rows[i];
-        const newCellId = newRow.cells[0];
-        g = placeNode(g, newCellId, node.children[i]);
-    }
-    return g;
-}
-
-/**
- * Build a one-line hint about the provider the user picked, woven
- * into the AI system prompt so suggestions include the right tools.
- * Returns null when no provider was chosen (the AI prompt falls
- * back to the intent's generic hint).
- */
-function buildProviderHint(providerChoice) {
-    if (!providerChoice) return null;
-    return (
-        `The user wants this widget to use the` +
-        `"${providerChoice.name}" provider (${providerChoice.kind}).` +
-        `Suggest 2-3 layouts that surface common ${providerChoice.name}` +
-        `interactions (search / list / detail / compose, whichever fit).` +
-        `The composer wires the actual provider methods in a later` +
-        `stage — DO NOT include data-fetching props; just pick the` +
-        `components a ${providerChoice.name} widget would naturally use.`
-    );
-}
-
-export function buildSystemPrompt({
-    retry = false,
-    intentHint = null,
-    providerHint = null,
-} = {}) {
-    // Filter to palette-visible component names — MenuItem variants
-    // are in the schema for import resolution but should not appear
-    // in user-facing suggestions.
-    const allowed = SCHEMA_COMPONENT_NAMES.filter(
-        (name) =>
-            !(
-                DASH_REACT_COMPONENT_SCHEMAS[name] &&
-                DASH_REACT_COMPONENT_SCHEMAS[name].hideFromPalette
-            )
-    ).join(", ");
-    const intentLines = intentHint ? ["INTENT CONTEXT: " + intentHint, ""] : [];
-    // PROVIDER CONTEXT (when present) is a stronger constraint than
-    // the intent hint — it names a specific service the AI should
-    // build around. Emit it first so the model anchors on it.
-    const providerLines = providerHint
-        ? ["PROVIDER CONTEXT: " + providerHint, ""]
-        : [];
-    const base = [
-        "You are a structured-output API for the Dash widget composer. You do NOT chat.",
-        "",
-        ...providerLines,
-        ...intentLines,
-        "The user describes a widget in one line. You respond with NOTHING but a JSON object of layout candidates.",
-        "",
-        "OUTPUT FORMAT — emit exactly this and nothing else:",
-        "```json",
-        "{",
-        '  "suggestions": [',
-        '    { "label": "<short summary>", "root": { "type": "Panel", "children": [ ... ] } },',
-        "    ...",
-        "  ]",
-        "}",
-        "```",
-        "",
-        "STRICT RULES:",
-        '- The first character of your response must be `{` or `` ``` ``. NO preamble, NO confirmation, NO "I\'ll help", NO "Let me first".',
-        "- DO NOT call any tools. DO NOT search the web. DO NOT read MCP servers.",
-        "  You have all the information you need in this prompt.",
-        "- DO NOT look up which providers are available. The composer's wiring",
-        "  stage handles provider/data binding after the user picks a layout.",
-        "- DO NOT ask the user for clarification. If the user's description is",
-        "  ambiguous, pick the most likely interpretation in the provider /",
-        "  intent context above. Suggesting 2-3 alternative layouts already",
-        "  covers the disambiguation — the user picks which one matches.",
-        "- Provide 2-3 suggestions. Each suggestion has { label: string, root: TreeNode }.",
-        "- Each TreeNode: { type: string, props?: object, children?: TreeNode[] }.",
-        '- The root TreeNode of every suggestion MUST have type "Panel".',
-        `- ONLY use these component types: ${allowed}.`,
-        "  This list is exhaustive — do not invent component names or look up others.",
-        "- props can include literal string/number/boolean values only — no functions, no JSX expressions, no data-fetching logic.",
-        "- Keep each suggestion compact — 3-6 nodes is ideal.",
-        "- The composer wires data slots in a later stage. Do NOT include props for `data`, `items`, `options`, or other dataSlot fields.",
-        "",
-        "FILL IN DESCRIPTIVE PROP VALUES — this is critical. The user picks a",
-        "layout and immediately sees the result; without specific labels they",
-        "can't tell what each component is FOR. Required for these props:",
-        "- Heading.title / Heading2.title / Heading3.title — name the section.",
-        '  Example: for an Algolia rules widget, "Index rules" not "Sample".',
-        "- SubHeading.title — name the sub-section similarly.",
-        "- Button.title / Button2.title / Button3.title — name the action.",
-        '  Example: "Add rule", "Refresh", "Search" — verbs that hint at',
-        "  what wiring this button would call.",
-        "- ButtonIcon.text + ButtonIcon.icon — same as Button.",
-        "- Paragraph.text — describe what the user should see in this slot,",
-        "  not literal placeholder content.",
-        "- Tag.text — short label fitting the widget context.",
-        "- InputText.label / TextArea.label / SearchInput.label /",
-        "  SelectInput.label / Slider.label — describe the input.",
-        '  Example: SearchInput.label="Search by name" for a search-list widget.',
-        "- InputText.placeholder / TextArea.placeholder /",
-        "  SearchInput.placeholder — short hint text shown in the empty input.",
-        "- Switch.label / Toggle.label / Checkbox.label — describe what the",
-        "  toggle controls.",
-        "- Alert.title + Alert.message — describe the kind of message this",
-        "  alert is reserved for in the widget.",
-        "These literal values render in the preview AND tell the user what",
-        "the layout is intended to do without any extra commentary.",
-        "",
-        // The user's specific complaint that drove the conventions
-        // rewrite: AI was defaulting to raw <Heading> (H1) for the
-        // widget's title, which is "like adding H1 to a tweet — its
-        // enormous and does not look ok." Conventions live in
-        // widgetConventions.js; this interpolation keeps the prompt
-        // in sync if the rule changes.
-        "HEADING VARIANT RULE — most-violated rule in past outputs:",
-        WIDGET_CONVENTIONS.headings.rule,
-        `- ALWAYS use ${WIDGET_CONVENTIONS.headings.preferredTitle} for the widget's title.`,
-        `- ALWAYS use ${WIDGET_CONVENTIONS.headings.preferredSubsection} for sub-section labels.`,
-        `- NEVER use these in widgets: ${WIDGET_CONVENTIONS.headings.forbidden.join(
-            ", "
-        )}.`,
-        `- Only use ${WIDGET_CONVENTIONS.headings.allowedNumericDisplay.join(
-            " or "
-        )} for numeric display (the big number in a stat widget).`,
-        "",
-        "REQUIRED VISIBLE STATES — for any widget that fetches data:",
-        ...WIDGET_CONVENTIONS.requiredStates.map(
-            (s) =>
-                `- ${s}: render a clear visible indication, NOT just console.error.`
-        ),
-        "",
-        // Primitive palette — the chrome's cohesion rule extended to
-        // widget interiors. The audit found 8/8 sample widgets break
-        // this from the inside out (hand-rolled `bg-purple-600` brand
-        // buttons, raw `<span className="bg-green-900/50">` status
-        // pills, italic-string empty states). The chrome itself never
-        // does any of that — it leans on dash-react primitives that
-        // read ThemeContext. We tell the model to do the same.
-        "PRIMITIVE PALETTE — which dash-react primitive each use case maps to.",
-        "Each entry is `use case → primitive (default | alternatives) — rule`.",
-        ...Object.entries(WIDGET_CONVENTIONS.primitives).map(
-            ([useCase, body]) => {
-                const alts = body.primitives.filter(
-                    (p) => p !== body.defaultChoice
-                );
-                const altsText = alts.length > 0 ? ` | ${alts.join(", ")}` : "";
-                return `- ${useCase} → ${body.defaultChoice}${altsText} — ${body.rule}`;
-            }
-        ),
-        "",
-        // Color rule — interpolated verbatim from widgetConventions so
-        // a future tweak there ripples through to every emitted prompt
-        // on the next call. The rule is intentionally specific about
-        // which Tailwind shape fragments are banned — the AI confuses
-        // "no color Tailwind" with "no Tailwind at all" if we don't
-        // call out the allowed neutrals.
-        "COLOR RULE — strictly enforced. Acceptance scorecard fails widgets that break this.",
-        WIDGET_CONVENTIONS.colorRule,
-        "- NEVER emit className strings containing bg-{color}-{shade}, text-{color}-{shade}, or border-{color}-{shade}.",
-        '- NEVER emit raw `<button className="...">` tags — use Button / Button2 / Button3.',
-        '- NEVER emit `<span className="bg-green-900/50 text-green-400">` style pills — use StatusBadge.',
-        '- NEVER emit `<div className="bg-red-900/30 ...">` error blocks — use Alert / Alert2.',
-        '- NEVER emit `<p className="text-gray-600 italic">No results</p>` — use EmptyState.',
-        "",
-        // Few-shot examples — concrete trees derived from real
-        // accepted widgets (see WIDGET_CONVENTIONS.referencedWidgets).
-        // Stronger anchor than rules-only; the model sees three
-        // different shapes (stat / list / search) it can pattern-
-        // match against.
-        "FEW-SHOT EXAMPLES — these are reference shapes from real",
-        "Dash widgets that have passed the acceptance bar. Match this",
-        "level of compactness and prop specificity:",
-        "",
-        ...WIDGET_CONVENTIONS.fewShotExamples.flatMap((ex, i) => [
-            `Example ${i + 1} — ${ex.description}:`,
-            "```json",
-            JSON.stringify({ suggestions: [ex.tree] }, null, 2),
-            "```",
-            "",
-        ]),
-    ];
-    if (retry) {
-        base.push(
-            "",
-            "PRIOR ATTEMPT FAILED. Your previous response either contained prose",
-            "instead of JSON or attempted a tool call. Respond IMMEDIATELY with the",
-            "JSON object only — no tool calls, no MCP lookups, no explanatory text",
-            "before, between, or after. Start with `{`. The user is blocked until",
-            "you produce the JSON."
-        );
-    }
-    return base.join("\n");
-}
-
-function sanitizeSuggestion(s) {
-    if (!s || typeof s !== "object") return null;
-    const label = typeof s.label === "string" ? s.label : "Suggestion";
-    const root = sanitizeNode(s.root);
-    if (!root || root.type !== "Panel") return null;
-    return {
-        label,
-        widgetName:
-            typeof s.widgetName === "string" &&
-            /^[A-Za-z][A-Za-z0-9_]*$/.test(s.widgetName)
-                ? s.widgetName
-                : undefined,
-        root,
-    };
-}
-
-function sanitizeNode(node) {
-    if (!node || typeof node !== "object") return null;
-    if (typeof node.type !== "string") return null;
-    const schema = DASH_REACT_COMPONENT_SCHEMAS[node.type];
-    if (!schema || schema.hideFromPalette) return null;
-    const out = {
-        type: node.type,
-        props:
-            node.props && typeof node.props === "object"
-                ? sanitizeProps(node.props)
-                : {},
-    };
-    if (Array.isArray(node.children) && isContainer(node.type)) {
-        out.children = node.children.map(sanitizeNode).filter(Boolean);
-    } else {
-        out.children = [];
-    }
-    return out;
-}
-
-function sanitizeProps(propsIn) {
-    const out = {};
-    for (const [k, v] of Object.entries(propsIn)) {
-        if (
-            typeof v === "string" ||
-            typeof v === "number" ||
-            typeof v === "boolean"
-        ) {
-            out[k] = v;
-        }
-    }
-    return out;
-}
-
-function summarizeTree(node, depth = 0) {
-    if (!node) return "";
-    const indent = "  ".repeat(depth);
-    const childList = Array.isArray(node.children) ? node.children : [];
-    if (childList.length === 0) return `${indent}${node.type}`;
-    return [
-        `${indent}${node.type}`,
-        ...childList.map((c) => summarizeTree(c, depth + 1)),
-    ].join("\n");
 }

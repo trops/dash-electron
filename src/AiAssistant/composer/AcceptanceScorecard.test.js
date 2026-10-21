@@ -10,11 +10,7 @@ jest.mock("@trops/dash-react", () => require("../dashReactTestStub"));
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import {
-    AcceptanceScorecard,
-    evaluateScorecard,
-    buildScorecardChatMessage,
-} from "./AcceptanceScorecard";
+import { AcceptanceScorecard, evaluateScorecard } from "./AcceptanceScorecard";
 
 // Strong "everything wrong" sample. Hits the color-Tailwind rule, the
 // raw-button rule, raw <Heading>, no EmptyState / Skeleton / Alert.
@@ -297,128 +293,17 @@ describe("AcceptanceScorecard component", () => {
     });
 });
 
-describe("buildScorecardChatMessage — pure formatter", () => {
-    test("empty / invalid input returns empty string", () => {
-        expect(buildScorecardChatMessage(null)).toBe("");
-        expect(buildScorecardChatMessage(undefined)).toBe("");
-        expect(buildScorecardChatMessage({})).toBe("");
-        expect(buildScorecardChatMessage({ matches: [] })).toBe("");
-    });
-
-    test("single rule produces conversational message + 'output BOTH code blocks'", () => {
-        const msg = buildScorecardChatMessage({
-            index: 0,
-            item: "Title uses SubHeading2.",
-            matches: [],
-        });
-        expect(msg).toMatch(/flags this rule/);
-        expect(msg).toContain("Title uses SubHeading2.");
-        expect(msg).toMatch(/Output BOTH/);
-    });
-
-    test("rule with matches surfaces the offending substrings", () => {
-        const msg = buildScorecardChatMessage({
-            index: 12,
-            item: "No hardcoded Tailwind color classes.",
-            matches: ["bg-purple-600", "text-gray-400"],
-        });
-        expect(msg).toMatch(/Offending substring/);
-        expect(msg).toContain("bg-purple-600");
-        expect(msg).toContain("text-gray-400");
-    });
-
-    test("matches list is capped at 5 with '+N more' overflow", () => {
-        const msg = buildScorecardChatMessage({
-            index: 12,
-            item: "No hardcoded color.",
-            matches: ["a", "b", "c", "d", "e", "f", "g"],
-        });
-        expect(msg).toContain("a, b, c, d, e");
-        expect(msg).toMatch(/\+2 more/);
-    });
-});
-
-describe("AcceptanceScorecard — Ask AI integration", () => {
-    test("Ask AI button renders per failing row when onSendToAi is provided", () => {
-        const onSendToAi = jest.fn();
-        render(
-            <AcceptanceScorecard
-                code={BAD_WIDGET_CODE}
-                onSendToAi={onSendToAi}
-            />
-        );
-        // Item 0 (raw Heading) and 12 (color tailwind) both fail in
-        // the bad fixture — both should get a Send to AI button.
-        expect(
-            screen.getByTestId("acceptance-scorecard-row-0-send-to-ai")
-        ).toBeInTheDocument();
-        expect(
-            screen.getByTestId("acceptance-scorecard-row-12-send-to-ai")
-        ).toBeInTheDocument();
-    });
-
-    test("Ask AI button is NOT rendered on passing or n/a rows", () => {
-        const onSendToAi = jest.fn();
-        render(
-            <AcceptanceScorecard
-                code={GOOD_WIDGET_CODE}
-                onSendToAi={onSendToAi}
-            />
-        );
-        // Good widget has no fails — no Send buttons anywhere.
-        const sendButtons = document.querySelectorAll(
-            '[data-testid^="acceptance-scorecard-row-"][data-testid$="-send-to-ai"]'
-        );
-        expect(sendButtons.length).toBe(0);
-    });
-
-    test("Ask AI buttons absent when onSendToAi is not provided", () => {
-        render(<AcceptanceScorecard code={BAD_WIDGET_CODE} />);
-        // No host wiring → read-only scorecard, no buttons.
-        const sendButtons = document.querySelectorAll(
-            '[data-testid^="acceptance-scorecard-row-"][data-testid$="-send-to-ai"]'
-        );
-        expect(sendButtons.length).toBe(0);
-    });
-
-    test("no batch 'fix all' button exists — per-row is the only flow", () => {
-        // Regression pin: an earlier iteration shipped a batch button
-        // that asked the AI to fix every failing rule in one message.
-        // That prompt biased the AI toward wholesale rewrites that
-        // mangled user-specific implementation. The button was
-        // removed; per-row remains the only path so each fix is
-        // surgical and the user verifies one at a time.
-        const onSendToAi = jest.fn();
-        render(
-            <AcceptanceScorecard
-                code={BAD_WIDGET_CODE}
-                onSendToAi={onSendToAi}
-            />
+describe("AcceptanceScorecard — no AI (consolidation Phase 3b)", () => {
+    test("failing rows have no Ask AI button; the headline says to fix them in the Code tab", () => {
+        const { container } = render(
+            <AcceptanceScorecard code={BAD_WIDGET_CODE} />
         );
         expect(
-            screen.queryByTestId("acceptance-scorecard-send-all-to-ai")
-        ).not.toBeInTheDocument();
-    });
-
-    test("clicking per-row Ask AI invokes onSendToAi with the row object (NOT wrapped in an array)", () => {
-        const onSendToAi = jest.fn();
-        render(
-            <AcceptanceScorecard
-                code={BAD_WIDGET_CODE}
-                onSendToAi={onSendToAi}
-            />
-        );
-        fireEvent.click(
-            screen.getByTestId("acceptance-scorecard-row-12-send-to-ai")
-        );
-        expect(onSendToAi).toHaveBeenCalledTimes(1);
-        const [rule] = onSendToAi.mock.calls[0];
-        // The batch-removal refactor flattened the callback contract:
-        // onSendToAi receives a single rule object, not an array of
-        // one element. Pinning this so future per-row additions
-        // don't accidentally re-introduce the array wrapper.
-        expect(Array.isArray(rule)).toBe(false);
-        expect(rule.index).toBe(12);
+            container.querySelectorAll('[data-testid$="-send-to-ai"]')
+        ).toHaveLength(0);
+        expect(
+            screen.getByTestId("acceptance-scorecard-summary")
+        ).toHaveTextContent(/fix these in the Code tab/);
     });
 });
 

@@ -2,7 +2,8 @@
  * WidgetBuilderModal — checked while it's written, installed only after a
  * pass (Widget Builder edit fixes; replaces the Checker after install,
  * CRE-011 AC5): each compiled version gets the fast checks and then the
- * Checker; problems go back to the AI; Install / Update waits for a pass of
+ * Checker; problems are listed for the user to fix (consolidation Phase 3b
+ * — no AI here); Install / Update waits for a pass of
  * the exact code; the success screen has nothing left running.
  */
 const fs = require("fs");
@@ -18,15 +19,20 @@ describe("checks run as the code is written", () => {
         expect(src).toMatch(
             /window\.mainApi\?\.widgetBuilder\?\.checkDraft\?\.\(/
         );
+        // Built by hand: no request to hold it to, only the widget.
         expect(src).toMatch(
-            /runTeamRole\(\s*"checker",\s*draftCheckRequest\(name, asked\)/
+            /runTeamRole\(\s*"checker",\s*draftCheckRequest\(name, ""\)/
         );
         expect(src).toMatch(/codeKeyOf\(detectedCode\)/);
     });
 
-    test("problems go back to the AI, at most MAX_CHECK_FIXES times", () => {
-        expect(src).toMatch(/checksFixRequest\(/);
-        expect(src).toMatch(/MAX_CHECK_FIXES/);
+    test("problems are listed for the user — nothing goes back to an AI", () => {
+        expect(src).toMatch(
+            /const fail = \(lines, review\) =>\s*setDraftCheck\(\{ key, phase: "failed", lines, review \}\);/
+        );
+        expect(src).not.toMatch(/checksFixRequest|MAX_CHECK_FIXES/);
+        expect(src).not.toMatch(/dash:chat-core-send/);
+        expect(src).not.toMatch(/ChatCore/);
     });
 });
 
@@ -45,16 +51,22 @@ describe("install only after a pass", () => {
 
     test("an unchanged widget isn't checked under Update original — nothing to save yet", () => {
         expect(src).toMatch(/const unchangedUpdate =/);
-        expect(src).toMatch(/if \(unchangedUpdate \|\| aiReplying\) \{/);
+        expect(src).toMatch(/if \(unchangedUpdate \|\| needsName\) \{/);
     });
 
-    test("nothing counts as checked while the AI is replying, or for an unchanged update", () => {
+    test("built by hand: checked once named, after the code settles, retried while the Checker is busy", () => {
         expect(src).toMatch(
-            /const \[aiReplying, setAiReplying\] = useState\(false\);/
+            /const needsName =\s*!isRemixMode && \(!widgetName \|\| \/\^ComposedWidget\\d\*\$\/\.test\(widgetName\)\);/
         );
-        expect(src).toMatch(/!aiReplying &&\s*!unchangedUpdate &&/);
-        expect(src).toMatch(/if \(unchangedUpdate \|\| aiReplying\) \{/);
-        expect(src).toMatch(/waiting=\{\s*aiReplying\s*\}/);
+        expect(src).toMatch(/timer = setTimeout\(start, 1500\);/);
+        expect(src).toMatch(
+            /\/in progress\/i\.test\(String\(res\.reason \|\| ""\)\)[\s\S]{0,120}if \(!stale\(\)\) retryCheck\(\);/
+        );
+    });
+
+    test("an unchanged update doesn't count as checked", () => {
+        expect(src).toMatch(/const checkPassed =\s*!unchangedUpdate &&/);
+        expect(src).not.toMatch(/aiReplying/);
     });
     test("no checks until it's known whether this is an update or a remix", () => {
         expect(src).toMatch(/if \(isRemixMode && !editModeSettled\) return;/);

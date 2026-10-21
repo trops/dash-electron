@@ -215,29 +215,3 @@ export function evaluateScorecard(code) {
         };
     });
 }
-
-/**
- * Build the chat message that gets dispatched into ChatCore when the
- * user clicks "Ask AI" on a scorecard row. Exposed for tests so we
- * can pin the exact wording without rendering the React tree.
- *
- * Single-rule only by design — earlier iterations supported a batch
- * "fix all failing rules" path, but that prompt biased the AI toward
- * wholesale rewrites that risked introducing regressions on widgets
- * with specific user implementation. The per-row flow makes the
- * user's fix decision explicit and keeps each AI response surgical.
- * If a future use case needs batching, group related rules into a
- * single chat-side message rather than re-introducing the
- * regenerate-everything prompt.
- */
-export function buildScorecardChatMessage(rule) {
-    if (!rule || typeof rule.item !== "string") return "";
-    const matches = Array.isArray(rule.matches) ? rule.matches : [];
-    const head = matches.slice(0, 5).join(", ");
-    const more = matches.length > 5 ? ` (+${matches.length - 5} more)` : "";
-    const offending = head ? `${head}${more}` : "";
-    const offendingLine = offending
-        ? `\n\nOffending substring(s): ${offending}.`
-        : "";
-    return `The acceptance scorecard flags this rule on the current widget code:\n\n"${rule.item}"${offendingLine}\n\nPlease update the widget to fix this. Output BOTH the component (jsx) and config (.dash.js) code blocks with the fix.`;
-}

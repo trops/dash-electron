@@ -3,8 +3,8 @@
  */
 /**
  * ChecksStatus — where the Widget Builder's checks stand, beside Install:
- * checking, the Checker reviewing, fixing, checked, or problems left (then
- * nothing can be installed — ask for changes or save a draft).
+ * checking, the Checker reviewing, checked, or problems left (then
+ * nothing can be installed — fix them in the Code tab or save a draft).
  */
 import React from "react";
 import "@testing-library/jest-dom";
@@ -23,10 +23,6 @@ describe("ChecksStatus", () => {
     test.each([
         [{ phase: "checking" }, /Checking the code/],
         [{ phase: "reviewing" }, /The Checker is reviewing it/],
-        [
-            { phase: "fixing", lines: ["a", "b"], fixes: 1 },
-            /Fixing 2 problems · try 1 of 2/,
-        ],
         [{ phase: "passed" }, /Checked/],
         [
             { phase: "passed", reviewSkipped: "the Checker is paused" },
@@ -54,7 +50,7 @@ describe("ChecksStatus", () => {
         expect(status).toHaveTextContent(/1 problem left/);
         expect(status).toHaveTextContent(/Unexpected token/);
         expect(status).toHaveTextContent(
-            /Ask for changes in the chat, or save it as a draft/
+            /Fix it in the Code tab, or save it as a draft/
         );
         expect(screen.queryByText(/The Checker said/)).toBeNull();
         fireEvent.click(
@@ -97,12 +93,5 @@ describe("ChecksStatus", () => {
         expect(
             screen.queryByRole("button", { name: "Check again" })
         ).toBeNull();
-    });
-
-    test("while the AI is replying, that's what it says — whatever the last check was", () => {
-        render(<ChecksStatus check={{ phase: "passed" }} waiting bt={bt} />);
-        expect(screen.getByTestId("draft-check-status")).toHaveTextContent(
-            /Waiting for the AI to finish/
-        );
     });
 });

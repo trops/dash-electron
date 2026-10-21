@@ -1,15 +1,16 @@
 /**
- * WidgetBuilderModal
+ * WidgetBuilderModal — the Widget Builder, for building a widget by hand
+ * (consolidation Phase 3b: every AI build goes through the Dash team in
+ * Create; this builder has no AI of its own).
  *
- * Split-pane modal for AI widget building with LIVE PREVIEW.
- * Left: Live widget preview (2/3)
- * Right: ChatCore for conversation (1/3)
+ * Left: the live preview and the Preview / Code / Configure / Console /
+ * Scorecard tabs. Right: Compose (pick a kind of widget, lay out its parts)
+ * for a new widget; hidden when editing an installed widget's code, which
+ * opens on the Code tab.
  *
- * Flow:
- * 1. User describes widget in chat
- * 2. AI generates code blocks
- * 3. Auto-compiles and shows live preview of the actual widget
- * 4. User can iterate or click "Install" to save to @ai-built/
+ * Every version is checked (the code checks, then the Dash team's Checker)
+ * and Install waits for a pass of that exact code; problems are shown for
+ * the user to fix.
  */
 import React, {
     useState,
@@ -25,7 +26,6 @@ import {
     Button2,
     Button3,
     ButtonIcon3,
-    Card2,
     ChoiceMenu,
     FontAwesomeIcon,
     InputText,
@@ -37,7 +37,6 @@ import {
     getStatusColors,
 } from "@trops/dash-react";
 import {
-    ChatCore,
     AppContext,
     evaluateBundle,
     extractWidgetConfigs,
@@ -48,15 +47,7 @@ import {
 } from "@trops/dash-core";
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
 import { extractWidgetName } from "./extractWidgetName";
-import {
-    INITIAL_AUTO_FIX,
-    MAX_AUTO_FIX,
-    buildFixRequest,
-    onBuildError,
-    resetAutoFix,
-} from "./autoFixPolicy";
-import { ChatProviderGate, typeLabel } from "./ChatProviderGate";
-import { WidgetDraftsList, firstUserMessageExcerpt } from "./WidgetDraftsList";
+import { WidgetDraftsList } from "./WidgetDraftsList";
 import { builderTheme, useBuilderTheme } from "./useBuilderTheme";
 import { WidgetConsolePane } from "./WidgetConsolePane";
 import { ChecksStatus } from "./ChecksStatus";
@@ -66,11 +57,7 @@ import {
     fastCheckProblems,
     verdictOf,
     draftCheckRequest,
-    checksFixRequest,
-    MAX_CHECK_FIXES,
-    userAskOf,
 } from "./draftCheck";
-import { ComposerPane } from "./composer/ComposerPane";
 import { ComposerPaneV2 } from "./composer/ComposerPaneV2";
 // Slice 19G.2: installWidgetConsoleCapture is no longer wired into
 // production — widgets render in an iframe so host-window capture
@@ -86,30 +73,17 @@ import { PreviewIframe } from "./PreviewIframe";
 import {
     AcceptanceScorecard,
     evaluateScorecard,
-    buildScorecardChatMessage,
 } from "./composer/AcceptanceScorecard";
 import {
     validateProviderApiUsage,
-    buildAiCorrectionMessage,
     validateNoModalUsage,
-    buildNoModalCorrectionMessage,
     validateNoBotCalls,
-    buildNoBotCallsCorrectionMessage,
     validateEventPublishing,
-    buildEventPublishingCorrectionMessage,
     validateComponentReferences,
-    buildComponentReferenceCorrectionMessage,
 } from "./widgetCodeValidator";
 import { scanCredentialMethodCalls } from "./widgetCredentialPermissionScanner";
 import { setGrants as setCredentialGrants } from "./widgetCredentialGrants";
 import { WidgetCredentialPermissionModal } from "./WidgetCredentialPermissionModal";
-import { buildSystemPrompt } from "./widgetBuilderPrompt";
-
-// G2 feature flag — when true, Compose mode renders the new
-// grid-based composer (recursive grid-of-cells layout with nesting)
-// instead of the tree-based ComposerPane. G3 lands the draft
-// migrator and removes the tree path entirely.
-const USE_COMPOSER_V2 = true;
 
 // Slice 17c — iframe-isolated preview is the only path. The legacy
 // localStorage opt-out (`dash:preview-iframe = "0"`) used to flip to
@@ -526,221 +500,6 @@ function PreviewTestInputsForm({
 // catch render errors that previously needed PreviewErrorBoundary on
 // the host side.
 
-// ─── System prompt builder ──────────────────────────────────────────
-//
-// Slice 19B: the modal's system prompt was a ~1000-line monster that
-// duplicated everything the project's dash-widget-builder skill
-// already covers. Now it's a thin pointer. The cliController spawns
-// claude-p with the parent process's cwd inherited (project root in
-// dev, app.getAppPath() in packaged), so the project's
-// .claude/skills/dash-widget-builder/ auto-loads. The skill carries
-// the canonical guidance (tailwind safelist, dash-react prop names,
-// providerApiRegistry, single-task widgets, defensive coding,
-// install-time permission gate, etc.). This builder only contributes
-// runtime context the skill can't know:
-//   - which provider the user pre-selected (focused branch)
-//   - which providers are installed at all (legacy branch)
-//   - first-response style guidance ("ask one short question, then
-//     output code")
-//
-// The DISCOVER_SYSTEM_PROMPT constant below is unchanged — it's for
-// the modal's other mode (browse the registry), not the build mode.
-//
-// buildSystemPrompt itself lives in `./widgetBuilderPrompt` so the
-// prompt-validation runner script can import it without dragging in
-// this modal's React component tree.
-
-const DISCOVER_SYSTEM_PROMPT = `You are helping the user DISCOVER existing widgets in the Dash registry. Your only job this conversation is to search and describe registry matches. You MUST NOT generate widget code.
-
-How to respond:
-- On every user message, call the \`search_widgets\` MCP tool with a short keyword query derived from the user's request (e.g. "sales pipeline" for "help me find a sales pipeline widget").
-- After the tool returns, give a brief 1–3 sentence summary of what you found. The app renders the widget list as interactive cards separately, so you do NOT need to list every result in prose — just highlight notable matches or gaps.
-- If \`search_widgets\` returns zero results, tell the user plainly, and suggest they switch to Build mode to generate one from scratch.
-- If the user's next message is a refinement (e.g. "sales pipeline" after "sales dashboard"), call \`search_widgets\` again with the new query. Treat every message as a search intent — do not silently switch modes.
-
-Hard rules:
-- Do NOT output widget code in any form.
-- Do NOT use Skill, Read, Write, Edit, Bash, Glob, or Grep tools.
-- Do NOT invoke the dash-widget-builder skill — the skill's guidance is already inlined above as the "Widget Builder Guidance" section. Its content is provided directly so calling the skill duplicates context and triggers forbidden tool exploration.
-- The only tool you should use is \`search_widgets\`.`;
-
-/**
- * Walk the most-recent assistant messages backwards looking for code
- * blocks. Returns BOTH the legacy `{ componentCode, configCode }` shape
- * AND the new `{ files: [{ path, content }] }` shape so callers can pick
- * whichever they need.
- *
- * Two response formats are supported, in priority order:
- *
- * 1. **Multi-file** — when blocks are preceded by `File: <relative-path>`
- *    markers, every block is captured with its declared path. The first
- *    matched assistant message that contains AT LEAST ONE `File:` marker
- *    is taken whole (so a multi-widget package with N siblings parses
- *    in one shot).
- *
- * 2. **Two-block legacy** — no `File:` markers, but at least 2 fenced
- *    code blocks. First is treated as the component, second as the
- *    config. Same heuristic as the old extractor — preserves
- *    backwards-compat with single-file widget responses.
- *
- * 3. **Single-block fix-up** — a single block that looks like a
- *    component (export default function / import React) or a config
- *    (workspace:/canHaveChildren). Used during edit cycles where the
- *    user only asks to change one half of the widget. Walks further
- *    back through history to fill in the other half.
- */
-function extractCodeBlocks(messages) {
-    // First pass: look for multi-file responses.
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const msg = messages[i];
-        if (msg.role !== "assistant") continue;
-        const text = textOfMessage(msg);
-        if (!text) continue;
-
-        const fileBlocks = extractFileBlocks(text);
-        if (fileBlocks.length > 0) {
-            const { componentCode, configCode } =
-                derivePrimaryFromFileBlocks(fileBlocks);
-            return { componentCode, configCode, files: fileBlocks };
-        }
-    }
-
-    // Second pass: legacy two-block / single-block flow.
-    let componentCode = null;
-    let configCode = null;
-
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const msg = messages[i];
-        if (msg.role !== "assistant") continue;
-        const text = textOfMessage(msg);
-        if (!text) continue;
-
-        const blocks = [];
-        const regex =
-            /```(?:jsx|javascript|js|react|tsx|typescript)?\s*\n([\s\S]*?)```/g;
-        let match;
-        while ((match = regex.exec(text)) !== null) {
-            blocks.push(match[1].trim());
-        }
-
-        if (blocks.length >= 2 && !componentCode) {
-            componentCode = blocks[0];
-            configCode = blocks[1];
-            break;
-        } else if (blocks.length === 1) {
-            const block = blocks[0];
-            if (
-                !componentCode &&
-                (block.includes("export default function") ||
-                    block.includes("import React"))
-            ) {
-                componentCode = block;
-            } else if (
-                !configCode &&
-                (block.includes("workspace:") ||
-                    block.includes("canHaveChildren"))
-            ) {
-                configCode = block;
-            }
-        }
-
-        if (componentCode && configCode) break;
-    }
-
-    // Synthesize a files[] payload from the legacy two-block result so
-    // downstream install code paths can take a uniform shape regardless
-    // of which format the AI returned.
-    const files = [];
-    if (componentCode || configCode) {
-        const widgetName = extractWidgetName(componentCode);
-        const safeName = widgetName || "Widget";
-        if (componentCode) {
-            files.push({
-                path: `widgets/${safeName}.js`,
-                content: componentCode,
-            });
-        }
-        if (configCode) {
-            files.push({
-                path: `widgets/${safeName}.dash.js`,
-                content: configCode,
-            });
-        }
-    }
-
-    return { componentCode, configCode, files };
-}
-
-function textOfMessage(msg) {
-    return typeof msg.content === "string"
-        ? msg.content
-        : Array.isArray(msg.content)
-        ? msg.content
-              .filter((c) => c.type === "text")
-              .map((c) => c.text)
-              .join("\n")
-        : "";
-}
-
-/**
- * Parse `File: <path>\n```...```` markers out of a message body. Each
- * fenced code block immediately preceded by a `File:` marker becomes one
- * file entry. Blocks with no preceding marker are ignored here (the
- * legacy two-block path catches those separately).
- */
-function extractFileBlocks(text) {
-    if (!text) return [];
-    // Match: a `File: <path>` line, optional blank, then a fenced block.
-    // Allow common code-fence info strings (jsx/js/javascript/json/md/...).
-    const regex =
-        /(?:^|\n)\s*File:\s*([^\n`]+?)\s*\n+```[a-zA-Z0-9]*\s*\n([\s\S]*?)```/g;
-    const out = [];
-    let match;
-    while ((match = regex.exec(text)) !== null) {
-        const path = match[1].trim();
-        const content = match[2];
-        if (path && content !== undefined) {
-            out.push({ path, content: content.replace(/\s+$/, "") });
-        }
-    }
-    return out;
-}
-
-/**
- * Pick the "primary" widget out of a multi-file response so the legacy
- * preview / install pipeline can keep showing one widget. Strategy:
- *  - Find the first `widgets/<Name>.dash.js`. The matching
- *    `widgets/<Name>.js` is the component.
- *  - If there's no .dash.js at all, fall back to the first .js with
- *    `export default function`.
- */
-function derivePrimaryFromFileBlocks(files) {
-    let componentCode = null;
-    let configCode = null;
-
-    const dashFile = files.find((f) => f.path.endsWith(".dash.js"));
-    if (dashFile) {
-        configCode = dashFile.content;
-        const baseName = dashFile.path.replace(/\.dash\.js$/, "");
-        const componentFile = files.find(
-            (f) => f.path === `${baseName}.js` || f.path === `${baseName}.jsx`
-        );
-        if (componentFile) componentCode = componentFile.content;
-    }
-
-    if (!componentCode) {
-        const candidate = files.find(
-            (f) =>
-                /\.(js|jsx|tsx|ts)$/.test(f.path) &&
-                !f.path.endsWith(".dash.js") &&
-                /export\s+default\s+function/.test(f.content)
-        );
-        if (candidate) componentCode = candidate.content;
-    }
-
-    return { componentCode, configCode };
-}
-
 // Mirrors validateWidget.cjs::VALID_CATEGORIES — kept in sync manually
 // (small enum, rarely changes). Used to populate the install-footer picker.
 const VALID_CATEGORIES = [
@@ -757,21 +516,13 @@ const VALID_CATEGORIES = [
 ];
 
 /**
- * Build a default `.dash.js` config literal when the AI emitted only the
- * component block. Bakes in the user-picked provider (if any) so the Code
- * tab shows what's actually going to install rather than a blank file.
- * The category is injected later by handleInstall once the user picks one.
+ * Build a default `.dash.js` config literal for a widget whose code has
+ * only the component. The category is injected later by handleInstall
+ * once the user picks one.
  */
-function synthesizeDefaultConfigCode(widgetName, selectedProvider) {
+function synthesizeDefaultConfigCode(widgetName) {
     if (!widgetName) return "";
     const displayName = widgetName.replace(/([A-Z])/g, " $1").trim();
-    const providersLine = (() => {
-        if (!selectedProvider) return "";
-        if (selectedProvider.sentinel === "none") return "";
-        const { type, providerClass } = selectedProvider;
-        if (!type || !providerClass) return "";
-        return `\n    providers: [{ type: "${type}", providerClass: "${providerClass}", required: true }],`;
-    })();
     return `export default {
     component: "${widgetName}",
     name: "${displayName}",
@@ -779,7 +530,7 @@ function synthesizeDefaultConfigCode(widgetName, selectedProvider) {
     author: "AI Assistant",
     type: "widget",
     canHaveChildren: false,
-    workspace: "ai-built",${providersLine}
+    workspace: "ai-built",
 };
 `;
 }
@@ -869,31 +620,6 @@ function dedupProvidersInConfigCode(configCode) {
     );
 }
 
-/**
- * Pull the list of provider types declared in a `.dash.js` config text.
- * Used by the Widget Builder to detect MCP types the freshly-generated
- * widget will need at runtime, so we can render an "install missing
- * provider" affordance even when the AI failed to call the
- * install_known_mcp_server tool.
- *
- * Conservative regex parser — handles the common literal shape
- * `providers: [{type:"x"}, {type:"y"}]`. Anything more exotic falls
- * through and the banner just doesn't appear (better than false
- * positives).
- */
-function extractProviderTypesFromConfigCode(configCode) {
-    if (!configCode) return [];
-    const arrayMatch = configCode.match(/providers\s*:\s*\[([^[\]]*?)\]/);
-    if (!arrayMatch) return [];
-    const types = [];
-    const typeRe = /type\s*:\s*["']([^"']+)["']/g;
-    let m;
-    while ((m = typeRe.exec(arrayMatch[1])) !== null) {
-        types.push(m[1]);
-    }
-    return types;
-}
-
 /** Try to extract an existing category from a configCode string. */
 function extractCategoryFromConfigCode(configCode) {
     if (!configCode) return null;
@@ -979,10 +705,6 @@ export const WidgetBuilderModal = ({
     // Draft-chipped widget. Cleared on close so subsequent opens
     // start from a clean slate.
     resumeDraftId = null,
-    // The user's description from the Create screen (create-entry PRD
-    // CRE-005): skips the drafts list and is sent, visibly, as the
-    // chat's first message instead of the hidden greeting.
-    initialPrompt = null,
     // Rendered inside the Create screen (create-entry PRD CRE-005 AC1): the
     // same body without the builder's own modal frame and header — Create's
     // header (← Back, ×) stands in for them. Closing still goes through
@@ -1007,9 +729,8 @@ export const WidgetBuilderModal = ({
             (window.__dashThemeContext || window.__dashAppThemeContext)) ||
         null;
     const [previewTheme, setPreviewTheme] = useState(readBroadcastTheme);
-    // The chat (ChatCore bubbles) follows the APP theme. This modal is
-    // mounted outside the theme provider, so without this the bubbles had
-    // no background and dim text.
+    // The builder's own chrome follows the APP theme. This modal is
+    // mounted outside the theme provider, so it reads the broadcast.
     const readAppTheme = () =>
         (typeof window !== "undefined" && window.__dashAppThemeContext) || null;
     const [appTheme, setAppTheme] = useState(readAppTheme);
@@ -1060,15 +781,11 @@ export const WidgetBuilderModal = ({
     // through the existing previewError UI. The shell posts every
     // error kind (`uncaught`, `unhandled-rejection`, `bundle-eval`,
     // `mount`, `no-component`, etc.) via `bridge:error`; we collapse
-    // them into a friendly message + meta so the existing "Send
-    // error to AI" button can post a corrective message to chat.
-    // Slice 17c.5 — drive the empty-render detector from iframe-side
-    // measurements. The shell measures its own DOM (the host can't
-    // query iframe content via the previewWrapperRef because that
-    // ref points at the inline preview div) and posts text length +
-    // descendant count via `bridge:render-stats`. We mirror the same
-    // double-check thresholds the inline detector uses
-    // (`text.length === 0 && childCount <= 1`).
+    // them into a friendly message + meta for the error box.
+    // Slice 17c.5 — the iframe shell measures its own DOM and posts text
+    // length + descendant count via `bridge:render-stats`; a widget that
+    // mounted but shows nothing (usually a wrong prop name, e.g. `text=`
+    // on Heading) gets a hint instead of a blank canvas.
     const handleIframeRenderStats = useCallback((payload) => {
         const textLength =
             (payload && typeof payload.textLength === "number"
@@ -1078,8 +795,7 @@ export const WidgetBuilderModal = ({
             (payload && typeof payload.childCount === "number"
                 ? payload.childCount
                 : 0) | 0;
-        const looksEmpty = textLength === 0 && childCount <= 1;
-        setPreviewLooksEmpty(looksEmpty);
+        setPreviewLooksEmpty(textLength === 0 && childCount <= 1);
     }, []);
     const handleIframePreviewError = useCallback((payload) => {
         const kind = (payload && payload.kind) || "iframe-runtime";
@@ -1087,30 +803,15 @@ export const WidgetBuilderModal = ({
             (payload && payload.message) || "Widget runtime error in iframe";
         const stack = (payload && payload.stack) || null;
         const friendly = `Widget preview error (${kind}): ${message}`;
-        previewErrorKindRef.current = "runtime";
         setPreviewError(friendly);
         setPreviewErrorMeta({
             kind: "iframe-error",
             iframeErrorKind: kind,
             message,
             stack,
-            // The Send-to-AI button reads previewErrorMeta.correction
-            // (set by slice 17b.12 for hallucinated-method errors).
-            // For iframe runtime errors we synthesize a similar
-            // message so the button works the same way.
-            correction:
-                "The widget you generated threw a runtime error inside the iframe-isolated preview:\n\n" +
-                friendly +
-                (stack ? "\n\nStack:\n" + stack : "") +
-                "\n\nFix the bug and re-emit BOTH the component and config code blocks. Trace through the user's first interaction (the dropdown selection, the form submit, etc.) and verify every hook, every async call, every prop access is null-safe.",
         });
     }, []);
-    // True when the compiled widget mounted but produced a tree with
-    // zero visible text — usually because the AI used wrong dash-react
-    // prop names (e.g. `<Heading text=...>` instead of `title=`). The
-    // detector runs after each preview compile (see useEffect below)
-    // and flips this flag to surface a corrective banner. Without it,
-    // the user just sees a black canvas with no error to act on.
+    // True when the compiled widget mounted but rendered no visible text.
     const [previewLooksEmpty, setPreviewLooksEmpty] = useState(false);
     // Default prop values derived from the parsed config's `userConfig`
     // schema. Live widgets receive their userConfig defaultValues as
@@ -1127,67 +828,7 @@ export const WidgetBuilderModal = ({
     // populates with the AI's actual userConfig / providers / events
     // — same source the runtime renderer uses, no source-string drift.
     const [previewParsedConfig, setPreviewParsedConfig] = useState(null);
-    // Provider the user selected for the widget being built. Drives the
-    // system prompt (single deterministic provider section instead of a
-    // catalog + decision tree the LLM has to navigate) AND the post-
-    // processing rewrite that snaps the AI's generated config to the
-    // selected type+class. See ChatProviderGate.
-    //   - null                                    → not picked yet
-    //   - { sentinel: "none" }                    → "no external provider"
-    //   - { name, type, providerClass }           → an installed provider
-    const [selectedProviderForBuild, setSelectedProviderForBuild] =
-        useState(null);
-    // What the user typed in the gate's message box before picking a
-    // provider. The gate then asks which data to use, and the chat opens
-    // with it as the first message — like `initialPrompt` from Create.
-    const [typedPrompt, setTypedPrompt] = useState(null);
-    const startPrompt = initialPrompt || typedPrompt;
-    // Mirror into a ref so the message-poller closure (which captures
-    // state at modal-open time) can read the latest pick without us
-    // having to invalidate the interval on every change.
-    const selectedProviderForBuildRef = useRef(null);
-    useEffect(() => {
-        selectedProviderForBuildRef.current = selectedProviderForBuild;
-    }, [selectedProviderForBuild]);
     const [previewError, setPreviewError] = useState(null);
-    // Where the current previewError came from: "compile" (a build of the
-    // AI's code, or the code checks after it), "runtime" (the widget threw),
-    // or "other". Only build errors are fixed automatically (phase 2d).
-    const previewErrorKindRef = useRef(null);
-    // Automatic build-error fixes: the policy's state, the request last
-    // sent (so it isn't mistaken for the user's own message), and what the
-    // preview area shows — "fixing" while the AI corrects its code,
-    // "exhausted" when the tries ran out.
-    const autoFixStateRef = useRef(INITIAL_AUTO_FIX);
-    const lastAutoFixTextRef = useRef(null);
-    const [autoFix, setAutoFix] = useState({ status: "idle", attempt: 0 });
-    // The dash-widget-builder skill's text, for the system prompt
-    // (phase 2e): undefined while loading, null if it couldn't be read.
-    // The chat waits for it so the first message carries the rules.
-    const [builderSkillText, setBuilderSkillText] = useState(undefined);
-    useEffect(() => {
-        if (!isOpen) return undefined;
-        let alive = true;
-        const getSkill = window.mainApi?.widgetBuilder?.getSkill;
-        if (typeof getSkill !== "function") {
-            setBuilderSkillText(null);
-            return undefined;
-        }
-        Promise.resolve(getSkill())
-            .then((text) => {
-                if (!alive) return;
-                if (!text) {
-                    console.warn(
-                        "[WidgetBuilder] Building without the Dash widget rules — the skill couldn't be read."
-                    );
-                }
-                setBuilderSkillText(text || null);
-            })
-            .catch(() => alive && setBuilderSkillText(null));
-        return () => {
-            alive = false;
-        };
-    }, [isOpen]);
     // Test-inputs form state (slice 17b.9). One key per userConfig
     // field — the user types values here to exercise the previewed
     // widget with real data without leaving the modal. Reset when
@@ -1198,7 +839,6 @@ export const WidgetBuilderModal = ({
     // config to match your installed provider" rewrite. Cleared whenever
     // a fresh compile starts so the banner doesn't linger after the AI
     // gets it right.
-    const [providerCorrection, setProviderCorrection] = useState(null);
     // Structured error metadata from the main process (e.g. an
     // ESBUILD_SPAWN_FAILED with diagnostics). When present we render an
     // expanded diagnostics block under the error message — this is what
@@ -1258,11 +898,9 @@ export const WidgetBuilderModal = ({
     // Registry auth — used to determine ownership for update vs remix
     const [registryUsername, setRegistryUsername] = useState(null);
     const [registryChecked, setRegistryChecked] = useState(false);
-    const lastCompiledCode = useRef(null);
     // Monotonic request counter — bumped at the start of every compile
     // request so in-flight IPCs know if they've been superseded. Used to
-    // ignore stale results when the user rapidly picks different widgets
-    // from the Discover grid.
+    // ignore stale results when edits come quickly.
     const compileRequestIdRef = useRef(0);
     const [activeTab, setActiveTab] = useState("preview");
     // Console events from the widget under preview. Captured by
@@ -1285,160 +923,19 @@ export const WidgetBuilderModal = ({
         setConsoleEvents([]);
     }, []);
 
-    // "User has acted in this modal session" gate — flips true the
-    // first time the chat message count grows past its mount-time
-    // snapshot. Used to suppress the scorecard tab badge + the
-    // "Widget rendered with no visible content" warning on the
-    // initial Build-mode screen: a stale draft loaded from
-    // localStorage shouldn't make the user feel like they did
-    // something wrong before they've even typed.
-    //
-    // ChatCore persists messages at the "dash-widget-builder"
-    // localStorage key as { messages: [...] }. Same-window writes
-    // don't fire the `storage` event, so we poll the key cheaply
-    // (one JSON.parse every 500ms) until the count grows or the
-    // user closes the modal — once the gate flips we tear the
-    // interval down. Done as state, not a ref, so the gate flipping
-    // triggers a re-render of the affected UI.
-    const mountChatMessageCountRef = useRef(null);
-    const [hasActedThisSession, setHasActedThisSession] = useState(false);
-    useEffect(() => {
-        try {
-            const raw = localStorage.getItem("dash-widget-builder");
-            const data = raw ? JSON.parse(raw) : null;
-            mountChatMessageCountRef.current = Array.isArray(data?.messages)
-                ? data.messages.length
-                : 0;
-        } catch {
-            mountChatMessageCountRef.current = 0;
-        }
-    }, []);
-    useEffect(() => {
-        if (hasActedThisSession) return undefined;
-        const id = setInterval(() => {
-            try {
-                const raw = localStorage.getItem("dash-widget-builder");
-                const data = raw ? JSON.parse(raw) : null;
-                const count = Array.isArray(data?.messages)
-                    ? data.messages.length
-                    : 0;
-                if (
-                    mountChatMessageCountRef.current !== null &&
-                    count > mountChatMessageCountRef.current
-                ) {
-                    setHasActedThisSession(true);
-                }
-            } catch {
-                // ignore — gate stays false on parse error
-            }
-        }, 500);
-        return () => clearInterval(id);
-    }, [hasActedThisSession]);
-
     // Acceptance scorecard counts — fed by the static-analysis pass
     // over the AI-generated widget source. Drives the Scorecard tab
     // badge (red count when ✗ items > 0). Recomputed only when the
     // emitted componentCode changes; for a 200-line widget the regex
     // pass is sub-millisecond, but memoizing keeps it off the render
     // hot path.
-    //
-    // Failure count zeroes out until the user has acted this session
-    // — the tab still exists for the user who wants to peek at their
-    // draft's score, but it doesn't ambush them with a red badge on
-    // the initial render of a pre-loaded draft.
     const scorecardRows = useMemo(() => {
         if (!detectedCode?.componentCode) return [];
         return evaluateScorecard(detectedCode.componentCode);
     }, [detectedCode?.componentCode]);
-    const scorecardFailCount = hasActedThisSession
-        ? scorecardRows.filter((r) => r.pass === false).length
-        : 0;
-
-    // Slice 19G.2 + 19H — push a "fix this runtime error" user
-    // message into the ChatCore conversation via the
-    // dash:chat-core-send CustomEvent. ChatCore subscribes to this
-    // event and calls handleSend on match (dash-core >= 0.1.553).
-    // The previous localStorage-write approach silently dropped
-    // messages because ChatCore only reads localStorage at mount.
-    const handleSendConsoleErrorToAI = useCallback((evt) => {
-        // Serialize args defensively: strings stay; non-strings get
-        // JSON.stringify'd; truncate any single arg to 1000 chars so
-        // the chat message stays terse.
-        const argsText = (evt.args || [])
-            .map((a) => {
-                if (typeof a === "string") return a;
-                if (a && typeof a === "object" && a.__isError) {
-                    return `${a.name || "Error"}: ${a.message || ""}`;
-                }
-                try {
-                    return JSON.stringify(a);
-                } catch {
-                    return String(a);
-                }
-            })
-            .map((s) => (s.length > 1000 ? s.slice(0, 1000) + "…" : s))
-            .join(" ");
-        // Trim the stack to the first 8 frames — full stacks are
-        // noisy and most of the signal is in the top frames.
-        const stackTrim = (evt.stack || "").split("\n").slice(0, 8).join("\n");
-        const sourceLabel =
-            evt.source === "window.error"
-                ? "uncaught error"
-                : evt.source === "unhandledrejection"
-                ? "unhandled promise rejection"
-                : `console.${evt.severity || "error"}`;
-        const content = `Runtime ${sourceLabel} in your widget:
-
-\`\`\`
-${argsText}
-\`\`\`
-
-${
-    stackTrim ? `Stack (top 8 frames):\n\`\`\`\n${stackTrim}\n\`\`\`\n\n` : ""
-}Re-emit BOTH code blocks (component + config) with the bug fixed. Add defensive guards (typeof / Array.isArray / optional chaining) so the same input doesn't crash again. If a \`catch\` block was silently swallowing the error, render it via \`<ErrorMessage message={err.message} />\` instead. Do not just retry the same code path.`;
-        try {
-            window.dispatchEvent(
-                new CustomEvent("dash:chat-core-send", {
-                    detail: {
-                        persistKey: "dash-widget-builder",
-                        content,
-                    },
-                })
-            );
-        } catch {
-            /* ignore */
-        }
-    }, []);
-
-    // Closes the scorecard loop: when the user clicks "Ask AI" on a
-    // failing rule, push a structured user message into the chat
-    // via the same dash:chat-core-send event handleSendConsoleErrorToAI
-    // uses. We also flip to Build mode so the AI's response goes to
-    // the chat the user is actually looking at — the AI will re-emit
-    // BOTH code blocks which the Build flow parses into detectedCode.
-    //
-    // Single-rule by design: an earlier "fix all failing rules in
-    // one shot" button biased the AI toward wholesale rewrites that
-    // mangled user-specific implementation. The per-row flow keeps
-    // each fix surgical.
-    const handleScorecardSendToAi = useCallback((rule) => {
-        const content = buildScorecardChatMessage(rule);
-        if (!content) return;
-        setChatMode("build");
-        setActiveTab("preview");
-        try {
-            window.dispatchEvent(
-                new CustomEvent("dash:chat-core-send", {
-                    detail: {
-                        persistKey: "dash-widget-builder",
-                        content,
-                    },
-                })
-            );
-        } catch {
-            /* ignore */
-        }
-    }, []);
+    const scorecardFailCount = scorecardRows.filter(
+        (r) => r.pass === false
+    ).length;
 
     // Surface auto-save activity in the build view: timestamp of the
     // last successful draft save + transient state so the user sees
@@ -1473,43 +970,29 @@ ${
     }, []);
 
     const [activeFile, setActiveFile] = useState("component");
-    const manualEditRef = useRef(false);
-    const lastMsgCount = useRef(0);
-    // Local edit-context override, populated when the user clicks Remix
-    // on a registry-preview card. Mirrors the shape of the prop editContext
-    // so the rest of the modal (system prompt, install path, remix footer,
-    // compilePreview sourcePackage) reads a single "effective" context.
+    // The code editor measures itself once, when it mounts; opened straight
+    // on the Code tab it mounts while the window is still animating in and
+    // shows a sliver. Remount it once the window has settled.
+    const [editorLayoutKey, setEditorLayoutKey] = useState(0);
+    useEffect(() => {
+        if (!isOpen) return undefined;
+        const t = setTimeout(() => setEditorLayoutKey((k) => k + 1), 400);
+        return () => clearTimeout(t);
+    }, [isOpen]);
+    // Local edit-context override, from a resumed draft of an edit (its
+    // editOf). Mirrors the shape of the prop editContext so the rest of the
+    // modal (install path, update/remix footer, compilePreview
+    // sourcePackage) reads a single "effective" context.
     const [editContextOverride, setEditContextOverride] = useState(null);
     const effectiveEditContext = editContextOverride || editContext;
     const isRemixMode = !!effectiveEditContext?.originalWidgetId;
 
-    // Chat-pane mode ("build" = AI generates widgets, "discover" = AI
-    // searches the registry, "compose" = stepwise composer with no
-    // chat). Resets to "build" (the AI chat) each time the modal opens;
-    // Compose remains one click away.
-    const [chatMode, setChatMode] = useState("build");
-    // Mirror of chatMode in a ref so the chat-messages poller (which
-    // stays mounted across mode changes) can read the current mode
-    // without resubscribing on every flip. Required so the
-    // "messages.length===0 + hadActivity" New-Chat reset branch can
-    // skip compose mode, which intentionally never writes messages.
-    const chatModeRef = useRef("compose");
-    useEffect(() => {
-        chatModeRef.current = chatMode;
-    }, [chatMode]);
-
-    // Composer tree state. Lifted out of ComposerPane so we can
-    // persist the user's composition in the draft alongside the
-    // generated code. `composerInitialTree` is set from a resumed
-    // draft (paired with a remount via composerSessionKey so the
-    // pane picks up the new tree); composerTree is the live mirror
-    // updated on every in-pane edit via onTreeChange.
-    const [composerTree, setComposerTree] = useState(null);
-    const [composerInitialTree, setComposerInitialTree] = useState(null);
+    // A resumed draft with code but no Compose grid (an old chat draft) is
+    // edited as code: Compose would replace it with an empty layout.
+    const [codeOnly, setCodeOnly] = useState(false);
+    // Compose's layout, persisted in the draft alongside the code. A
+    // resumed draft seeds the pane, remounted via composerSessionKey.
     const [composerSessionKey, setComposerSessionKey] = useState(0);
-    // V2 grid composer state. Lives alongside the tree state during
-    // the dogfood phase — once G3 flips the default, the tree state
-    // gets migrated and the old fields go away.
     const [composerGrid, setComposerGrid] = useState(null);
     // Seeds the V2 pane when a Compose draft is resumed (remounted via
     // composerSessionKey).
@@ -1518,42 +1001,16 @@ ${
     useEffect(() => {
         composerGridRef.current = composerGrid;
     }, [composerGrid]);
-    // Selected composer node, lifted out of ComposerPane so the
+    // Selected composer node, lifted out of the composer so the
     // preview iframe's click-to-pick can drive the composer's
     // inspector. Also lets us pass the current selection back into
     // the iframe so the highlighted outline stays in sync when the
     // user picks a node in the composition tree.
     const [composerSelectedNodeId, setComposerSelectedNodeId] = useState(null);
-    // Mirror in a ref so the auto-save useEffect can read the latest
-    // tree without re-binding on every keystroke. The save effect's
-    // deps already cover code+files; using a ref for tree avoids
-    // re-scheduling the entire effect when the tree mutates.
-    const composerTreeRef = useRef(null);
-    useEffect(() => {
-        composerTreeRef.current = composerTree;
-    }, [composerTree]);
-    // Widgets returned by registry.search for the most recent user message
-    // in Discover mode. Rendered as cards above the chat.
-    const [discoverResults, setDiscoverResults] = useState([]);
-    const [discoverSearching, setDiscoverSearching] = useState(false);
-    // Set of locally-installed package IDs ("@scope/name"). Populated once
-    // when the modal opens so Discover cards can show an "Installed ✓"
-    // badge — the raw registry.search result doesn't carry this flag.
-    const [installedPackageIds, setInstalledPackageIds] = useState(
-        () => new Set()
-    );
-    // Remember the last query we searched for so we don't re-hit the
-    // registry on every poll tick for the same user message.
-    const lastDiscoverQueryRef = useRef("");
-    // When previewing a registry widget (user clicked a Discover card),
-    // this holds the package metadata so the Preview footer can swap to
-    // "Install from registry" instead of the AI-built install flow.
-    const [browsingPackage, setBrowsingPackage] = useState(null);
-    const [registryInstalling, setRegistryInstalling] = useState(false);
     // User's explicit provider selection for the preview, keyed by the
     // widget-declared provider type (e.g. { algolia: "My Algolia Account" }).
     // Passed through to PreviewContextWrapper so the widget sees a real
-    // provider and renders its live UX. In Edit-with-AI mode this is
+    // provider and renders its live UX. When editing a widget this is
     // pre-filled from the dashboard widget instance's selectedProviders
     // so the dropdown reflects the live binding instead of showing
     // blank — see the editContext-change effect below.
@@ -1649,46 +1106,9 @@ ${
         previewAppCtx,
     ]);
 
-    // Pre-populate the provider picker from edit-context when editing
-    // an existing widget. If the existing config declares a provider
-    // type that matches one of the user's installed providers, pick
-    // that one. Otherwise leave the picker null so the user picks
-    // explicitly.
-    React.useEffect(() => {
-        if (!effectiveEditContext?.configCode) return;
-        const types = extractProviderTypesFromConfigCode(
-            effectiveEditContext.configCode
-        );
-        if (types.length === 0) {
-            // Existing widget has no provider declared → "no external".
-            setSelectedProviderForBuild({ sentinel: "none" });
-            return;
-        }
-        // Type-first architecture: derive just { type, providerClass }
-        // from the existing widget's config. Class is determined by
-        // matching an installed provider of that type, or falling back
-        // to "credential" (the more common case for non-MCP providers).
-        const wantedType = types[0];
-        const installed = Object.values(providers || {}).find(
-            (p) => p && typeof p === "object" && p.type === wantedType
-        );
-        setSelectedProviderForBuild({
-            type: wantedType,
-            providerClass:
-                installed?.providerClass ||
-                // No installed match — guess "mcp" if the type appears
-                // in the MCP catalog (heuristic), else default to
-                // "credential". Either way the user can change later.
-                "credential",
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [
-        effectiveEditContext?.configCode,
-        effectiveEditContext?.originalWidgetId,
-    ]);
     // Device-code sign-in flow for the registry. When the user clicks
-    // "Sign in to preview", we stash the flow here so we can display the
-    // user code + poll for completion.
+    // "Sign in" (to update their own widgets in place), we stash the flow
+    // here so we can display the user code + poll for completion.
     const [signInFlow, setSignInFlow] = useState(null);
     const signInPollRef = useRef(null);
 
@@ -1696,21 +1116,9 @@ ${
     // `appContext` is empty — the real providers/settings arrive via the
     // window bridge (previewAppCtx = window.__dashAppContext). Read from the
     // bridge first so the composer's provider picker sees the user's
-    // configured providers (incl. custom MCP) and the builder honors the
-    // selected model/backend. Fall back to appContext when the bridge is
-    // absent (e.g. tests).
-    const settings = previewAppCtx?.settings || appContext?.settings || {};
+    // configured providers (incl. custom MCP). Fall back to appContext when
+    // the bridge is absent (e.g. tests).
     const providers = previewAppCtx?.providers || appContext?.providers || {};
-    const aiSettings = settings.aiAssistant || {};
-    const preferredBackend = aiSettings.preferredBackend || "claude-code";
-    const model = aiSettings.model || "claude-opus-4-8";
-
-    const anthropicEntry = Object.entries(providers).find(
-        ([, p]) =>
-            p.type === "anthropic" &&
-            (p.providerClass || "credential") === "credential"
-    );
-    const apiKey = anthropicEntry?.[1]?.credentials?.apiKey || null;
     // The builder's chrome follows the APP theme (chatThemeCtx).
     const tk = (key) => currentTheme?.[key] || "";
     const bgDark = tk("bg-primary-dark");
@@ -1759,16 +1167,6 @@ ${
         registryUsername,
     });
 
-    // Reset the chat mode toggle to "build" (the AI chat) each time the
-    // modal reopens; the user can flip to Compose via the tab strip.
-    useEffect(() => {
-        if (isOpen) {
-            setChatMode("build");
-            setDiscoverResults([]);
-            lastDiscoverQueryRef.current = "";
-        }
-    }, [isOpen]);
-
     // Slice 19G.2 — host-side console / error capture is OBSOLETE.
     // Widgets render in an isolated iframe (slice 17c+); the host
     // window's console.* and window.error never see widget-scoped
@@ -1794,15 +1192,15 @@ ${
             setSavedCode(null);
             setLeavePrompt(null);
             setEditModeSettled(false);
+            setCodeOnly(false);
             // Reset to loading sentinel so the next open shows the loading
             // skeleton instead of whatever view was active when last closed.
             setViewMode(null);
             return;
         }
-        if (effectiveEditContext || initialPrompt || resumeDraftId) {
-            // Remix / edit flow, a prompt from the Create screen (the user
-            // already said what to build), or a draft picked to continue —
-            // skip the drafts gate. (With a draft, the list would race
+        if (effectiveEditContext || resumeDraftId) {
+            // Editing a widget, or a draft picked to continue — skip the
+            // drafts gate. (With a draft, the list would race
             // resumeFromDraft and could land on the list instead.)
             setViewMode("builder");
             return;
@@ -1832,9 +1230,8 @@ ${
 
     // Save the in-flight widget as a draft — only when the user asks
     // (Save as draft, or Save as draft when leaving with unsaved work), so
-    // drafts don't pile up. We persist BOTH the latest code and the
-    // chat history (read from the same localStorage key ChatCore
-    // uses), so resuming restores the conversation exactly. Same
+    // drafts don't pile up. We persist the latest code and the Compose
+    // layout, so resuming picks up where the user left off. Same
     // session = same draft id (one row updated, not piled up). The
     // first save of a session generates the id; subsequent saves
     // reuse it via draftSessionIdRef. A draft we resumed from reuses
@@ -1851,23 +1248,9 @@ ${
                 `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
             draftSessionIdRef.current = id;
         }
-        let chatHistory = [];
-        try {
-            const raw = localStorage.getItem("dash-widget-builder");
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed?.messages))
-                    chatHistory = parsed.messages;
-            }
-        } catch {
-            /* ignore */
-        }
         const componentName =
             extractWidgetName(detectedCode.componentCode) || null;
-        const draftName =
-            componentName ||
-            firstUserMessageExcerpt(chatHistory).slice(0, 60) ||
-            "Untitled draft";
+        const draftName = componentName || "Untitled draft";
         // Build the files[] payload for the main process to
         // materialize on disk. Synthesize a 2-entry array if the AI's
         // multi-file payload was empty (legacy single-file response).
@@ -1892,9 +1275,7 @@ ${
             id,
             name: draftName,
             componentName,
-            chatHistory,
-            pickedProvider: selectedProviderForBuildRef.current,
-            mode: "ai",
+            mode: "compose",
             // Editing an installed widget: what it edits, so resuming
             // the draft edits that widget again.
             editOf: effectiveEditContext
@@ -1908,13 +1289,8 @@ ${
                       manifest: effectiveEditContext.manifest || null,
                   }
                 : null,
-            // Compose-mode persistence: stash the live tree + the
-            // active chat mode so resuming restores the composer
-            // back to the user's last composition (not just the
-            // emitted code).
-            chatMode: chatModeRef.current || "build",
-            composerTree: composerTreeRef.current || null,
-            // The V2 Compose grid — what resume hands back to the pane.
+            // Compose persistence: resuming restores the composer to the
+            // user's last layout (not just the emitted code).
             composerGrid: composerGridRef.current || null,
         };
         // Pass files alongside so the main process materializes them
@@ -2002,7 +1378,7 @@ ${
         return () => setLeaveGuard(null);
     }, [setLeaveGuard, askLeave]);
 
-    // Probe Claude CLI / esbuild / @ai-built dir on every modal open so
+    // Probe esbuild / the @ai-built dir on every modal open so
     // we can surface failures BEFORE the user tries to compile and hits
     // a raw "spawn ENOENT" with no path forward. Result is rendered as a
     // yellow banner at the top of the modal — only shown when something
@@ -2030,45 +1406,8 @@ ${
         };
     }, [isOpen]);
 
-    // Pull both MCP catalogs (built-in + known-external) so the system
-    // prompt can advertise them to Claude. Refetched on every open so a
-    // newly-added custom MCP shows up without restarting the modal.
-    const [builtInCatalog, setBuiltInCatalog] = useState([]);
-    const [knownExternalCatalog, setKnownExternalCatalog] = useState([]);
-    useEffect(() => {
-        if (!isOpen) return;
-        let cancelled = false;
-        (async () => {
-            try {
-                const [local, external] = await Promise.all([
-                    window.mainApi?.mcp?.getCatalog?.(),
-                    window.mainApi?.mcp?.getKnownExternalCatalog?.(),
-                ]);
-                if (cancelled) return;
-                setBuiltInCatalog(local?.catalog || []);
-                setKnownExternalCatalog(external?.servers || []);
-            } catch (err) {
-                console.warn(
-                    "[WidgetBuilderModal] MCP catalog fetch failed:",
-                    err
-                );
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [isOpen]);
-
     const healthCheckIssues = healthCheck
         ? [
-              healthCheck.cli && healthCheck.cli.ok === false
-                  ? {
-                        label: "Claude CLI",
-                        detail:
-                            healthCheck.cli.error ||
-                            "Not found — chat will not work until installed",
-                    }
-                  : null,
               healthCheck.compiler && healthCheck.compiler.ok === false
                   ? {
                         label: "Widget compiler",
@@ -2102,214 +1441,8 @@ ${
           ].filter(Boolean)
         : [];
 
-    // Fetch the set of installed package IDs whenever the modal opens so
-    // Discover cards can show accurate "Installed ✓" badges. Refreshed
-    // after a successful install so the badge updates in-place.
-    const refreshInstalledPackageIds = useCallback(async () => {
-        try {
-            const list = await window.mainApi?.widgets?.list();
-            const ids = new Set();
-            for (const w of list || []) {
-                const id = w?.packageId || w?.name;
-                if (id) ids.add(id);
-            }
-            setInstalledPackageIds(ids);
-        } catch {
-            /* ignore — cards just won't show badges */
-        }
-    }, []);
-
-    useEffect(() => {
-        if (isOpen) refreshInstalledPackageIds();
-    }, [isOpen, refreshInstalledPackageIds]);
-
-    // When the installed set changes (e.g. user just installed a package
-    // via this modal), re-compute the `installed` flag on already-rendered
-    // cards in-place so badges light up without re-running the AI search.
-    useEffect(() => {
-        setDiscoverResults((prev) => {
-            if (!prev.length) return prev;
-            let changed = false;
-            const next = prev.map((pkg) => {
-                const scopedId = pkg.scope
-                    ? `@${pkg.scope.replace(/^@/, "")}/${
-                          pkg.package || pkg.name
-                      }`
-                    : pkg.package || pkg.name;
-                const installed =
-                    !!pkg.installed || installedPackageIds.has(scopedId);
-                if (installed === pkg.installed) return pkg;
-                changed = true;
-                return { ...pkg, installed };
-            });
-            return changed ? next : prev;
-        });
-    }, [installedPackageIds]);
-
-    // Clear results when switching away from Discover so stale cards don't
-    // linger when the user goes back to Discover later; re-running a new
-    // search will repopulate them.
-    useEffect(() => {
-        if (chatMode !== "discover") {
-            lastDiscoverQueryRef.current = "";
-        }
-    }, [chatMode]);
-
-    // Populate the Discover results strip by watching ChatCore's persisted
-    // messages for the AI's own search_widgets tool call. Priority:
-    //  1. The AI's extracted input.query (best: "clock" vs "find some clock widgets")
-    //  2. The user's most recent message text (fallback when the tool
-    //     name doesn't match or tool_use is still streaming)
-    //
-    // The poll runs any time the modal is open — not gated by chatMode —
-    // so if the AI searches in Build mode the cards are still ready to
-    // show when the user flips to Discover, and users who chat freely
-    // see results sooner.
-    useEffect(() => {
-        if (!isOpen) return;
-        const interval = setInterval(async () => {
-            try {
-                const raw = localStorage.getItem("dash-widget-builder");
-                if (!raw) return;
-                const data = JSON.parse(raw);
-                const msgs = data?.messages || [];
-                // Claude Code CLI prefixes MCP tools as
-                // "mcp__<server>__<tool>"; the Anthropic API backend
-                // passes the bare name. Match anything that contains
-                // "search_widgets" as a defensive net.
-                const isSearchWidgets = (name) =>
-                    typeof name === "string" &&
-                    name.toLowerCase().includes("search_widgets");
-                let query = "";
-                outer: for (let i = msgs.length - 1; i >= 0; i--) {
-                    const m = msgs[i];
-                    const calls = Array.isArray(m?.toolCalls)
-                        ? m.toolCalls
-                        : [];
-                    for (let j = calls.length - 1; j >= 0; j--) {
-                        const c = calls[j];
-                        if (!isSearchWidgets(c?.toolName)) continue;
-                        const q =
-                            c?.input?.query ??
-                            (typeof c?.input === "string" ? c.input : "");
-                        if (q && String(q).trim()) {
-                            query = String(q).trim();
-                            break outer;
-                        }
-                    }
-                }
-                // Fallback: if no tool-call query found, use the latest
-                // user message as the search keyword. Imperfect (raw
-                // conversational text rarely substring-matches widget
-                // metadata) but strictly better than no cards at all.
-                if (!query) {
-                    for (let i = msgs.length - 1; i >= 0; i--) {
-                        const m = msgs[i];
-                        // Skip hidden ones (the automatic greeting).
-                        if (m?.role !== "user" || m.hidden) continue;
-                        const t =
-                            typeof m.content === "string"
-                                ? m.content
-                                : Array.isArray(m.content)
-                                ? m.content
-                                      .filter((c) => c?.type === "text")
-                                      .map((c) => c.text)
-                                      .join(" ")
-                                : "";
-                        if (t && t.trim()) {
-                            query = t.trim();
-                            break;
-                        }
-                    }
-                }
-                if (!query) return;
-                if (query === lastDiscoverQueryRef.current) return;
-                lastDiscoverQueryRef.current = query;
-                setDiscoverSearching(true);
-                try {
-                    const result = await window.mainApi?.registry?.search(
-                        query,
-                        { type: "widget" }
-                    );
-                    // Flatten packages → widget cards (same shape our cards
-                    // expect: {name, displayName, description, package,
-                    // scope, installed, downloadUrl, version}).
-                    const widgets = [];
-                    for (const pkg of result?.packages || []) {
-                        const scopedId = pkg.scope
-                            ? `@${pkg.scope.replace(/^@/, "")}/${pkg.name}`
-                            : pkg.name;
-                        // registry.search doesn't set `installed`; consult
-                        // the locally-cached set we populated on open.
-                        const installed =
-                            !!pkg.installed ||
-                            installedPackageIds.has(scopedId);
-                        const base = {
-                            package: pkg.name,
-                            scope: pkg.scope || null,
-                            installed,
-                            downloadUrl: pkg.downloadUrl,
-                            version: pkg.version,
-                        };
-                        const sub = pkg.widgets || [];
-                        if (sub.length === 0) {
-                            widgets.push({
-                                ...base,
-                                name: pkg.name,
-                                displayName: pkg.displayName || pkg.name,
-                                description: pkg.description || "",
-                            });
-                        } else {
-                            for (const w of sub) {
-                                widgets.push({
-                                    ...base,
-                                    name:
-                                        pkg.scope && w.name
-                                            ? `${pkg.scope}.${pkg.name}.${w.name}`
-                                            : w.name || pkg.name,
-                                    displayName:
-                                        w.displayName ||
-                                        w.name ||
-                                        pkg.displayName ||
-                                        pkg.name,
-                                    description:
-                                        w.description || pkg.description || "",
-                                });
-                            }
-                        }
-                    }
-                    setDiscoverResults(widgets);
-                } finally {
-                    setDiscoverSearching(false);
-                }
-            } catch {
-                /* ignore — next tick will retry */
-            }
-        }, 1200);
-        return () => clearInterval(interval);
-    }, [isOpen, installedPackageIds]);
-
-    // End session + clear chat on unmount (modal close) so the next
-    // open starts fresh. The open-side clear happens in Dash.js before
-    // this component mounts (avoids race with ChatCore loading stale data).
-    useEffect(() => {
-        return () => {
-            try {
-                localStorage.setItem(
-                    "dash-widget-builder",
-                    JSON.stringify({ messages: [] })
-                );
-            } catch (_) {
-                /* ignore */
-            }
-            if (window.mainApi?.llm?.endCliSession) {
-                window.mainApi.llm.endCliSession("dash-widget-builder");
-            }
-        };
-    }, []);
-
-    // Isolate widget-preview runtime errors so buggy user code (AI-
-    // generated or registry) can't crash the rest of the app. React's
+    // Isolate widget-preview runtime errors so buggy widget code can't
+    // crash the rest of the app. React's
     // PreviewErrorBoundary catches RENDER errors only; event-handler
     // and async errors bypass it, and in dev mode react-error-overlay
     // will blanket the Electron window with its red full-screen UI if
@@ -2332,7 +1465,6 @@ ${
 
         const handleCapture = (message) => {
             console.warn("[WidgetBuilderModal] suppressed error:", message);
-            previewErrorKindRef.current = "runtime";
             setPreviewError(message || "Widget runtime error");
             setPreviewComponent(null);
         };
@@ -2389,181 +1521,6 @@ ${
         };
     }, [isOpen]);
 
-    // Poll for code blocks and auto-compile for preview
-    useEffect(() => {
-        if (!isOpen) return;
-        const interval = setInterval(() => {
-            try {
-                const raw = localStorage.getItem("dash-widget-builder");
-                if (raw) {
-                    const data = JSON.parse(raw);
-                    const msgs = data?.messages || [];
-
-                    // Detect New Chat (messages cleared) — but not in remix mode
-                    // where we intentionally start with empty messages.
-                    // Triggers if the user had ANY activity in the chat
-                    // (either compiled code OR sent at least one message),
-                    // so clicking New Chat after Skip-for-now (no compile
-                    // yet) still re-opens the provider gate.
-                    //
-                    // Slice 20.C1+ — also skip the reset branch while
-                    // the user is in compose mode. Compose never writes
-                    // chat messages, so `msgs.length === 0` is true for
-                    // every poll tick; combined with `hadActivity` from
-                    // the composer's own compiles, the reset would fire
-                    // continuously and nuke the live composer preview.
-                    //
-                    // Use lastMsgCount alone (not lastCompiledCode) as
-                    // the "had activity" signal. The previous OR with
-                    // lastCompiledCode meant that ANY prior compile —
-                    // including ones from the composer — counted as
-                    // chat activity, so switching compose → build
-                    // (still messages.length===0 from the never-used
-                    // chat) would immediately nuke the composer's
-                    // emitted code. Only a real prior chat turn should
-                    // gate this reset.
-                    const hadActivity = lastMsgCount.current > 0;
-                    if (
-                        msgs.length === 0 &&
-                        hadActivity &&
-                        chatModeRef.current !== "compose" &&
-                        !effectiveEditContext?.componentCode
-                    ) {
-                        setPreviewComponent(null);
-                        setPreviewError(null);
-                        setDetectedCode({
-                            componentCode: null,
-                            configCode: null,
-                        });
-                        setInstallStatus(null);
-                        // Reset the provider gate so it reappears for the
-                        // user to re-pick (matches user-stated UX: "if the
-                        // user would like to change the provider, the
-                        // session would end, a new chat would begin and the
-                        // provider view would show as if they started from
-                        // the beginning").
-                        setSelectedProviderForBuild(null);
-                        setTypedPrompt(null);
-                        lastCompiledCode.current = null;
-                        // Reset the message counter so this block doesn't
-                        // re-fire on the next poll tick (msgs is still []
-                        // until the user types something new).
-                        lastMsgCount.current = 0;
-                        return;
-                    }
-
-                    // The AI is replying while the last saved message is a
-                    // user's (theirs, the greeting, a fix request).
-                    const lastSaved = msgs[msgs.length - 1];
-                    const replying = !!lastSaved && lastSaved.role === "user";
-                    setAiReplying((r) => (r === replying ? r : replying));
-
-                    // Reset manualEdit when user sends a new message
-                    if (msgs.length !== lastMsgCount.current) {
-                        lastMsgCount.current = msgs.length;
-                        if (manualEditRef.current)
-                            manualEditRef.current = false;
-                    }
-
-                    // Skip polling if user is manually editing code
-                    if (manualEditRef.current) return;
-
-                    const extracted = extractCodeBlocks(msgs);
-                    if (extracted.componentCode) {
-                        if (
-                            extracted.componentCode !== lastCompiledCode.current
-                        ) {
-                            console.log(
-                                "[WidgetBuilder] New code detected, compiling preview..."
-                            );
-                            // If AI emitted only the component (no .dash.js
-                            // block), synthesize a default config bound to
-                            // the picker selection so the Code tab shows
-                            // the file the user is actually going to
-                            // install. Without this the .dash.js editor
-                            // appears empty and the user can't see that
-                            // their picked provider is wired in.
-                            let normalized = extracted;
-                            if (!extracted.configCode) {
-                                // Derive widgetName from the AI's component
-                                // code rather than reading the stale captured
-                                // closure variable (this poller was set up
-                                // when the modal first opened and detectedCode
-                                // was empty).
-                                const liveWidgetName = extractWidgetName(
-                                    extracted.componentCode
-                                );
-                                const livePick =
-                                    selectedProviderForBuildRef.current;
-                                const synthesized = synthesizeDefaultConfigCode(
-                                    liveWidgetName,
-                                    livePick
-                                );
-                                if (synthesized && liveWidgetName) {
-                                    const filesWithConfig = (() => {
-                                        const out = Array.isArray(
-                                            extracted.files
-                                        )
-                                            ? [...extracted.files]
-                                            : [];
-                                        const dashPath = `widgets/${liveWidgetName}.dash.js`;
-                                        const existing = out.findIndex(
-                                            (f) => f?.path === dashPath
-                                        );
-                                        if (existing >= 0) {
-                                            out[existing] = {
-                                                path: dashPath,
-                                                content: synthesized,
-                                            };
-                                        } else {
-                                            out.push({
-                                                path: dashPath,
-                                                content: synthesized,
-                                            });
-                                        }
-                                        return out;
-                                    })();
-                                    normalized = {
-                                        ...extracted,
-                                        configCode: synthesized,
-                                        files: filesWithConfig,
-                                    };
-                                }
-                            }
-                            setDetectedCode(normalized);
-                            compilePreview(normalized);
-                        }
-                    } else if (msgs.length > 0 && false) {
-                        // Debug: check if assistant responded but no code blocks found
-                        const lastAssistant = [...msgs]
-                            .reverse()
-                            .find((m) => m.role === "assistant");
-                        if (lastAssistant) {
-                            const text =
-                                typeof lastAssistant.content === "string"
-                                    ? lastAssistant.content
-                                    : Array.isArray(lastAssistant.content)
-                                    ? lastAssistant.content
-                                          .filter((c) => c.type === "text")
-                                          .map((c) => c.text)
-                                          .join("\n")
-                                    : "";
-                            if (text.includes("```")) {
-                                console.warn(
-                                    "[WidgetBuilder] Code fences found but extractCodeBlocks returned null. Check fence language tags."
-                                );
-                            }
-                        }
-                    }
-                }
-            } catch (e) {
-                /* ignore */
-            }
-        }, 2000);
-        return () => clearInterval(interval);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen]);
-
     // Pre-load source code for remix/edit mode
     useEffect(() => {
         if (editContext?.componentCode && isOpen) {
@@ -2572,21 +1529,10 @@ ${
                 configCode: editContext.configCode || "",
             };
             setDetectedCode(code);
-            lastCompiledCode.current = code.componentCode;
-            // Try to compile a preview — if it fails (e.g. multi-file
-            // widget with unresolvable imports), fall back to Code tab.
-            setActiveTab("preview");
+            // "Edit the code yourself" opens on the code (consolidation
+            // Phase 3b); the preview compiles meanwhile, one tab away.
+            setActiveTab("code");
             compilePreview(code).catch(() => {});
-
-            // Land the user in Build mode (chat-driven edit), not
-            // the default Compose mode. Edit-with-AI is about
-            // iterating on existing code via the AI chat — Compose's
-            // grid-based building would discard the loaded code and
-            // start fresh (ComposerPaneV2's empty-grid mount used to
-            // overwrite detectedCode here; even with that guarded,
-            // Compose isn't the right entry point for a widget the
-            // user already has).
-            setChatMode("build");
 
             // Nothing's changed yet: the installed code is what's kept.
             setSavedCode({
@@ -2620,16 +1566,6 @@ ${
 
             // Default mode based on ownership — set once registry check completes.
             // @ai-built is always "update"; for others, wait for ownership check.
-
-            // Clear previous chat so the user starts fresh
-            try {
-                localStorage.setItem(
-                    "dash-widget-builder",
-                    JSON.stringify({ messages: [] })
-                );
-            } catch (_) {
-                /* ignore */
-            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editContext, isOpen]);
@@ -2646,10 +1582,8 @@ ${
             const name = extractWidgetName(code.componentCode);
             if (!code.componentCode) return;
             if (!name) {
-                // Can't tell which component to mount — a build error the
-                // AI can fix (sent automatically), never a silent stall.
-                lastCompiledCode.current = code.componentCode;
-                previewErrorKindRef.current = "compile";
+                // Can't tell which component to mount — say so, never a
+                // silent stall.
                 setPreviewComponent(null);
                 setPreviewErrorMeta(null);
                 setPreviewError(
@@ -2666,16 +1600,13 @@ ${
             const isStale = () => compileRequestIdRef.current !== requestId;
 
             setIsCompiling(true);
-            previewErrorKindRef.current = "compile";
             setPreviewError(null);
             setPreviewComponent(null);
-            setProviderCorrection(null);
             setInstallStatus(null);
             // Console output from a previous bundle is no longer
             // relevant to the new compile — clear so the user only
             // sees output for the widget they're currently looking at.
             clearConsoleEvents();
-            lastCompiledCode.current = code.componentCode;
 
             try {
                 const result =
@@ -2696,8 +1627,7 @@ ${
                         // resolve relative imports from the installed
                         // package (e.g. Algolia widgets that import from
                         // ../hooks/, ../components/, etc.). Callers can
-                        // pass a per-call override (used by the Discover
-                        // flow before editContext gets promoted).
+                        // pass a per-call override.
                         sourcePackageOverride ||
                             effectiveEditContext?.originalPackage ||
                             null,
@@ -2709,20 +1639,11 @@ ${
                         Array.isArray(code.files) && code.files.length > 0
                             ? code.files
                             : null,
-                        // Provider the user pre-selected — main process
-                        // auto-corrects any drift in the AI's config.
-                        selectedProviderForBuild
+                        // No provider pick to correct the config to.
+                        null
                     );
 
                 if (isStale()) return;
-
-                // Slice 17b: capture provider auto-correct so the UI can show
-                // a banner explaining why the rendered preview differs from
-                // what the AI emitted (e.g. AI declared `mcp` but user has
-                // the provider configured as `credential`).
-                if (result?.providerCorrection) {
-                    setProviderCorrection(result.providerCorrection);
-                }
 
                 if (!result?.success) {
                     setPreviewError(result?.error || "Compilation failed");
@@ -2836,14 +1757,11 @@ ${
                                             `\`${e.snippet}\` (line ${e.line})`
                                     )
                                     .join("\n") +
-                                '\n\nClick "Send error to AI" to make it an action widget that publishes an event.'
+                                "\n\nMake it an action widget that publishes an event instead (Code tab)."
                         );
                         setPreviewErrorMeta({
                             kind: "bot-call-in-widget",
                             errors: botCheck.errors,
-                            correction: buildNoBotCallsCorrectionMessage(
-                                botCheck.errors
-                            ),
                         });
                         setPreviewComponent(null);
                         setPreviewParsedConfig(match.config);
@@ -2862,14 +1780,11 @@ ${
                                             `\`${e.snippet}\` (line ${e.line})`
                                     )
                                     .join("\n") +
-                                '\n\nClick "Send error to AI" to publish with useWidgetEvents instead.'
+                                "\n\nPublish with useWidgetEvents instead (Code tab)."
                         );
                         setPreviewErrorMeta({
                             kind: "raw-publish-in-widget",
                             errors: publishCheck.errors,
-                            correction: buildEventPublishingCorrectionMessage(
-                                publishCheck.errors
-                            ),
                         });
                         setPreviewComponent(null);
                         setPreviewParsedConfig(match.config);
@@ -2887,14 +1802,11 @@ ${
                         setPreviewError(
                             "Widget uses popup chrome that's forbidden inside widgets:\n" +
                                 list +
-                                '\n\nClick "Send error to AI" to request a corrected version.'
+                                "\n\nFix it in the Code tab."
                         );
                         setPreviewErrorMeta({
                             kind: "modal-in-widget",
                             errors: modalCheck.errors,
-                            correction: buildNoModalCorrectionMessage(
-                                modalCheck.errors
-                            ),
                         });
                         setPreviewComponent(null);
                         setPreviewParsedConfig(match.config);
@@ -2912,14 +1824,11 @@ ${
                         setPreviewError(
                             "Widget calls provider methods that don't exist:\n" +
                                 list +
-                                '\n\nClick "Send error to AI" to request a corrected version.'
+                                "\n\nFix it in the Code tab."
                         );
                         setPreviewErrorMeta({
                             kind: "provider-api-hallucination",
                             errors: apiCheck.errors,
-                            correction: buildAiCorrectionMessage(
-                                apiCheck.errors
-                            ),
                         });
                         setPreviewComponent(null);
                         setPreviewParsedConfig(match.config);
@@ -2930,9 +1839,9 @@ ${
                     // component names BEFORE the iframe tries to
                     // render. React's "Element type is invalid" error
                     // shows up deep in the reconciler with no
-                    // line-pointer; a static check on the AI's source
+                    // line-pointer; a static check on the source
                     // gives the user a clean "<Bogus> doesn't exist"
-                    // message + Send-to-AI fix.
+                    // message.
                     const componentCheck =
                         validateComponentReferences(componentSrc);
                     if (!componentCheck.ok) {
@@ -2945,15 +1854,11 @@ ${
                         setPreviewError(
                             "Widget uses component names that don't exist:\n" +
                                 list +
-                                '\n\nClick "Send error to AI" to request a corrected version.'
+                                "\n\nFix it in the Code tab."
                         );
                         setPreviewErrorMeta({
                             kind: "component-name-hallucination",
                             errors: componentCheck.errors,
-                            correction:
-                                buildComponentReferenceCorrectionMessage(
-                                    componentCheck.errors
-                                ),
                         });
                         setPreviewComponent(null);
                         setPreviewParsedConfig(match.config);
@@ -2969,12 +1874,7 @@ ${
                     // them is one extra setState per compile.
                     setPreviewBundleSource(result.bundleSource);
                     setPreviewBundleComponentName(match.key || name);
-                    // Slice 17c.7 — the inline empty-render detector
-                    // useEffect previously reset this on every compile.
-                    // With the inline path gone, do the reset here in
-                    // the same place we set bundle source. Iframe
-                    // render-stats will flip it back true if the
-                    // widget really does render empty.
+                    // Render-stats flip this back if it really is empty.
                     setPreviewLooksEmpty(false);
                     // Hand the resolved config to the Configure tab so
                     // its form reflects what the AI actually generated
@@ -2982,9 +1882,6 @@ ${
                     // imports + identifier component refs).
                     setPreviewParsedConfig(match.config);
                     setPreviewError(null);
-                    // It compiled — the next failure gets fresh tries.
-                    autoFixStateRef.current = resetAutoFix();
-                    setAutoFix({ status: "idle", attempt: 0 });
                 } else {
                     setPreviewWidgetDefaults({});
                     setPreviewTestInputs({});
@@ -3002,44 +1899,18 @@ ${
                 if (!isStale()) setIsCompiling(false);
             }
         },
-        [
-            effectiveEditContext?.originalPackage,
-            selectedProviderForBuild,
-            clearConsoleEvents,
-        ]
+        [effectiveEditContext?.originalPackage, clearConsoleEvents]
     );
-
-    // Send a build-error fix request to this builder's chat. Hidden: it's
-    // the builder talking to the AI, not the user.
-    const sendFixRequest = useCallback((content, { hidden }) => {
-        try {
-            window.dispatchEvent(
-                new CustomEvent("dash:chat-core-send", {
-                    detail: {
-                        persistKey: "dash-widget-builder",
-                        content,
-                        hidden,
-                    },
-                })
-            );
-        } catch (_) {
-            /* ignore */
-        }
-    }, []);
 
     // Checked while it's written (Widget Builder edit fixes; draftCheck.js):
     // each new version that compiles gets the fast checks — built inside its
     // package, code checks, must-fix checklist — then the Dash team's
-    // Checker on it as draft:<Name>. Problems go back to the AI (hidden,
-    // like build errors), at most MAX_CHECK_FIXES times before the user
-    // speaks again. Install waits for a pass of this exact code.
+    // Checker on it as draft:<Name>. Problems are listed for the user to fix
+    // by hand (consolidation Phase 3b). Install waits for a pass of this
+    // exact code.
     const [draftCheck, setDraftCheck] = useState(null);
-    // The AI is still replying (the chat's last saved message is a user's —
-    // theirs, the greeting, or a fix request): nothing counts as checked.
-    const [aiReplying, setAiReplying] = useState(false);
     const draftCheckRef = useRef(null);
     draftCheckRef.current = draftCheck;
-    const checkFixesRef = useRef(0);
     const checkRunRef = useRef(0);
     // "Check again" after a check that couldn't run.
     const [checkAttempt, setCheckAttempt] = useState(0);
@@ -3049,6 +1920,10 @@ ${
         setCheckAttempt((n) => n + 1);
     }, []);
     const currentCodeKey = codeKeyOf(detectedCode);
+    // A new widget needs a name of the user's (Compose starts with a
+    // placeholder one) — nothing is checked or installed before it has one.
+    const needsName =
+        !isRemixMode && (!widgetName || /^ComposedWidget\d*$/.test(widgetName));
     const editedName = (effectiveEditContext?.originalComponentName || "")
         .split(".")
         .pop();
@@ -3070,7 +1945,6 @@ ${
         (effectiveEditContext.configCode || "") ===
             (detectedCode?.configCode || "");
     const checkPassed =
-        !aiReplying &&
         !unchangedUpdate &&
         !!draftCheck &&
         draftCheck.key === currentCodeKey &&
@@ -3081,7 +1955,7 @@ ${
         if (installStatus?.success || !checkName) return;
         // Update or remix isn't known until ownership is checked.
         if (isRemixMode && !editModeSettled) return;
-        if (unchangedUpdate || aiReplying) {
+        if (unchangedUpdate || needsName) {
             // A check that no longer applies is dropped.
             checkRunRef.current += 1;
             if (draftCheckRef.current) setDraftCheck(null);
@@ -3093,28 +1967,14 @@ ${
         const run = ++checkRunRef.current;
         const stale = () => run !== checkRunRef.current;
         const code = detectedCode;
-        const sendBack = (lines, review) => {
-            if (checkFixesRef.current < MAX_CHECK_FIXES) {
-                checkFixesRef.current += 1;
-                setDraftCheck({
-                    key,
-                    phase: "fixing",
-                    lines,
-                    review,
-                    fixes: checkFixesRef.current,
-                });
-                const content = checksFixRequest(
-                    name,
-                    review ? [...lines, review] : lines
-                );
-                lastAutoFixTextRef.current = content;
-                sendFixRequest(content, { hidden: true });
-            } else {
-                setDraftCheck({ key, phase: "failed", lines, review });
-            }
-        };
-        setDraftCheck({ key, phase: "checking" });
-        (async () => {
+        // What's wrong, for the user to fix in the Code tab.
+        const fail = (lines, review) =>
+            setDraftCheck({ key, phase: "failed", lines, review });
+        // Built by hand, the code changes with every edit: check it once
+        // it has settled for a moment, not on each one.
+        let timer = null;
+        const start = async () => {
+            setDraftCheck({ key, phase: "checking" });
             let result;
             try {
                 result = await window.mainApi?.widgetBuilder?.checkDraft?.({
@@ -3143,21 +2003,14 @@ ${
             }
             const lines = fastCheckProblems(result);
             if (lines.length) {
-                sendBack(lines, null);
+                fail(lines, null);
                 return;
             }
             setDraftCheck({ key, phase: "reviewing" });
-            // What the user asked for, from the builder's chat.
-            let asked = "";
-            try {
-                const raw = localStorage.getItem("dash-widget-builder");
-                asked = userAskOf(raw ? JSON.parse(raw)?.messages : []);
-            } catch {
-                asked = "";
-            }
+            // Built by hand: no request to hold it to, only the widget.
             const res = await runTeamRole(
                 "checker",
-                draftCheckRequest(name, asked)
+                draftCheckRequest(name, "")
             );
             if (stale()) return;
             // Only a paused or missing Checker skips its review.
@@ -3167,6 +2020,13 @@ ${
                     phase: "passed",
                     reviewSkipped: res.reason,
                 });
+                return;
+            }
+            // The Checker is still on an earlier version: try again shortly.
+            if (res.skipped && /in progress/i.test(String(res.reason || ""))) {
+                setTimeout(() => {
+                    if (!stale()) retryCheck();
+                }, 4000);
                 return;
             }
             if (res.skipped) {
@@ -3180,7 +2040,6 @@ ${
             }
             const verdict = verdictOf(res.output);
             if (verdict === "PASSED") {
-                checkFixesRef.current = 0;
                 setDraftCheck({ key, phase: "passed" });
                 return;
             }
@@ -3197,7 +2056,7 @@ ${
                 });
                 return;
             }
-            sendBack(
+            fail(
                 [
                     verdict
                         ? "The Checker found problems:"
@@ -3205,7 +2064,11 @@ ${
                 ],
                 String(res.output || "").trim()
             );
-        })();
+        };
+        timer = setTimeout(start, 1500);
+        return () => {
+            if (timer) clearTimeout(timer);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         isOpen,
@@ -3216,58 +2079,19 @@ ${
         installStatus,
         checkName,
         unchangedUpdate,
-        aiReplying,
+        needsName,
         editModeSettled,
         checkAttempt,
     ]);
 
-    // Build errors go back to the AI by themselves (phase 2d), up to
-    // MAX_AUTO_FIX times in a row; the user sees the error only when the
-    // tries run out. A short pause lets the AI's reply that produced the
-    // code finish before the next message.
-    useEffect(() => {
-        if (!previewError || isCompiling) return undefined;
-        const r = onBuildError(autoFixStateRef.current, {
-            code: lastCompiledCode.current,
-            kind: previewErrorKindRef.current,
-        });
-        autoFixStateRef.current = r.state;
-        if (r.exhausted) {
-            setAutoFix({ status: "exhausted", attempt: r.state.attempts });
-            return undefined;
-        }
-        if (!r.send) return undefined;
-        setAutoFix({ status: "fixing", attempt: r.state.attempts });
-        const content = buildFixRequest(previewError, previewErrorMeta);
-        lastAutoFixTextRef.current = content;
-        const t = setTimeout(
-            () => sendFixRequest(content, { hidden: true }),
-            1500
-        );
-        return () => clearTimeout(t);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [previewError, isCompiling]);
-
-    // The user's own message (anything but the builder's fix request)
-    // starts the automatic fixes over.
-    const handleChatEvent = useCallback((event, payload) => {
-        if (event !== "messageSent") return;
-        if (payload && payload.text === lastAutoFixTextRef.current) return;
-        autoFixStateRef.current = resetAutoFix();
-        setAutoFix({ status: "idle", attempt: 0 });
-        checkFixesRef.current = 0;
-    }, []);
-
     // Resume an in-progress draft. Triggered by the `resumeDraftId`
     // prop (Settings → Widgets → Draft chip → Resume button). Mirrors
-    // the WidgetDraftsList onResume callback verbatim — fetches the
-    // full draft via drafts.get, restores chat history into ChatCore's
-    // localStorage key, sets detectedCode, recompiles the preview,
-    // restores provider gate state and composer tree, flips view to
-    // builder. Wrapped in useCallback so the useEffect below can fire
+    // the WidgetDraftsList onResume callback — fetches the full draft
+    // via drafts.get, sets detectedCode, recompiles the preview, restores
+    // the composer layout, flips view to builder. Wrapped in useCallback so the useEffect below can fire
     // it without re-running every render.
     const resumeFromDraft = useCallback(
-        async (id) => {
+        async (id, fallback = null) => {
             if (!id) return;
             let full = null;
             try {
@@ -3275,21 +2099,11 @@ ${
             } catch (err) {
                 console.warn("[WidgetBuilder] resume fetch failed:", err);
             }
+            // A legacy (v1) draft's list row still carries its code.
+            if (!full) full = fallback;
             if (!full) return;
             resumedDraftRef.current = full;
             draftSessionIdRef.current = full.id;
-            try {
-                localStorage.setItem(
-                    "dash-widget-builder",
-                    JSON.stringify({
-                        messages: Array.isArray(full.chatHistory)
-                            ? full.chatHistory
-                            : [],
-                    })
-                );
-            } catch {
-                /* ignore */
-            }
             const restoredCode = {
                 componentCode: full.componentCode || null,
                 configCode: full.configCode || null,
@@ -3311,20 +2125,20 @@ ${
             if (restoredCode.componentCode) {
                 compilePreview(restoredCode).catch(() => {});
             }
-            if (full.pickedProvider !== undefined) {
-                setSelectedProviderForBuild(full.pickedProvider);
-            }
-            if (full.composerTree) {
-                setComposerInitialTree(full.composerTree);
-                setComposerTree(full.composerTree);
-                setComposerSessionKey((k) => k + 1);
-            }
+            // An old chat draft — code without a Compose layout, or saved
+            // from the chat (chatMode "build") even with one — is edited as
+            // code: Compose would rebuild it from the layout and drop it.
+            const asCode =
+                !!restoredCode.componentCode &&
+                (!full.composerGrid ||
+                    (!!full.chatMode && full.chatMode !== "compose"));
+            setCodeOnly(asCode);
+            if (asCode) setActiveTab("code");
             if (full.composerGrid) {
                 setComposerInitialGrid(full.composerGrid);
                 setComposerGrid(full.composerGrid);
                 setComposerSessionKey((k) => k + 1);
             }
-            if (full.chatMode) setChatMode(full.chatMode);
             setInstallStatus(null);
             setViewMode("builder");
         },
@@ -3341,277 +2155,8 @@ ${
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, resumeDraftId]);
 
-    // Fetch a registry widget's source (no install), hand it to the existing
-    // compilePreview pipeline, and switch to the Preview tab.
-    //
-    // `pkg` may come from two shapes:
-    //  1. registryController.searchRegistry — .name is the bare package name
-    //  2. MCP search_widgets tool result — .name is a dotted scoped id
-    //     (e.g. "trops.clock.Analog") and .package is the bare name
-    // We normalize on .package (bare) when present, falling back to .name.
-    //
-    // If the widget is already installed locally, read the source from disk
-    // (mainApi.widgets.readSources) to avoid the registry's auth-gated
-    // download endpoint. Only un-installed widgets fall back to previewFetch.
-    const handleSelectRegistryPackage = useCallback(
-        async (pkg) => {
-            const packageName = pkg.package || pkg.name;
-            const scopedPackage = pkg.scope
-                ? `@${pkg.scope.replace(/^@/, "")}/${packageName}`
-                : packageName;
-            // Bump the shared compile request counter up front so any
-            // in-flight readSources/previewFetch/compile from a
-            // previously-clicked card knows it's stale and bails out
-            // before overwriting state. Fixes the A → Back → B race.
-            const requestId = ++compileRequestIdRef.current;
-            const isStale = () => compileRequestIdRef.current !== requestId;
-
-            // Extract the bare widget component name from the card's
-            // dotted id (e.g. "trops.chat.ChatClaudeCodeWidget" →
-            // "ChatClaudeCodeWidget"). Used for readSources (disk files
-            // are named by the bare name).
-            const widgetComponentName = pkg.name?.includes(".")
-                ? pkg.name.split(".").pop()
-                : pkg.name;
-            // The full dotted scoped id is what ComponentManager actually
-            // keys widgets by (from config.id in the bundle). Dash.js's
-            // `dash:place-widget-in-cell` does exact-match lookup, so we
-            // need THIS value — not the bare component name — when handing
-            // off to onInstalled for placement.
-            const registryId =
-                pkg.scope && packageName && widgetComponentName
-                    ? `${pkg.scope.replace(
-                          /^@/,
-                          ""
-                      )}.${packageName}.${widgetComponentName}`
-                    : pkg.name || widgetComponentName;
-            setBrowsingPackage({
-                packageName,
-                scopedPackage,
-                componentName: widgetComponentName,
-                registryId,
-                displayName: pkg.displayName || packageName,
-                description: pkg.description || "",
-                downloadUrl: pkg.downloadUrl,
-                version: pkg.version,
-                installed: !!pkg.installed,
-                scope: pkg.scope,
-            });
-            setActiveTab("preview");
-            setPreviewError(null);
-            setPreviewComponent(null);
-            setInstallStatus(null);
-            setPreviewProviderSelection({});
-            setIsCompiling(true);
-            try {
-                let componentCode = null;
-                let configCode = null;
-                let resolvedDownloadUrl = null;
-
-                // Always try the local installed copy first — it's the
-                // only path that can read a specific widget out of a
-                // multi-widget package by componentName. `mainApi.registry.search`
-                // doesn't tell us whether the package is installed, so we
-                // can't gate on `pkg.installed` (it's undefined and would
-                // force every click into the registry-download fallback,
-                // which always returns the alphabetically-first widget).
-                const local = await window.mainApi?.widgets?.readSources(
-                    scopedPackage,
-                    widgetComponentName
-                );
-                if (isStale()) return;
-                if (local?.success && local.componentCode) {
-                    componentCode = local.componentCode;
-                    configCode = local.configCode;
-                }
-
-                if (!componentCode) {
-                    // Package isn't installed locally — fall back to the
-                    // registry download. dash-core v0.1.391+ honors the
-                    // componentName hint so multi-widget packages return
-                    // the right widget.
-                    const source = await window.mainApi?.registry?.previewFetch(
-                        packageName,
-                        widgetComponentName
-                    );
-                    if (isStale()) return;
-                    if (!source?.componentCode) {
-                        throw new Error(
-                            "This package has no previewable component source."
-                        );
-                    }
-                    componentCode = source.componentCode;
-                    configCode = source.configCode;
-                    resolvedDownloadUrl = source.downloadUrl;
-                }
-
-                if (isStale()) return;
-                setDetectedCode({ componentCode, configCode });
-                if (resolvedDownloadUrl) {
-                    setBrowsingPackage((prev) =>
-                        prev
-                            ? { ...prev, downloadUrl: resolvedDownloadUrl }
-                            : prev
-                    );
-                }
-                // Pass scopedPackage so the compile IPC can resolve
-                // sibling imports from the installed package dir (or
-                // short-circuit to the pre-built bundle when the source
-                // hasn't been modified yet).
-                await compilePreview(
-                    { componentCode, configCode },
-                    scopedPackage
-                );
-            } catch (err) {
-                if (isStale()) return;
-                previewErrorKindRef.current = "other";
-                setPreviewError(err?.message || "Failed to load preview");
-                setIsCompiling(false);
-            }
-        },
-        [compilePreview]
-    );
-
-    // Install the currently-previewed registry package through the existing
-    // widget install IPC. Uses the scoped ID (@scope/name) as the install
-    // key and resolves {version}/{name} placeholders in the downloadUrl.
-    const handleInstallRegistryPackage = useCallback(async () => {
-        if (!browsingPackage || browsingPackage.installed) return;
-        const scopedId = browsingPackage.scope
-            ? `@${browsingPackage.scope.replace(/^@/, "")}/${
-                  browsingPackage.packageName
-              }`
-            : browsingPackage.packageName;
-        const resolvedUrl = (browsingPackage.downloadUrl || "")
-            .replace(/\{version\}/g, browsingPackage.version || "")
-            .replace(/\{name\}/g, browsingPackage.packageName);
-        setRegistryInstalling(true);
-        try {
-            await window.mainApi?.widgets?.install(scopedId, resolvedUrl);
-            setInstallStatus({ success: true, widgetName: scopedId });
-            setBrowsingPackage((prev) =>
-                prev ? { ...prev, installed: true } : prev
-            );
-            setDiscoverResults((prev) =>
-                prev.map((p) =>
-                    p.name === browsingPackage.packageName
-                        ? { ...p, installed: true }
-                        : p
-                )
-            );
-            // Refresh the installed-package set so other cards from the
-            // same package also show the badge, and so a subsequent
-            // AI search re-flattens with the accurate install state.
-            refreshInstalledPackageIds();
-            if (typeof onInstalled === "function") {
-                // Pass the full dotted registry id (e.g.
-                // "trops.chat.ChatClaudeCodeWidget") as the first arg —
-                // that's the key ComponentManager registers under and
-                // LayoutBuilder looks up when placing into the cell.
-                onInstalled(
-                    browsingPackage.registryId || browsingPackage.packageName,
-                    scopedId
-                );
-            }
-        } catch (err) {
-            setInstallStatus({
-                error: err?.message || "Install failed",
-            });
-        } finally {
-            setRegistryInstalling(false);
-        }
-    }, [browsingPackage, onInstalled, refreshInstalledPackageIds]);
-
-    // Clear the current registry-widget preview so the user can pick
-    // another card from the Discover results strip.
-    const handleBackToDiscover = useCallback(() => {
-        setBrowsingPackage(null);
-        setDetectedCode({ componentCode: null, configCode: null });
-        setPreviewComponent(null);
-        setPreviewError(null);
-        setInstallStatus(null);
-        setEditContextOverride(null);
-        setPreviewProviderSelection({});
-        lastCompiledCode.current = null;
-    }, []);
-
-    // Place an already-installed registry widget into the user's current
-    // grid cell. Mirrors what the AI-build flow does at the end — calls
-    // the onInstalled callback so Dash.js dispatches the
-    // `dash:place-widget-in-cell` event, then shows the success screen.
-    const handleAddInstalledToDashboard = useCallback(() => {
-        if (!browsingPackage) return;
-        const scopedId = browsingPackage.scopedPackage
-            ? browsingPackage.scopedPackage
-            : browsingPackage.scope
-            ? `@${browsingPackage.scope.replace(/^@/, "")}/${
-                  browsingPackage.packageName
-              }`
-            : browsingPackage.packageName;
-        setInstallStatus({ success: true, widgetName: scopedId });
-        if (typeof onInstalled === "function") {
-            // Full dotted registry id is required for the cell-placement
-            // handoff — see the comment in handleInstallRegistryPackage.
-            onInstalled(
-                browsingPackage.registryId || browsingPackage.packageName,
-                scopedId
-            );
-        }
-    }, [browsingPackage, onInstalled]);
-
-    // Remix a registry widget: keep the fetched source + preview in place,
-    // promote the package into an internal edit-context override so the
-    // modal transitions to its edit/remix flow (AI chat now knows the
-    // source code; Install footer becomes the existing remix/rename
-    // footer; handleInstall records remixedFrom attribution).
-    const handleRemixRegistryPackage = useCallback(() => {
-        if (!browsingPackage || !detectedCode?.componentCode) return;
-        const scoped = browsingPackage.scopedPackage
-            ? browsingPackage.scopedPackage
-            : browsingPackage.scope
-            ? `@${browsingPackage.scope.replace(/^@/, "")}/${
-                  browsingPackage.packageName
-              }`
-            : browsingPackage.packageName;
-        const originalComponentName = extractWidgetName(
-            detectedCode.componentCode
-        );
-        setEditContextOverride({
-            componentCode: detectedCode.componentCode,
-            configCode: detectedCode.configCode || "",
-            originalPackage: scoped,
-            originalComponentName,
-            originalWidgetId: `${scoped}/${
-                originalComponentName || browsingPackage.packageName
-            }`,
-            manifest: {
-                author: "Unknown",
-                version: browsingPackage.version || "1.0.0",
-            },
-        });
-        // Seed the remix name so the footer's rename input is pre-filled.
-        const base = (originalComponentName || "").replace(/Remix\d*$/, "");
-        setRemixName(base ? `${base}Remix` : "");
-        setEditMode("remix");
-        // Hand off from browsing-registry footer to the normal remix
-        // footer by clearing browsingPackage.
-        setBrowsingPackage(null);
-        setInstallStatus(null);
-        // Clear the chat so the user can describe their changes from a
-        // clean slate — the system prompt will now include the source.
-        try {
-            localStorage.setItem(
-                "dash-widget-builder",
-                JSON.stringify({ messages: [] })
-            );
-        } catch {
-            /* ignore */
-        }
-    }, [browsingPackage, detectedCode]);
-
     // Kick off the registry device-code sign-in flow: open the browser
     // to the verification URL and start polling for the resulting token.
-    // When polling succeeds, auto-retry the current registry preview.
     const handleSignInForPreview = useCallback(async () => {
         try {
             const flow = await window.mainApi?.registryAuth?.initiateLogin();
@@ -3640,9 +2185,8 @@ ${
                         signInPollRef.current = null;
                         setSignInFlow(null);
                         setPreviewError(null);
-                        // Refresh auth status so the Discover "sign in as
-                        // guest" banner disappears and any edit-with-AI
-                        // ownership checks see the user as logged in.
+                        // Refresh auth status so the ownership check
+                        // (Update original) sees the user as signed in.
                         try {
                             const status =
                                 await window.mainApi?.registryAuth?.getStatus();
@@ -3654,25 +2198,10 @@ ${
                         } catch {
                             /* ignore */
                         }
-                        // Auto-retry the current registry package
-                        if (browsingPackage) {
-                            const retry = {
-                                name: browsingPackage.packageName,
-                                package: browsingPackage.packageName,
-                                scope: browsingPackage.scope,
-                                displayName: browsingPackage.displayName,
-                                description: browsingPackage.description,
-                                downloadUrl: browsingPackage.downloadUrl,
-                                version: browsingPackage.version,
-                                installed: browsingPackage.installed,
-                            };
-                            handleSelectRegistryPackage(retry);
-                        }
                     } else if (res?.status === "expired") {
                         clearInterval(signInPollRef.current);
                         signInPollRef.current = null;
                         setSignInFlow(null);
-                        previewErrorKindRef.current = "other";
                         setPreviewError(
                             "Sign-in code expired. Click Sign in to try again."
                         );
@@ -3682,10 +2211,9 @@ ${
                 }
             }, intervalMs);
         } catch (err) {
-            previewErrorKindRef.current = "other";
             setPreviewError(err?.message || "Could not start sign-in flow.");
         }
-    }, [browsingPackage, handleSelectRegistryPackage]);
+    }, []);
 
     useEffect(() => {
         return () => {
@@ -3707,7 +2235,6 @@ ${
     // Handle manual code edits from the Code tab (buffers only, no compile)
     const handleCodeEdit = useCallback(
         (newCode) => {
-            manualEditRef.current = true;
             setEditBuffer((prev) => ({
                 ...prev,
                 [activeFile]: newCode,
@@ -3724,14 +2251,12 @@ ${
         };
         setDetectedCode(updated);
         setEditBuffer({ component: null, config: null });
-        lastCompiledCode.current = null;
         compilePreview(updated);
     }, [editBuffer, detectedCode, compilePreview]);
 
     // Cancel: discard buffered edits
     const handleCancelEdits = useCallback(() => {
         setEditBuffer({ component: null, config: null });
-        manualEditRef.current = false;
     }, []);
 
     const handleInstall = useCallback(
@@ -3856,13 +2381,9 @@ ${
                         );
                     }
                 } else {
-                    // Same synthesizer the message-poller uses, with the
-                    // user-picked category baked in. Picker selection drives
-                    // the providers array.
-                    finalConfigCode = synthesizeDefaultConfigCode(
-                        installName,
-                        selectedProviderForBuild
-                    );
+                    // A default config, with the user-picked category
+                    // baked in.
+                    finalConfigCode = synthesizeDefaultConfigCode(installName);
                     finalConfigCode = injectCategoryIntoConfigCode(
                         finalConfigCode,
                         selectedCategory
@@ -3937,14 +2458,13 @@ ${
                     installName,
                     installComponentCode,
                     finalConfigCode,
-                    `AI-generated widget: ${installName}`,
+                    `Widget: ${installName}`,
                     cellContext || null,
                     process.env.REACT_APP_IDENTIFIER || "@trops/dash-electron",
                     remixMeta,
                     finalFiles,
-                    // Provider the user pre-selected — main process
-                    // auto-corrects any drift in the AI's config to match.
-                    selectedProviderForBuild,
+                    // No provider pick to correct the config to.
+                    null,
                     // Update original on one of the user's own packages:
                     // that package is rebuilt in place (lib/aiBuild.cjs),
                     // not copied to @ai-built.
@@ -4019,7 +2539,6 @@ ${
             isRemixMode,
             editMode,
             remixName,
-            selectedProviderForBuild,
             checkPassed,
             checkName,
         ]
@@ -4067,17 +2586,24 @@ ${
 
     if (!isOpen) return null;
 
-    // A build error that isn't out of tries is being fixed (or waiting on
-    // the AI's fix) — decided here, not after an effect, so the red box
-    // never flashes first.
-    const autoFixShowing =
-        !!previewError &&
-        previewErrorKindRef.current === "compile" &&
-        autoFix.status !== "exhausted";
-
     const PreviewComponent = previewComponent;
     const displayName =
         widgetName?.replace(/([A-Z])/g, " $1").trim() || "Widget";
+    // Compose is for a new widget; an installed widget's code (or an old
+    // chat draft's) is edited as code, with the right side hidden.
+    const showCompose = !effectiveEditContext?.componentCode && !codeOnly;
+    // Compose's "Rather describe it? Ask the Dash team": the builder closes
+    // and Create opens on a new widget with the text (consolidation Phase 3b).
+    const askDashTeam = (text) => {
+        setIsOpen(false);
+        setTimeout(() => {
+            window.dispatchEvent(
+                new CustomEvent("dash:open-create", {
+                    detail: { type: "widget", prompt: text || "" },
+                })
+            );
+        }, 0);
+    };
 
     const Frame = embedded ? EmbeddedFrame : BuilderModalFrame;
     const frameProps = embedded
@@ -4105,31 +2631,34 @@ ${
                 {/* Header — Create's header replaces it when embedded */}
                 {!embedded && (
                     <PanelHeader
-                        glyph="wand-magic-sparkles"
+                        glyph="wrench"
                         title={
                             <span className="flex items-baseline gap-2 min-w-0">
-                                <span className="shrink-0">
-                                    {isRemixMode
-                                        ? "Edit widget with AI"
-                                        : "Build widget with AI"}
+                                <span className="shrink-0">Widget Builder</span>
+                                {/* What's open: a widget's code (by its
+                                name), or a new widget built by hand. */}
+                                <span
+                                    className={`text-sm font-normal truncate ${chromeMuted}`}
+                                    title={
+                                        effectiveEditContext?.originalComponentName ||
+                                        undefined
+                                    }
+                                >
+                                    {effectiveEditContext?.componentCode
+                                        ? `${
+                                              (
+                                                  effectiveEditContext?.originalComponentName ||
+                                                  ""
+                                              )
+                                                  .split(".")
+                                                  .pop()
+                                                  .replace(
+                                                      /([a-z0-9])([A-Z])/g,
+                                                      "$1 $2"
+                                                  ) || displayName
+                                          } · editing the code`
+                                        : "Build by hand"}
                                 </span>
-                                {/* Edit mode names the widget (its full
-                                scoped ID, e.g. "ai-built.composedwidget3.
-                                ComposedWidget3" — what the user knows from
-                                their dashboard layout). */}
-                                {isRemixMode &&
-                                    effectiveEditContext?.originalComponentName && (
-                                        <code
-                                            className={`text-xs font-mono font-normal truncate ${chromeMuted}`}
-                                            title={
-                                                effectiveEditContext.originalComponentName
-                                            }
-                                        >
-                                            {
-                                                effectiveEditContext.originalComponentName
-                                            }
-                                        </code>
-                                    )}
                             </span>
                         }
                         actions={
@@ -4156,7 +2685,7 @@ ${
                                 icon="triangle-exclamation"
                                 className="h-3 w-3"
                             />
-                            AI Assistant setup issue
+                            Widget Builder setup issue
                             {healthCheckIssues.length > 1
                                 ? ` (${healthCheckIssues.length})`
                                 : ""}
@@ -4204,16 +2733,7 @@ ${
                             onStartNew={() => {
                                 draftSessionIdRef.current = null;
                                 resumedDraftRef.current = null;
-                                // Clear ChatCore's persisted history so the
-                                // new build starts fresh.
-                                try {
-                                    localStorage.setItem(
-                                        "dash-widget-builder",
-                                        JSON.stringify({ messages: [] })
-                                    );
-                                } catch {
-                                    /* ignore */
-                                }
+                                setCodeOnly(false);
                                 setDetectedCode({
                                     componentCode: null,
                                     configCode: null,
@@ -4222,113 +2742,17 @@ ${
                                 setPreviewComponent(null);
                                 setPreviewError(null);
                                 setInstallStatus(null);
-                                setSelectedProviderForBuild(null);
-                                setTypedPrompt(null);
                                 // Reset compose-mode state so a fresh
                                 // session doesn't inherit the tree from
                                 // whatever was last loaded.
-                                setComposerInitialTree(null);
                                 setComposerInitialGrid(null);
                                 setComposerGrid(null);
-                                setComposerTree(null);
                                 setComposerSessionKey((k) => k + 1);
                                 setViewMode("builder");
                             }}
-                            onResume={async (draft) => {
-                                // For v2 (disk-backed) drafts the list row
-                                // doesn't carry componentCode/configCode —
-                                // fetch the full draft via drafts.get which
-                                // folds disk-read code into the response.
-                                // Falls back to the row data for legacy v1
-                                // drafts that still have JSON-stored code.
-                                let full = draft;
-                                try {
-                                    const fetched =
-                                        await window.mainApi?.drafts?.get?.(
-                                            draft.id
-                                        );
-                                    if (fetched) full = fetched;
-                                } catch {
-                                    /* ignore — use list-row fallback */
-                                }
-                                // Reuse the draft id so subsequent saves
-                                // update this row instead of creating a new
-                                // one.
-                                resumedDraftRef.current = full;
-                                draftSessionIdRef.current = full.id;
-                                // Restore chat history into ChatCore's
-                                // persistKey so the conversation reappears.
-                                try {
-                                    localStorage.setItem(
-                                        "dash-widget-builder",
-                                        JSON.stringify({
-                                            messages: Array.isArray(
-                                                full.chatHistory
-                                            )
-                                                ? full.chatHistory
-                                                : [],
-                                        })
-                                    );
-                                } catch {
-                                    /* ignore */
-                                }
-                                // Restore the latest code so the preview +
-                                // editor pick up where the user left off.
-                                const restoredCode = {
-                                    componentCode: full.componentCode || null,
-                                    configCode: full.configCode || null,
-                                    files: Array.isArray(full.files)
-                                        ? full.files
-                                        : [],
-                                };
-                                setDetectedCode(restoredCode);
-                                // Compile the restored code so the Preview
-                                // tab actually renders instead of showing
-                                // the empty placeholder from modal open.
-                                // Mirrors the remix/editContext useEffect
-                                // a few hundred lines up — drafts went
-                                // through setDetectedCode but never
-                                // through the compile pipeline, so the
-                                // preview stayed blank until the user
-                                // typed a new message (chat) or edited
-                                // the code tab manually.
-                                if (restoredCode.componentCode) {
-                                    compilePreview(restoredCode).catch(
-                                        () => {}
-                                    );
-                                }
-                                // Restore the picked provider so the chat
-                                // gate doesn't reappear and the post-process
-                                // auto-correct stays consistent.
-                                if (full.pickedProvider !== undefined) {
-                                    setSelectedProviderForBuild(
-                                        full.pickedProvider
-                                    );
-                                }
-                                // Restore compose mode + the saved
-                                // composer tree so the user picks up
-                                // exactly where they left off (palette,
-                                // selected node, wires, field maps).
-                                // composerSessionKey bump forces the
-                                // pane to remount with the new initial
-                                // tree — useState wouldn't otherwise pick
-                                // up the change after the first mount.
-                                if (full.composerTree) {
-                                    setComposerInitialTree(full.composerTree);
-                                    setComposerTree(full.composerTree);
-                                    setComposerSessionKey((k) => k + 1);
-                                }
-                                if (full.composerGrid) {
-                                    setComposerInitialGrid(full.composerGrid);
-                                    setComposerGrid(full.composerGrid);
-                                    setComposerSessionKey((k) => k + 1);
-                                }
-                                if (full.chatMode) {
-                                    setChatMode(full.chatMode);
-                                }
-                                setInstallStatus(null);
-                                setViewMode("builder");
-                            }}
+                            onResume={(draft) =>
+                                resumeFromDraft(draft.id, draft)
+                            }
                         />
                     </div>
                 )}
@@ -4402,38 +2826,33 @@ ${
                                             ) : null
                                         }
                                     />
-                                    {chatMode === "build" && (
-                                        <BuilderTab
-                                            active={activeTab === "scorecard"}
-                                            onClick={() =>
-                                                setActiveTab("scorecard")
-                                            }
-                                            disabled={
-                                                !detectedCode.componentCode
-                                            }
-                                            icon="circle-check"
-                                            label="Scorecard"
-                                            testId="tab-scorecard"
-                                            title="Cohesion-rule checklist for the generated widget"
-                                            activeClass={tabActive}
-                                            idleClass={tabIdle}
-                                            badge={
-                                                scorecardFailCount > 0 ? (
-                                                    <span
-                                                        className={`px-1.5 rounded text-xs ${status.error.solidBg} ${bt.onSolid}`}
-                                                        title={`${scorecardFailCount} cohesion rule${
-                                                            scorecardFailCount ===
-                                                            1
-                                                                ? ""
-                                                                : "s"
-                                                        } failing`}
-                                                    >
-                                                        {scorecardFailCount}
-                                                    </span>
-                                                ) : null
-                                            }
-                                        />
-                                    )}
+                                    <BuilderTab
+                                        active={activeTab === "scorecard"}
+                                        onClick={() =>
+                                            setActiveTab("scorecard")
+                                        }
+                                        disabled={!detectedCode.componentCode}
+                                        icon="circle-check"
+                                        label="Scorecard"
+                                        testId="tab-scorecard"
+                                        title="Cohesion-rule checklist for the widget"
+                                        activeClass={tabActive}
+                                        idleClass={tabIdle}
+                                        badge={
+                                            scorecardFailCount > 0 ? (
+                                                <span
+                                                    className={`px-1.5 rounded text-xs ${status.error.solidBg} ${bt.onSolid}`}
+                                                    title={`${scorecardFailCount} cohesion rule${
+                                                        scorecardFailCount === 1
+                                                            ? ""
+                                                            : "s"
+                                                    } failing`}
+                                                >
+                                                    {scorecardFailCount}
+                                                </span>
+                                            ) : null
+                                        }
+                                    />
                                 </div>
                                 {isCompiling && (
                                     <div
@@ -4482,29 +2901,9 @@ ${
                                         {installStatus.widgetName}
                                     </span>
                                 )}
-                                {/* Slice 17b: provider auto-correct surface.
-                                Main process snaps the AI's declared
-                                providerClass to whatever the user has
-                                installed; this banner explains why the
-                                preview's providers section may differ
-                                from what the AI emitted. */}
-                                {providerCorrection && !previewError && (
-                                    <span
-                                        className={`text-xs flex items-center gap-1 ${status.warning.icon}`}
-                                        title={providerCorrection.reason || ""}
-                                    >
-                                        <FontAwesomeIcon
-                                            icon="wrench"
-                                            className="h-3 w-3"
-                                        />
-                                        Provider config auto-corrected to match
-                                        your installed provider
-                                    </span>
-                                )}
                                 {/* Right-side draft toolbar — Open in Editor +
                                 Save Draft + save status. Visible once
-                                the AI has emitted code AND we're in
-                                build mode (not remix). Lives in the
+                                there's code. Lives in the
                                 tab bar row so the user can act on
                                 their in-flight draft without leaving
                                 the modal to find the drafts list. */}
@@ -4646,9 +3045,7 @@ ${
                                                         source couldn't be read.
                                                         Try re-publishing the
                                                         widget package with
-                                                        source files included,
-                                                        or generate a fresh
-                                                        widget below.
+                                                        source files included.
                                                     </p>
                                                     {effectiveEditContext.originalPackage && (
                                                         <p
@@ -4668,239 +3065,37 @@ ${
                                                             effectiveEditContext.sourceError
                                                         }
                                                     </p>
-                                                    <p
-                                                        className={`text-xs ${bt.muted} mt-2`}
-                                                    >
-                                                        You can still describe a
-                                                        new widget from scratch
-                                                        using the chat.
-                                                    </p>
                                                 </div>
                                             </div>
                                         )}
-                                    {/* Empty state: Discover cards grid OR
-                                "Describe your widget" prompt for Build mode. */}
-                                    {!previewComponent &&
+                                    {/* Empty state: where the widget will show
+                                    (Compose's empty layout isn't a widget yet). */}
+                                    {(!previewComponent ||
+                                        detectedCode.emptyGrid) &&
                                         !previewError &&
                                         !isCompiling &&
-                                        !effectiveEditContext?.sourceError &&
-                                        (() => {
-                                            const hasDiscoverActivity =
-                                                discoverSearching ||
-                                                discoverResults.length > 0 ||
-                                                !!lastDiscoverQueryRef.current;
-                                            if (hasDiscoverActivity) {
-                                                return (
-                                                    <div className="flex flex-col h-full">
-                                                        <div
-                                                            className={`flex items-center justify-between gap-2 pb-3 border-b ${bt.border}`}
-                                                        >
-                                                            <div className="flex items-baseline gap-2 min-w-0">
-                                                                <span
-                                                                    className={`text-sm font-semibold ${bt.text}`}
-                                                                >
-                                                                    {discoverSearching
-                                                                        ? "Searching registry..."
-                                                                        : `${
-                                                                              discoverResults.length
-                                                                          } match${
-                                                                              discoverResults.length ===
-                                                                              1
-                                                                                  ? ""
-                                                                                  : "es"
-                                                                          }`}
-                                                                </span>
-                                                                {lastDiscoverQueryRef.current && (
-                                                                    <span
-                                                                        className={`text-xs ${bt.muted} truncate`}
-                                                                    >
-                                                                        for “
-                                                                        {
-                                                                            lastDiscoverQueryRef.current
-                                                                        }
-                                                                        ”
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <span
-                                                                className={`text-xs font-medium ${bt.muted} shrink-0`}
-                                                            >
-                                                                Click a widget
-                                                                to preview
-                                                            </span>
-                                                        </div>
-                                                        {/* Sign-in nudge: the
-                                                    registry only returns
-                                                    public packages to
-                                                    anonymous users, so
-                                                    missing private/entitled
-                                                    widgets can be surfaced
-                                                    with one click. */}
-                                                        {registryChecked &&
-                                                            !registryUsername && (
-                                                                <div
-                                                                    className={`mt-2 flex items-center gap-3 px-3 py-2 rounded-lg ${bt.status.warning.bg} border ${bt.status.warning.border}`}
-                                                                >
-                                                                    <p
-                                                                        className={`flex-1 text-xs ${bt.status.warning.text} leading-snug`}
-                                                                    >
-                                                                        You're
-                                                                        browsing
-                                                                        as a
-                                                                        guest —
-                                                                        sign in
-                                                                        to also
-                                                                        see
-                                                                        private
-                                                                        widgets
-                                                                        you own
-                                                                        or have
-                                                                        access
-                                                                        to.
-                                                                    </p>
-                                                                    <Button2
-                                                                        size="sm"
-                                                                        title="Sign in"
-                                                                        onClick={
-                                                                            handleSignInForPreview
-                                                                        }
-                                                                        className="shrink-0"
-                                                                    />
-                                                                </div>
-                                                            )}
-                                                        {!discoverSearching &&
-                                                            discoverResults.length ===
-                                                                0 && (
-                                                                <div
-                                                                    className={`flex-1 flex items-center justify-center text-center text-sm ${bt.muted} px-6`}
-                                                                >
-                                                                    No registry
-                                                                    widgets
-                                                                    matched “
-                                                                    {
-                                                                        lastDiscoverQueryRef.current
-                                                                    }
-                                                                    ”. Try
-                                                                    different
-                                                                    keywords, or
-                                                                    switch to
-                                                                    Build mode
-                                                                    to generate
-                                                                    one.
-                                                                </div>
-                                                            )}
-                                                        {discoverResults.length >
-                                                            0 && (
-                                                            <div className="flex-1 overflow-auto pt-3">
-                                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                                    {discoverResults.map(
-                                                                        (
-                                                                            pkg
-                                                                        ) => (
-                                                                            <Card2
-                                                                                key={`${
-                                                                                    pkg.scope ||
-                                                                                    ""
-                                                                                }/${
-                                                                                    pkg.name
-                                                                                }`}
-                                                                                onClick={() =>
-                                                                                    handleSelectRegistryPackage(
-                                                                                        pkg
-                                                                                    )
-                                                                                }
-                                                                                ariaLabel={`Preview ${
-                                                                                    pkg.displayName ||
-                                                                                    pkg.name
-                                                                                }`}
-                                                                                hover
-                                                                                className="flex flex-col gap-1 text-left"
-                                                                            >
-                                                                                <div className="flex items-start justify-between gap-2">
-                                                                                    <div
-                                                                                        className={`font-semibold text-sm ${bt.text} truncate`}
-                                                                                    >
-                                                                                        {pkg.displayName ||
-                                                                                            pkg.name}
-                                                                                    </div>
-                                                                                    {pkg.installed && (
-                                                                                        <span
-                                                                                            className={`shrink-0 px-1.5 py-0.5 rounded text-xs font-medium ${bt.status.success.bg} ${bt.status.success.icon} border ${bt.status.success.border}`}
-                                                                                        >
-                                                                                            Installed
-                                                                                        </span>
-                                                                                    )}
-                                                                                </div>
-                                                                                <div
-                                                                                    className={`text-xs ${bt.muted} truncate font-mono`}
-                                                                                >
-                                                                                    {pkg.scope
-                                                                                        ? `@${pkg.scope.replace(
-                                                                                              /^@/,
-                                                                                              ""
-                                                                                          )}/${
-                                                                                              pkg.package ||
-                                                                                              pkg.name
-                                                                                          }`
-                                                                                        : pkg.package ||
-                                                                                          pkg.name}
-                                                                                </div>
-                                                                                {pkg.description && (
-                                                                                    <div
-                                                                                        className={`text-sm ${bt.muted} overflow-hidden leading-snug mt-1`}
-                                                                                        style={{
-                                                                                            display:
-                                                                                                "-webkit-box",
-                                                                                            WebkitLineClamp: 3,
-                                                                                            WebkitBoxOrient:
-                                                                                                "vertical",
-                                                                                        }}
-                                                                                    >
-                                                                                        {
-                                                                                            pkg.description
-                                                                                        }
-                                                                                    </div>
-                                                                                )}
-                                                                            </Card2>
-                                                                        )
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            }
-                                            return (
-                                                <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                                                    <div
-                                                        className={`w-16 h-16 rounded-2xl ${bt.surface} border ${bt.border} flex items-center justify-center`}
-                                                    >
-                                                        <FontAwesomeIcon
-                                                            icon="wand-magic-sparkles"
-                                                            className={`h-7 w-7 ${bt.accent}`}
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-2 max-w-sm">
-                                                        <p
-                                                            className={`text-sm font-medium ${bt.text}`}
-                                                        >
-                                                            {chatMode ===
-                                                            "discover"
-                                                                ? "Search the registry"
-                                                                : "Your preview shows here"}
-                                                        </p>
-                                                        <p
-                                                            className={`text-xs ${bt.muted}`}
-                                                        >
-                                                            {chatMode ===
-                                                            "discover"
-                                                                ? "Tell the AI what kind of widget you're looking for and registry matches will appear here."
-                                                                : "Once the widget is written, it runs here with live data."}
-                                                        </p>
-                                                    </div>
+                                        !effectiveEditContext?.sourceError && (
+                                            <div
+                                                className="flex flex-col items-center justify-center h-full text-center space-y-4"
+                                                data-testid="builder-preview-empty"
+                                            >
+                                                <div
+                                                    className={`w-16 h-16 rounded-2xl ${bt.surface} border ${bt.border} flex items-center justify-center`}
+                                                >
+                                                    <FontAwesomeIcon
+                                                        icon="wrench"
+                                                        className={`h-7 w-7 ${bt.accent}`}
+                                                    />
                                                 </div>
-                                            );
-                                        })()}
+                                                <p
+                                                    className={`text-sm max-w-sm ${bt.muted}`}
+                                                >
+                                                    {showCompose
+                                                        ? "Pick a kind of widget on the right — it shows here as you build it."
+                                                        : "The widget shows here once its code builds."}
+                                                </p>
+                                            </div>
+                                        )}
 
                                     {/* Auth-gated preview: friendlier than a red error */}
                                     {previewError &&
@@ -5005,35 +3200,8 @@ ${
                                             </div>
                                         )}
 
-                                    {/* A build error the AI is fixing by
-                                    itself (phase 2d) — no red box yet. */}
-                                    {previewError && autoFixShowing && (
-                                        <div
-                                            data-testid="auto-fix-progress"
-                                            className={`flex flex-col items-center justify-center h-full gap-3 ${bt.text}`}
-                                        >
-                                            <FontAwesomeIcon
-                                                icon="spinner"
-                                                className={`h-6 w-6 animate-spin ${bt.accent}`}
-                                            />
-                                            <div className="text-sm font-medium">
-                                                Fixing a build error… (try{" "}
-                                                {Math.max(autoFix.attempt, 1)}{" "}
-                                                of {MAX_AUTO_FIX})
-                                            </div>
-                                            <div
-                                                className={`text-xs ${bt.muted}`}
-                                            >
-                                                The AI is correcting its code.
-                                                The preview appears when it
-                                                builds.
-                                            </div>
-                                        </div>
-                                    )}
-
                                     {/* Compile error (non-auth) */}
                                     {previewError &&
-                                        !autoFixShowing &&
                                         !/authentic|unauth|401|sign.?in/i.test(
                                             previewError
                                         ) && (
@@ -5051,9 +3219,6 @@ ${
                                                         {previewErrorMeta?.code ===
                                                         "ESBUILD_SPAWN_FAILED"
                                                             ? "Widget compiler unavailable"
-                                                            : autoFix.status ===
-                                                              "exhausted"
-                                                            ? `Still failing after ${MAX_AUTO_FIX} automatic fixes`
                                                             : "Compilation Error"}
                                                     </div>
                                                     <pre
@@ -5141,9 +3306,8 @@ ${
                                                                 )}
                                                             </div>
                                                         )}
-                                                    {/* Slice 17b: heuristic hint for the
-                                                    common "AI emitted utility imports
-                                                    but no File: markers" failure.
+                                                    {/* Slice 17b: hint for an import of a
+                                                    file the package doesn't have.
                                                     Only for real import errors
                                                     (esbuild: Could not resolve
                                                     "./x") — not the "Could not
@@ -5155,21 +3319,12 @@ ${
                                                         <div
                                                             className={`text-xs ${bt.status.warning.icon} ${bt.status.warning.bg} border ${bt.status.warning.border} rounded p-2`}
                                                         >
-                                                            This widget
-                                                            references files
-                                                            that weren't
-                                                            included in the AI's
-                                                            response. Ask the AI
-                                                            to emit every
-                                                            imported file as a
-                                                            separate{" "}
-                                                            <code>File:</code>{" "}
-                                                            marker (e.g.{" "}
-                                                            <code>
-                                                                File:
-                                                                widgets/utils.js
-                                                            </code>
-                                                            ).
+                                                            This widget imports
+                                                            a file that isn't in
+                                                            its package. Remove
+                                                            the import, or keep
+                                                            the code in the
+                                                            widget's own file.
                                                         </div>
                                                     )}
                                                     {previewErrorMeta?.diagnostics && (
@@ -5210,52 +3365,7 @@ ${
                                                             </Button3>
                                                         </details>
                                                     )}
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() => {
-                                                            // Slice 19H: dispatch the
-                                                            // dash:chat-core-send window
-                                                            // CustomEvent so the ChatCore
-                                                            // bound to this modal actually
-                                                            // sends the message. The
-                                                            // previous localStorage-write
-                                                            // approach silently dropped
-                                                            // the message because ChatCore
-                                                            // only reads localStorage at
-                                                            // mount. Use the validator's
-                                                            // specific correction message
-                                                            // when present (slice 17b.12);
-                                                            // otherwise fall back to the
-                                                            // generic compile-error prompt.
-                                                            // Asked by hand: the
-                                                            // automatic fixes start
-                                                            // over after this.
-                                                            const content =
-                                                                buildFixRequest(
-                                                                    previewError,
-                                                                    previewErrorMeta
-                                                                );
-                                                            autoFixStateRef.current =
-                                                                resetAutoFix();
-                                                            setAutoFix({
-                                                                status: "idle",
-                                                                attempt: 0,
-                                                            });
-                                                            sendFixRequest(
-                                                                content,
-                                                                {
-                                                                    hidden: false,
-                                                                }
-                                                            );
-                                                        }}
-                                                    >
-                                                        {autoFix.status ===
-                                                        "exhausted"
-                                                            ? "Try again"
-                                                            : "Send error to AI"}
-                                                    </Button>
-                                                    {autoFix.status ===
-                                                        "exhausted" && (
+                                                    {detectedCode.componentCode && (
                                                         <Button2
                                                             size="sm"
                                                             onClick={() =>
@@ -5272,46 +3382,48 @@ ${
                                         )}
 
                                     {/* Live widget preview */}
-                                    {PreviewComponent && !installStatus && (
-                                        <div className="flex flex-col h-full">
-                                            {/* Provider picker — shown when the
+                                    {PreviewComponent &&
+                                        !detectedCode.emptyGrid &&
+                                        !installStatus && (
+                                            <div className="flex flex-col h-full">
+                                                {/* Provider picker — shown when the
                                         widget declares providers. Without a
                                         selection the widget renders its own
                                         "not configured" empty state, same
                                         as on a real dashboard. */}
-                                            <PreviewProviderPicker
-                                                configCode={
-                                                    detectedCode.configCode
-                                                }
-                                                appProviders={
-                                                    (
-                                                        previewAppCtx ||
-                                                        appContext
-                                                    )?.providers
-                                                }
-                                                selection={
-                                                    previewProviderSelection
-                                                }
-                                                justChanged={
-                                                    providerJustChanged
-                                                }
-                                                onChange={(
-                                                    next,
-                                                    changedType,
-                                                    changedValue
-                                                ) => {
-                                                    setPreviewProviderSelection(
-                                                        next
-                                                    );
-                                                    if (changedType) {
-                                                        flagProviderChange(
-                                                            changedType,
-                                                            changedValue
-                                                        );
+                                                <PreviewProviderPicker
+                                                    configCode={
+                                                        detectedCode.configCode
                                                     }
-                                                }}
-                                            />
-                                            {/* Test-inputs form (slice 17b.9) —
+                                                    appProviders={
+                                                        (
+                                                            previewAppCtx ||
+                                                            appContext
+                                                        )?.providers
+                                                    }
+                                                    selection={
+                                                        previewProviderSelection
+                                                    }
+                                                    justChanged={
+                                                        providerJustChanged
+                                                    }
+                                                    onChange={(
+                                                        next,
+                                                        changedType,
+                                                        changedValue
+                                                    ) => {
+                                                        setPreviewProviderSelection(
+                                                            next
+                                                        );
+                                                        if (changedType) {
+                                                            flagProviderChange(
+                                                                changedType,
+                                                                changedValue
+                                                            );
+                                                        }
+                                                    }}
+                                                />
+                                                {/* Test-inputs form (slice 17b.9) —
                                         renders one row per userConfig field
                                         the AI declared, so the user can
                                         type values into the widget without
@@ -5320,161 +3432,75 @@ ${
                                         rules manager and watch the preview
                                         fetch real data). Empty when the
                                         widget declares no userConfig. */}
-                                            <PreviewTestInputsForm
-                                                userConfig={
-                                                    previewParsedConfig?.userConfig
-                                                }
-                                                defaults={previewWidgetDefaults}
-                                                values={previewTestInputs}
-                                                onChange={(field, value) =>
-                                                    setPreviewTestInputs(
-                                                        (prev) => ({
-                                                            ...prev,
-                                                            [field]: value,
-                                                        })
-                                                    )
-                                                }
-                                                onReset={() =>
-                                                    setPreviewTestInputs({})
-                                                }
-                                            />
-                                            {/* Empty-render banner — surfaces the
-                                        common case where the widget mounted
-                                        but produced no visible content (the
-                                        AI used wrong dash-react prop names,
-                                        e.g. `text=` on Heading). Without
-                                        this the user sees a black canvas
-                                        with no clue what's wrong.
-
-                                        Suppressed in compose mode: an empty
-                                        preview while the user is still
-                                        dragging components into cells is
-                                        expected, not an error. The "Send
-                                        to AI to fix" CTA also doesn't apply
-                                        — compose doesn't go through chat. */}
-                                            {previewLooksEmpty &&
-                                                chatMode !== "compose" &&
-                                                hasActedThisSession && (
-                                                    <div
-                                                        className={`mx-4 mt-2 px-3 py-2 rounded-md border ${bt.status.warning.border} ${bt.status.warning.bg} text-xs ${bt.status.warning.text} space-y-1`}
-                                                    >
+                                                <PreviewTestInputsForm
+                                                    userConfig={
+                                                        previewParsedConfig?.userConfig
+                                                    }
+                                                    defaults={
+                                                        previewWidgetDefaults
+                                                    }
+                                                    values={previewTestInputs}
+                                                    onChange={(field, value) =>
+                                                        setPreviewTestInputs(
+                                                            (prev) => ({
+                                                                ...prev,
+                                                                [field]: value,
+                                                            })
+                                                        )
+                                                    }
+                                                    onReset={() =>
+                                                        setPreviewTestInputs({})
+                                                    }
+                                                />
+                                                {/* A widget that mounted but shows
+                                            nothing: a hint for the code. Not
+                                            while composing — an empty layout
+                                            is expected there. */}
+                                                {previewLooksEmpty &&
+                                                    !showCompose && (
                                                         <div
-                                                            className={`font-semibold ${bt.status.warning.icon}`}
+                                                            className={`mx-4 mt-2 px-3 py-2 rounded-md border ${bt.status.warning.border} ${bt.status.warning.bg} text-xs ${bt.status.warning.text} space-y-1`}
+                                                            data-testid="builder-preview-looks-empty"
                                                         >
-                                                            Widget rendered with
-                                                            no visible content
+                                                            <div
+                                                                className={`font-semibold ${bt.status.warning.icon}`}
+                                                            >
+                                                                Widget rendered
+                                                                with no visible
+                                                                content
+                                                            </div>
+                                                            <div>
+                                                                Most common
+                                                                cause: a wrong
+                                                                prop name on a
+                                                                dash-react
+                                                                component. Use
+                                                                title on
+                                                                Heading, Button
+                                                                and EmptyState
+                                                                (not text or
+                                                                message).
+                                                            </div>
                                                         </div>
-                                                        <div
-                                                            className={`${bt.status.warning.text}`}
-                                                        >
-                                                            Most common cause:
-                                                            wrong prop names on
-                                                            dash-react
-                                                            components. Use{" "}
-                                                            <code
-                                                                className={`${bt.surface} px-1 rounded`}
-                                                            >
-                                                                title
-                                                            </code>{" "}
-                                                            on{" "}
-                                                            <code
-                                                                className={`${bt.surface} px-1 rounded`}
-                                                            >
-                                                                Heading
-                                                            </code>
-                                                            /
-                                                            <code
-                                                                className={`${bt.surface} px-1 rounded`}
-                                                            >
-                                                                Button
-                                                            </code>
-                                                            /
-                                                            <code
-                                                                className={`${bt.surface} px-1 rounded`}
-                                                            >
-                                                                EmptyState
-                                                            </code>{" "}
-                                                            (not{" "}
-                                                            <code
-                                                                className={`${bt.surface} px-1 rounded`}
-                                                            >
-                                                                text
-                                                            </code>{" "}
-                                                            or{" "}
-                                                            <code
-                                                                className={`${bt.surface} px-1 rounded`}
-                                                            >
-                                                                message
-                                                            </code>
-                                                            ). Click "Send to AI
-                                                            to fix" and the chat
-                                                            will request a
-                                                            corrected version.
-                                                        </div>
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => {
-                                                                try {
-                                                                    const raw =
-                                                                        localStorage.getItem(
-                                                                            "dash-widget-builder"
-                                                                        );
-                                                                    const data =
-                                                                        raw
-                                                                            ? JSON.parse(
-                                                                                  raw
-                                                                              )
-                                                                            : {
-                                                                                  messages:
-                                                                                      [],
-                                                                              };
-                                                                    const msgs =
-                                                                        data?.messages ||
-                                                                        [];
-                                                                    msgs.push({
-                                                                        role: "user",
-                                                                        content: `The widget compiled and mounted but rendered no visible content (preview is black). This is almost always a dash-react prop-name mismatch. Please re-emit the component AND config code blocks with corrected prop names: \`<Heading title="...">\` (NOT text=), \`<Button title="...">\` (NOT text=), \`<EmptyState title="..." description="...">\` (NOT message=). Output BOTH the \`\`\`jsx component block and the \`\`\`javascript config block.`,
-                                                                    });
-                                                                    localStorage.setItem(
-                                                                        "dash-widget-builder",
-                                                                        JSON.stringify(
-                                                                            {
-                                                                                ...data,
-                                                                                messages:
-                                                                                    msgs,
-                                                                            }
-                                                                        )
-                                                                    );
-                                                                    setPreviewLooksEmpty(
-                                                                        false
-                                                                    );
-                                                                } catch {
-                                                                    /* ignore */
-                                                                }
-                                                            }}
-                                                        >
-                                                            Send to AI to fix
-                                                        </Button>
-                                                    </div>
-                                                )}
-                                            {/* Widget preview — fills available space.
+                                                    )}
+                                                {/* Widget preview — fills available space.
                                                 The inner padding keeps the widget off
                                                 the frame's edges, like a dashboard cell. */}
-                                            <div className="flex-1 p-4 overflow-auto">
-                                                <div
-                                                    className={`h-full rounded-lg border overflow-hidden shadow-lg p-3 ${
-                                                        previewThemeCtx
-                                                            ?.currentTheme?.[
-                                                            "border-primary-dark"
-                                                        ] || `${bt.border}`
-                                                    } ${
-                                                        previewThemeCtx
-                                                            ?.currentTheme?.[
-                                                            "bg-primary-dark"
-                                                        ] || `${bt.surface}`
-                                                    }`}
-                                                >
-                                                    {/* Slice 17c — iframe-isolated preview is the
+                                                <div className="flex-1 p-4 overflow-auto">
+                                                    <div
+                                                        className={`h-full rounded-lg border overflow-hidden shadow-lg p-3 ${
+                                                            previewThemeCtx
+                                                                ?.currentTheme?.[
+                                                                "border-primary-dark"
+                                                            ] || `${bt.border}`
+                                                        } ${
+                                                            previewThemeCtx
+                                                                ?.currentTheme?.[
+                                                                "bg-primary-dark"
+                                                            ] || `${bt.surface}`
+                                                        }`}
+                                                    >
+                                                        {/* Slice 17c — iframe-isolated preview is the
                                                     only path now. Bundle source flows through
                                                     postMessage; module references go via direct
                                                     cross-window assignment (not serializable).
@@ -5487,259 +3513,151 @@ ${
                                                     async, commit-phase, CSS, globals, memory)
                                                     stay kernel-isolated from the host React
                                                     tree. */}
-                                                    {previewBundleSource && (
-                                                        <PreviewIframe
-                                                            bundleSource={
-                                                                previewBundleSource
-                                                            }
-                                                            componentName={
-                                                                previewBundleComponentName
-                                                            }
-                                                            props={{
-                                                                title: displayName,
-                                                                ...previewWidgetDefaults,
-                                                                // Only let NON-empty
-                                                                // test inputs override
-                                                                // the userConfig
-                                                                // defaults — a blank
-                                                                // ("") test value must
-                                                                // not clobber a real
-                                                                // default at preview.
-                                                                ...Object.fromEntries(
-                                                                    Object.entries(
-                                                                        previewTestInputs ||
-                                                                            {}
-                                                                    ).filter(
-                                                                        ([
-                                                                            ,
-                                                                            v,
-                                                                        ]) =>
-                                                                            v !==
-                                                                                "" &&
-                                                                            v !==
-                                                                                undefined &&
-                                                                            v !==
-                                                                                null
-                                                                    )
-                                                                ),
-                                                                ...(effectiveEditContext?.userPrefs ||
-                                                                    {}),
-                                                            }}
-                                                            themeContext={
-                                                                previewThemeCtx
-                                                            }
-                                                            appContext={{
-                                                                providers:
-                                                                    (
-                                                                        previewAppCtx ||
-                                                                        appContext
-                                                                    )
-                                                                        ?.providers ||
-                                                                    {},
-                                                                credentials:
-                                                                    (
-                                                                        previewAppCtx ||
-                                                                        appContext
-                                                                    )
-                                                                        ?.credentials ||
-                                                                    null,
-                                                            }}
-                                                            widgetData={buildPreviewWidgetData(
-                                                                {
-                                                                    editContext:
-                                                                        effectiveEditContext,
-                                                                    previewConfigCode:
-                                                                        detectedCode.configCode,
-                                                                    previewProviderSelection,
+                                                        {previewBundleSource && (
+                                                            <PreviewIframe
+                                                                bundleSource={
+                                                                    previewBundleSource
                                                                 }
-                                                            )}
-                                                            onError={
-                                                                handleIframePreviewError
-                                                            }
-                                                            onRenderStats={
-                                                                handleIframeRenderStats
-                                                            }
-                                                            onConsoleEvent={
-                                                                appendConsoleEvent
-                                                            }
-                                                            // Compose-mode
-                                                            // click-to-select.
-                                                            // Only active in
-                                                            // compose mode —
-                                                            // chat/build keep
-                                                            // the preview
-                                                            // passive so
-                                                            // installed-widget
-                                                            // interactions
-                                                            // (button clicks,
-                                                            // selections)
-                                                            // aren't
-                                                            // intercepted.
-                                                            selectable={
-                                                                chatMode ===
-                                                                "compose"
-                                                            }
-                                                            selectedNodeId={
-                                                                composerSelectedNodeId
-                                                            }
-                                                            onComposerNodeClick={({
-                                                                nodeId,
-                                                            }) =>
-                                                                setComposerSelectedNodeId(
-                                                                    nodeId
-                                                                )
-                                                            }
-                                                        />
-                                                    )}
-                                                </div>
-                                            </div>
-                                            {/* Registry-preview footer (shown when user is browsing a registry widget) */}
-                                            {browsingPackage && (
-                                                <div
-                                                    className={`px-6 py-3 border-t ${borderColor} shrink-0 space-y-2`}
-                                                >
-                                                    <div className="flex items-center justify-between gap-3">
-                                                        <Button3
-                                                            size="sm"
-                                                            onClick={
-                                                                handleBackToDiscover
-                                                            }
-                                                        >
-                                                            <FontAwesomeIcon
-                                                                icon="arrow-left"
-                                                                className="h-2.5 w-2.5"
-                                                            />
-                                                            Back to Discover
-                                                        </Button3>
-                                                        <div
-                                                            className={`text-xs truncate flex-1 text-right font-mono ${chromeMuted}`}
-                                                        >
-                                                            {browsingPackage.scope
-                                                                ? `@${browsingPackage.scope.replace(
-                                                                      /^@/,
-                                                                      ""
-                                                                  )}/${
-                                                                      browsingPackage.packageName
-                                                                  }`
-                                                                : browsingPackage.packageName}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center justify-between gap-3">
-                                                        <span
-                                                            className={`text-xs truncate ${chromeMuted}`}
-                                                        >
-                                                            {browsingPackage.installed
-                                                                ? "Already installed in your widget library."
-                                                                : "Preview this widget, then install or remix."}
-                                                        </span>
-                                                        <div className="flex items-center gap-3 shrink-0">
-                                                            <Button2
-                                                                size="sm"
-                                                                onClick={
-                                                                    handleRemixRegistryPackage
+                                                                componentName={
+                                                                    previewBundleComponentName
                                                                 }
-                                                                disabled={
-                                                                    !detectedCode?.componentCode
+                                                                props={{
+                                                                    title: displayName,
+                                                                    ...previewWidgetDefaults,
+                                                                    // Only let NON-empty
+                                                                    // test inputs override
+                                                                    // the userConfig
+                                                                    // defaults — a blank
+                                                                    // ("") test value must
+                                                                    // not clobber a real
+                                                                    // default at preview.
+                                                                    ...Object.fromEntries(
+                                                                        Object.entries(
+                                                                            previewTestInputs ||
+                                                                                {}
+                                                                        ).filter(
+                                                                            ([
+                                                                                ,
+                                                                                v,
+                                                                            ]) =>
+                                                                                v !==
+                                                                                    "" &&
+                                                                                v !==
+                                                                                    undefined &&
+                                                                                v !==
+                                                                                    null
+                                                                        )
+                                                                    ),
+                                                                    ...(effectiveEditContext?.userPrefs ||
+                                                                        {}),
+                                                                }}
+                                                                themeContext={
+                                                                    previewThemeCtx
                                                                 }
-                                                                tooltip="Fork this widget into @ai-built/ and edit it with AI"
-                                                            >
-                                                                Remix
-                                                            </Button2>
-                                                            {browsingPackage.installed ? (
-                                                                <Button
-                                                                    size="sm"
-                                                                    onClick={
-                                                                        handleAddInstalledToDashboard
+                                                                appContext={{
+                                                                    providers:
+                                                                        (
+                                                                            previewAppCtx ||
+                                                                            appContext
+                                                                        )
+                                                                            ?.providers ||
+                                                                        {},
+                                                                    credentials:
+                                                                        (
+                                                                            previewAppCtx ||
+                                                                            appContext
+                                                                        )
+                                                                            ?.credentials ||
+                                                                        null,
+                                                                }}
+                                                                widgetData={buildPreviewWidgetData(
+                                                                    {
+                                                                        editContext:
+                                                                            effectiveEditContext,
+                                                                        previewConfigCode:
+                                                                            detectedCode.configCode,
+                                                                        previewProviderSelection,
                                                                     }
-                                                                    disabled={
-                                                                        !cellContext
-                                                                    }
-                                                                    tooltip={
-                                                                        cellContext
-                                                                            ? "Place this widget in the dashboard cell you opened the builder from"
-                                                                            : "Open the builder from an empty grid cell to place widgets"
-                                                                    }
-                                                                >
-                                                                    Add to
-                                                                    Dashboard
-                                                                </Button>
-                                                            ) : (
-                                                                <Button
-                                                                    size="sm"
-                                                                    onClick={
-                                                                        handleInstallRegistryPackage
-                                                                    }
-                                                                    disabled={
-                                                                        registryInstalling
-                                                                    }
-                                                                >
-                                                                    {registryInstalling
-                                                                        ? "Installing..."
-                                                                        : cellContext
-                                                                        ? "Install + Add to Dashboard"
-                                                                        : "Install"}
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    {installStatus?.error && (
-                                                        <div
-                                                            className={`text-xs ${status.error.icon}`}
-                                                        >
-                                                            {
-                                                                installStatus.error
-                                                            }
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {/* Footer — mode toggle, name (remix), category + Install */}
-                                            {!browsingPackage && (
-                                                <div
-                                                    className={`px-6 py-3 border-t ${borderColor} shrink-0`}
-                                                >
-                                                    {isRemixMode && (
-                                                        <div className="mb-2 space-y-2">
-                                                            {/* Sign-in nudge for non-ai-built widgets when not authenticated */}
-                                                            {!isOwner &&
-                                                                registryChecked &&
-                                                                !registryUsername &&
-                                                                widgetScope !==
-                                                                    "ai-built" && (
-                                                                    <div
-                                                                        className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${status.warning.bg} ${status.warning.border}`}
-                                                                    >
-                                                                        <p
-                                                                            className={`flex-1 text-xs leading-snug ${status.warning.text}`}
-                                                                        >
-                                                                            Sign
-                                                                            in
-                                                                            to
-                                                                            the
-                                                                            registry
-                                                                            to
-                                                                            update
-                                                                            your
-                                                                            own
-                                                                            widgets
-                                                                            in
-                                                                            place
-                                                                            instead
-                                                                            of
-                                                                            duplicating.
-                                                                        </p>
-                                                                        <Button2
-                                                                            size="sm"
-                                                                            title="Sign in"
-                                                                            onClick={
-                                                                                handleSignInForPreview
-                                                                            }
-                                                                            className="shrink-0"
-                                                                        />
-                                                                    </div>
                                                                 )}
-                                                            {/* Signed-in-but-not-the-owner hint. Surfaces
+                                                                onError={
+                                                                    handleIframePreviewError
+                                                                }
+                                                                onRenderStats={
+                                                                    handleIframeRenderStats
+                                                                }
+                                                                onConsoleEvent={
+                                                                    appendConsoleEvent
+                                                                }
+                                                                // Compose's
+                                                                // click-to-select;
+                                                                // editing code
+                                                                // keeps the
+                                                                // preview passive
+                                                                // so the widget's
+                                                                // own clicks work.
+                                                                selectable={
+                                                                    showCompose
+                                                                }
+                                                                selectedNodeId={
+                                                                    composerSelectedNodeId
+                                                                }
+                                                                onComposerNodeClick={({
+                                                                    nodeId,
+                                                                }) =>
+                                                                    setComposerSelectedNodeId(
+                                                                        nodeId
+                                                                    )
+                                                                }
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {/* Footer — mode toggle, name (remix), category + Install */}
+                                                {
+                                                    <div
+                                                        className={`px-6 py-3 border-t ${borderColor} shrink-0`}
+                                                    >
+                                                        {isRemixMode && (
+                                                            <div className="mb-2 space-y-2">
+                                                                {/* Sign-in nudge for non-ai-built widgets when not authenticated */}
+                                                                {!isOwner &&
+                                                                    registryChecked &&
+                                                                    !registryUsername &&
+                                                                    widgetScope !==
+                                                                        "ai-built" && (
+                                                                        <div
+                                                                            className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${status.warning.bg} ${status.warning.border}`}
+                                                                        >
+                                                                            <p
+                                                                                className={`flex-1 text-xs leading-snug ${status.warning.text}`}
+                                                                            >
+                                                                                Sign
+                                                                                in
+                                                                                to
+                                                                                the
+                                                                                registry
+                                                                                to
+                                                                                update
+                                                                                your
+                                                                                own
+                                                                                widgets
+                                                                                in
+                                                                                place
+                                                                                instead
+                                                                                of
+                                                                                duplicating.
+                                                                            </p>
+                                                                            <Button2
+                                                                                size="sm"
+                                                                                title="Sign in"
+                                                                                onClick={
+                                                                                    handleSignInForPreview
+                                                                                }
+                                                                                className="shrink-0"
+                                                                            />
+                                                                        </div>
+                                                                    )}
+                                                                {/* Signed-in-but-not-the-owner hint. Surfaces
                                                             what's actually being compared so the user
                                                             can see why the Update toggle stays hidden
                                                             (mismatched username vs. scope) without us
@@ -5749,238 +3667,247 @@ ${
                                                             handled by the scope === username check;
                                                             this surfaces that gap so the user knows
                                                             their options. */}
-                                                            {!isOwner &&
-                                                                registryChecked &&
-                                                                registryUsername &&
-                                                                widgetScope &&
-                                                                widgetScope !==
-                                                                    "ai-built" && (
-                                                                    <div
-                                                                        className={`px-3 py-2 rounded-lg border ${status.warning.bg} ${status.warning.border}`}
-                                                                    >
-                                                                        <p
-                                                                            className={`text-xs leading-snug ${status.warning.text}`}
+                                                                {!isOwner &&
+                                                                    registryChecked &&
+                                                                    registryUsername &&
+                                                                    widgetScope &&
+                                                                    widgetScope !==
+                                                                        "ai-built" && (
+                                                                        <div
+                                                                            className={`px-3 py-2 rounded-lg border ${status.warning.bg} ${status.warning.border}`}
                                                                         >
-                                                                            Signed
-                                                                            in
-                                                                            as{" "}
-                                                                            <code
-                                                                                className={
-                                                                                    codeChip
-                                                                                }
+                                                                            <p
+                                                                                className={`text-xs leading-snug ${status.warning.text}`}
                                                                             >
-                                                                                {
-                                                                                    registryUsername
-                                                                                }
-                                                                            </code>{" "}
-                                                                            —
-                                                                            this
-                                                                            widget
-                                                                            is
-                                                                            under
-                                                                            scope{" "}
-                                                                            <code
-                                                                                className={
-                                                                                    codeChip
-                                                                                }
-                                                                            >
-                                                                                @
-                                                                                {
-                                                                                    widgetScope
-                                                                                }
-                                                                            </code>
-                                                                            .
-                                                                            Update-in-place
-                                                                            is
-                                                                            only
-                                                                            enabled
-                                                                            when
-                                                                            the
-                                                                            signed-in
-                                                                            username
-                                                                            matches
-                                                                            the
-                                                                            scope.
-                                                                            Otherwise
-                                                                            use
-                                                                            Remix
-                                                                            to
-                                                                            fork
-                                                                            into{" "}
-                                                                            <code
-                                                                                className={
-                                                                                    codeChip
-                                                                                }
-                                                                            >
-                                                                                @ai-built/
-                                                                            </code>
-                                                                            .
-                                                                        </p>
-                                                                    </div>
+                                                                                Signed
+                                                                                in
+                                                                                as{" "}
+                                                                                <code
+                                                                                    className={
+                                                                                        codeChip
+                                                                                    }
+                                                                                >
+                                                                                    {
+                                                                                        registryUsername
+                                                                                    }
+                                                                                </code>{" "}
+                                                                                —
+                                                                                this
+                                                                                widget
+                                                                                is
+                                                                                under
+                                                                                scope{" "}
+                                                                                <code
+                                                                                    className={
+                                                                                        codeChip
+                                                                                    }
+                                                                                >
+                                                                                    @
+                                                                                    {
+                                                                                        widgetScope
+                                                                                    }
+                                                                                </code>
+
+                                                                                .
+                                                                                Update-in-place
+                                                                                is
+                                                                                only
+                                                                                enabled
+                                                                                when
+                                                                                the
+                                                                                signed-in
+                                                                                username
+                                                                                matches
+                                                                                the
+                                                                                scope.
+                                                                                Otherwise
+                                                                                use
+                                                                                Remix
+                                                                                to
+                                                                                fork
+                                                                                into{" "}
+                                                                                <code
+                                                                                    className={
+                                                                                        codeChip
+                                                                                    }
+                                                                                >
+                                                                                    @ai-built/
+                                                                                </code>
+
+                                                                                .
+                                                                            </p>
+                                                                        </div>
+                                                                    )}
+                                                                {/* Update / Remix toggle — only when user is the owner */}
+                                                                {isOwner && (
+                                                                    <SegmentedControl
+                                                                        ariaLabel="Update or remix"
+                                                                        value={
+                                                                            editMode
+                                                                        }
+                                                                        onChange={
+                                                                            setEditMode
+                                                                        }
+                                                                        options={[
+                                                                            {
+                                                                                value: "update",
+                                                                                label: "Update original",
+                                                                            },
+                                                                            {
+                                                                                value: "remix",
+                                                                                label: "Remix as new",
+                                                                            },
+                                                                        ]}
+                                                                    />
                                                                 )}
-                                                            {/* Update / Remix toggle — only when user is the owner */}
-                                                            {isOwner && (
-                                                                <SegmentedControl
-                                                                    ariaLabel="Update or remix"
-                                                                    value={
-                                                                        editMode
+                                                                {editMode ===
+                                                                    "remix" && (
+                                                                    <InputText
+                                                                        value={
+                                                                            remixName
+                                                                        }
+                                                                        onChange={(
+                                                                            value
+                                                                        ) => {
+                                                                            // PascalCase, letters and digits only.
+                                                                            const raw =
+                                                                                String(
+                                                                                    value ||
+                                                                                        ""
+                                                                                ).replace(
+                                                                                    /[^a-zA-Z0-9]/g,
+                                                                                    ""
+                                                                                );
+                                                                            setRemixName(
+                                                                                raw
+                                                                                    .charAt(
+                                                                                        0
+                                                                                    )
+                                                                                    .toUpperCase() +
+                                                                                    raw.slice(
+                                                                                        1
+                                                                                    )
+                                                                            );
+                                                                        }}
+                                                                        placeholder="RemixWidgetName"
+                                                                        ariaLabel="Name for the remixed widget"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <span
+                                                                className={`text-xs truncate ${chromeMuted}`}
+                                                            >
+                                                                {!isRemixMode
+                                                                    ? needsName
+                                                                        ? showCompose
+                                                                            ? "Name the widget on the right to install it"
+                                                                            : "Rename its component in the Code tab to install it"
+                                                                        : `Goes into your widgets as ${displayName}`
+                                                                    : editMode ===
+                                                                      "update"
+                                                                    ? `Updates ${
+                                                                          effectiveEditContext.originalPackage ||
+                                                                          `@ai-built/${widgetName?.toLowerCase()}`
+                                                                      }`
+                                                                    : `Remixes ${
+                                                                          effectiveEditContext.originalComponentName
+                                                                      } → @ai-built/${(
+                                                                          remixName ||
+                                                                          widgetName
+                                                                      )?.toLowerCase()}`}
+                                                            </span>
+                                                            <div className="flex items-center gap-3 shrink-0">
+                                                                {/* Say why Install is
+                                                            greyed out. */}
+                                                                <ChecksStatus
+                                                                    check={
+                                                                        draftCheck &&
+                                                                        draftCheck.key ===
+                                                                            currentCodeKey
+                                                                            ? draftCheck
+                                                                            : null
                                                                     }
-                                                                    onChange={
-                                                                        setEditMode
+                                                                    bt={bt}
+                                                                    onRetry={
+                                                                        retryCheck
                                                                     }
-                                                                    options={[
-                                                                        {
-                                                                            value: "update",
-                                                                            label: "Update original",
-                                                                        },
-                                                                        {
-                                                                            value: "remix",
-                                                                            label: "Remix as new",
-                                                                        },
-                                                                    ]}
                                                                 />
-                                                            )}
-                                                            {editMode ===
-                                                                "remix" && (
-                                                                <InputText
+                                                                {checkPassed &&
+                                                                    !selectedCategory && (
+                                                                        <span
+                                                                            data-testid="install-category-hint"
+                                                                            className={`text-xs ${chromeMuted}`}
+                                                                        >
+                                                                            Pick
+                                                                            a
+                                                                            category
+                                                                            to
+                                                                            install
+                                                                        </span>
+                                                                    )}
+                                                                <ChoiceMenu
+                                                                    label="Category"
                                                                     value={
-                                                                        remixName
+                                                                        selectedCategory ||
+                                                                        null
+                                                                    }
+                                                                    options={
+                                                                        VALID_CATEGORIES
                                                                     }
                                                                     onChange={(
-                                                                        value
-                                                                    ) => {
-                                                                        // PascalCase, letters and digits only.
-                                                                        const raw =
-                                                                            String(
-                                                                                value ||
-                                                                                    ""
-                                                                            ).replace(
-                                                                                /[^a-zA-Z0-9]/g,
-                                                                                ""
-                                                                            );
-                                                                        setRemixName(
-                                                                            raw
-                                                                                .charAt(
-                                                                                    0
-                                                                                )
-                                                                                .toUpperCase() +
-                                                                                raw.slice(
-                                                                                    1
-                                                                                )
-                                                                        );
-                                                                    }}
-                                                                    placeholder="RemixWidgetName"
-                                                                    ariaLabel="Name for the remixed widget"
+                                                                        v
+                                                                    ) =>
+                                                                        setSelectedCategory(
+                                                                            v ||
+                                                                                null
+                                                                        )
+                                                                    }
+                                                                    align="right"
+                                                                    direction="up"
                                                                 />
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                    <div className="flex items-center justify-between gap-3">
-                                                        <span
-                                                            className={`text-xs truncate ${chromeMuted}`}
-                                                        >
-                                                            {!isRemixMode
-                                                                ? `Installs to @ai-built/${widgetName?.toLowerCase()}`
-                                                                : editMode ===
-                                                                  "update"
-                                                                ? `Updates ${
-                                                                      effectiveEditContext.originalPackage ||
-                                                                      `@ai-built/${widgetName?.toLowerCase()}`
-                                                                  }`
-                                                                : `Remixes ${
-                                                                      effectiveEditContext.originalComponentName
-                                                                  } → @ai-built/${(
-                                                                      remixName ||
-                                                                      widgetName
-                                                                  )?.toLowerCase()}`}
-                                                        </span>
-                                                        <div className="flex items-center gap-3 shrink-0">
-                                                            {/* Say why Install is
-                                                            greyed out. */}
-                                                            <ChecksStatus
-                                                                check={
-                                                                    draftCheck &&
-                                                                    draftCheck.key ===
-                                                                        currentCodeKey
-                                                                        ? draftCheck
-                                                                        : null
-                                                                }
-                                                                bt={bt}
-                                                                onRetry={
-                                                                    retryCheck
-                                                                }
-                                                                waiting={
-                                                                    aiReplying
-                                                                }
-                                                            />
-                                                            {checkPassed &&
-                                                                !selectedCategory && (
-                                                                    <span
-                                                                        data-testid="install-category-hint"
-                                                                        className={`text-xs ${chromeMuted}`}
-                                                                    >
-                                                                        Pick a
-                                                                        category
-                                                                        to
-                                                                        install
-                                                                    </span>
-                                                                )}
-                                                            <ChoiceMenu
-                                                                label="Category"
-                                                                value={
-                                                                    selectedCategory ||
-                                                                    null
-                                                                }
-                                                                options={
-                                                                    VALID_CATEGORIES
-                                                                }
-                                                                onChange={(v) =>
-                                                                    setSelectedCategory(
-                                                                        v ||
-                                                                            null
-                                                                    )
-                                                                }
-                                                                align="right"
-                                                                direction="up"
-                                                            />
-                                                            <Button
-                                                                onClick={
-                                                                    handleInstall
-                                                                }
-                                                                disabled={
-                                                                    !checkPassed ||
-                                                                    !selectedCategory ||
-                                                                    (isRemixMode &&
-                                                                        editMode ===
-                                                                            "remix" &&
-                                                                        !remixName)
-                                                                }
-                                                                tooltip={
-                                                                    !checkPassed
-                                                                        ? "Waiting for the checks to pass"
-                                                                        : !selectedCategory
-                                                                        ? "Pick a category first"
-                                                                        : editMode ===
-                                                                              "remix" &&
-                                                                          !remixName
-                                                                        ? "Enter a name for the remix"
-                                                                        : undefined
-                                                                }
-                                                                title={
-                                                                    !isRemixMode
-                                                                        ? "Install widget"
-                                                                        : editMode ===
-                                                                          "update"
-                                                                        ? "Update widget"
-                                                                        : "Remix widget"
-                                                                }
-                                                            />
+                                                                <Button
+                                                                    onClick={
+                                                                        handleInstall
+                                                                    }
+                                                                    disabled={
+                                                                        needsName ||
+                                                                        !checkPassed ||
+                                                                        !selectedCategory ||
+                                                                        (isRemixMode &&
+                                                                            editMode ===
+                                                                                "remix" &&
+                                                                            !remixName)
+                                                                    }
+                                                                    tooltip={
+                                                                        needsName
+                                                                            ? "Name the widget first"
+                                                                            : !checkPassed
+                                                                            ? "Waiting for the checks to pass"
+                                                                            : !selectedCategory
+                                                                            ? "Pick a category first"
+                                                                            : editMode ===
+                                                                                  "remix" &&
+                                                                              !remixName
+                                                                            ? "Enter a name for the remix"
+                                                                            : undefined
+                                                                    }
+                                                                    title={
+                                                                        !isRemixMode
+                                                                            ? "Install widget"
+                                                                            : editMode ===
+                                                                              "update"
+                                                                            ? "Update widget"
+                                                                            : "Remix widget"
+                                                                    }
+                                                                />
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                                }
+                                            </div>
+                                        )}
 
                                     {/* Installed success */}
                                     {installStatus?.success && (
@@ -6022,7 +3949,7 @@ ${
                                                         ? editMode === "update"
                                                             ? "has been updated in place."
                                                             : "has been swapped into your dashboard."
-                                                        : cellContext
+                                                        : cellContext?.gridItemId
                                                         ? "is now in the widget selector."
                                                         : "now appears in your Widgets list."}
                                                 </p>
@@ -6047,18 +3974,9 @@ ${
                                                             componentCode: null,
                                                             configCode: null,
                                                         });
-                                                        lastCompiledCode.current =
-                                                            null;
-                                                        if (browsingPackage) {
-                                                            setBrowsingPackage(
-                                                                null
-                                                            );
-                                                        }
                                                     }}
                                                 >
-                                                    {browsingPackage
-                                                        ? "Browse More"
-                                                        : "Build Another"}
+                                                    Build Another
                                                 </Button2>
                                             </div>
                                         </div>
@@ -6170,7 +4088,7 @@ ${
                                             <div className="flex-1 min-h-0 overflow-hidden relative">
                                                 <div className="absolute inset-0">
                                                     <CodeEditorVS
-                                                        key={activeFile}
+                                                        key={`${activeFile}-${editorLayoutKey}`}
                                                         code={
                                                             editBuffer[
                                                                 activeFile
@@ -6314,7 +4232,6 @@ ${
                                                 configCode: newConfigCode,
                                             };
                                             setDetectedCode(updated);
-                                            lastCompiledCode.current = null;
                                             compilePreview(updated);
                                         }}
                                     />
@@ -6323,7 +4240,6 @@ ${
                                 <WidgetConsolePane
                                     events={consoleEvents}
                                     onClear={clearConsoleEvents}
-                                    onSendErrorToAI={handleSendConsoleErrorToAI}
                                 />
                             )}
                             {activeTab === "scorecard" &&
@@ -6349,16 +4265,9 @@ ${
                                             <div
                                                 className={`text-xs ${bt.muted} mt-1`}
                                             >
-                                                The scorecard runs over whatever
-                                                widget code is currently in the
-                                                editor — your draft, a remixed
-                                                registry widget, or a fresh AI
-                                                generation. Drafts from before
-                                                the cohesion rubric existed will
-                                                show failures here; to fix them,
-                                                ask the AI in the chat panel to
-                                                regenerate, or edit directly in
-                                                the{" "}
+                                                The scorecard runs over the
+                                                widget code in the editor. Fix
+                                                what fails in the{" "}
                                                 <button
                                                     type="button"
                                                     onClick={() =>
@@ -6373,406 +4282,44 @@ ${
                                         </div>
                                         <AcceptanceScorecard
                                             code={detectedCode.componentCode}
-                                            onSendToAi={handleScorecardSendToAi}
                                         />
                                     </div>
                                 )}
                         </div>
 
-                        {/* Right: Chat (1/3). `overflow-hidden` is
-                        load-bearing: ComposerPaneV2 → QuickStartPane
-                        renders a grid of intent cards whose intrinsic
-                        min-content can exceed this panel's 1/3 share
-                        on narrow viewports. Without the clip the grid
-                        spills past the modal's right edge and the
-                        second column ("View", "Custom") disappears
-                        off-screen. */}
-                        <div
-                            className={`flex flex-col flex-1 min-w-0 overflow-hidden border-l ${borderColor}`}
-                        >
-                            {/* Build / Compose are the two ways to MAKE a widget
-                            (a segmented control). Discover is a different path —
-                            find an existing widget in the registry — so it's its
-                            own button. */}
+                        {/* Right: Compose (1/3), for a new widget.
+                        `overflow-hidden` is load-bearing: QuickStartPane's
+                        grid of intent cards can exceed this panel's share
+                        on narrow viewports. Hidden while editing code. */}
+                        {showCompose && (
                             <div
-                                className={`flex items-center justify-between gap-2 h-12 px-3 border-b shrink-0 ${borderColor}`}
+                                className={`flex flex-col flex-1 min-w-0 overflow-hidden border-l ${borderColor}`}
+                                data-testid="builder-compose-pane"
                             >
-                                <SegmentedControl
-                                    ariaLabel="How to make the widget"
-                                    size="md"
-                                    value={
-                                        chatMode === "discover"
-                                            ? null
-                                            : chatMode
+                                <ComposerPaneV2
+                                    key={composerSessionKey}
+                                    initialGrid={composerInitialGrid}
+                                    onChange={setComposerGrid}
+                                    selectedCellId={composerSelectedNodeId}
+                                    onSelectedCellChange={
+                                        setComposerSelectedNodeId
                                     }
-                                    onChange={(v) => setChatMode(v)}
-                                    options={[
-                                        { value: "build", label: "Build" },
-                                        {
-                                            // Compose: pick components and wire data
-                                            // slots, no AI prompt (slice 20.C1).
-                                            value: "compose",
-                                            label: (
-                                                <span data-testid="chat-mode-compose">
-                                                    Compose
-                                                </span>
-                                            ),
-                                        },
-                                    ]}
+                                    providers={providers}
+                                    editContext={effectiveEditContext}
+                                    currentDraftId={draftSessionIdRef.current}
+                                    onAskDashTeam={askDashTeam}
+                                    onEmit={(code) => {
+                                        setDetectedCode({
+                                            componentCode: code.componentCode,
+                                            configCode: code.configCode,
+                                            files: code.files || null,
+                                            emptyGrid: !!code.empty,
+                                        });
+                                        compilePreview(code).catch(() => {});
+                                    }}
                                 />
-                                <span data-testid="chat-mode-discover">
-                                    <Button2
-                                        size="sm"
-                                        onClick={() =>
-                                            setChatMode(
-                                                chatMode === "discover"
-                                                    ? "build"
-                                                    : "discover"
-                                            )
-                                        }
-                                        tooltip={
-                                            chatMode === "discover"
-                                                ? "Back to building a widget"
-                                                : "Search the Dash registry for an existing widget instead of building one"
-                                        }
-                                    >
-                                        <span className="flex items-center gap-2">
-                                            <FontAwesomeIcon
-                                                icon={
-                                                    chatMode === "discover"
-                                                        ? "arrow-left"
-                                                        : "magnifying-glass"
-                                                }
-                                                className="h-3 w-3"
-                                            />
-                                            {chatMode === "discover"
-                                                ? "Back to Build"
-                                                : "Discover existing"}
-                                        </span>
-                                    </Button2>
-                                </span>
                             </div>
-
-                            {/* Chat content + provider gate. The gate fills
-                        this region in place of the chat (ChatCore isn't
-                        mounted until a provider is picked), with its own
-                        message box at the bottom. It appears in build
-                        mode when no
-                        provider has been picked yet (Edit-with-AI
-                        auto-derives via the useEffect at line ~1467
-                        and skips the gate). New Chat clears messages
-                        which triggers the message-poller's reset
-                        block to also null `selectedProviderForBuild`,
-                        re-opening the gate. */}
-                            <div className="relative flex flex-col flex-1 min-h-0">
-                                {/* Slice 20.C1: Compose-mode UI replaces
-                                the chat pane and the provider gate.
-                                Stage 1 (component picker) emits a
-                                data-less widget skeleton on every
-                                edit through the same compilePreview
-                                pipeline the chat path uses, so the
-                                left-side Preview tab updates live. */}
-                                {chatMode === "compose" && USE_COMPOSER_V2 && (
-                                    <ComposerPaneV2
-                                        key={composerSessionKey}
-                                        initialGrid={composerInitialGrid}
-                                        onChange={setComposerGrid}
-                                        selectedCellId={composerSelectedNodeId}
-                                        onSelectedCellChange={
-                                            setComposerSelectedNodeId
-                                        }
-                                        providers={providers}
-                                        apiKey={apiKey}
-                                        model={model}
-                                        backend={preferredBackend}
-                                        // Edit-mode awareness so the pane's
-                                        // mount-time auto-name + empty-grid
-                                        // emit don't overwrite the loaded
-                                        // editContext.componentCode. See
-                                        // ComposerPaneV2's editContext prop
-                                        // docs for the failure mode this
-                                        // prevents.
-                                        editContext={effectiveEditContext}
-                                        currentDraftId={
-                                            draftSessionIdRef.current
-                                        }
-                                        onEmit={(code) => {
-                                            setDetectedCode({
-                                                componentCode:
-                                                    code.componentCode,
-                                                configCode: code.configCode,
-                                                files: code.files || null,
-                                                emptyGrid: !!code.empty,
-                                            });
-                                            compilePreview(code).catch(
-                                                () => {}
-                                            );
-                                        }}
-                                    />
-                                )}
-                                {chatMode === "compose" && !USE_COMPOSER_V2 && (
-                                    <ComposerPane
-                                        key={composerSessionKey}
-                                        initialTree={composerInitialTree}
-                                        onTreeChange={setComposerTree}
-                                        selectedNodeId={composerSelectedNodeId}
-                                        onSelectedNodeChange={
-                                            setComposerSelectedNodeId
-                                        }
-                                        providers={providers}
-                                        apiKey={apiKey}
-                                        model={model}
-                                        backend={preferredBackend}
-                                        onEmit={(code) => {
-                                            // Mirror the composer's
-                                            // emitted code into
-                                            // detectedCode so the Code
-                                            // and Configure tabs (gated
-                                            // on detectedCode.componentCode)
-                                            // become active. Without
-                                            // this, the user can't see
-                                            // or edit the source the
-                                            // composer is generating.
-                                            setDetectedCode({
-                                                componentCode:
-                                                    code.componentCode,
-                                                configCode: code.configCode,
-                                                files: code.files || null,
-                                            });
-                                            compilePreview(code).catch(
-                                                () => {}
-                                            );
-                                            // Intentionally NOT yanking
-                                            // the user back to Preview
-                                            // on every composer edit —
-                                            // when they're reading the
-                                            // Code tab, the auto-switch
-                                            // is disruptive. Preview
-                                            // content updates regardless
-                                            // of which tab is active.
-                                        }}
-                                    />
-                                )}
-                                {chatMode === "build" &&
-                                    selectedProviderForBuild === null &&
-                                    !detectedCode?.componentCode && (
-                                        <ChatProviderGate
-                                            onChange={
-                                                setSelectedProviderForBuild
-                                            }
-                                            builtInCatalog={builtInCatalog}
-                                            knownExternalCatalog={
-                                                knownExternalCatalog
-                                            }
-                                            prompt={startPrompt}
-                                            onPrompt={(text) => {
-                                                // A new description starts a
-                                                // new conversation: ChatCore
-                                                // only sends its first message
-                                                // into an empty history.
-                                                if (text) {
-                                                    try {
-                                                        localStorage.setItem(
-                                                            "dash-widget-builder",
-                                                            JSON.stringify({
-                                                                messages: [],
-                                                            })
-                                                        );
-                                                    } catch {
-                                                        /* ignore */
-                                                    }
-                                                    // The poller reads an emptied history as
-                                                    // "New chat" (and resets the gate) unless
-                                                    // its count starts over too.
-                                                    lastMsgCount.current = 0;
-                                                }
-                                                setTypedPrompt(text || null);
-                                            }}
-                                            canEditPrompt={
-                                                !initialPrompt && !!typedPrompt
-                                            }
-                                        />
-                                    )}
-
-                                {/* Slice 17b.1: which data the AI is
-                                writing for, with "Change" to pick again. */}
-                                {chatMode === "build" &&
-                                    selectedProviderForBuild !== null && (
-                                        <div
-                                            className={`flex flex-row items-center justify-between gap-2 pl-4 pr-3 py-1.5 text-sm border-b ${bt.border}`}
-                                        >
-                                            <div
-                                                className={`flex flex-row items-center gap-2 min-w-0 ${bt.muted}`}
-                                            >
-                                                <FontAwesomeIcon
-                                                    icon="plug"
-                                                    className="h-3 w-3 shrink-0"
-                                                />
-                                                <span className="truncate">
-                                                    {selectedProviderForBuild?.sentinel ===
-                                                    "none"
-                                                        ? "No external provider"
-                                                        : `Data: ${
-                                                              [
-                                                                  ...builtInCatalog,
-                                                                  ...knownExternalCatalog,
-                                                              ].find(
-                                                                  (e) =>
-                                                                      e?.id ===
-                                                                      selectedProviderForBuild?.type
-                                                              )?.name ||
-                                                              typeLabel(
-                                                                  selectedProviderForBuild?.type
-                                                              ) ||
-                                                              "(unknown)"
-                                                          }`}
-                                                </span>
-                                            </div>
-                                            {/* Only before code exists: the
-                                            gate can't reopen over a written
-                                            widget (start a new chat instead). */}
-                                            {!detectedCode?.componentCode && (
-                                                <Button3
-                                                    size="sm"
-                                                    title="Change"
-                                                    tooltip="Pick different data"
-                                                    onClick={() =>
-                                                        setSelectedProviderForBuild(
-                                                            null
-                                                        )
-                                                    }
-                                                />
-                                            )}
-                                        </div>
-                                    )}
-
-                                {/* Render ChatCore only after the provider
-                                gate is resolved (or skipped via edit
-                                mode). Otherwise the AI's first response
-                                is generated against a system prompt
-                                that doesn't know about the user's
-                                pick — locking in a generic "what kind
-                                of widget?" message even after the
-                                user selects. */}
-                                {chatMode !== "compose" &&
-                                    builderSkillText !== undefined &&
-                                    (chatMode !== "build" ||
-                                        selectedProviderForBuild !== null ||
-                                        detectedCode?.componentCode) && (
-                                        <ChatCore
-                                            title=""
-                                            model={model}
-                                            // Lock the modal's CLI invocation: replace
-                                            // Claude Code's default system prompt
-                                            // (which advertises tools + auto-loads
-                                            // project skills by description match)
-                                            // with ours, and disable all built-in
-                                            // tools. Without this, the
-                                            // dash-widget-builder skill auto-loads
-                                            // here and the AI uses Bash/Read/Glob
-                                            // despite the prompt forbidding them.
-                                            // Replace Claude Code's default preamble
-                                            // with the modal's terse skill-pointer
-                                            // prompt — the dash-widget-builder skill
-                                            // (auto-loaded from .claude/skills/) does
-                                            // the heavy lifting; the default preamble
-                                            // would otherwise override our concise
-                                            // first-response guidance.
-                                            replaceSystemPrompt={true}
-                                            // Skip auto-wiring the dash MCP — the
-                                            // widget builder doesn't need
-                                            // dashboard-management tools while
-                                            // generating a widget. (No effect on
-                                            // CLI argv as of slice 19B; gates the
-                                            // dash MCP plumbing only.)
-                                            disableTools={true}
-                                            systemPrompt={(() => {
-                                                if (chatMode === "discover") {
-                                                    return DISCOVER_SYSTEM_PROMPT;
-                                                }
-                                                const base = buildSystemPrompt({
-                                                    builtInCatalog,
-                                                    knownExternalCatalog,
-                                                    installedProviders:
-                                                        providers,
-                                                    selectedProvider:
-                                                        selectedProviderForBuild,
-                                                    skillText: builderSkillText,
-                                                });
-                                                // Edit mode: append the existing
-                                                // widget source so the AI sees what
-                                                // it's modifying. The new
-                                                // buildSystemPrompt handles
-                                                // first-response style for build
-                                                // mode; edit mode needs its own
-                                                // first-response wording (confirm by
-                                                // name, ask what to change) so it
-                                                // appends here.
-                                                if (
-                                                    effectiveEditContext?.componentCode
-                                                ) {
-                                                    return `${base}\n\nYou are editing an existing widget. The user will describe what changes they want. Here is the CURRENT source code you are modifying:\n\nComponent (jsx):\n\`\`\`jsx\n${
-                                                        effectiveEditContext.componentCode
-                                                    }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
-                                                        effectiveEditContext.configCode ||
-                                                        ""
-                                                    }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above. CRITICAL: PRESERVE every existing \`userConfig\` field EXACTLY as written — including its \`defaultValue\`, \`displayName\`, \`instructions\`, and \`required\` — unless the user explicitly asks to change that specific field. Never drop or blank out a \`userConfig\` \`defaultValue\` the user authored. KEEP every import of the package's own files (e.g. \`import algoliaProviderConfig from "./algoliaProviderConfig"\`) exactly as written — those files are part of the widget's package and are included when it builds; never inline, rewrite or remove them, and never add settings that ask for API keys: the widget's provider connection supplies them.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences: confirm you see the widget by name and ask what they'd like to change. No lists, no bullet points, no sections, no suggestions — keep it under 30 words total.`;
-                                                }
-                                                // Hand-off path: user
-                                                // composed a widget in
-                                                // Compose mode, then
-                                                // switched to Build to
-                                                // ask AI for tweaks.
-                                                // detectedCode is
-                                                // populated but there's
-                                                // no editContext (this
-                                                // isn't an install they
-                                                // came back to edit).
-                                                // Treat the composed code
-                                                // as the starting point
-                                                // so the AI iterates
-                                                // instead of generating
-                                                // from scratch.
-                                                if (
-                                                    detectedCode?.componentCode
-                                                ) {
-                                                    return `${base}\n\nThe user started this widget in Compose mode and now wants AI help to refine it. Here is the CURRENT source they composed:\n\nComponent (jsx):\n\`\`\`jsx\n${
-                                                        detectedCode.componentCode
-                                                    }\n\`\`\`\n\nConfig (.dash.js):\n\`\`\`javascript\n${
-                                                        detectedCode.configCode ||
-                                                        ""
-                                                    }\n\`\`\`\n\nWhen the user describes changes, output BOTH updated code blocks (the full component and full config) incorporating their requested changes. Do NOT ask the user to share the code — you already have it above. CRITICAL: PRESERVE every existing \`userConfig\` field EXACTLY as written — including its \`defaultValue\`, \`displayName\`, \`instructions\`, and \`required\` — unless the user explicitly asks to change that specific field. Never drop or blank out a \`userConfig\` \`defaultValue\` the user authored. Do NOT throw away what they composed unless they explicitly ask you to start over.\n\nIf this is your FIRST response in the conversation, do NOT output code. Reply with 1–2 short sentences acknowledging what they've built so far and asking what they'd like to change. No lists, no bullet points, under 30 words.`;
-                                                }
-                                                return base;
-                                            })()}
-                                            maxToolRounds="10"
-                                            apiKey={apiKey}
-                                            backend={preferredBackend}
-                                            persistKey="dash-widget-builder"
-                                            onPublishEvent={handleChatEvent}
-                                            hideToolsBanner={true}
-                                            // The code lives in the Code
-                                            // tab; the chat shows a note.
-                                            hideCodeBlocks="Code updated — see the Code tab."
-                                            initialMessage={
-                                                chatMode === "discover"
-                                                    ? "Tell me what kind of widget you're looking for."
-                                                    : effectiveEditContext?.componentCode
-                                                    ? "Hello, let's make some edits to this widget."
-                                                    : startPrompt ||
-                                                      "Hi, I'd like to build a new widget."
-                                            }
-                                            initialMessageHidden={
-                                                !(
-                                                    chatMode !== "discover" &&
-                                                    !effectiveEditContext?.componentCode &&
-                                                    startPrompt
-                                                )
-                                            }
-                                        />
-                                    )}
-                            </div>
-                        </div>
+                        )}
                     </div>
                 )}
                 {/* Slice 17d.2 — install-time permission gate. Renders

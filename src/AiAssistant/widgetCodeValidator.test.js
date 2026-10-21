@@ -4,15 +4,10 @@
  */
 import {
     validateProviderApiUsage,
-    buildAiCorrectionMessage,
     validateNoModalUsage,
     validateNoBotCalls,
-    buildNoBotCallsCorrectionMessage,
     validateEventPublishing,
-    buildEventPublishingCorrectionMessage,
-    buildNoModalCorrectionMessage,
     validateComponentReferences,
-    buildComponentReferenceCorrectionMessage,
     validateProviderCredentials,
 } from "./widgetCodeValidator";
 
@@ -250,78 +245,6 @@ describe("validateNoModalUsage — rejects popup chrome inside widgets", () => {
     });
 });
 
-describe("buildNoModalCorrectionMessage", () => {
-    test("returns empty string for no errors", () => {
-        expect(buildNoModalCorrectionMessage([])).toBe("");
-        expect(buildNoModalCorrectionMessage(null)).toBe("");
-    });
-
-    test("teaches the inline-Card alternative", () => {
-        const errors = [
-            { tag: "Modal", line: 5, suggestion: "Use a collapsible <Card>" },
-        ];
-        const msg = buildNoModalCorrectionMessage(errors);
-        expect(msg).toContain("Modal");
-        expect(msg).toContain("Card");
-        expect(msg).toContain("INLINE");
-    });
-
-    test("teaches the multi-widget split via useWidgetEvents", () => {
-        const msg = buildNoModalCorrectionMessage([
-            { tag: "Modal", line: 1, suggestion: "" },
-        ]);
-        expect(msg).toContain("useWidgetEvents");
-        expect(msg).toMatch(/split/i);
-        expect(msg).toMatch(/File:/);
-    });
-
-    test("instructs the AI to re-emit both code blocks", () => {
-        const msg = buildNoModalCorrectionMessage([
-            { tag: "Modal", line: 1, suggestion: "" },
-        ]);
-        expect(msg).toMatch(/component \+ config/i);
-    });
-});
-
-describe("buildAiCorrectionMessage", () => {
-    test("returns empty string for no errors", () => {
-        expect(buildAiCorrectionMessage([])).toBe("");
-        expect(buildAiCorrectionMessage(null)).toBe("");
-    });
-
-    test("includes the offending method names", () => {
-        const errors = [
-            {
-                service: "algolia",
-                method: "getRules",
-                suggestion: "listIndices",
-            },
-        ];
-        const msg = buildAiCorrectionMessage(errors);
-        expect(msg).toContain("getRules");
-        expect(msg).toContain("methods that do not exist");
-    });
-
-    test("instructs the AI to re-emit both code blocks", () => {
-        const errors = [
-            { service: "algolia", method: "x", suggestion: "listIndices" },
-        ];
-        const msg = buildAiCorrectionMessage(errors);
-        expect(msg).toMatch(/component \+ config/i);
-        expect(msg).toMatch(/AVAILABLE METHODS/i);
-    });
-
-    test("teaches the providerHash + dashboardAppId + providerName pattern", () => {
-        const msg = buildAiCorrectionMessage([
-            { service: "algolia", method: "x", suggestion: "" },
-        ]);
-        expect(msg).toContain("providerHash");
-        expect(msg).toContain("dashboardAppId");
-        expect(msg).toContain("providerName");
-        expect(msg).toContain("never the bare `pc`");
-    });
-});
-
 describe("validateComponentReferences — accepts known + locally-defined components", () => {
     test("returns ok for empty / non-string input", () => {
         expect(validateComponentReferences("")).toEqual({
@@ -493,31 +416,6 @@ describe("validateComponentReferences — rejects unknown components", () => {
     });
 });
 
-describe("buildComponentReferenceCorrectionMessage", () => {
-    test("returns empty string when no errors", () => {
-        expect(buildComponentReferenceCorrectionMessage([])).toBe("");
-        expect(buildComponentReferenceCorrectionMessage(null)).toBe("");
-    });
-
-    test("includes each unknown component name", () => {
-        const msg = buildComponentReferenceCorrectionMessage([
-            { name: "Heding", line: 5, suggestion: "did you mean <Heading>?" },
-            { name: "TabPanel", line: 8, suggestion: "not imported" },
-        ]);
-        expect(msg).toContain("Heding");
-        expect(msg).toContain("TabPanel");
-        expect(msg).toContain("don't exist");
-    });
-
-    test("instructs the AI to re-emit both code blocks", () => {
-        const msg = buildComponentReferenceCorrectionMessage([
-            { name: "Heding", line: 5, suggestion: "?" },
-        ]);
-        expect(msg).toMatch(/component \+ config/i);
-        expect(msg).toMatch(/dash-react-components.md|@trops\/dash-react/);
-    });
-});
-
 describe("validateNoBotCalls (team-dashboards TD-005)", () => {
     test("catches every way of reaching mainApi.bots", () => {
         const code = [
@@ -535,16 +433,6 @@ describe("validateNoBotCalls (team-dashboards TD-005)", () => {
         const code =
             'publishEvent("checkEmail", {}); const t = "Your bots run on events"; window.mainApi.widgets.list();';
         expect(validateNoBotCalls(code)).toEqual({ ok: true, errors: [] });
-    });
-
-    test("the correction turns it into an action widget", () => {
-        const msg = buildNoBotCallsCorrectionMessage(
-            validateNoBotCalls("window.mainApi.bots.run(1)").errors
-        );
-        expect(msg).toMatch(/starts a bot directly/);
-        expect(msg).toMatch(/publishEvent/);
-        expect(msg).toMatch(/Run on events/);
-        expect(msg).toMatch(/BOTH code blocks/);
     });
 });
 
@@ -570,14 +458,6 @@ describe("validateEventPublishing — api.publishEvent isn't heard (4d-2)", () =
             ).ok
         ).toBe(true);
         expect(validateEventPublishing("").ok).toBe(true);
-    });
-    test("the correction asks for useWidgetEvents and both blocks", () => {
-        const msg = buildEventPublishingCorrectionMessage(
-            validateEventPublishing('props.api.publishEvent("a")').errors
-        );
-        expect(msg).toMatch(/Re-emit BOTH code blocks/);
-        expect(msg).toMatch(/const \{ publishEvent \} = useWidgetEvents\(\);/);
-        expect(msg).toMatch(/Never call `api\.publishEvent`/);
     });
 });
 

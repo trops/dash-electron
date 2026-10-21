@@ -2961,34 +2961,6 @@ function createWindow() {
         // The Widget Builder's compile + install live in lib/aiBuild.cjs so
         // the Dash team's Builder can use them too (create-entry CRE-011).
 
-        // --- AI Widget Builder: its rules (create-entry PRD phase 2e) ---
-        // The builder's AI never got the dash-widget-builder skill on its
-        // own (Claude Code runs with --disable-slash-commands; the installed
-        // app's folder is inside app.asar; the Anthropic API has no skills),
-        // so the builder asks for the text and puts it in its prompt.
-        // app.getAppPath() is the project root in dev and app.asar when
-        // installed — Electron's fs reads inside the archive.
-        logger.loggedHandle("widget:builder-skill", async () => {
-            try {
-                const path = require("path");
-                const fs = require("fs");
-                const file = path.join(
-                    app.getAppPath(),
-                    ".claude",
-                    "skills",
-                    "dash-widget-builder",
-                    "SKILL.md"
-                );
-                return fs.readFileSync(file, "utf8");
-            } catch (err) {
-                console.warn(
-                    "[widget:builder-skill] Couldn't read the skill:",
-                    err && err.message
-                );
-                return null;
-            }
-        });
-
         // --- AI Widget Builder: Preview Compile ---
         // Compiles widget code and returns the bundle source for live preview.
         // Does NOT install — just compile and return.

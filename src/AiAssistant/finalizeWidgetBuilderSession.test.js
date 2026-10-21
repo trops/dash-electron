@@ -9,7 +9,6 @@
 import {
     finalizeWidgetBuilderSession,
     markWidgetBuilderActive,
-    primeWidgetBuilderChat,
     resetWidgetBuilderSessionState,
     suppressStageRemount,
     widgetBuilderBlocksRemount,
@@ -158,30 +157,5 @@ describe("the remount guard", () => {
         markWidgetBuilderActive(false);
         markWidgetBuilderActive(true);
         expect(widgetBuilderBlocksRemount()).toBe(true);
-    });
-});
-
-describe("primeWidgetBuilderChat", () => {
-    test("clears the last chat and ends the Claude Code session", () => {
-        localStorage.setItem(
-            "dash-widget-builder",
-            JSON.stringify({ messages: [{ role: "user", content: "old" }] })
-        );
-        primeWidgetBuilderChat();
-        expect(JSON.parse(localStorage.getItem("dash-widget-builder"))).toEqual(
-            { messages: [] }
-        );
-        expect(window.mainApi.llm.endCliSession).toHaveBeenCalledWith(
-            "dash-widget-builder"
-        );
-    });
-
-    test("a resumed draft keeps its chat", () => {
-        const kept = JSON.stringify({
-            messages: [{ role: "user", content: "x" }],
-        });
-        localStorage.setItem("dash-widget-builder", kept);
-        primeWidgetBuilderChat({ resuming: true });
-        expect(localStorage.getItem("dash-widget-builder")).toBe(kept);
     });
 });

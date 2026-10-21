@@ -9,8 +9,6 @@
  * builder is open and for 3s after one finishes.
  */
 
-const BUILDER_CHAT_KEY = "dash-widget-builder";
-
 let activeBuilders = 0;
 let suppressUntil = 0;
 
@@ -36,36 +34,16 @@ export function resetWidgetBuilderSessionState() {
 }
 
 /**
- * Before a builder mounts: clear the last session's chat (ChatCore reads it
- * only at mount) and end its Claude Code session — unless a draft is being
- * resumed, whose chat the builder restores itself.
- */
-export function primeWidgetBuilderChat({ resuming = false } = {}) {
-    if (!resuming) {
-        try {
-            localStorage.setItem(
-                BUILDER_CHAT_KEY,
-                JSON.stringify({ messages: [] })
-            );
-        } catch (_) {
-            /* ignore */
-        }
-    }
-    if (window.mainApi?.llm?.endCliSession) {
-        window.mainApi.llm.endCliSession(BUILDER_CHAT_KEY);
-    }
-}
-
-/**
  * Finish a session: register the installed widget's bundle, tell the widget
- * lists, and put it on the dashboard — swapped into its cell for Edit with AI
- * (a remix), placed into an empty cell for Build with AI. No install: nothing.
+ * lists, and put it on the dashboard — swapped into its cell when a widget
+ * was edited there, placed into an empty cell it was built for. No install:
+ * nothing.
  *
  * @param {object} args
  * @param {{componentName, scopedName}|null} args.installed  from onInstalled:
  *        the scoped component id and the package name
  * @param {object|null} args.cellContext  { cellNumber, gridItemId, workspaceId }
- * @param {object|null} args.editContext  { originalWidgetId, … } (Edit with AI)
+ * @param {object|null} args.editContext  { originalWidgetId, … } (editing a widget)
  * @param {(scopedName, source, regEntry, opts) => void} args.registerBundle
  */
 export async function finalizeWidgetBuilderSession({

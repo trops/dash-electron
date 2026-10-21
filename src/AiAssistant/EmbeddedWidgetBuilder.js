@@ -1,20 +1,18 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { WidgetBuilderModal } from "./WidgetBuilderModal";
 import {
     finalizeWidgetBuilderSession,
     markWidgetBuilderActive,
-    primeWidgetBuilderChat,
     suppressStageRemount,
 } from "./finalizeWidgetBuilderSession";
 
 /**
  * The Widget Builder as the Create screen shows it (create-entry PRD CRE-005
  * AC1), registered with dash-core's setWidgetBuilderRenderer. Create passes
- * { initialPrompt, resumeDraftId, onClose, setLeaveGuard } — the builder
+ * { resumeDraftId, onClose, setLeaveGuard } — the builder
  * registers a leave guard Create awaits before ← Back / × (unsaved work).
  *
- * It does what Dash.js does around the builder's own window: clears the last
- * chat before the builder mounts (unless a draft is resumed), holds off
+ * It does what Dash.js does around the builder's own window: holds off
  * dashboard remounts while open, and finishes an install — register, refresh
  * the widget lists — when the session ends. A session ends on Done/close
  * inside the builder, on Create's ← Back, or on Create closing; finishing on
@@ -25,7 +23,6 @@ import {
  */
 export function makeEmbeddedWidgetBuilder(registerBundle) {
     function EmbeddedWidgetBuilder({
-        initialPrompt = null,
         resumeDraftId = null,
         onClose = null,
         // Create waits on this before ← Back / × (unsaved work).
@@ -33,12 +30,6 @@ export function makeEmbeddedWidgetBuilder(registerBundle) {
     }) {
         const installedRef = useRef(null);
         const finishedRef = useRef(false);
-
-        // Before the builder (and its ChatCore) first renders.
-        useState(() => {
-            primeWidgetBuilderChat({ resuming: !!resumeDraftId });
-            return true;
-        });
 
         const finish = () => {
             if (finishedRef.current) return;
@@ -106,7 +97,6 @@ export function makeEmbeddedWidgetBuilder(registerBundle) {
                 cellContext={null}
                 editContext={null}
                 resumeDraftId={resumeDraftId}
-                initialPrompt={initialPrompt}
                 setLeaveGuard={setLeaveGuard}
             />
         );

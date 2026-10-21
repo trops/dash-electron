@@ -1,7 +1,7 @@
 # PRD: In-App AI Assistant & Widget Builder
 
-**Status:** In Progress (Phase 3 complete, Phases 1-2 partial; Discover tab shipped 2026-04-19). **The right-side AI Assistant panel is retired** (create-entry 5e-2c, 2026-10-14) — see below. The Widget Builder is unchanged.
-**Last Updated:** 2026-10-14
+**Status:** In Progress (Phase 3 complete, Phases 1-2 partial; Discover tab shipped 2026-04-19). **The right-side AI Assistant panel is retired** (create-entry 5e-2c, 2026-10-14) — see below. **The Widget Builder's own AI chat and Discover are retired** (consolidation Phase 3b, 2026-10-21): US-003, US-004 and US-007 below describe what was; the builder is the by-hand tool (create-entry CRE-010 AC6).
+**Last Updated:** 2026-10-21
 **Owner:** John Giatropoulos
 **Related PRDs:** None
 
@@ -19,7 +19,9 @@
 > | Make a theme from a website; delete dashboards                 | The Themes and Dashboards pages                            |
 > | Chat with your connected tools                                 | A dashboard's team lead (no general-purpose chat any more) |
 >
-> Kept: ChatCore (the Widget Builder's chat engine), Settings › AI (renamed from "AI Assistant"; Create and the Widget Builder use it), and Dash's MCP server for outside apps — its `ask_team_lead` runs now say "Asked through Dash's MCP server". Assistant chats were never saved past the window, so there's no history to move.
+> **The Widget Builder's chat retired too (consolidation Phase 3b, 2026-10-21).** Every AI widget build or change goes through the Dash team in Create (create-entry CRE-005 AC3, CRE-014): the Scout, the Planner, the Builder's draft, the Checker and a preview before anything is installed. The Widget Builder keeps Compose, Code, Preview, Configure, Console, Scorecard, drafts and the checked Install, with no AI of its own; Compose's "describe it" hands off to Create. Discover's job (find a widget you have or one in the registry) is the Scout's, and browsing the registry is Widgets › Search for Widgets.
+>
+> Kept: ChatCore (the sample Chat widgets use it), Settings › AI (renamed from "AI Assistant"; Create and the Widget Builder use it), and Dash's MCP server for outside apps — its `ask_team_lead` runs now say "Asked through Dash's MCP server". Assistant chats were never saved past the window, so there's no history to move.
 
 ---
 
@@ -180,7 +182,7 @@ Build on `ChatCore.js` engine. Pre-configure system prompt with Dash capabilitie
 
 ---
 
-**US-003: Build Widget with AI**
+**US-003: Build Widget with AI** — _retired 2026-10-21 (consolidation Phase 3b): the Dash team builds widgets in Create (create-entry CRE-005 AC3)._
 
 > As a Solutions Engineer,
 > I want to describe a widget in natural language and get a working result with live preview,
@@ -206,7 +208,7 @@ Widget files go to `{userData}/widgets/@ai-built/{widget-name}/`. Use existing `
 
 ### Should-Have (P1)
 
-**US-004: Remix Existing Widget**
+**US-004: Remix Existing Widget** — _retired 2026-10-21 (consolidation Phase 3b): Change <widget> in Create, in place or as a new widget (create-entry CRE-014); by hand, Edit the code yourself._
 
 > As a user,
 > I want to customize an existing widget using AI,
@@ -228,7 +230,7 @@ Uses `widget:read-sources` IPC (dash-core 0.1.322+) to read `.js` + `.dash.js` s
 
 ---
 
-**US-007: Discover Registry Widgets Before Building**
+**US-007: Discover Registry Widgets Before Building** — _retired 2026-10-21 (consolidation Phase 3b): the Scout looks first (create-entry CRE-005 AC3); the registry is Widgets › Search for Widgets._
 
 > As a user opening the Widget Builder,
 > I want to search the Dash registry for existing widgets and preview them inline,
@@ -354,7 +356,9 @@ Left = Navigation          Center = Content          Right = Helpers
 └───────────────────────────────────────────────────────┘
 ```
 
-**Layout (2026-10-13, design audit screen 3a):** the sketch above is the original. Today the builder is one raised modal surface: a panel header (title, quiet ✕), Preview / Code / Configure / Console / Scorecard as underline tabs on the left (2/3), and Build | Compose plus "Discover existing" on the right (1/3), with both header rows the same height so their hairlines line up. The Build pane opens on its message box ("Describe the widget you want"). Sending asks "Which data should this widget use?" with likely choices; the chat starts with the description as its first message once the data is picked. "Pick the data first…" opens the full list: rows with an icon, a readable name and "Not set up yet" / "Set up · N accounts", plus a filter. A type with no account asks before going on (set up, skip, or pick something else). The install bar uses a Category menu and a primary Install button.
+**Now (2026-10-21, consolidation Phase 3b):** **Widget Builder · Build by hand** — Preview / Code / Configure / Console / Scorecard on the left; on the right, Compose for a new widget (hidden when editing an installed widget's code, which opens on Code). No chat, provider question or Discover. See create-entry CRE-010 AC6.
+
+**Layout (2026-10-13, design audit screen 3a — before Phase 3b):** the sketch above is the original. Today the builder is one raised modal surface: a panel header (title, quiet ✕), Preview / Code / Configure / Console / Scorecard as underline tabs on the left (2/3), and Build | Compose plus "Discover existing" on the right (1/3), with both header rows the same height so their hairlines line up. The Build pane opens on its message box ("Describe the widget you want"). Sending asks "Which data should this widget use?" with likely choices; the chat starts with the description as its first message once the data is picked. "Pick the data first…" opens the full list: rows with an icon, a readable name and "Not set up yet" / "Set up · N accounts", plus a filter. A type with no account asks before going on (set up, skip, or pick something else). The install bar uses a Category menu and a primary Install button.
 
 ### Widget Lifecycle
 
@@ -523,8 +527,9 @@ The `tailwind.config.js` content array conditionally excludes the widget cache p
 
 ## Revision History
 
-| Version | Date       | Author            | Changes                                                                                                                                                       |
-| ------- | ---------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1.0     | 2026-04-03 | John Giatropoulos | Initial draft from design conversation                                                                                                                        |
-| 1.1     | 2026-04-05 | John Giatropoulos | Phase 3 implemented (v0.0.338–v0.0.345, dash-core v0.1.321). Added implementation notes, architecture decisions, and lessons learned.                         |
-| 1.2     | 2026-04-19 | John Giatropoulos | Added US-007: Discover tab in Widget Builder. Ships read-only preview + install; remix wiring deferred. Depends on dash-core v0.1.388 (`fetchPackageSource`). |
+| Version | Date       | Author            | Changes                                                                                                                                                                                              |
+| ------- | ---------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-04-03 | John Giatropoulos | Initial draft from design conversation                                                                                                                                                               |
+| 1.1     | 2026-04-05 | John Giatropoulos | Phase 3 implemented (v0.0.338–v0.0.345, dash-core v0.1.321). Added implementation notes, architecture decisions, and lessons learned.                                                                |
+| 1.2     | 2026-04-19 | John Giatropoulos | Added US-007: Discover tab in Widget Builder. Ships read-only preview + install; remix wiring deferred. Depends on dash-core v0.1.388 (`fetchPackageSource`).                                        |
+| 1.3     | 2026-10-21 | John Giatropoulos | Consolidation Phase 3b: the Widget Builder's AI chat (US-003, US-004) and Discover (US-007) retired — AI builds and changes go through the Dash team in Create; the builder is for building by hand. |

@@ -1,5 +1,5 @@
 /**
- * WidgetConsolePane — Console-tab body for the AI Builder.
+ * WidgetConsolePane — Console-tab body for the Widget Builder.
  *
  * Renders captured console.* + window.error + unhandledrejection
  * events from the widget under preview. Severities color-coded; each
@@ -54,11 +54,7 @@ function formatTime(ts) {
     return `${hh}:${mm}:${ss}.${ms}`;
 }
 
-export const WidgetConsolePane = ({
-    events = [],
-    onClear,
-    onSendErrorToAI,
-}) => {
+export const WidgetConsolePane = ({ events = [], onClear }) => {
     const bt = useBuilderTheme();
     const [errorsOnly, setErrorsOnly] = useState(false);
     const filtered = useMemo(
@@ -153,20 +149,6 @@ export const WidgetConsolePane = ({
                                         </span>
                                     ))}
                                 </div>
-                                {evt.severity === "error" &&
-                                    typeof onSendErrorToAI === "function" && (
-                                        <div className="flex-shrink-0 font-sans">
-                                            <Button3
-                                                title="Send error to AI"
-                                                size="sm"
-                                                onClick={() =>
-                                                    onSendErrorToAI(evt)
-                                                }
-                                                testId="console-send-to-ai"
-                                                tooltip="Push this error into the chat as a fix request"
-                                            />
-                                        </div>
-                                    )}
                             </div>
                         </div>
                     ))}

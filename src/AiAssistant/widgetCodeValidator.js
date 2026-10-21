@@ -490,53 +490,6 @@ export function validateProviderCredentials(componentCode, configCode) {
     return { ok: errors.length === 0, errors };
 }
 
-/** The chat correction for a widget that publishes with api.publishEvent. */
-export function buildEventPublishingCorrectionMessage(errors) {
-    if (!errors || errors.length === 0) return "";
-    const lines = [
-        "The widget you generated publishes with api.publishEvent, which sends the bare event name — no bot or widget can hear it:",
-    ];
-    for (const e of errors) lines.push(`- \`${e.snippet}\` on line ${e.line}`);
-    lines.push("");
-    lines.push(
-        'Re-emit BOTH code blocks (component + config). Publish with `const { publishEvent } = useWidgetEvents();` and `publishEvent("<event>", payload)` (imported from @trops/dash-core), with the event declared in the config\'s `events`. Never call `api.publishEvent`.'
-    );
-    return lines.join("\n");
-}
-
-/** The chat correction for a widget that reaches mainApi.bots. */
-export function buildNoBotCallsCorrectionMessage(errors) {
-    if (!errors || errors.length === 0) return "";
-    const lines = [
-        "The widget you generated starts a bot directly, which widgets may not do:",
-    ];
-    for (const e of errors) lines.push(`- \`${e.snippet}\` on line ${e.line}`);
-    lines.push("");
-    lines.push(
-        'Re-emit BOTH code blocks (component + config). Make it an action widget: declare the event in the config\'s `events`, call `publishEvent("<event>", payload)` from `useWidgetEvents()` on click and show a local "sent" status, and listen for the bot\'s completed/failed through `eventHandlers` to show when it finished. Tell the user to wire the bot under its Run on events. Never reference `mainApi.bots` in any form.'
-    );
-    return lines.join("\n");
-}
-
-/**
- * Build a corrective-message string the modal can post into the
- * chat history so the AI fixes the no-Modal violation.
- */
-export function buildNoModalCorrectionMessage(errors) {
-    if (!errors || errors.length === 0) return "";
-    const lines = [
-        "The widget you generated uses popup chrome that's forbidden inside widgets:",
-    ];
-    for (const e of errors) {
-        lines.push(`- \`<${e.tag}>\` on line ${e.line} — ${e.suggestion}`);
-    }
-    lines.push("");
-    lines.push(
-        "Re-emit BOTH code blocks (component + config). Replace `<Modal>` / `<Dialog>` / `<Drawer>` with INLINE rendering: a `{showThing && <Card>{thing}</Card>}` collapsible inside the widget's flat surface. Widgets are single-purpose, share dashboard real-estate, and must not pop chrome over other widgets. If the flow legitimately needs two separate widgets, split it: emit the second widget as a separate File: block and coordinate via `useWidgetEvents` (publish on action in widget A, listen + render in widget B)."
-    );
-    return lines.join("\n");
-}
-
 /**
  * Find every JSX `<UpperCaseName ...` reference where the name is
  * neither imported in the file nor exported by @trops/dash-react.
@@ -666,43 +619,4 @@ function suggestionForComponent(name) {
         return `did you mean ${close.map((c) => `<${c}>`).join(" or ")}?`;
     }
     return `not imported and not exported by @trops/dash-react. If you meant to define it locally, add a function/const declaration.`;
-}
-
-/**
- * Build a corrective-message string the modal can post into the chat
- * history so the AI fixes a hallucinated / typo'd component name.
- */
-export function buildComponentReferenceCorrectionMessage(errors) {
-    if (!errors || errors.length === 0) return "";
-    const lines = [
-        "The widget you generated uses component names that don't exist:",
-    ];
-    for (const e of errors) {
-        lines.push(`- \`<${e.name}>\` on line ${e.line} — ${e.suggestion}`);
-    }
-    lines.push("");
-    lines.push(
-        "Re-emit BOTH code blocks (component + config). Use ONLY components imported from `@trops/dash-react` (see the dash-react-components.md skill reference for the full list) or components you define locally in the same file. Don't invent component names. If you genuinely need a component that doesn't exist, fall back to a `<Panel>` + `<Heading>` + `<Paragraph>` composition."
-    );
-    return lines.join("\n");
-}
-
-/**
- * Build a corrective-message string the modal can post into the
- * chat history so the AI fixes its own mistake. Same shape as the
- * empty-render banner's "Send to AI to fix" action.
- */
-export function buildAiCorrectionMessage(errors) {
-    if (!errors || errors.length === 0) return "";
-    const lines = ["The widget you generated calls methods that do not exist:"];
-    for (const e of errors) {
-        lines.push(
-            `- \`window.mainApi.${e.service}.${e.method}(...)\` — not a real method on the \`${e.service}\` provider. Available: ${e.suggestion}.`
-        );
-    }
-    lines.push("");
-    lines.push(
-        "Re-emit BOTH code blocks (component + config) using only methods from the AVAILABLE METHODS section in the system prompt. Do NOT invent new method names. Pass `{ providerHash: pc.providerHash, dashboardAppId: pc.dashboardAppId, providerName: pc.providerName, ...callSpecificFields }` as the single argument — never the bare `pc` object."
-    );
-    return lines.join("\n");
 }
