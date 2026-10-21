@@ -1,13 +1,15 @@
 /**
  * @jest-environment jsdom
  *
- * QuickStartPane — renders three onramps (AI form, sample-layouts
- * gallery, "start from scratch") for the empty composer. We test:
- *   - structural rendering (both halves + escape hatch)
+ * QuickStartPane — the empty composer's onramps: the kinds of widget and
+ * their starter layouts, "start from scratch", and "Rather describe it?
+ * Ask the Dash team" (consolidation Phase 3b — the builder has no AI). We
+ * test:
+ *   - structural rendering (both steps + escape hatch)
  *   - clicking a sample card fires onApplyGrid with the template grid
  *   - the escape hatch routes through onRequestPalette with the
  *     supplied seed cell id
- *   - the tree → grid converter produces a non-empty grid
+ *   - the hand-off to the Dash team, with and without a description
  */
 
 jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
@@ -15,12 +17,7 @@ jest.mock("@trops/dash-react", () => require("../dashReactTestStub"));
 import React from "react";
 import { render, fireEvent, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import {
-    QuickStartPane,
-    treeToGrid,
-    buildSystemPrompt,
-} from "./QuickStartPane";
-import { WIDGET_CONVENTIONS } from "./widgetConventions";
+import { QuickStartPane } from "./QuickStartPane";
 import {
     SAMPLE_LAYOUTS,
     INTENTS,
@@ -45,17 +42,34 @@ describe("QuickStartPane — step 1 (intent picker)", () => {
                 screen.getByTestId(`composer-quick-start-intent-${it.id}`)
             ).toBeInTheDocument();
         }
-        // No detail view, no samples, no AI form when at step 1.
+        // No detail view or samples at step 1.
         expect(
             screen.queryByTestId("composer-quick-start-samples")
-        ).not.toBeInTheDocument();
-        expect(
-            screen.queryByTestId("composer-quick-start-ai")
         ).not.toBeInTheDocument();
         // Escape hatch is visible from both steps.
         expect(
             screen.getByTestId("composer-quick-start-scratch")
         ).toBeInTheDocument();
+        // Without a host to hand off to, no Dash team link.
+        expect(
+            screen.queryByTestId("composer-quick-start-ask-team")
+        ).not.toBeInTheDocument();
+    });
+
+    test("Rather describe it? Ask the Dash team (step 1: a link, no text)", () => {
+        const onAskDashTeam = jest.fn();
+        render(
+            <QuickStartPane
+                onApplyGrid={() => {}}
+                onRequestPalette={() => {}}
+                seedCellId="cell-1"
+                onAskDashTeam={onAskDashTeam}
+            />
+        );
+        const link = screen.getByTestId("composer-quick-start-ask-team");
+        expect(link).toHaveTextContent("Rather describe it? Ask the Dash team");
+        fireEvent.click(link);
+        expect(onAskDashTeam).toHaveBeenCalledWith("");
     });
 
     test("clicking an intent advances to the matching detail view", () => {
@@ -82,7 +96,7 @@ describe("QuickStartPane — step 2 (intent detail)", () => {
         );
     }
 
-    test("renders only the samples matching the picked intent + the AI form", () => {
+    test("renders only the samples matching the picked intent", () => {
         render(
             <QuickStartPane
                 onApplyGrid={() => {}}
@@ -107,10 +121,10 @@ describe("QuickStartPane — step 2 (intent detail)", () => {
                 `composer-quick-start-sample-${viewOnlySample.id}`
             )
         ).not.toBeInTheDocument();
-        // AI form opener is present.
+        // No AI of its own.
         expect(
-            screen.getByTestId("composer-quick-start-ai-open")
-        ).toBeInTheDocument();
+            screen.queryByTestId("composer-quick-start-ai-open")
+        ).not.toBeInTheDocument();
     });
 
     test("clicking a sample card fires onApplyGrid with that sample's grid", () => {
@@ -146,22 +160,25 @@ describe("QuickStartPane — step 2 (intent detail)", () => {
         ).toBeInTheDocument();
     });
 
-    test("opening the AI form reveals the textarea and submit button", () => {
+    test("Rather describe it? hands the text to the Dash team", () => {
+        const onAskDashTeam = jest.fn();
         render(
             <QuickStartPane
                 onApplyGrid={() => {}}
                 onRequestPalette={() => {}}
                 seedCellId="cell-1"
+                onAskDashTeam={onAskDashTeam}
             />
         );
         advanceToIntent("search");
-        fireEvent.click(screen.getByTestId("composer-quick-start-ai-open"));
-        expect(
-            screen.getByTestId("composer-quick-start-ai-input")
-        ).toBeInTheDocument();
-        expect(
-            screen.getByTestId("composer-quick-start-ai-submit")
-        ).toBeDisabled();
+        fireEvent.change(
+            screen.getByTestId("composer-quick-start-ask-team-input"),
+            { target: { value: "  Look up an order by number " } }
+        );
+        fireEvent.click(screen.getByTestId("composer-quick-start-ask-team"));
+        expect(onAskDashTeam).toHaveBeenCalledWith(
+            "Look up an order by number"
+        );
     });
 });
 
@@ -344,87 +361,5 @@ describe("QuickStartPane — escape hatch", () => {
         expect(
             screen.getByTestId("composer-quick-start-scratch")
         ).toBeDisabled();
-    });
-});
-
-describe("treeToGrid", () => {
-    test("converts a Panel-with-children tree into a non-empty grid", () => {
-        const tree = {
-            widgetName: "MyWidget",
-            root: {
-                type: "Panel",
-                props: {},
-                children: [
-                    { type: "Heading", props: { title: "Hi" }, children: [] },
-                    { type: "DataList", props: {}, children: [] },
-                ],
-            },
-        };
-        const g = treeToGrid(tree);
-        expect(g.widgetName).toBe("MyWidget");
-        expect(isGridEmpty(g)).toBe(false);
-        // Each child of the root Panel landed in its own row.
-        const panelCellId = g.grids[g.rootGridId].rows[0].cells[0];
-        const panelGridId = g.cells[panelCellId].gridId;
-        expect(g.grids[panelGridId].rows.length).toBe(2);
-    });
-
-    test("returns null for unusable input", () => {
-        expect(treeToGrid(null)).toBeNull();
-        expect(treeToGrid({})).toBeNull();
-    });
-});
-
-describe("buildSystemPrompt — Phase 4 primitive + color guidance", () => {
-    test("prompt contains the PRIMITIVE PALETTE section", () => {
-        const prompt = buildSystemPrompt({});
-        expect(prompt).toMatch(/PRIMITIVE PALETTE/);
-    });
-
-    test("prompt names every primitive use-case from WIDGET_CONVENTIONS.primitives", () => {
-        const prompt = buildSystemPrompt({});
-        for (const useCase of Object.keys(WIDGET_CONVENTIONS.primitives)) {
-            expect(prompt).toContain(useCase);
-        }
-    });
-
-    test("prompt names every primitive default by component name", () => {
-        const prompt = buildSystemPrompt({});
-        // Defaults like Button2, StatusBadge, Alert2, EmptyState,
-        // Skeleton.Text, StatCard must all appear so the AI can quote
-        // them by name in the emitted tree.
-        for (const body of Object.values(WIDGET_CONVENTIONS.primitives)) {
-            expect(prompt).toContain(body.defaultChoice);
-        }
-    });
-
-    test("prompt contains the COLOR RULE section + the rule body verbatim", () => {
-        const prompt = buildSystemPrompt({});
-        expect(prompt).toMatch(/COLOR RULE/);
-        expect(prompt).toContain(WIDGET_CONVENTIONS.colorRule);
-    });
-
-    test("prompt explicitly forbids raw <button> tags and bg-{color}-{shade} classes", () => {
-        const prompt = buildSystemPrompt({});
-        expect(prompt).toMatch(/NEVER emit raw `<button/);
-        expect(prompt).toMatch(/bg-\{color\}/);
-    });
-
-    test("prompt explicitly names StatusBadge / Alert / EmptyState as the replacements for hand-rolled patterns", () => {
-        const prompt = buildSystemPrompt({});
-        expect(prompt).toMatch(/use StatusBadge/);
-        expect(prompt).toMatch(/use Alert/);
-        expect(prompt).toMatch(/use EmptyState/);
-    });
-
-    test("FEW-SHOT EXAMPLES section is still present after Phase 4 additions", () => {
-        // Regression check — the primitive + color sections were
-        // inserted BEFORE few-shot, so the few-shot block must still
-        // render below them.
-        const prompt = buildSystemPrompt({});
-        expect(prompt).toMatch(/FEW-SHOT EXAMPLES/);
-        for (const ex of WIDGET_CONVENTIONS.fewShotExamples) {
-            expect(prompt).toContain(ex.description);
-        }
     });
 });

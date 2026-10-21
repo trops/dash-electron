@@ -2,8 +2,7 @@
  * WidgetBuilderModal — editing a widget from one of the user's own packages
  * (Widget Builder edit fixes): "Update original" rebuilds that package in
  * place, the category comes from the widget and isn't required to update,
- * the success screen says what happened, and the AI keeps the package's
- * shared imports.
+ * and the success screen says what happened.
  */
 const fs = require("fs");
 const path = require("path");
@@ -43,12 +42,5 @@ describe("category when editing (prefilled when known, else picked)", () => {
         expect(src).toMatch(
             /finalConfigCode = injectCategoryIntoConfigCode\(\s*detectedCode\.configCode,\s*selectedCategory\s*\)/
         );
-    });
-});
-
-describe("the AI keeps the package's shared files", () => {
-    test("edit-mode instructions say to keep imports of the package's own files", () => {
-        expect(src).toMatch(/KEEP every import of the package's own files/);
-        expect(src).toMatch(/never add settings that ask for API keys/);
     });
 });

@@ -60,10 +60,9 @@ describe("Dash.js — one way to finish a builder session", () => {
         expect(dash).toMatch(/suppressStageRemount\(\);/);
     });
 
-    test("the builder window clears the chat with the shared helper", () => {
-        expect(dash).toMatch(
-            /primeWidgetBuilderChat\(\{ resuming: !!resumeDraftId \}\);/
-        );
+    test("there's no builder chat to clear any more", () => {
+        expect(dash).not.toMatch(/primeWidgetBuilderChat/);
+        expect(dash).not.toMatch(/widgetBuilderInitialPrompt/);
     });
 
     test("the builder window reads the install synchronously (drafts list installs, then closes in one tick)", () => {
@@ -80,7 +79,7 @@ describe("Dash.js — one way to finish a builder session", () => {
 describe("WidgetBuilderModal — a resumed draft", () => {
     test("skips the drafts list (no race with resumeFromDraft)", () => {
         expect(modal).toMatch(
-            /if \(effectiveEditContext \|\| initialPrompt \|\| resumeDraftId\) \{/
+            /if \(effectiveEditContext \|\| resumeDraftId\) \{/
         );
     });
 });

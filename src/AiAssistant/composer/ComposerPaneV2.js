@@ -74,6 +74,14 @@ function hasEditableProps(componentName) {
     return false;
 }
 
+// The name field shows only a name the user chose: the placeholder name
+// ("ComposedWidget", "ComposedWidget2", …) reads as empty, so a new widget
+// asks for its name (consolidation Phase 3b, mockup frame B).
+export function shownName(widgetName) {
+    const name = widgetName || "";
+    return /^ComposedWidget\d*$/.test(name) ? "" : name;
+}
+
 export function ComposerPaneV2({
     onEmit,
     onChange,
@@ -81,11 +89,9 @@ export function ComposerPaneV2({
     initialGrid = null,
     selectedCellId: controlledSelectedCellId = null,
     onSelectedCellChange,
-    // LLM context for the empty-state quick-start pane. Same shape
-    // the modal already threads into SuggestLayoutButton in V1.
-    apiKey = null,
-    model = null,
-    backend = "claude-code",
+    // (text) → hand the widget to the Dash team (the builder closes and
+    // Create opens on it). Shown in the quick-start pane when given.
+    onAskDashTeam = null,
     // Edit-mode awareness. When the modal opens with an existing
     // widget's code loaded (Edit with AI), the compose pane must
     // NOT auto-emit the empty-grid placeholder on mount — that
@@ -132,7 +138,9 @@ export function ComposerPaneV2({
     // commits the name with the Save (checkmark) button (or Enter), which is
     // the only thing that writes it into grid.widgetName. Edit mode locks the
     // name entirely (renaming an installed widget changes its identity).
-    const [pendingName, setPendingName] = useState(grid.widgetName || "");
+    const [pendingName, setPendingName] = useState(() =>
+        shownName(grid.widgetName)
+    );
     const [nameError, setNameError] = useState(null);
     const [nameSaved, setNameSaved] = useState(false);
     // When set, the pane swaps to the full-pane PaletteView, and
@@ -165,7 +173,7 @@ export function ComposerPaneV2({
     // OUTSIDE the input — draft resume (initialGrid) or the on-mount
     // collision bump. User typing flows the other way (pendingName only).
     useEffect(() => {
-        setPendingName(grid.widgetName || "");
+        setPendingName(shownName(grid.widgetName));
     }, [grid.widgetName]);
 
     // Commit the typed name into grid.widgetName (the single point that
@@ -620,7 +628,7 @@ export function ComposerPaneV2({
                                             commitName();
                                         }
                                     }}
-                                    placeholder="MyWidget"
+                                    placeholder="Name it, e.g. OrderLookup"
                                     className="flex-1 min-w-0"
                                     data-testid="composer-widget-name"
                                 />
@@ -720,10 +728,8 @@ export function ComposerPaneV2({
                         seedCellId={
                             grid.grids[grid.rootGridId].rows[0].cells[0]
                         }
-                        apiKey={apiKey}
-                        model={model}
-                        backend={backend}
                         providers={providers}
+                        onAskDashTeam={onAskDashTeam}
                     />
                 ) : (
                     <div className="flex-1 min-h-0 flex flex-col p-3 gap-2">

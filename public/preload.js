@@ -86,12 +86,10 @@ const extendedApi = {
                 // componentCode/configCode alone still work for legacy
                 // single-file widgets.
                 files,
-                // Provider TYPE the user pre-selected via the
-                // ChatProviderGate. The main process uses this to
-                // auto-correct any drift in the AI's generated config
-                // (`providers: [...]`) so the widget always declares
-                // the type+class the user actually picked. Shape:
-                //   { type, providerClass } or { sentinel: "none" } or null
+                // A provider type+class to snap the config's
+                // `providers: [...]` to, or null (the Widget Builder
+                // passes null — it has no provider pick since Phase 3b).
+                // Shape: { type, providerClass } or { sentinel: "none" } or null
                 // (no instance name — instance binding is handled at
                 // runtime by the preview-area dropdown).
                 selectedProvider,
@@ -126,11 +124,10 @@ const extendedApi = {
                 // category injection + ComponentManager registration
                 // path which keys off the primary widget.
                 files,
-                // Provider type the user pre-selected via the
-                // ChatProviderGate. Used by the main-process auto-correct
-                // to snap any AI drift in `providers: [...]` to the
-                // actual type+class. Shape: { type, providerClass } or
-                // { sentinel: "none" } or null.
+                // A provider type+class to snap the config's
+                // `providers: [...]` to, or null (the Widget Builder
+                // passes null since Phase 3b). Shape: { type,
+                // providerClass } or { sentinel: "none" } or null.
                 selectedProvider,
                 // "Update original" on a widget from one of the user's own
                 // packages: that package's name — it's rebuilt and
@@ -155,9 +152,6 @@ const extendedApi = {
                 widgetName,
                 componentName,
             }),
-        // The dash-widget-builder skill's text for the builder's prompt
-        // (null when it can't be read).
-        getSkill: () => ipcRenderer.invoke("widget:builder-skill"),
     },
     aiAssistant: {
         // Probes Claude CLI availability, esbuild native helper

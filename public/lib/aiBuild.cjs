@@ -169,9 +169,9 @@ function writeAiFiles(stagingDir, files) {
 }
 
 /**
- * Auto-correct safety net for the ChatProviderGate's type+class
- * selection. The user chose a provider TYPE in the gate UI; the
- * LLM may have generated
+ * Auto-correct safety net for a provider type+class selection (the
+ * Widget Builder's chat used to pass one; since Phase 3b it passes null
+ * and the config is written as-is). The LLM may have generated
  * a config that declares a different `type` or `providerClass`
  * (training-data anchor, search_widgets imitation, etc.). Snap
  * the config's `providers: [...]` to match the picker so the

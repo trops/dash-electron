@@ -41,7 +41,6 @@ describe("Widget Builder — no hard-coded palette colours", () => {
         "WidgetConfigureTab.js",
         "WidgetConsolePane.js",
         "composer/AcceptanceScorecard.js",
-        "ChatProviderGate.js",
         "ChecksStatus.js",
         "UnsavedWorkPrompt.js",
         "WidgetCredentialPermissionModal.js",
@@ -49,17 +48,9 @@ describe("Widget Builder — no hard-coded palette colours", () => {
         "composer/GridEditor.js",
         "composer/PaletteView.js",
         "composer/PropertyInspector.js",
-        "composer/SuggestLayoutButton.js",
+        "composer/QuickStartPane.js",
         "composer/WirePicker.js",
     ])("%s has none", (file) => {
         expect(hardcoded(file)).toEqual([]);
-    });
-
-    test("QuickStartPane.js keeps only its prompt-text examples", () => {
-        // buildSystemPrompt tells the AI which class pills NOT to emit
-        // ("text-gray-600 italic" etc.) — text, not UI.
-        expect(
-            hardcoded("composer/QuickStartPane.js").length
-        ).toBeLessThanOrEqual(6);
     });
 });

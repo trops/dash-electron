@@ -1,16 +1,13 @@
 /**
  * draftCheck — the Widget Builder checks code while it's written (Widget
  * Builder edit fixes): the fast checks on each version, then the Checker;
- * problems go back to the AI; Install waits for a pass of the exact code.
+ * problems are listed for the user; Install waits for a pass of the exact code.
  */
 import {
     codeKeyOf,
     fastCheckProblems,
     verdictOf,
-    checksFixRequest,
     draftCheckRequest,
-    MAX_CHECK_FIXES,
-    userAskOf,
 } from "./draftCheck";
 
 describe("codeKeyOf — a pass belongs to this exact code", () => {
@@ -81,33 +78,7 @@ describe("the Checker", () => {
     });
 });
 
-describe("checksFixRequest — problems go back to the AI", () => {
-    test("lists them and asks for both code blocks", () => {
-        const text = checksFixRequest("AlgoliaHits", ["one", "two"]);
-        expect(text).toMatch(/The checks found problems with AlgoliaHits/);
-        expect(text).toMatch(/- one\n- two/);
-        expect(text).toMatch(/output BOTH the component and the config/);
-        expect(MAX_CHECK_FIXES).toBe(2);
-    });
-});
-
 describe("what the user asked goes to the Checker", () => {
-    test("the user's latest messages, not hidden ones or the AI's", () => {
-        const ask = userAskOf([
-            { role: "user", content: "Make an Algolia hits widget" },
-            { role: "assistant", content: "Done" },
-            {
-                role: "user",
-                content: "The checks found problems…",
-                hidden: true,
-            },
-            { role: "user", content: "Show 'No products found' when empty" },
-        ]);
-        expect(ask).toBe(
-            "Make an Algolia hits widget\n\nShow 'No products found' when empty"
-        );
-        expect(userAskOf([])).toBe("");
-    });
     test("the request carries it", () => {
         expect(
             draftCheckRequest("AlgoliaHits", "Show 'No products found'")

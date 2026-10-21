@@ -40,26 +40,36 @@ afterEach(() => {
     delete window.mainApi;
 });
 
+// The grid's name after the latest change (the placeholder name isn't shown
+// in the field, so the bump is read from what the pane reports).
+const lastName = (onChange) => {
+    const calls = onChange.mock.calls;
+    return calls.length ? calls[calls.length - 1][0]?.widgetName : undefined;
+};
+
 describe("ComposerPaneV2 — widget name collision avoidance", () => {
     test("default name is unchanged when nothing is installed", async () => {
         installMainApi(jest.fn().mockResolvedValue([]));
-        render(<ComposerPaneV2 />);
-        const input = screen.getByTestId("composer-widget-name");
-        // Wait one tick so the on-mount async effect resolves.
+        const onChange = jest.fn();
+        render(<ComposerPaneV2 onChange={onChange} />);
         await waitFor(() => {
-            expect(input.value).toBe("ComposedWidget");
+            expect(lastName(onChange)).toBe("ComposedWidget");
         });
+        // The field shows only a name the user chose (frame B).
+        expect(screen.getByTestId("composer-widget-name").value).toBe("");
     });
 
     test("bumps to ComposedWidget2 when ComposedWidget is taken", async () => {
         installMainApi(
             jest.fn().mockResolvedValue([{ componentName: "ComposedWidget" }])
         );
-        render(<ComposerPaneV2 />);
-        const input = screen.getByTestId("composer-widget-name");
+        const onChange = jest.fn();
+        render(<ComposerPaneV2 onChange={onChange} />);
         await waitFor(() => {
-            expect(input.value).toBe("ComposedWidget2");
+            expect(lastName(onChange)).toBe("ComposedWidget2");
         });
+        // The field shows only a name the user chose (frame B).
+        expect(screen.getByTestId("composer-widget-name").value).toBe("");
     });
 
     test("skips names already used by drafts", async () => {
@@ -72,11 +82,13 @@ describe("ComposerPaneV2 — widget name collision avoidance", () => {
                 { id: "d2", name: "ComposedWidget3" },
             ]),
         };
-        render(<ComposerPaneV2 />);
-        const input = screen.getByTestId("composer-widget-name");
+        const onChange = jest.fn();
+        render(<ComposerPaneV2 onChange={onChange} />);
         await waitFor(() => {
-            expect(input.value).toBe("ComposedWidget4");
+            expect(lastName(onChange)).toBe("ComposedWidget4");
         });
+        // The field shows only a name the user chose (frame B).
+        expect(screen.getByTestId("composer-widget-name").value).toBe("");
     });
 
     test("doesn't count the draft being resumed against itself", async () => {
@@ -90,11 +102,13 @@ describe("ComposerPaneV2 — widget name collision avoidance", () => {
                     { id: "mine", componentName: "ComposedWidget2" },
                 ]),
         };
-        render(<ComposerPaneV2 currentDraftId="mine" />);
-        const input = screen.getByTestId("composer-widget-name");
+        const onChange = jest.fn();
+        render(<ComposerPaneV2 currentDraftId="mine" onChange={onChange} />);
         await waitFor(() => {
-            expect(input.value).toBe("ComposedWidget2");
+            expect(lastName(onChange)).toBe("ComposedWidget2");
         });
+        // The field shows only a name the user chose (frame B).
+        expect(screen.getByTestId("composer-widget-name").value).toBe("");
     });
 
     test("bumps past every taken suffix", async () => {
@@ -107,22 +121,26 @@ describe("ComposerPaneV2 — widget name collision avoidance", () => {
                     { componentName: "ComposedWidget3" },
                 ])
         );
-        render(<ComposerPaneV2 />);
-        const input = screen.getByTestId("composer-widget-name");
+        const onChange = jest.fn();
+        render(<ComposerPaneV2 onChange={onChange} />);
         await waitFor(() => {
-            expect(input.value).toBe("ComposedWidget4");
+            expect(lastName(onChange)).toBe("ComposedWidget4");
         });
+        // The field shows only a name the user chose (frame B).
+        expect(screen.getByTestId("composer-widget-name").value).toBe("");
     });
 
     test("collision check is case-insensitive", async () => {
         installMainApi(
             jest.fn().mockResolvedValue([{ componentName: "composedwidget" }])
         );
-        render(<ComposerPaneV2 />);
-        const input = screen.getByTestId("composer-widget-name");
+        const onChange = jest.fn();
+        render(<ComposerPaneV2 onChange={onChange} />);
         await waitFor(() => {
-            expect(input.value).toBe("ComposedWidget2");
+            expect(lastName(onChange)).toBe("ComposedWidget2");
         });
+        // The field shows only a name the user chose (frame B).
+        expect(screen.getByTestId("composer-widget-name").value).toBe("");
     });
 
     test("widgetPackage (@ai-built/<slug>) counts toward the taken set", async () => {
@@ -133,11 +151,13 @@ describe("ComposerPaneV2 — widget name collision avoidance", () => {
                     { widgetPackage: "@ai-built/composedwidget" },
                 ])
         );
-        render(<ComposerPaneV2 />);
-        const input = screen.getByTestId("composer-widget-name");
+        const onChange = jest.fn();
+        render(<ComposerPaneV2 onChange={onChange} />);
         await waitFor(() => {
-            expect(input.value).toBe("ComposedWidget2");
+            expect(lastName(onChange)).toBe("ComposedWidget2");
         });
+        // The field shows only a name the user chose (frame B).
+        expect(screen.getByTestId("composer-widget-name").value).toBe("");
     });
 
     test("user-typed name is not overwritten by the late-arriving bump", async () => {
@@ -370,7 +390,9 @@ describe("ComposerPaneV2 — explicit name confirm (no per-keystroke churn)", ()
         const onEmit = jest.fn();
         render(<ComposerPaneV2 onEmit={onEmit} />);
         const input = screen.getByTestId("composer-widget-name");
-        await waitFor(() => expect(input.value).toBe("ComposedWidget"));
+        // A new widget's field starts empty and asks for a name (frame B).
+        expect(input.value).toBe("");
+        await waitFor(() => expect(onEmit).toHaveBeenCalled());
         const afterMount = onEmit.mock.calls.length;
 
         // Typing only updates the local input — no emit (so no draft save
@@ -394,7 +416,9 @@ describe("ComposerPaneV2 — explicit name confirm (no per-keystroke churn)", ()
         const onEmit = jest.fn();
         render(<ComposerPaneV2 onEmit={onEmit} />);
         const input = screen.getByTestId("composer-widget-name");
-        await waitFor(() => expect(input.value).toBe("ComposedWidget"));
+        // A new widget's field starts empty and asks for a name (frame B).
+        expect(input.value).toBe("");
+        await waitFor(() => expect(onEmit).toHaveBeenCalled());
         const afterMount = onEmit.mock.calls.length;
 
         fireEvent.change(input, { target: { value: "Taken" } });
@@ -426,6 +450,17 @@ describe("ComposerPaneV2 — explicit name confirm (no per-keystroke churn)", ()
     });
 });
 
+describe("ComposerPaneV2 — the name field (consolidation Phase 3b)", () => {
+    test("shows only a name the user chose — a placeholder name reads as empty", async () => {
+        const { shownName } = require("./ComposerPaneV2");
+        expect(shownName("ComposedWidget")).toBe("");
+        expect(shownName("ComposedWidget12")).toBe("");
+        expect(shownName("OrderLookup")).toBe("OrderLookup");
+        expect(shownName("ComposedWidgetPro")).toBe("ComposedWidgetPro");
+        expect(shownName(undefined)).toBe("");
+    });
+});
+
 describe("ComposerPaneV2 — drafts (draft cleanup)", () => {
     test("components registered from draft folders don't count as taken", async () => {
         installMainApi(
@@ -440,10 +475,10 @@ describe("ComposerPaneV2 — drafts (draft cleanup)", () => {
                 },
             ])
         );
-        render(<ComposerPaneV2 />);
-        const input = screen.getByTestId("composer-widget-name");
+        const onChange = jest.fn();
+        render(<ComposerPaneV2 onChange={onChange} />);
         await new Promise((r) => setTimeout(r, 20));
-        expect(input.value).toBe("ComposedWidget");
+        expect(lastName(onChange)).toBe("ComposedWidget");
     });
 
     test("the empty placeholder is emitted marked empty", async () => {

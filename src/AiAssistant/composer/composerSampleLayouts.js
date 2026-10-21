@@ -328,40 +328,24 @@ export const INTENTS = [
         label: "Search",
         icon: "magnifying-glass",
         tagline: "Find or filter data — input on top, results below.",
-        aiHint:
-            "The user wants a SEARCH widget: prioritize layouts with " +
-            "an input (SearchInput / InputText) up top driving a " +
-            "results region (DataList / Table) below it.",
     },
     {
         id: "view",
         label: "View",
         icon: "chart-column",
         tagline: "Show data, stats, or records — a read-only surface.",
-        aiHint:
-            "The user wants a VIEW widget: prioritize layouts that " +
-            "display data (SubHeading2 + Table / DataList / Card with " +
-            "stats). No input controls unless filtering is essential.",
     },
     {
         id: "act",
         label: "Act",
         icon: "bolt",
         tagline: "Submit a form or fire an action — inputs + a button.",
-        aiHint:
-            "The user wants an ACTION widget: include input fields " +
-            "(InputText / TextArea / SelectInput) and a Button to " +
-            "submit. The Button.onClick will be wired to a tool.",
     },
     {
         id: "else",
         label: "Custom",
-        icon: "wand-magic-sparkles",
-        tagline: "Something else — start free-form or let AI propose.",
-        aiHint:
-            "The user wants a CUSTOM widget that doesn't fit search / " +
-            "view / action neatly. Suggest a flexible layout with " +
-            "containers (Panel / Card) the user can fill in.",
+        icon: "shapes",
+        tagline: "Start from a blank layout.",
     },
     {
         id: "provider",
@@ -370,14 +354,6 @@ export const INTENTS = [
         tagline:
             "Start from a service — Slack, Algolia, Google Drive, " +
             "GitHub, etc.",
-        // aiHint is overridden at scaffold time by the chosen
-        // provider's name (see QuickStartPane.buildSystemPrompt) —
-        // this string is a fallback if the user lands on the AI
-        // form without picking a provider first.
-        aiHint:
-            "The user wants a widget that connects to a specific " +
-            "external service. Suggest layouts whose data slots are " +
-            "obviously meant to be wired to provider tools.",
     },
 ];
 

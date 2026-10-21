@@ -33,7 +33,6 @@ import { registerWidgetPreview } from "./AiAssistant/registerWidgetPreview";
 import { makeEmbeddedWidgetBuilder } from "./AiAssistant/EmbeddedWidgetBuilder";
 import {
     finalizeWidgetBuilderSession,
-    primeWidgetBuilderChat,
     suppressStageRemount,
     widgetBuilderBlocksRemount,
 } from "./AiAssistant/finalizeWidgetBuilderSession";
@@ -550,29 +549,19 @@ class App extends React.Component {
             // Resume mode: Settings → Widgets dispatches with
             // `resumeDraftId` when the user clicks Resume on a
             // Draft-chipped widget. The modal reads it on mount and
-            // seeds composer tree + chat + code from drafts.get(id).
+            // seeds the Compose layout + code from drafts.get(id).
             const resumeDraftId =
                 detail && typeof detail.resumeDraftId === "string"
                     ? detail.resumeDraftId
                     : null;
-            // Clear stale chat BEFORE mounting the modal so ChatCore
-            // loads an empty conversation on its first render — UNLESS
-            // we're resuming a draft, in which case the modal will
-            // overwrite the chat from the draft's saved chatHistory.
-            primeWidgetBuilderChat({ resuming: !!resumeDraftId });
-            // The Create screen sends `prompt` — the user's description,
-            // sent as the chat's first message. It isn't part of the cell.
-            const { prompt, ...cellDetail } = detail;
-            const initialPrompt =
-                !resumeDraftId && typeof prompt === "string" && prompt.trim()
-                    ? prompt.trim()
-                    : null;
+            // (The builder has no AI of its own any more — a `prompt`
+            // from an older caller isn't part of the cell.)
+            const { prompt: _prompt, ...cellDetail } = detail;
             this.setState({
                 isWidgetBuilderOpen: true,
                 widgetBuilderCellContext: resumeDraftId ? null : cellDetail,
                 widgetBuilderEditContext: null,
                 widgetBuilderResumeDraftId: resumeDraftId,
-                widgetBuilderInitialPrompt: initialPrompt,
             });
         });
 
@@ -1023,8 +1012,6 @@ class App extends React.Component {
                                                         null,
                                                     widgetBuilderResumeDraftId:
                                                         null,
-                                                    widgetBuilderInitialPrompt:
-                                                        null,
                                                     installedWidgetInfo: null,
                                                 });
 
@@ -1071,11 +1058,6 @@ class App extends React.Component {
                                         resumeDraftId={
                                             this.state
                                                 .widgetBuilderResumeDraftId ||
-                                            null
-                                        }
-                                        initialPrompt={
-                                            this.state
-                                                .widgetBuilderInitialPrompt ||
                                             null
                                         }
                                     />

@@ -1,11 +1,11 @@
 /**
  * Widget Builder polish (static source checks, like the toolbar test):
  *
- *   - The chat is wrapped in the APP theme. The modal mounts outside the
- *     theme provider, so ChatCore's bubbles had no background and dim text.
- *   - The builder opens in Build (the AI chat), not Compose.
+ *   - The builder is wrapped in the APP theme (it mounts outside the
+ *     theme provider).
+ *   - It builds by hand (consolidation Phase 3b): Compose for a new widget,
+ *     the Code tab for an installed one, no AI chat or Discover.
  *   - The footer says why Install is greyed out (no category yet).
- *   - A draft's fallback name skips the hidden greeting message.
  */
 const fs = require("fs");
 const path = require("path");
@@ -16,26 +16,54 @@ const source = fs.readFileSync(
 );
 
 describe("WidgetBuilderModal — polish", () => {
-    test("the whole builder (chat included) renders inside the app theme", () => {
+    test("the whole builder renders inside the app theme", () => {
         expect(source).toMatch(/window\.__dashAppThemeContext/);
         expect(source).toMatch(
             /<ThemeContext\.Provider\s+value=\{chatThemeCtx\}>\s*<Frame/
         );
     });
 
-    test("opens in Build mode", () => {
-        expect(source).toMatch(/useState\("build"\)/);
-        expect(source).not.toMatch(
-            /setChatMode\("compose"\);\s*setDiscoverResults/
+    test("builds by hand: no chat, no Discover, no Build/Compose switch", () => {
+        expect(source).not.toMatch(/ChatCore|ChatProviderGate|setChatMode/);
+        expect(source).not.toMatch(/Discover existing|discoverResults/);
+        expect(source).not.toMatch(/"How to make the widget"/);
+        expect(source).toMatch(/glyph="wrench"/);
+        expect(source).toMatch(/: "Build by hand"/);
+        expect(source).toMatch(/· editing the code/);
+    });
+
+    test("Compose is for a new widget; an installed widget's code opens on Code", () => {
+        expect(source).toMatch(
+            /const showCompose = !effectiveEditContext\?\.componentCode && !codeOnly;/
+        );
+        expect(source).toMatch(
+            /"Edit the code yourself" opens on the code[\s\S]{0,160}setActiveTab\("code"\);/
+        );
+        expect(source).toMatch(/\{showCompose && \(/);
+    });
+
+    test("an old chat draft is edited as code (no Compose layout, or saved from the chat)", () => {
+        expect(source).toMatch(
+            /const asCode =\s*!!restoredCode\.componentCode &&\s*\(!full\.composerGrid \|\|\s*\(!!full\.chatMode && full\.chatMode !== "compose"\)\);/
         );
     });
 
-    test("explains why Install is disabled", () => {
-        expect(source).toContain('data-testid="install-category-hint"');
+    test("a new widget needs a name of the user's before Install", () => {
+        expect(source).toMatch(
+            /\/\^ComposedWidget\\d\*\$\/\.test\(widgetName\)/
+        );
+        expect(source).toMatch(/Goes into your widgets as \$\{displayName\}/);
+        expect(source).toMatch(/"Name the widget first"/);
     });
 
-    test("the Discover search never uses the hidden greeting", () => {
-        expect(source).toMatch(/m\?\.role !== "user" \|\| m\.hidden/);
+    test("Compose's Ask the Dash team closes the builder and opens Create", () => {
+        expect(source).toMatch(
+            /const askDashTeam = \(text\) => \{\s*setIsOpen\(false\);/
+        );
+        expect(source).toMatch(
+            /"dash:open-create", \{\s*detail: \{ type: "widget", prompt: text \|\| "" \},/
+        );
+        expect(source).toMatch(/onAskDashTeam=\{askDashTeam\}/);
     });
 
     test("the missing-files hint only matches real import errors", () => {
@@ -52,17 +80,23 @@ describe("WidgetBuilderModal — polish", () => {
         );
     });
 
-    test("draft fallback name skips hidden messages", () => {
-        expect(source).toMatch(/firstUserMessageExcerpt\(chatHistory\)/);
+    test("a draft is named by its widget, else Untitled draft (no chat to name it from)", () => {
+        expect(source).toMatch(
+            /const draftName = componentName \|\| "Untitled draft";/
+        );
     });
 
     test("Compose (V2) drafts save and restore their grid", () => {
         // Saved with the draft…
         expect(source).toMatch(/composerGrid: composerGridRef\.current/);
-        // …and restored on both resume paths (drafts list + resumeDraftId).
+        // …and restored by the one resume path (drafts list and
+        // resumeDraftId both go through resumeFromDraft).
         expect(
             source.match(/setComposerInitialGrid\(full\.composerGrid\)/g) || []
-        ).toHaveLength(2);
+        ).toHaveLength(1);
+        expect(source).toMatch(
+            /onResume=\{\(draft\) =>\s*resumeFromDraft\(draft\.id, draft\)\s*\}/
+        );
         // "Build new widget" starts from an empty grid.
         expect(source).toMatch(/setComposerInitialGrid\(null\)/);
     });
