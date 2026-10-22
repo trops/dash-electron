@@ -9,11 +9,12 @@
           this link, dash-react components inside the iframe render
           with no classes defined — buttons, inputs, headings all
           fall back to browser defaults and the preview looks "raw."
-          Same-origin (the iframe is served alongside the host page),
-          so the absolute /tailwind.css path resolves identically in
-          dev and packaged builds.
+          Relative, like widget-preview-shell.js below: the packaged
+          app loads this page from file://, where "/tailwind.css"
+          means the root of the disk. tailwind.css sits next to this
+          page in dev (served at /) and in build/.
         -->
-        <link rel="stylesheet" href="/tailwind.css" />
+        <link rel="stylesheet" href="tailwind.css" />
         <!--
           Slice 17c.1 — minimal entry HTML loaded by the widget builder
           modal's preview iframe. Owns its own JavaScript context, DOM,
