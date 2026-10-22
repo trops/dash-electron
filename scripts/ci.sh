@@ -87,7 +87,7 @@ node --test scripts/bundleSecurityLint.test.js scripts/libraryImports.test.js
 
 # Bot Factory background-mode helpers (Slice 6b): pure tray/login-item logic
 step "Running Bot Factory background-mode tests (Slice 6b)"
-node --test public/botBackground.test.js public/appIdentifier.test.js public/widgetEventRelay.test.js public/botLeadIpc.test.js public/popoutRoute.test.js public/widgetConfigType.test.js public/widgetImportFixes.test.js public/teamWidgetTools.test.js public/teamWidgetToolsEdit.test.js public/installGate.test.js public/assistantDock.test.js public/botNotify.test.js public/widgetDrafts.test.cjs public/packageUpdate.test.js
+node --test public/botBackground.test.js public/appIdentifier.test.js public/widgetEventRelay.test.js public/botLeadIpc.test.js public/popoutRoute.test.js public/widgetConfigType.test.js public/widgetImportFixes.test.js public/teamWidgetTools.test.js public/teamWidgetToolsEdit.test.js public/installGate.test.js public/assistantDock.test.js public/botNotify.test.js public/widgetDrafts.test.cjs public/packageUpdate.test.js public/updateCheckError.test.js
 
 # 2. Update @trops dependencies to latest published versions
 step "Updating @trops dependencies"
