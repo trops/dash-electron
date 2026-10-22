@@ -37,6 +37,21 @@ import { createPreviewBridge } from "./previewBridge";
 
 const HOST_PATH = "/widget-preview-host.html";
 
+/**
+ * Where the iframe loads the preview host page from. Dev serves the app
+ * from http://localhost:3000, so the root path works. The packaged app
+ * loads build/index.html from file://, where "/widget-preview-host.html"
+ * means the root of the disk — the frame stays blank and never sends
+ * bridge:ready. There the page sits next to index.html, so resolve it
+ * against the page's own URL.
+ */
+export function previewHostUrl(location = window.location) {
+    if (location && location.protocol === "file:") {
+        return new URL(HOST_PATH.slice(1), location.href).href;
+    }
+    return HOST_PATH;
+}
+
 // Module references the iframe shell needs to satisfy the bundle's
 // `require("react")` / `require("@trops/dash-react")` calls. Built
 // once and reused — these are stable singletons in the host bundle.
@@ -353,7 +368,7 @@ export function PreviewIframe({
     return (
         <iframe
             ref={iframeRef}
-            src={HOST_PATH}
+            src={previewHostUrl()}
             title="Widget Preview"
             sandbox="allow-scripts allow-same-origin allow-forms"
             data-preview-status={status}

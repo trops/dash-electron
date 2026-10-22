@@ -28,7 +28,52 @@ jest.mock("@trops/dash-core", () => ({}), { virtual: true });
 import React from "react";
 import { render, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { PreviewIframe } from "./PreviewIframe";
+import { PreviewIframe, previewHostUrl } from "./PreviewIframe";
+
+describe("previewHostUrl — where the host page loads from", () => {
+    test("dev (http): the root path", () => {
+        expect(
+            previewHostUrl({
+                protocol: "http:",
+                href: "http://localhost:3000/",
+            })
+        ).toBe("/widget-preview-host.html");
+    });
+
+    test("packaged app (file://): next to index.html, not the disk root", () => {
+        expect(
+            previewHostUrl({
+                protocol: "file:",
+                href: "file:///Applications/Dash.app/Contents/Resources/app.asar/build/index.html",
+            })
+        ).toBe(
+            "file:///Applications/Dash.app/Contents/Resources/app.asar/build/widget-preview-host.html"
+        );
+    });
+
+    test("the host page loads nothing from a root path (blank or unstyled under file://)", () => {
+        const fs = require("fs");
+        const path = require("path");
+        const html = fs.readFileSync(
+            path.join(__dirname, "../../public/widget-preview-host.html"),
+            "utf8"
+        );
+        expect(html).not.toMatch(/(src|href)="\//);
+        expect(html).toMatch(/href="tailwind\.css"/);
+        expect(html).toMatch(/src="widget-preview-shell\.js"/);
+    });
+
+    test("packaged popout (query string): still next to index.html", () => {
+        expect(
+            previewHostUrl({
+                protocol: "file:",
+                href: "file:///Applications/Dash.app/Contents/Resources/app.asar/build/index.html?popout=1#/x",
+            })
+        ).toBe(
+            "file:///Applications/Dash.app/Contents/Resources/app.asar/build/widget-preview-host.html"
+        );
+    });
+});
 
 describe("PreviewIframe — render shape", () => {
     test("mounts an iframe pointed at the preview host page", () => {
