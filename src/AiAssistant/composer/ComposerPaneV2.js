@@ -82,6 +82,15 @@ export function shownName(widgetName) {
     return /^ComposedWidget\d*$/.test(name) ? "" : name;
 }
 
+// A quick-start layout brings its own placeholder name: a name the user
+// already chose stays (QA 2026-10-22: Install then said "Name the widget
+// first").
+export function keepChosenName(current, next) {
+    const chosen = shownName(current && current.widgetName);
+    if (!chosen || !next) return next;
+    return { ...next, widgetName: chosen };
+}
+
 export function ComposerPaneV2({
     onEmit,
     onChange,
@@ -740,7 +749,7 @@ export function ComposerPaneV2({
                 ) : isGridEmpty(grid) ? (
                     <QuickStartPane
                         onApplyGrid={(next, pickedProvider) => {
-                            setGrid(next);
+                            setGrid((prev) => keepChosenName(prev, next));
                             // Stash the picked provider for downstream
                             // consumers via context. Apply paths that
                             // don't pass a second arg (or pass null —
