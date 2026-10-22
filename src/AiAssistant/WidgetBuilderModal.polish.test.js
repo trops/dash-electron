@@ -101,3 +101,22 @@ describe("WidgetBuilderModal — polish", () => {
         expect(source).toMatch(/setComposerInitialGrid\(null\)/);
     });
 });
+
+describe("WidgetBuilderModal — wording (consolidation Phase 4d)", () => {
+    test("the tabs are Logs and Style checks, not Console and Scorecard", () => {
+        expect(source).toMatch(/label="Logs"/);
+        expect(source).toMatch(/label="Style checks"/);
+        expect(source).not.toMatch(/label="Console"/);
+        expect(source).not.toMatch(/label="Scorecard"/);
+        expect(source).not.toMatch(/cohesion rule/i);
+    });
+
+    test("Category says what it's for", () => {
+        expect(source).toMatch(
+            /title="Where it's listed when you publish it\."/
+        );
+        expect(source).toMatch(
+            /Pick\s+a\s+category\s+to\s+install\s+—\s+it's\s+where\s+the\s+widget\s+is\s+listed\s+when\s+you\s+publish\s+it/
+        );
+    });
+});

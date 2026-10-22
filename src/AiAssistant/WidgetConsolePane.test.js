@@ -34,7 +34,7 @@ describe("WidgetConsolePane — no AI (consolidation Phase 3b)", () => {
 describe("WidgetConsolePane — toolbar and empty states", () => {
     test("with no events it says so", () => {
         render(<WidgetConsolePane events={[]} />);
-        expect(screen.getByText("No console output yet")).toBeInTheDocument();
+        expect(screen.getByText("No logs yet")).toBeInTheDocument();
     });
 
     test("Errors only filters the rows", () => {
