@@ -764,3 +764,163 @@ describe("PreviewIframe — parent re-renders", () => {
         expect(latest).toHaveBeenCalledWith({ message: "x" });
     });
 });
+
+describe("PreviewIframe — recovers a missed or repeated ready (QA 2026-10-22)", () => {
+    const ready = (source, payload = {}) =>
+        act(() => {
+            window.dispatchEvent(
+                new MessageEvent("message", {
+                    origin: window.location.origin,
+                    source,
+                    data: { type: "bridge:ready", payload },
+                })
+            );
+        });
+
+    test("a frame that reloads (a new page load) gets the widget again", () => {
+        const { container } = render(
+            <PreviewIframe
+                bundleSource="module.exports = {}"
+                componentName="Clock"
+            />
+        );
+        const posted = [];
+        container.querySelector("iframe").contentWindow.postMessage = (m) =>
+            posted.push(m);
+        ready(undefined, { loadId: "load-1" });
+        ready(undefined, { loadId: "load-2" });
+        expect(
+            posted.filter((m) => m.type === "bridge:load-bundle")
+        ).toHaveLength(2);
+    });
+
+    test("a repeated ready from the same page load doesn't load it twice", () => {
+        const { container } = render(
+            <PreviewIframe
+                bundleSource="module.exports = {}"
+                componentName="Clock"
+            />
+        );
+        const posted = [];
+        container.querySelector("iframe").contentWindow.postMessage = (m) =>
+            posted.push(m);
+        ready(undefined, { loadId: "load-1" });
+        ready(undefined, { loadId: "load-1" });
+        expect(
+            posted.filter((m) => m.type === "bridge:load-bundle")
+        ).toHaveLength(1);
+    });
+
+    test("every ready sends the widget when the frame names no load", () => {
+        const { container } = render(
+            <PreviewIframe
+                bundleSource="module.exports = {}"
+                componentName="Clock"
+            />
+        );
+        const posted = [];
+        container.querySelector("iframe").contentWindow.postMessage = (m) =>
+            posted.push(m);
+        ready();
+        ready();
+        expect(
+            posted.filter((m) => m.type === "bridge:load-bundle")
+        ).toHaveLength(2);
+    });
+
+    test("a bundle that arrives before the ready is sent on the ready, once", () => {
+        const { container, rerender } = render(<PreviewIframe />);
+        const posted = [];
+        container.querySelector("iframe").contentWindow.postMessage = (m) =>
+            posted.push(m);
+        rerender(
+            <PreviewIframe
+                bundleSource="module.exports = {}"
+                componentName="Clock"
+            />
+        );
+        expect(posted).toEqual([]);
+        ready();
+        expect(
+            posted.filter((m) => m.type === "bridge:load-bundle")
+        ).toHaveLength(1);
+    });
+
+    test("a frame that loaded but never said ready is asked again, after a moment", () => {
+        jest.useFakeTimers();
+        try {
+            const { container } = render(<PreviewIframe />);
+            const iframe = container.querySelector("iframe");
+            const posted = [];
+            iframe.contentWindow.postMessage = (m) => posted.push(m);
+            act(() => {
+                iframe.dispatchEvent(new Event("load"));
+            });
+            // Not at once: the frame's own ready normally follows its load.
+            expect(posted).toEqual([]);
+            act(() => {
+                jest.advanceTimersByTime(600);
+            });
+            expect(posted.map((m) => m.type)).toEqual(["bridge:hello"]);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    test("a frame whose ready arrives after its load isn't asked again", () => {
+        jest.useFakeTimers();
+        try {
+            const { container } = render(<PreviewIframe />);
+            const iframe = container.querySelector("iframe");
+            const posted = [];
+            iframe.contentWindow.postMessage = (m) => posted.push(m);
+            act(() => {
+                iframe.dispatchEvent(new Event("load"));
+            });
+            ready(undefined, { loadId: "load-1" });
+            act(() => {
+                jest.advanceTimersByTime(600);
+            });
+            expect(posted.map((m) => m.type)).not.toContain("bridge:hello");
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    test("another preview's frame can't mark this one ready", () => {
+        const { container } = render(
+            <PreviewIframe
+                bundleSource="module.exports = {}"
+                componentName="Clock"
+            />
+        );
+        const posted = [];
+        container.querySelector("iframe").contentWindow.postMessage = (m) =>
+            posted.push(m);
+        const otherFrame = document.createElement("iframe");
+        document.body.appendChild(otherFrame);
+        ready(otherFrame.contentWindow);
+        expect(container.querySelector("iframe")).toHaveAttribute(
+            "data-preview-status",
+            "loading"
+        );
+        expect(posted).toEqual([]);
+        otherFrame.remove();
+    });
+
+    test("the shell answers bridge:hello by announcing ready again", () => {
+        const fs = require("fs");
+        const path = require("path");
+        const shell = fs.readFileSync(
+            path.join(__dirname, "../../public/widget-preview-shell.js"),
+            "utf8"
+        );
+        expect(shell).toMatch(
+            /if \(type === "bridge:hello"\) \{[\s\S]{0,120}announceReady\(\);/
+        );
+        // Its ready names the page load, the same for a repeated one.
+        expect(shell).toMatch(
+            /postToHost\("bridge:ready", \{[\s\S]{0,60}loadId: LOAD_ID/
+        );
+    });
+});

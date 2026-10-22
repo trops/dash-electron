@@ -36,6 +36,9 @@ import * as JsxRuntime from "react/jsx-runtime";
 import { createPreviewBridge } from "./previewBridge";
 
 const HOST_PATH = "/widget-preview-host.html";
+// How long after the frame's load event to wait for its ready before
+// asking again (the ready normally follows the load event at once).
+const HELLO_DELAY_MS = 500;
 
 /**
  * Where the iframe loads the preview host page from. Dev serves the app
@@ -203,6 +206,42 @@ export function PreviewIframe({
     };
     const writeHostModulesRef = useRef(writeHostModules);
     writeHostModulesRef.current = writeHostModules;
+    const bundleRef = useRef({ bundleSource, componentName });
+    bundleRef.current = { bundleSource, componentName };
+
+    // Sends the current bundle (if any) once the frame is ready.
+    // The frame page load (the shell's loadId, from its ready) and the
+    // bundle last sent to it: a second ready from the same page (an
+    // answered hello) must not load the widget twice.
+    const frameLoadIdRef = useRef(null);
+    const sentRef = useRef(null);
+    const sendBundle = useCallback(() => {
+        const { bundleSource: source, componentName: name } = bundleRef.current;
+        if (!source || !name || !readyRef.current) return;
+        const loadId = frameLoadIdRef.current;
+        const sent = sentRef.current;
+        if (
+            loadId &&
+            sent &&
+            sent.loadId === loadId &&
+            sent.source === source &&
+            sent.name === name
+        ) {
+            return;
+        }
+        sentRef.current = { loadId, source, name };
+        // Refresh the host modules map before each load — guards
+        // against the iframe reloading mid-session and clearing
+        // window.__hostModules.
+        writeHostModulesRef.current();
+        bridgeRef.current?.send("bridge:load-bundle", {
+            bundleSource: source,
+            componentName: name,
+            // Seed the first render with the current props (userConfig
+            // defaults + test inputs) so the widget never mounts prop-less.
+            initialProps: propsRef.current || {},
+        });
+    }, []);
 
     // Set up the bridge once. Runs on mount; teardown on unmount.
     useEffect(() => {
@@ -214,11 +253,19 @@ export function PreviewIframe({
             if (typeof fn === "function") fn(payload);
         };
 
+        // Every ready sends the bundle — the first, and a later one after
+        // the frame reloads or answers a hello — so a ready can't be
+        // "used up" before there's a bundle to send.
         const offReady = bridge.on("bridge:ready", (payload) => {
             readyRef.current = true;
+            frameLoadIdRef.current = (payload && payload.loadId) || null;
             writeHostModulesRef.current();
+            // Back to "ready" even after a mount: a reloaded frame needs
+            // the theme, connections and props again (they're sent on the
+            // status change).
             setStatus("ready");
             call("onReady", payload);
+            sendBundle();
         });
 
         const offMounted = bridge.on("bridge:mounted", (payload) => {
@@ -253,7 +300,8 @@ export function PreviewIframe({
             bridgeRef.current = null;
             readyRef.current = false;
         };
-    }, []);
+        // sendBundle never changes (no deps), so this still runs once.
+    }, [sendBundle]);
 
     // Push the selectable flag into the iframe whenever it flips.
     // Cheap — the shell only installs CSS once on first true, and
@@ -279,27 +327,23 @@ export function PreviewIframe({
         });
     }, [selectedNodeId, status]);
 
-    // Send bridge:load-bundle when the bundle source / component
-    // name change AND the iframe handshake has completed.
+    // A new bundle / component goes to a ready frame. (A bundle that
+    // arrives before the handshake is sent by the ready handler.)
     useEffect(() => {
-        if (!bundleSource || !componentName) return;
-        if (!readyRef.current) return;
-        // Refresh the host modules map before each load — guards
-        // against the iframe reloading mid-session and clearing
-        // window.__hostModules.
-        writeHostModules();
-        bridgeRef.current?.send("bridge:load-bundle", {
-            bundleSource,
-            componentName,
-            // Seed the first render with the current props (userConfig
-            // defaults + test inputs) so the widget never mounts prop-less.
-            initialProps: propsRef.current || {},
-        });
-        // We deliberately re-run this effect when the iframe goes
-        // from not-ready to ready (status flip from "loading" →
-        // "ready") so a bundle posted before handshake also fires
-        // once handshake completes.
-    }, [bundleSource, componentName, status, writeHostModules]);
+        sendBundle();
+    }, [bundleSource, componentName, sendBundle]);
+
+    // The frame loaded but its ready never reached us (posted before the
+    // bridge listened): ask it to say ready again. The load event comes
+    // just before the frame's own ready, so wait a moment first.
+    const helloTimerRef = useRef(null);
+    const handleFrameLoad = useCallback(() => {
+        clearTimeout(helloTimerRef.current);
+        helloTimerRef.current = setTimeout(() => {
+            if (!readyRef.current) bridgeRef.current?.send("bridge:hello", {});
+        }, HELLO_DELAY_MS);
+    }, []);
+    useEffect(() => () => clearTimeout(helloTimerRef.current), []);
 
     // Send bridge:set-props when props change AND a component is
     // currently mounted.
@@ -372,6 +416,7 @@ export function PreviewIframe({
             title="Widget Preview"
             sandbox="allow-scripts allow-same-origin allow-forms"
             data-preview-status={status}
+            onLoad={handleFrameLoad}
             className={className}
             style={{
                 width: "100%",

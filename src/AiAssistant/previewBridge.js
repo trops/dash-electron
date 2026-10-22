@@ -17,10 +17,15 @@
  *      webpack HMR, MetaMask wallet probes, etc.) are ignored.
  *   4. A throwing handler is logged but does not stop other
  *      handlers for the same message type from running.
+ *   5. Messages from another window (another preview's frame) are
+ *      dropped: two previews on one page each hear only their own.
  */
 
 export const BRIDGE_MESSAGE_TYPES = Object.freeze({
     // Host → iframe
+    // Asks the frame to announce bridge:ready again (a ready sent before
+    // the host listened is otherwise lost).
+    HELLO: "bridge:hello",
     LOAD_BUNDLE: "bridge:load-bundle",
     SET_PROPS: "bridge:set-props",
     SET_THEME: "bridge:set-theme",
@@ -104,6 +109,8 @@ export function createPreviewBridge({ iframeRef, allowedOrigin }) {
             return;
         }
         if (!isBridgeMessage(event.data)) return;
+        const own = iframeRef?.current?.contentWindow;
+        if (event.source && own && event.source !== own) return;
         const set = handlers.get(event.data.type);
         if (!set || set.size === 0) return;
         for (const h of set) {
