@@ -46,13 +46,14 @@ The macOS build is a universal binary — same `.dmg` works on both Intel and Ap
 
 ### 0.2 First launch
 
--   [ ] App opens to a Welcome panel (no dashboards yet, sidebar is mostly empty).
+-   [ ] App opens to the Dashboards page (no dashboards yet, sidebar is mostly empty); after a few seconds a "Welcome to Dash" dialog offers **Install Kitchen Sink** / **Skip for now**.
+-   [ ] Still signed out: left nav → **Create**. Anything that needs the registry says "Sign in to the Dash registry to use this." — never "Authentication expired". Close it.
 -   [ ] No red errors in the dev tools console (View menu → Toggle Developer Tools).
 -   [ ] Title bar shows "Dash".
 
 ### 0.3 Sign in to the registry
 
--   [ ] Click your name at the bottom of the left nav → **Settings** → **Account** → **Sign In**.
+-   [ ] Click **Account** at the bottom of the left nav (it shows your name once you're signed in) → **Settings** → **Account** → **Sign In**.
 -   [ ] Browser opens to a Cognito hosted-UI page; complete sign-in.
 -   [ ] Back in the app, your username appears under Account within ~10s.
 -   [ ] Account section shows your owned packages (may be empty).
@@ -67,6 +68,7 @@ The macOS build is a universal binary — same `.dmg` works on both Intel and Ap
 
 -   [ ] Left nav → **Create**. The Create screen asks "What do you want to make?" with a text box, a **Type** menu (Auto, Widget, Bot, Dashboard, Theme), **Send**, and **Or start without AI** buttons below. Close it.
 -   [ ] With no dialog open and no dashboard in edit mode, press **⌘N** (Mac) or **Ctrl+N** (Windows). Create opens. Close it.
+-   [ ] Press **⌘K** / **Ctrl+K**: the command palette opens (as the empty state's "Press ⌘K to search dashboards…" says). Press it again to close.
 -   [ ] Click **Edit dashboard** on any dashboard, press ⌘N / Ctrl+N: nothing opens (it's off while editing). Click **Cancel**.
 -   [ ] Click the robot (**Bots**) on the far-right rail. Your bots show as a contacts list with **Search bots**, **Recent / A–Z** and a **By team** switch. A **Pinned** section at the top holds the open dashboard's team lead (if it has one) and **Dash team**.
 -   [ ] Click a bot: its page opens on its conversation. Send it a message; the reply streams in. Switch to **Activity**, then close the page.
@@ -98,16 +100,16 @@ Open one of the dashboards you just created and click **Edit dashboard** in its 
 -   [ ] **Split** — widget **⋯** → **Split side by side** / **Split top and bottom**.
 -   [ ] **Multi-page** — click **Add page** in the page tab bar; put a widget on each page; switch pages.
 -   [ ] **Pinned sidebar** — Dashboard tab → turn on **Pinned sidebar**; put a widget in it.
--   [ ] **Nested grid** — drop a `LayoutGridContainer` inside another `LayoutGridContainer`. Children render in the inner grid.
+-   [ ] **Subdivide a cell** — there's no nested grid to drop in (the Add list offers no grid container); split the cell instead (**Split**, above). Each half takes its own widget.
 -   [ ] **Cancel** — make a change, click **Cancel**. The change is gone.
 
 ### 1.3 Edit one widget (the widget panel)
 
 In edit mode, click a widget. The edit panel's **Widget** tab shows its name, who it's from, a **Change <widget>** button, and sections **Settings**, **Connections**, **Listens for** (and Notifications, Schedule, Advanced when the widget has them).
 
--   [ ] **Settings** — change a setting; the widget reflects it after **Save**. The panel's footer says "Settings wait for Save."
+-   [ ] **Settings** — change a setting; the widget reflects it after **Save**. The panel's footer says "Settings wait for Save." Also type a new value and click **Save** straight away, without leaving the field first: it's saved too (reload to check).
 -   [ ] **Connections** — pick a provider for a widget that needs one; **Save**; it connects.
--   [ ] **Missing-connection pill** — put a widget that needs a provider on a dashboard with no provider of that type. In edit mode its card shows a warning pill, e.g. "Needs a Slack connection" (two problems say "2 things to fix"). Click the pill: the panel opens at **Connections**. The card's **⋮** menu marks **Edit in panel** with "!".
+-   [ ] **Missing-connection pill** — put a widget that needs a provider on a dashboard with no provider of that type. In edit mode its card shows a warning pill, e.g. "Needs a Slack connection" (two problems say "2 things to fix"). Click the pill: the panel opens at **Connections**. The card's **⋮** menu marks **Edit in panel** with "!". The same pill shows when the provider a widget uses is deleted (§4.5).
 -   [ ] **Listens for** — on a dashboard with two widgets that talk (e.g. a Kanban's `prospectSelected` into a detail widget), select the receiving widget → **Listens for** → **+ Listen for another widget** → pick **When** and what it should do → **Add** → **Save**. The wiring persists across reload.
 -   [ ] **Delete a source** — delete the sending widget, **Save**. Dashboard tab → **Open Dashboard Config** → **Listeners**: the deleted widget is gone, and the receiver no longer lists it. (Listener reconciliation — a hot regression spot.)
 
@@ -116,7 +118,7 @@ In edit mode, click a widget. The edit panel's **Widget** tab shows its name, wh
 In edit mode → **Dashboard** tab → **Open Dashboard Config**.
 
 -   [ ] **Providers tab** — the amber dot shows when widgets still need a provider. Bulk-assign a provider; save; close and reopen — assignments stuck.
--   [ ] **Listeners**, **Notifications**, **Widgets** tabs — list what's set across the dashboard; **Edit in panel** on a row opens that widget in the edit panel.
+-   [ ] **Listeners**, **Notifications**, **Widgets** tabs — list what's set across the dashboard. On Listeners, **Edit in panel** on a row opens that widget in the edit panel; on Widgets, a row opens its settings in the dialog, with **Apply to all**.
 -   [ ] **Dependencies tab** — lists every distinct widget package used in the dashboard. Each row shows the scoped name (`@scope/name`).
 
 ### 1.5 Publish
@@ -158,7 +160,7 @@ In edit mode → **Dashboard** tab → **Open Dashboard Config**.
 
 All installs run the same code checks first (the install gate).
 
--   [ ] **From registry** — left nav → **Widgets** → **New Widget** → **Browse widgets in the registry** → pick one → Install.
+-   [ ] **From registry** — left nav → **Widgets** → **New Widget** → **Browse widgets in the registry** → pick one → **Install Package**. Signed out, browsing works but installing asks you to sign in first.
 -   [ ] **From a local zip** — Widgets → **New Widget** → **Install a widget from file** → pick a widget zip.
 -   [ ] **From a folder** — Widgets → **New Widget** → **Load a widget from a folder** → pick a folder containing one or more widget packages. Non-widget folders are skipped, not failed.
 -   [ ] **Install gate** — install (from file) a widget zip whose code breaks the widget rules — e.g. a widget that starts a bot directly from its code (widgets may only publish events). The install is refused with "<widget> wasn't installed — it didn't pass its checks:" and a list of what's wrong. Nothing new appears on the Widgets page.
@@ -172,6 +174,7 @@ All installs run the same code checks first (the install gate).
 -   [ ] Click a widget: its detail shows a live preview and **Change <widget>**.
 -   [ ] **Search** — type a widget name. One flat list: **Packages**, then **Widgets**, each widget saying which package it's in. Clear the search; you're back where you were.
 -   [ ] A package that didn't pass its checks at startup says **Didn't pass its checks** and lists the problems ("It still works, but these need fixing").
+-   [ ] **Drafts** — a widget saved as a draft before its first build (§6.6) is listed under AI-built as "<name> (draft)" with **Resume** (which reopens the Widget Builder on it) and no **Publish…**. With the Widgets page already open, it shows up without leaving the page.
 
 ### 2.3 Preview
 
@@ -203,18 +206,19 @@ All installs run the same code checks first (the install gate).
 -   [ ] The confirmation says the widget comes with the other widgets in the package and that uninstalling removes all of them, lists each with the dashboards it's on, and says those cells will show "Widget Not Found" until you reinstall from the registry. (For an `@ai-built` widget: "This can't be undone: it isn't in the registry.")
 -   [ ] Confirm. The package is gone from the Widgets page; reopen the dashboard → the cell shows "Widget Not Found". No crash.
 -   [ ] Same from the package: **About this package** → **⋯** → **Uninstall**.
+-   [ ] **A widget loaded from a folder** (§2.1) — uninstall it. The confirmation says "Dash will forget it. Your folder stays where it is."; confirm, and the folder and its files are still on disk.
 
 ### 2.7 Debug
 
 -   [ ] **Runtime error** — pick (or write) an installed widget that throws on mount. The cell says "<widget> couldn't show" with the error, **Try again**, and **Fix <widget>** (not on built-in `dash.` widgets). **Fix <widget>** is tested in §6.4.
--   [ ] **Debug Console** — Cmd+Shift+D / Ctrl+Shift+D. Three tabs: Log Stream, API Catalog, Widget Events. Log Stream shows live `console.*` output; API Catalog renders the IPC method list.
+-   [ ] **Debug Console** — turn on debug mode (Settings → **General** → **Debug mode**, or **Search** → **Toggle Debug Mode**); the Debug Console opens in its own window. No keyboard shortcut opens it. Three tabs: Log Stream, API Catalog, Widget Events. Log Stream shows live `console.*` output; API Catalog renders the IPC method list.
 -   [ ] **Builder preview error isolation** — in the Widget Builder (§6.6), type a syntax error in the widget code. The preview pane shows the error, but the rest of the app stays alive (no app-level crash).
 
 ---
 
 ## 3. Themes — ~15 min
 
--   [ ] **Install from registry** — left nav → **Themes** → **Browse marketplace** → pick → Install.
+-   [ ] **Install from registry** — left nav → **Themes** → **Browse marketplace** → pick → **Install Theme**. Signed out, it asks you to sign in first.
 -   [ ] **Create with AI** — left nav → **Create** → Type: **Theme** → describe the look → **Send**. It opens in the theme editor; nothing changes until you save.
 -   [ ] **Create without AI** — Create → **New theme** → pick a start (From Presets, From Colors, From Random, From Website) → save. The theme appears on the Themes page.
 -   [ ] **Edit tokens** — Themes → select a theme → **Edit theme** → tweak a color, font size, or spacing token → save → previews update.
@@ -231,7 +235,7 @@ The provider system is where most "but it doesn't work for me" findings come fro
 
 ### 4.1 Credential providers
 
--   [ ] Left nav → **Providers** → **New Provider** → pick a credential-style provider (e.g., Algolia, OpenAI). Enter an API key. Save.
+-   [ ] Left nav → **Providers** → **New Provider** → **Credential** → type the provider type yourself (e.g. `algolia`), a name and an API key → **Create**.
 -   [ ] Toggle **default for type** on; create a second provider of the same type; toggle default on it instead. Verify only one provider of a given type can be default at a time.
 
 ### 4.2 MCP servers (catalog)
@@ -257,12 +261,13 @@ Pick one OAuth-gated provider (Google Drive is the canonical one):
 
 ### 4.4 Custom MCP server
 
--   [ ] Providers → **New Provider** → Custom MCP server.
+-   [ ] Providers → **New Provider** → **MCP** → **or add a custom server** (top right of the catalog).
 -   [ ] Configure transport + command + env vars. **On Windows specifically, leave one env var blank.** Save and start the server. It should not crash on parse (the Windows tokenization fix).
 
 ### 4.5 WebSocket provider
 
 -   [ ] Providers → **New Provider** → WebSocket provider. URL + optional headers. Save. It connects (or shows a clean disconnected state if the URL is unreachable — no crash).
+-   [ ] **Test Connection** — in the form, and on the provider's page: against a server that's up it says "Connected in Nms"; against one that's down, a plain error. A widget already using the provider stays connected after the test.
 
 ### 4.6 Provider resolution layering
 
@@ -274,19 +279,20 @@ Pick one OAuth-gated provider (Google Drive is the canonical one):
 
 -   [ ] Bind a provider to a widget on a dashboard.
 -   [ ] Providers → select that provider → Delete.
--   [ ] Reopen the dashboard and click **Edit dashboard**. The widget's card shows the missing-connection pill (§1.3). App must NOT crash.
+-   [ ] Reopen the dashboard and click **Edit dashboard**. The widget's card shows the missing-connection pill (§1.3), and the banner says "1 widget needs a provider" — also when it was your last provider. Dashboard Config's **Providers** tab shows it unresolved too. App must NOT crash.
 
 ---
 
 ## 5. Settings & Account — ~10 min
 
-Open Settings from your name at the bottom of the left nav.
+Open Settings from **Account** at the bottom of the left nav (your name, when signed in).
 
--   [ ] **General** — toggle Debug Mode; click "Open Data Directory" — file manager opens to the user-data folder.
--   [ ] **Folders** — left nav → **Dashboards** → Folders → **New Folder** with a name and icon (icon picker has search). Rename it. Move a dashboard into it. Delete the folder; confirmation says how many dashboards live there.
+-   [ ] **General** — toggle **Debug mode** (the Debug Console opens in its own window, §2.7); on the "Data directory" row click **Open Folder** — file manager opens to the user-data folder.
+-   [ ] **Folders** — left nav → **Dashboards** → Folders → **New Folder** with a name and icon (icon picker has search). Rename it. Move a dashboard into it with the **Folder** select on the dashboard's detail. Delete the folder: the confirmation says how many dashboards live there and that they'll be left without a folder; confirm, and the folder is gone while its dashboards stay, under Uncategorized.
 -   [ ] **Notifications** — toggle global on/off. Pick a widget that emits notifications, toggle the per-widget setting, verify the change.
 -   [ ] **MCP Server** — toggle the embedded server on. Copy the auth token. Change the port; restart; verify the new port.
--   [ ] **AI** — switch backend Claude Code CLI ↔ Anthropic API. The model picker updates accordingly.
+-   [ ] **MCP Server, port in use** — with the server off, start a second Dash (or anything) on its port, then toggle it on: "Port … is already in use" shows and stays (more than a few seconds). Type another port while it's off, press Tab, toggle on: it starts on the new port.
+-   [ ] **AI** — switch backend Claude Code CLI ↔ Anthropic API. The **Model** list is the curated one either way (it isn't fetched for the CLI); pick a model and it sticks.
 -   [ ] **Account** — sign out (token cleared). Sign back in (different account is fine, or the same one). Owned-packages list reflects the signed-in user.
 
 ---
@@ -298,11 +304,12 @@ Needs AI set up (Settings → **AI**). Nothing is made, installed or saved until
 ### 6.1 A dashboard: plan → Build, and Fold
 
 -   [ ] Left nav → **Create** → Type: **Dashboard** → describe one (e.g. "a dashboard to track my GitHub pull requests") → **Send**. The hint under the box said "You'll get a plan to review first. Nothing is made until you press Build."
--   [ ] A plan appears: what each widget is (Yours / From the registry / New) and **What to expect**. If it asks questions, answer them and click **Send answers**; the plan updates.
--   [ ] Anything to connect or approve is listed under **Before building**; the build button says what's left (e.g. "Connect Slack & build"; after **Build without it for now** in the Connect window, it says "Build without Slack").
+-   [ ] A plan appears: what each widget is (Yours / From the registry / New) and **What to expect**; its summary counts read cleanly (e.g. "2 from the registry · 1 new layout", never "undefined"). If it asks questions, answer them: a single question with choices sends when you click one; otherwise click **Send answers**. The plan updates.
+-   [ ] Anything to connect or approve is listed under **Before building**; the build button says what's left (e.g. "Connect GitHub, approve 1 install & build"; after **Build without it for now** in the Connect window: "Approve 1 install & build"; after approving the install: "Build without GitHub").
+-   [ ] **Registry sign-in** — signed out, build a plan that installs widgets from the registry: it asks you to sign in to the registry before building, and nothing starts if you don't.
 -   [ ] **Fold** — while the plan is open, click the fold icon (**Fold into the sidebar**) in Create's header. Create closes and the plan carries on in a **Create** panel on the right. Click **Expand** there: it reopens in Create, where it was.
 -   [ ] Click **Build**. Progress shows each piece; **Stop** works. When done, **Go to dashboard** opens the new dashboard, live.
--   [ ] **Auto** — Create → leave Type on **Auto** → describe something. Dash picks the type and says so; **Change** lets you pick another.
+-   [ ] **Auto** — Create → leave Type on **Auto** → describe something. Dash picks the type and names it (e.g. "· a widget, picked by Auto"); **Change** lets you pick another.
 
 ### 6.2 A widget on its own, through the team (with preview)
 
@@ -311,6 +318,8 @@ Needs AI set up (Settings → **AI**). Nothing is made, installed or saved until
 -   [ ] A plan appears; click **Build**. The widget is built, checked, then shown running.
 -   [ ] Pick a connection and settings if it asks. **Looks good — add it to my widgets** installs it: "<name> is in your widgets", with **See it on the Widgets page** and **Done**. **Change something** instead sends a note back to the Builder.
 -   [ ] Nothing was installed before **Looks good** (check the Widgets page while the preview is up).
+-   [ ] The preview's inputs each have a label; a number setting has a number box, an on/off setting a switch, and a choice lists its options by name.
+-   [ ] If a preview never shows the widget, after about 10 seconds it says "The preview didn't start. Use Run preview again."; **Run preview again** brings it back.
 
 ### 6.3 An empty cell → Build with AI
 
@@ -322,7 +331,7 @@ Needs AI set up (Settings → **AI**). Nothing is made, installed or saved until
 
 -   [ ] Edit dashboard → click a widget you made → **Change <widget>** (also in the card's **⋮** menu, and on the Widgets page). Create opens on the widget: what it is, and **What should change?**.
 -   [ ] **Where the change goes**: **Update <widget> everywhere** (lists where it's used) or **Save as a new widget** (it replaces it in this cell only). A widget that isn't yours offers only **Save as a new widget**.
--   [ ] Describe a small change → **Send** → plan → **Build** → preview → **Looks good — update <widget>**. Every dashboard using it shows the change.
+-   [ ] Describe a small change → **Send** → plan (headed "CHANGE TO <widget> · NOT MADE YET") → **Build** → preview → **Looks good — update <widget>**. Every dashboard using it shows the change.
 -   [ ] **Change something else** starts another change; **Done** closes.
 -   [ ] **Edit the code yourself** opens the Widget Builder on that widget's code (§6.6).
 -   [ ] With unsaved edits on the dashboard, **Change <widget>** is disabled and says "Save or cancel your N change(s) first."
@@ -344,9 +353,10 @@ Needs AI set up (Settings → **AI**). Nothing is made, installed or saved until
 -   [ ] Create → Type: **Widget** → **Build it by hand**. The Widget Builder opens ("Build by hand") with tabs **Preview**, **Code**, **Configure**, **Logs** and **Style checks**.
 -   [ ] Type a name in **Name it, e.g. OrderLookup**. A hint says "Saved when you press Enter or click away." Press Enter (or click away): the hint goes. Clear the field and click away: the old name comes back.
 -   [ ] Type a new name but don't press Enter: **Install widget** is disabled and says "Press Enter to save the name first".
+-   [ ] Save a name (Enter), then pick a starting layout: the name stays ("Goes into your widgets as <name>").
 -   [ ] **Category** says what it's for ("Where it's listed when you publish it."); Install waits for one.
--   [ ] Edit code → the preview updates. **Logs** says "No logs yet" until the widget logs something. **Style checks** says whether the style checks pass.
--   [ ] **Install widget** → the widget is checked, then installed; it's on the Widgets page under `@ai-built/<name>`.
+-   [ ] Edit code → **Save & Compile** → the preview updates. **Logs** says "No logs yet" until the widget logs something. **Style checks** says whether the style checks pass.
+-   [ ] **Install widget** → the widget is checked, then installed; it's on the Widgets page under `@ai-built/<name>`. **Build Another** starts clean: no name, no layout, no category.
 -   [ ] Close with unsaved work: it asks to **Save as draft** / **Discard** / **Keep editing**. A draft shows on the Widgets page with **Resume**.
 
 ---

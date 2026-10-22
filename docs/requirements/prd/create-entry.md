@@ -51,7 +51,7 @@ This section is the current behaviour, door by door. The user stories below hold
 
 -   The left nav's **Create** (the one way in — the right rail has no **+**).
 -   **⌘N / Ctrl+N**, except in a popout, while a dashboard is being edited, or while a dialog is open (DashboardStage).
--   The command palette's **Create…** (it shows ⌘N). The palette itself opens from the left nav's **Search** and the empty state's **Search** button. The empty state ("No dashboards open") says "Press ⌘K to search dashboards…", but nothing binds ⌘K (open gap).
+-   The command palette's **Create…** (it shows ⌘N). The palette itself opens from the left nav's **Search**, the empty state's **Search** button and **⌘K / Ctrl+K** (dash-react CommandPalette toggles it), as the empty state's "Press ⌘K to search dashboards…" says.
 -   **New Dashboard**, **New Widget** and **New Bot** on the Manage pages open Create on that type.
 
 ### Create's types
@@ -121,9 +121,9 @@ The right rail's Create panel holds a plan you **Fold** into it, shown compact (
 
 ### CRE-001: One start screen (P0)
 
-**Status:** Implemented (⌘K is an open gap)
+**Status:** Implemented
 
--   [x] AC1: Create is a full-screen modal with a margin. It opens from the left nav's **Create**, the command palette's **Create…** and **⌘N / Ctrl+N** (not in a popout, while editing a dashboard, or while a dialog is open); the palette shows ⌘N on Create…. _(The empty state's "Press ⌘K to search dashboards…" names a key nothing binds — open gap.)_
+-   [x] AC1: Create is a full-screen modal with a margin. It opens from the left nav's **Create**, the command palette's **Create…** and **⌘N / Ctrl+N** (not in a popout, while editing a dashboard, or while a dialog is open); the palette shows ⌘N on Create…. _(⌘K / Ctrl+K opens the command palette, as the empty state says.)_
 -   [x] AC2: It opens with the cursor in one prompt box, a heading and a one-line explanation.
 -   [~] AC3: Under the box: **Type** (Auto, Widget, Bot, Dashboard, Theme) as a menu (`aria-haspopup`, `aria-expanded`); for Bot, **Where** (No dashboard, or one of yours). Auto asks the AI once to pick a type, with a reason, and says "picked by Auto · Change"; without an AI it guesses from keywords. Theme makes a name and four colours and opens the theme editor unsaved. A plan that names a dashboard you have changes that dashboard. _Not built: **+** to attach a provider or file._
 -   [x] AC4: An **AI** picker beside Send shows the AI in use and changes it (`settings.aiAssistant.preferredBackend`, the same setting as Settings › AI, via `useAiBackend`). With no AI configured it says so and links to set one up; the no-AI row still works.
@@ -328,7 +328,7 @@ As a user editing a dashboard, everything about one widget is in one place, and 
 One list; each is open unless it says otherwise.
 
 1. **The Checker doesn't render the widget.** `check_widget` compiles the draft and runs the code checks, the must-fix checklist and a config read; nothing runs it in a hidden preview, so a widget that compiles but fails at runtime passes. Needs a hidden preview window.
-2. **⌘K is shown but not bound.** The empty state ("No dashboards open") says "Press ⌘K to search dashboards…" (dash-core DashboardStage), and the unused `DashNavbar` also shows "⌘K"; the palette opens only from Search. (Fix in the separate code-nits PR after Phase 5: bind it, or drop the label.)
+2. ~~**⌘K is shown but not bound.**~~ Not a gap (QA 2026-10-22): dash-react's CommandPalette binds ⌘K / Ctrl+K to toggle the palette, so the empty state's "Press ⌘K to search dashboards…" is right.
 3. **"AI Assistant" leftovers.** The Settings tab is already **AI**, but a few strings still say AI Assistant: the default `author` on widgets the builder makes ("AI Assistant" — WidgetBuilderModal, WidgetConfigureTab, aiBuild.cjs), the fallback provider name "Anthropic (AI Assistant)" in Settings › AI, and "Asked via the AI Assistant" on old conversations. (Code-nits PR.)
 4. **Arrow keys** to move or resize a selected widget (CRE-013 AC5).
 5. **A live preview while building** (CRE-004 AC2).
@@ -396,7 +396,7 @@ Then the consolidation roadmap (2026-10-16 onward): Phase 0 and 1 (one install g
 1. ~~**Configure screens in the panel (CRE-006 AC4/AC5)**~~ — done: widget side dash-core #718 (v0.1.733), bot side #719 (v0.1.734); since replaced by the one widget panel (CRE-015).
 2. **Arrow-key move and resize (CRE-013 AC5)** — open (Open gaps 4).
 3. **Remounts on mode switch** — open (Open gaps 12).
-4. **⌘K label** — the palette's Create… now shows ⌘N (bound); the empty state still says "Press ⌘K", which nothing binds (Open gaps 2).
+4. ~~**⌘K label**~~ — done: the palette's Create… shows ⌘N (bound), and ⌘K opens the palette as the empty state says (Open gaps 2).
 5. ~~**Build-mode registry panel:** the builder searched the registry with the latest visible message and showed "0 matches" in Build mode~~ — moot: the Widget Builder has no AI chat or registry search (Phase 3b).
 6. **Deleted drafts linger in the widget list** — open (Open gaps 13).
 7. ~~**Move the other builder entry points into Create** (empty-cell Build with AI, Edit with AI, Widgets page)~~ — done: Phases 2b, 3a and 3b.
