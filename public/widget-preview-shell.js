@@ -519,6 +519,11 @@
         var type = event.data.type;
         var payload = event.data.payload || {};
 
+        if (type === "bridge:hello") {
+            // The host missed our ready (it wasn't listening yet).
+            announceReady();
+            return;
+        }
         if (type === "bridge:unmount") {
             unmountCurrent();
             return;
@@ -901,6 +906,8 @@
     );
 
     // === Handshake ===
+    var LOAD_ID =
+        String(Date.now()) + "-" + Math.random().toString(36).slice(2);
     function announceReady() {
         // Bridge mainApi from the host BEFORE handshake-ready, so a
         // widget that loads as soon as bridge:ready fires has
@@ -912,7 +919,9 @@
         // file. Bumping it would break tests that assert the exact
         // string and also signal a wire-format change to the host
         // bridge, which this slice doesn't make.
-        postToHost("bridge:ready", { shellVersion: "17c.1" });
+        // loadId names this page load: a ready repeated for a hello
+        // carries the same one, so the host sends the widget only once.
+        postToHost("bridge:ready", { shellVersion: "17c.1", loadId: LOAD_ID });
     }
     if (document.readyState === "complete") {
         announceReady();

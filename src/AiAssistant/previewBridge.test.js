@@ -247,3 +247,28 @@ describe("createPreviewBridge — host-side surface", () => {
         expect(calls).toEqual([]);
     });
 });
+
+describe("createPreviewBridge — only its own frame", () => {
+    test("drops a message from another window", () => {
+        const own = { postMessage: jest.fn() };
+        const bridge = createPreviewBridge({
+            iframeRef: { current: { contentWindow: own } },
+            allowedOrigin: "*",
+        });
+        const handler = jest.fn();
+        bridge.on("bridge:ready", handler);
+        bridge._dispatch({
+            origin: "x",
+            source: { other: true },
+            data: { type: "bridge:ready", payload: {} },
+        });
+        expect(handler).not.toHaveBeenCalled();
+        bridge._dispatch({
+            origin: "x",
+            source: own,
+            data: { type: "bridge:ready", payload: {} },
+        });
+        expect(handler).toHaveBeenCalledTimes(1);
+        bridge.destroy();
+    });
+});
