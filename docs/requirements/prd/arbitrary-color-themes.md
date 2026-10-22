@@ -1,10 +1,12 @@
 # PRD: Arbitrary-Color Themes (CSS Custom Properties)
 
-**Status:** Draft
-**Last Updated:** 2026-05-22
+**Status:** In Progress — Phases 1 and 2 shipped, Phase 3 mostly shipped (see Implementation Phases). Open: Tier-1 visual snapshots, the e2e test, the widget-builder skill docs for `cssValue` (US-007 AC3), per-variant and sub-token hex.
+**Last Updated:** 2026-10-22
 **Owner:** trops
 **Related PRDs:** N/A
 **Affected Repos:** `dash-react` (theme model + safelist), `dash-core` (theme picker UI), `dash-electron` (settings surface + safelist build)
+
+> **Where things are now (2026-10-22):** "Settings → Themes" in this PRD is now the **Themes** page in the left nav (Edit theme opens the theme editor) and **Create › Theme**. The color plumbing is in dash-react (#46 `colorMath.js` + CSS-variable injection in `ThemePreviewProvider`; #47 `TAILWIND_PALETTE` / `hexForTailwindClass`) and dash-core (`ThemeModel` hex path and `cssValue`; `CustomHexColorPane`); the `bg-[var(--…)]` safelist is in dash-electron `tailwind.config.js`.
 
 ---
 
@@ -141,7 +143,7 @@ Dash's visual identity is bounded by Tailwind's palette. Polished, brand-aware d
 > so that my Dash workspace skins to a brand color outside the Tailwind named palette.
 
 **Priority:** P0
-**Status:** Backlog
+**Status:** Implemented — hex input with live swatch in `CustomHexColorPane` (dash-core v0.1.570), used by the theme editor's channel editor (`Theme/Studio/ChannelEditorModal.js`) and Create › Theme's quick create (`Theme/Wizard/ThemeQuickCreate.js`). The checkboxes below were not re-walked by hand.
 
 **Acceptance Criteria:**
 
@@ -196,7 +198,7 @@ Theme persists: { primary: "#4A154B", secondary: "indigo", ... }.
 > so that I don't have to write two code paths.
 
 **Priority:** P0
-**Status:** Backlog
+**Status:** In Progress — the class-token path works (`bg-[var(--primary-…)]`, dash-core `ThemeModel.test.js`); the Tier-1 visual snapshots and Storybook entries were never made.
 
 **Acceptance Criteria:**
 
@@ -236,7 +238,7 @@ Same code, same MenuItem, no widget-side change.
 > so that nothing I've already configured visually shifts.
 
 **Priority:** P0
-**Status:** Backlog
+**Status:** Implemented — named themes keep the classic `bg-{name}-{shade}` tokens (dash-core `ThemeModel.test.js`).
 
 **Acceptance Criteria:**
 
@@ -276,7 +278,7 @@ The app looks identical post-upgrade. No visual shift, no flash-of-default.
 > so that I can build a complete brand palette.
 
 **Priority:** P1
-**Status:** Backlog
+**Status:** Implemented (Phase 2).
 
 **Acceptance Criteria:**
 
@@ -314,7 +316,7 @@ Etc.
 > so that I can knowingly choose to proceed.
 
 **Priority:** P1
-**Status:** Backlog
+**Status:** Implemented (Phase 3) — the warning lives in `CustomHexColorPane`.
 
 **Acceptance Criteria:**
 
@@ -355,7 +357,7 @@ User can still save.
 > so that I can apply a familiar brand identity with one click.
 
 **Priority:** P2
-**Status:** Backlog
+**Status:** Implemented (Phase 3) — 8 brand presets (`getBrandPresets()` in dash-core `utils/themeGenerator.js`).
 
 **Acceptance Criteria:**
 
@@ -379,7 +381,7 @@ User can still save.
 > so that I can write inline `style={{ backgroundColor: ... }}` without dropping out of the theme system.
 
 **Priority:** P1 (promoted from P2 on 2026-05-22 — required to fix SlackWidget inline-style theme bug)
-**Status:** Backlog
+**Status:** Implemented (Phase 2) as `currentTheme.cssValue[token]` (not `cssVars`). AC3 (widget-builder skill docs) is still open.
 
 **Acceptance Criteria:**
 
@@ -673,16 +675,16 @@ Pixel output
 
 ## Implementation Phases
 
-### Phase 1: MVP — Custom Primary Color (P0)
+### Phase 1: MVP — Custom Primary Color (P0) — SHIPPED (plumbing dash-react #46/#47; picker in Phase 3)
 
 **Timeline:** ~1 week dev + 2 days QA.
 
 **Deliverables:**
 
--   [ ] US-001: Hex input for primary color, save + load round-trip.
--   [ ] US-002: All Tier-1 primitives render correctly under a custom-primary theme.
--   [ ] US-003: Backwards compat — named themes byte-identical.
--   [ ] FR-001 through FR-006 implemented.
+-   [x] US-001: Hex input for primary color, save + load round-trip (the input landed in Phase 3, dash-core v0.1.570).
+-   [ ] US-002: All Tier-1 primitives render correctly under a custom-primary theme — token path tested; visual snapshots not made.
+-   [x] US-003: Backwards compat — named themes keep their classic tokens (dash-core `ThemeModel.test.js`).
+-   [x] FR-001 through FR-006 implemented (colorMath, CSS-variable injection, ThemeModel hex path, safelist).
 
 **Success Criteria:**
 
@@ -759,7 +761,7 @@ Pixel output
 -   `dash-react/src/Context/ThemePreviewProvider.js` — current preview mechanism
 -   `dash-electron/tailwind.config.js` — current safelist
 
-**Implementation Status:** Backlog. No code yet.
+**Implementation Status:** In Progress. Shipped: dash-react `src/Utils/colorMath.js` (+ `colorMath.test.js`), `src/Utils/tailwindPalette.js`, CSS-variable writes in `src/Context/ThemePreviewProvider.js` (dash-react #46, #47); dash-core `src/Models/ThemeModel.js` hex path and `cssValue` (+ `ThemeModel.test.js`), `src/Components/Theme/Panel/Pane/CustomHexColorPane.js`, `getBrandPresets()`; dash-electron `tailwind.config.js` `var(--…)` safelist. Not made: `e2e/themes/custom-color.spec.js`, Tier-1 visual snapshots.
 
 ---
 
@@ -818,6 +820,7 @@ Pixel output
 
 ## Revision History
 
-| Version | Date       | Author | Changes        |
-| ------- | ---------- | ------ | -------------- |
-| 1.0     | 2026-05-22 | trops  | Initial draft. |
+| Version | Date       | Author | Changes                                                                                                                                                                                                                                          |
+| ------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1.0     | 2026-05-22 | trops  | Initial draft.                                                                                                                                                                                                                                   |
+| 1.1     | 2026-10-22 | trops  | Consolidation Phase 5: status Draft → In Progress; story statuses and Phase 1 match what shipped (dash-react #46/#47, dash-core ThemeModel / CustomHexColorPane / brand presets); "Settings → Themes" is now the Themes page and Create › Theme. |

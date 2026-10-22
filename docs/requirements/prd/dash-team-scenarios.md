@@ -1,8 +1,15 @@
 # Dash team — use cases walked through on paper
 
-**Status:** Slice 0 of phase 3 (create-entry PRD CRE-011 / CRE-012)
-**Last Updated:** 2026-10-11
+**Status:** Historical — the paper walk-through (slice 0 of create-entry phase 3, CRE-011 / CRE-012) that shaped the Dash team. The team shipped; create-entry.md is the current source. Kept for the Planner test set and the reasoning behind the gaps.
+**Last Updated:** 2026-10-22
 **Related:** [create-entry.md](./create-entry.md) · dash-core `bot-teams.md` (TEAM-010 team_run_bot) · `bot-factory.md` (US-016 model advisor, US-019 budgets) · `bot-capabilities.md` (CAP-006 built-in tools)
+
+> **Where the gaps ended up (checked against the code 2026-10-22):**
+>
+> -   **Closed:** G1 (a build waits for a provider that isn't connected — dash-core `electron/bots/planBuild.js`), G3 (no `create_bot` tool: Create › Bot builds one bot, the Checker checks it, and it's saved paused — `planBuild.js` bot steps), G4 (placement draws the active page — `electron/utils/placeWidget.js`), G6 (`check_widget` checks the old vs new config), G7 (`search_library`: your widgets, AI-built and the registry), G13 (`ask_role`).
+> -   **Changed:** the Checker no longer runs "after each build" on an installed widget. The Builder writes a draft, the Checker checks it, the user previews it, and only then is it installed (check-before-install, consolidation Phase 1b).
+> -   **Still open:** **G2** — `check_widget` is static (compile, code checks, scorecard, config); nothing renders the widget. See create-entry's open gaps.
+> -   **Also closed:** G5 (every run records model, tokens and cost — CRE-012 AC3–5), G8 (before-building approvals — CRE-003 AC3), G9 (what the bots can and can't do — CRE-003 AC5), G10 (per-role built-in tools — CRE-011), G11 (the structured plan and its UI — CRE-003), G12 (orchestration: progress, Stop, recovery, waiting — CRE-004).
 
 Before building the Dash team (Planner, Scout, Builder, Checker), six realistic requests are walked through the planned team: who does what, with which tool, what the user must approve, roughly what it costs, and where it breaks. Every step is checked against what the code has today. The gaps feed the phase 3 slices; the scenarios later become the Planner's test set (plan-only runs, nothing built).
 
@@ -111,7 +118,7 @@ Before building the Dash team (Planner, Scout, Builder, Checker), six realistic 
 
 1. **Planner** — a few tappable questions (which calendar, which channels, a summary bot?), then a **plan**: 3 widgets (Scout: calendar from the registry, Gmail from scenario 1 if built, Slack channels yours), an optional summary bot, a layout, **Before building** (connect Google Calendar, Gmail, Slack), an estimate.
 2. **Builder** — builds what's new one at a time, `create_dashboard` + layout, places and wires.
-3. **Checker** — after each piece; a failure stops that piece ("Let Builder fix it" ≤ 2, then asks).
+3. **Checker** — after each piece; a failure stops that piece ("Let Builder fix it" ≤ 2, then asks). _(As built: the Checker checks each new widget's draft before it's installed, and the user previews it first — check-before-install.)_
 
 **Approvals:** three connections · installs · the bot.
 **Cost:** build ~$0.60–1.00 (Planner Opus is the biggest share) · running: the summary bot ~$1.70/month.
@@ -135,9 +142,11 @@ Before building the Dash team (Planner, Scout, Builder, Checker), six realistic 
 | **Phase 4**                   | G1 waiting on connections · G8 before-building approvals · G11 plan UI · G12 orchestration                                                                                |
 | **Later**                     | G2 headless render check                                                                                                                                                  |
 
+_As built (2026-10-22): G3 shipped as Create › Bot's build steps (build, check, save paused), not a `create_bot` tool; slice 4 became "the Checker checks the draft before install", and the Widget Builder's own AI was retired (consolidation Phase 3b)._
+
 **Also found while mapping (bugs, not team gaps):**
 
--   On the **Anthropic API** backend the Widget Builder may still be offered the Dash tools — `disableTools` isn't checked in that path (it is on Claude Code).
+-   ~~On the **Anthropic API** backend the Widget Builder may still be offered the Dash tools — `disableTools` isn't checked in that path (it is on Claude Code).~~ Moot: the Widget Builder has no AI of its own since consolidation Phase 3b (2026-10-21).
 -   Team leads run on **Opus** by default (`model: null` → provider default), though the bot-teams PRD says a lead's default is the fast tier.
 -   The tool-loop engine records only the **last turn's** tokens; neither engine counts cache tokens; Claude Code runs are priced in dollars. _(slice 1)_
 
