@@ -1,7 +1,7 @@
 # PRD: In-App AI Assistant & Widget Builder
 
-**Status:** In Progress (Phase 3 complete, Phases 1-2 partial; Discover tab shipped 2026-04-19). **The right-side AI Assistant panel is retired** (create-entry 5e-2c, 2026-10-14) — see below. **The Widget Builder's own AI chat and Discover are retired** (consolidation Phase 3b, 2026-10-21): US-003, US-004 and US-007 below describe what was; the builder is the by-hand tool (create-entry CRE-010 AC6).
-**Last Updated:** 2026-10-21
+**Status:** In Progress — US-001 (Settings › AI) and US-006 (as Fix <widget>) Implemented; US-005 partly built (see it). **Retired:** the right-side AI Assistant panel (US-002, Phase 2; create-entry 5e-2c, 2026-10-14) and the Widget Builder's own AI chat, Remix and Discover (US-003, US-004, US-007; consolidation Phase 3b, 2026-10-21). Their stories are in the Appendix. The Widget Builder is the by-hand tool (create-entry CRE-010 AC6); every AI build or change goes through the Dash team in Create.
+**Last Updated:** 2026-10-22
 **Owner:** John Giatropoulos
 **Related PRDs:** None
 
@@ -11,15 +11,17 @@
 > | -------------------------------------------------------------- | ---------------------------------------------------------- |
 > | Add a widget or bot to a dashboard, switch a dashboard's theme | A Create plan for that dashboard (5e-2b)                   |
 > | Make a new dashboard                                           | A Create plan                                              |
-> | Ask a team lead                                                | Create's Ask box, To: picker (5e-2a)                       |
-> | Answer questions about bots and dashboards                     | Create's Ask box (the Planner)                             |
+> | Ask a team lead                                                | The lead's Conversation: Bots panel › Pinned (Phase 4a)    |
+> | Answer questions about bots and dashboards                     | The Dash team page: Bots panel › Pinned › Dash team        |
 > | Remove, move or resize widgets; set layouts                    | Edit mode on the dashboard                                 |
 > | Add or remove providers                                        | The Providers page                                         |
 > | Make a theme from a description                                | Create › Theme                                             |
 > | Make a theme from a website; delete dashboards                 | The Themes and Dashboards pages                            |
 > | Chat with your connected tools                                 | A dashboard's team lead (no general-purpose chat any more) |
 >
-> **The Widget Builder's chat retired too (consolidation Phase 3b, 2026-10-21).** Every AI widget build or change goes through the Dash team in Create (create-entry CRE-005 AC3, CRE-014): the Scout, the Planner, the Builder's draft, the Checker and a preview before anything is installed. The Widget Builder keeps Compose, Code, Preview, Configure, Console, Scorecard, drafts and the checked Install, with no AI of its own; Compose's "describe it" hands off to Create. Discover's job (find a widget you have or one in the registry) is the Scout's, and browsing the registry is Widgets › Search for Widgets.
+> (The "Ask box" and To: picker that first replaced the panel in Create were removed in consolidation Phase 4a, 2026-10-21: you ask the Dash team or a lead from the Bots panel.)
+>
+> **The Widget Builder's chat retired too (consolidation Phase 3b, 2026-10-21).** Every AI widget build or change goes through the Dash team in Create (create-entry CRE-005 AC3, CRE-014): the Scout, the Planner, the Builder's draft, the Checker and a preview before anything is installed. The Widget Builder keeps Compose, Code, Preview, Configure, Logs, Style checks (named Console and Scorecard until Phase 4d), drafts and the checked Install, with no AI of its own; Compose's "describe it" hands off to Create. Discover's job (find a widget you have or one in the registry) is the Scout's, and browsing the registry is Widgets › Search for Widgets.
 >
 > Kept: ChatCore (the sample Chat widgets use it), Settings › AI (renamed from "AI Assistant"; Create and the Widget Builder use it), and Dash's MCP server for outside apps — its `ask_team_lead` runs now say "Asked through Dash's MCP server". Assistant chats were never saved past the window, so there's no history to move.
 
@@ -143,115 +145,37 @@ Widget creation remains developer-only. The MCP server's power is underutilized 
 > so that I can use AI features within the app.
 
 **Priority:** P0
-**Status:** Backlog
+**Status:** Implemented (Settings › AI — the section was "AI Assistant" until the panel retired; dash-core `src/Components/Settings/sections/AiAssistantSection.js`). Create, the Dash team and the Widget Builder use it.
 
 **Acceptance Criteria:**
 
--   [ ] AC1: If Claude Code CLI is installed, assistant is available immediately with no configuration
--   [ ] AC2: If CLI is not available, user can enter an Anthropic API key via Settings > AI Assistant
--   [ ] AC3: API keys are stored encrypted using the existing provider system (`safeStorage`)
--   [ ] AC4: If user already has an Anthropic provider (from Chat widget), assistant reuses it automatically
--   [ ] AC5: Settings > AI Assistant shows: preferred backend, API key (if Anthropic), model selector
--   [ ] AC6: The model selector is populated dynamically (live Anthropic Models API fetch with a curated fallback), has a Refresh action, and auto-migrates a retired saved model to a current replacement with a one-time notice. Default model: `claude-opus-4-8`. Implemented 2026-06-24 (dash-core `electron/llm/modelProviders.js` provider registry + `LLM_LIST_MODELS` IPC; renderer `src/utils/modelMigration.js`).
+-   [x] AC1: If Claude Code CLI is installed, AI features work immediately with no configuration (Connection Status shows "Available at …")
+-   [x] AC2: If CLI is not available, user can enter an Anthropic API key via Settings › AI
+-   [x] AC3: API keys are stored encrypted using the existing provider system (`safeStorage`) — saved as an Anthropic credential provider
+-   [x] AC4: If user already has an Anthropic provider (from Chat widget), it is reused automatically
+-   [x] AC5: Settings › AI shows: connection status, preferred backend, API key (if Anthropic), model selector. Settings are saved in app settings under `aiAssistant`.
+-   [x] AC6: The model selector is populated dynamically (live Anthropic Models API fetch with a curated fallback), has a Refresh action, and auto-migrates a retired saved model to a current replacement with a one-time notice. Default model: `claude-opus-4-8`. Implemented 2026-06-24 (dash-core `electron/llm/modelProviders.js` provider registry + `LLM_LIST_MODELS` IPC; renderer `src/utils/modelMigration.js`).
 
 **Technical Notes:**
 Reuse `llmController` + `cliController` from `dash-core/electron/controller/`. Store preference in `settings.json`. Reuse `providerController` for API key encryption.
 
 ---
 
-**US-002: AI Assistant Panel**
-
-> As a user,
-> I want a persistent AI assistant panel on the right side of the app,
-> so that I can get help with dashboard tasks without leaving my workflow.
-
-**Priority:** P0
-**Status:** Backlog
-
-**Acceptance Criteria:**
-
--   [ ] AC1: Assistant panel slides in from the right side (same side as WidgetSidebar in edit mode)
--   [ ] AC2: Panel has a toggle button in the toolbar/header area
--   [ ] AC3: Assistant has access to all Dash MCP tools (dashboard, widget, theme, provider, layout management)
--   [ ] AC4: Assistant knows the active dashboard context (which dashboard is open, what widgets are placed)
--   [ ] AC5: Chat history persists within the session
--   [ ] AC6: Panel can be popped out into a standalone window
-
-**Technical Notes:**
-Build on `ChatCore.js` engine. Pre-configure system prompt with Dash capabilities. Enable all MCP tools by default. Use `DashboardPublisher` IPC bridge for cross-window events if popped out.
+**US-002: AI Assistant Panel** — Retired. Superseded by Create and the Dash team (create-entry CRE-007; the table at the top) (2026-10-22). Original story: Appendix A.
 
 ---
 
-**US-003: Build Widget with AI** — _retired 2026-10-21 (consolidation Phase 3b): the Dash team builds widgets in Create (create-entry CRE-005 AC3)._
-
-> As a Solutions Engineer,
-> I want to describe a widget in natural language and get a working result with live preview,
-> so that I can create custom widgets without writing code.
-
-**Priority:** P0
-**Status:** Backlog
-
-**Acceptance Criteria:**
-
--   [x] AC1: Grid cell "+" menu includes "Build with AI" option (v0.0.338, dash-core 0.1.318)
--   [x] AC2: Opens a modal with split pane: live preview (left 2/3) + chat (right 1/3) (v0.0.338)
--   [x] AC3: AI generates `.js` component + `.dash.js` config from natural language description (v0.0.342)
--   [x] AC4: Each iteration compiles via esbuild and renders in the preview pane (v0.0.343)
--   [x] AC5: User can iterate conversationally — single-block fixes supported (v0.0.343)
--   [x] AC6: "Install Widget" installs to `@ai-built/` scope, "Done" places it in the selected cell (v0.0.345)
--   [x] AC7: Widget uses `@trops/dash-react` components and `@trops/dash-core` hooks (externalized in esbuild)
-
-**Technical Notes:**
-Widget files go to `{userData}/widgets/@ai-built/{widget-name}/`. Use existing `widgetRegistry.installFromLocalPath()` for installation. esbuild compilation uses same pipeline as registry widgets. Preview uses `evaluateBundle()` + `extractWidgetConfigs()` from `dash-core`.
+**US-003: Build Widget with AI** — Retired (was Implemented, v0.0.338–v0.0.345). Superseded by the Dash team building widgets in Create, and empty cell → Build with AI (create-entry CRE-005 AC3, CRE-008) (2026-10-22). Original story: Appendix A.
 
 ---
 
 ### Should-Have (P1)
 
-**US-004: Remix Existing Widget** — _retired 2026-10-21 (consolidation Phase 3b): Change <widget> in Create, in place or as a new widget (create-entry CRE-014); by hand, Edit the code yourself._
-
-> As a user,
-> I want to customize an existing widget using AI,
-> so that I can adapt it to my specific needs without starting from scratch.
-
-**Priority:** P1
-**Status:** Implemented
-
-**Acceptance Criteria:**
-
--   [x] AC1: "Edit with AI" button on widget cell header in layout edit mode opens the widget builder modal
--   [x] AC2: Original widget source is pre-loaded as AI context (Code tab + chat seed)
--   [x] AC3: AI generates a forked version under `@ai-built/` scope
--   [x] AC4: Original widget is untouched — remix is a separate installation under `@ai-built/`
--   [x] AC5: Remix metadata tracks attribution (`remixedFrom` in `dash.json`) for non-AI-built widgets
-
-**Technical Notes:**
-Uses `widget:read-sources` IPC (dash-core 0.1.322+) to read `.js` + `.dash.js` source files. "Edit with AI" wand button added to `WidgetCardHeader` in layout edit mode. On remix, widget is installed to `@ai-built/` and the cell's widget is swapped in-place via `dash:swap-widget-in-cell` event (no page refresh). Attribution is only added when remixing a non-`@ai-built/` widget.
+**US-004: Remix Existing Widget** — Retired (was Implemented). Superseded by Change <widget> in Create (create-entry CRE-014): your own widget changes in place, everywhere it's used; anyone else's becomes a new widget in that cell. AC4 ("original untouched") no longer holds for your own widgets (2026-10-22). By hand, Edit the code yourself. Original story: Appendix A.
 
 ---
 
-**US-007: Discover Registry Widgets Before Building** — _retired 2026-10-21 (consolidation Phase 3b): the Scout looks first (create-entry CRE-005 AC3); the registry is Widgets › Search for Widgets._
-
-> As a user opening the Widget Builder,
-> I want to search the Dash registry for existing widgets and preview them inline,
-> so that I can install a battle-tested widget instead of re-generating one from scratch.
-
-**Priority:** P1
-**Status:** Implemented (read-only preview + install)
-
-**Acceptance Criteria:**
-
--   [x] AC1: Widget Builder modal opens on a new **Discover** tab by default (existing Edit-with-AI flow still opens on Preview)
--   [x] AC2: Discover tab has a search input that queries the registry via `mainApi.registry.search(query, { type: "widget" })`
--   [x] AC3: Search results render as cards (displayName, scoped ID, description, "Installed" badge when applicable)
--   [x] AC4: Clicking a card fetches the package source via a new `mainApi.registry.previewFetch` IPC and renders the live widget in the Preview tab (no installation)
--   [x] AC5: Preview footer shows an Install button that calls existing `mainApi.widgets.install` and surfaces the standard success screen
--   [x] AC6: A disabled **Remix** button is rendered next to Install with tooltip "Remix is coming in a follow-up release" (wiring deferred)
--   [x] AC7: A "Back to Discover" link is visible while previewing a registry widget
--   [ ] AC8: Remix button wired — hand off registry source to the existing Edit-with-AI flow, fork to `@ai-built/` with attribution (follow-up PR)
-
-**Technical Notes:**
-Added `fetchPackageSource(packageName)` in dash-core `electron/controller/registryController.js` (shipped v0.1.388). Downloads package ZIP to a temp dir with `validateZipEntries()`, reads `widgets/*.js`, `widgets/*.dash.js`, and optionally `dist/index.cjs.js`, then cleans up. Exposed via `mainApi.registry.previewFetch`. The dash-electron `WidgetBuilderModal` compiles the returned source through the existing `compilePreview` pipeline so the registry widget renders exactly the same way an AI-built one does.
+**US-007: Discover Registry Widgets Before Building** — Retired (was Implemented). Superseded by the Scout looking first (create-entry CRE-005 AC3) and the Widgets page's registry search (2026-10-22). Original story: Appendix A.
 
 ---
 
@@ -262,19 +186,19 @@ Added `fetchPackageSource(packageName)` in dash-core `electron/controller/regist
 > so that my team can install and use it.
 
 **Priority:** P1
-**Status:** Backlog
+**Status:** Partly built — publishing lives on the Widgets page (dash-core app-navigation NAV-012), not Settings › Widgets.
 
 **Acceptance Criteria:**
 
--   [ ] AC1: Settings > Widgets shows AI-built widgets with a "Publish" action
--   [ ] AC2: Publish validates widget structure via `validateWidget.cjs`
--   [ ] AC3: User provides metadata (display name, description, icon)
--   [ ] AC4: Widget re-scoped from `@ai-built/` to `@username/`
--   [ ] AC5: Publishes via `publishToRegistry.js` (requires registry auth)
+-   [x] AC1: The Widgets page shows **Publish…** (or **Publish new version…**) on your own and AI-built packages (dash-core `AppPages/WidgetsPage.js` → `PublishWidgetModal`)
+-   [ ] AC2: Publish validates widget structure via `validateWidget.cjs` — not wired into the in-app publish
+-   [ ] AC3: User provides metadata (display name, description, icon) — the dialog shows what the widget's config already says
+-   [x] AC4: Widget published under `@username/` (the dialog shows "publishing as @username/…")
+-   [x] AC5: Publishes through the registry (`mainApi.registry.publishWidget`; requires registry sign-in)
 -   [ ] AC6: Remix attribution preserved in registry listing
 
 **Technical Notes:**
-Reuse existing `scripts/publishToRegistry.js` and `scripts/validateWidget.cjs`.
+Original plan reused `scripts/publishToRegistry.js` and `scripts/validateWidget.cjs`; the in-app publish uses dash-core's `widgetRegistryController` instead.
 
 ---
 
@@ -285,14 +209,14 @@ Reuse existing `scripts/publishToRegistry.js` and `scripts/validateWidget.cjs`.
 > so that I can resolve issues without developer help.
 
 **Priority:** P1
-**Status:** Backlog
+**Status:** Implemented as **Fix <widget>** (consolidation Phase 3). A failing installed widget shows **Fix <name>**; it opens Create › Change <widget> with the error and "Fix the error so it works again." (dash-core `Widget/canFixWithAi.js`, `Create/CreateEdit.js`). A missing connection shows on the card as a pill instead (create-entry CRE-015 AC9).
 
 **Acceptance Criteria:**
 
--   [ ] AC1: Assistant can read the active widget's error state
--   [ ] AC2: Assistant can inspect provider configuration for a widget
--   [ ] AC3: Assistant suggests specific fixes ("Your Gong widget needs a provider — want me to set it up?")
--   [ ] AC4: Assistant can execute fixes with user confirmation (e.g., connect a provider to a widget)
+-   [x] AC1: The error is sent with the fix request (`fixRequestDetail`)
+-   [x] AC2: A missing connection or unconnected listener shows as the card's pill and opens the widget panel at the fix (no AI needed)
+-   [x] AC3: The Dash team's Scout says what the widget does now, and the Planner plans the fix
+-   [x] AC4: Nothing is installed until the user previews the fix (code and all) and accepts it
 
 ---
 
@@ -319,12 +243,14 @@ Reuse existing `scripts/publishToRegistry.js` and `scripts/validateWidget.cjs`.
 
 ### LLM Connection
 
-| Backend         | Auth                 | Setup                                        |
-| --------------- | -------------------- | -------------------------------------------- |
-| Claude Code CLI | Pro/Max subscription | Auto-detected, zero config                   |
-| Anthropic API   | API key (encrypted)  | Settings > AI Assistant or existing provider |
+| Backend         | Auth                 | Setup                              |
+| --------------- | -------------------- | ---------------------------------- |
+| Claude Code CLI | Pro/Max subscription | Auto-detected, zero config         |
+| Anthropic API   | API key (encrypted)  | Settings › AI or existing provider |
 
 ### UI Layout
+
+Superseded by the panel's retirement (US-002) (2026-10-22): asking and making happen in Create and the Bots panel. Original sketch:
 
 ```
 ┌──────────┬──────────────────────────────────┬──────────────┐
@@ -356,9 +282,7 @@ Left = Navigation          Center = Content          Right = Helpers
 └───────────────────────────────────────────────────────┘
 ```
 
-**Now (2026-10-21, consolidation Phase 3b; wording Phase 4d):** **Widget Builder · Build by hand** — Preview / Code / Configure / **Logs** / **Style checks** (were Console / Scorecard) on the left; the name commits on Enter or when you leave the field (no Save button; "Saved when you press Enter or click away." while it differs; a name that can't be used shows why and the widget keeps its old one), and Category says what it's for ("where the widget is listed when you publish it"); on the right, Compose for a new widget (hidden when editing an installed widget's code, which opens on Code). No chat, provider question or Discover. See create-entry CRE-010 AC6.
-
-**Layout (2026-10-13, design audit screen 3a — before Phase 3b):** the sketch above is the original. Today the builder is one raised modal surface: a panel header (title, quiet ✕), Preview / Code / Configure / Console / Scorecard as underline tabs on the left (2/3), and Build | Compose plus "Discover existing" on the right (1/3), with both header rows the same height so their hairlines line up. The Build pane opens on its message box ("Describe the widget you want"). Sending asks "Which data should this widget use?" with likely choices; the chat starts with the description as its first message once the data is picked. "Pick the data first…" opens the full list: rows with an icon, a readable name and "Not set up yet" / "Set up · N accounts", plus a filter. A type with no account asks before going on (set up, skip, or pick something else). The install bar uses a Category menu and a primary Install button.
+**Now (2026-10-21, consolidation Phase 3b; wording Phase 4d):** **Widget Builder · Build by hand** — Preview / Code / Configure / **Logs** / **Style checks** (were Console / Scorecard) on the left; the name commits on Enter or when you leave the field (no Save button; "Saved when you press Enter or click away." while it differs; a name that can't be used shows why and the widget keeps its old one), and Category says what it's for ("where the widget is listed when you publish it"); on the right, Compose for a new widget (hidden when editing an installed widget's code, which opens on Code). No chat, provider question or Discover. See create-entry CRE-010 AC6. (The 2026-10-13 layout with the Build chat and Discover: Appendix A.)
 
 ### Widget Lifecycle
 
@@ -455,7 +379,7 @@ The `tailwind.config.js` content array conditionally excludes the widget cache p
 -   **Interpreted hot-reload** — All builds go through esbuild. No eval-based rendering.
 -   **Autonomous agent** — Assistant responds to requests, doesn't proactively modify dashboards.
 -   **Widget marketplace curation** — No quality review for published AI-built widgets beyond `validateWidget.cjs`.
--   **Code editor view** — Users don't see/edit generated source code directly. AI handles code changes conversationally.
+-   ~~**Code editor view**~~ — Superseded by the Widget Builder's Code tab and Create's code preview (CRE-010 AC6, CRE-014) (2026-10-22).
 
 **Future Considerations:**
 
@@ -468,33 +392,23 @@ The `tailwind.config.js` content array conditionally excludes the widget cache p
 
 ## Implementation Phases
 
-### Phase 1: AI Assistant Settings + LLM Connection (P0)
+### Phase 1: AI Assistant Settings + LLM Connection (P0) — ✅ Implemented
 
 **Deliverables:**
 
--   [ ] US-001: Settings > AI Assistant tab
--   [ ] Auto-detect Claude Code CLI
--   [ ] API key entry (reuses provider system)
--   [ ] Backend preference stored in `settings.json`
--   [ ] New IPC: `ai-assistant:get-config`, `ai-assistant:set-config`
+-   [x] US-001: Settings › AI section
+-   [x] Auto-detect Claude Code CLI (`mainApi.llm.checkCliAvailable`)
+-   [x] API key entry (reuses provider system)
+-   [x] Backend preference stored in app settings (`aiAssistant`)
+-   [x] ~~New IPC: `ai-assistant:get-config`, `ai-assistant:set-config`~~ — not needed; the section reads and writes app settings
 
 **Success Criteria:** User can configure and verify LLM connection from within the app.
 
-### Phase 2: AI Sidebar Assistant (P0)
+### Phase 2: AI Sidebar Assistant (P0) — Retired
 
-**Deliverables:**
+Superseded by Create and the Dash team (create-entry CRE-007) (2026-10-22). The panel shipped and was retired in create-entry 5e-2c (2026-10-14). Original deliverables: Appendix A.
 
--   [ ] US-002: Right-side `AiAssistantPanel` component
--   [ ] Pre-loaded with Dash MCP tools as system context
--   [ ] Context-aware (active dashboard, placed widgets)
--   [ ] Popout to standalone window support
--   [ ] Toggle button in toolbar
-
-**Success Criteria:** User can have a conversation with the assistant that creates/modifies dashboards using MCP tools.
-
-**Dependencies:** Phase 1
-
-### Phase 3: Inline Widget Builder (P0) — ✅ Implemented
+### Phase 3: Inline Widget Builder (P0) — ✅ Implemented, then retired (consolidation Phase 3b, 2026-10-21; the builder's AI chat is gone)
 
 **Deliverables:**
 
@@ -515,11 +429,11 @@ The `tailwind.config.js` content array conditionally excludes the widget cache p
 
 **Deliverables:**
 
--   [x] US-004: Remix existing widgets
--   [ ] US-005: Publish AI-built widgets to registry
--   [ ] US-006: AI troubleshooting for widget errors
+-   [x] US-004: Remix existing widgets (retired; now Change <widget>, CRE-014)
+-   [ ] US-005: Publish AI-built widgets to registry (partly built: AC1, AC4, AC5)
+-   [x] US-006: AI troubleshooting for widget errors (as Fix <widget>)
 
-**Success Criteria:** Full widget lifecycle from build → test → remix → publish.
+**Success Criteria:** Full widget lifecycle from build → test → change → publish.
 
 **Dependencies:** Phase 3
 
@@ -527,9 +441,118 @@ The `tailwind.config.js` content array conditionally excludes the widget cache p
 
 ## Revision History
 
-| Version | Date       | Author            | Changes                                                                                                                                                                                              |
-| ------- | ---------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1.0     | 2026-04-03 | John Giatropoulos | Initial draft from design conversation                                                                                                                                                               |
-| 1.1     | 2026-04-05 | John Giatropoulos | Phase 3 implemented (v0.0.338–v0.0.345, dash-core v0.1.321). Added implementation notes, architecture decisions, and lessons learned.                                                                |
-| 1.2     | 2026-04-19 | John Giatropoulos | Added US-007: Discover tab in Widget Builder. Ships read-only preview + install; remix wiring deferred. Depends on dash-core v0.1.388 (`fetchPackageSource`).                                        |
-| 1.3     | 2026-10-21 | John Giatropoulos | Consolidation Phase 3b: the Widget Builder's AI chat (US-003, US-004) and Discover (US-007) retired — AI builds and changes go through the Dash team in Create; the builder is for building by hand. |
+| Version | Date       | Author            | Changes                                                                                                                                                                                                                                                                                                                  |
+| ------- | ---------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1.0     | 2026-04-03 | John Giatropoulos | Initial draft from design conversation                                                                                                                                                                                                                                                                                   |
+| 1.1     | 2026-04-05 | John Giatropoulos | Phase 3 implemented (v0.0.338–v0.0.345, dash-core v0.1.321). Added implementation notes, architecture decisions, and lessons learned.                                                                                                                                                                                    |
+| 1.2     | 2026-04-19 | John Giatropoulos | Added US-007: Discover tab in Widget Builder. Ships read-only preview + install; remix wiring deferred. Depends on dash-core v0.1.388 (`fetchPackageSource`).                                                                                                                                                            |
+| 1.3     | 2026-10-21 | John Giatropoulos | Consolidation Phase 3b: the Widget Builder's AI chat (US-003, US-004) and Discover (US-007) retired — AI builds and changes go through the Dash team in Create; the builder is for building by hand.                                                                                                                     |
+| 1.4     | 2026-10-22 | John Giatropoulos | Consolidation Phase 5 reconciliation: US-001 and Phase 1 ticked (Settings › AI); US-002, US-003, US-004, US-007 and Phase 2 marked Retired, stories moved to Appendix A; US-005 partly built (Widgets page Publish); US-006 built as Fix <widget>; Logs / Style checks names; asking moved to the Bots panel (Phase 4a). |
+
+---
+
+## Appendix A: history
+
+Retired stories and sketches, kept as written before they were superseded.
+
+### US-002: AI Assistant Panel (retired 2026-10-14)
+
+> As a user,
+> I want a persistent AI assistant panel on the right side of the app,
+> so that I can get help with dashboard tasks without leaving my workflow.
+
+**Priority:** P0
+**Status:** Backlog (the panel shipped without these boxes being ticked, then retired in create-entry 5e-2c)
+
+**Acceptance Criteria:**
+
+-   [ ] AC1: Assistant panel slides in from the right side (same side as WidgetSidebar in edit mode)
+-   [ ] AC2: Panel has a toggle button in the toolbar/header area
+-   [ ] AC3: Assistant has access to all Dash MCP tools (dashboard, widget, theme, provider, layout management)
+-   [ ] AC4: Assistant knows the active dashboard context (which dashboard is open, what widgets are placed)
+-   [ ] AC5: Chat history persists within the session
+-   [ ] AC6: Panel can be popped out into a standalone window
+
+**Technical Notes:**
+Build on `ChatCore.js` engine. Pre-configure system prompt with Dash capabilities. Enable all MCP tools by default. Use `DashboardPublisher` IPC bridge for cross-window events if popped out.
+
+**Phase 2 deliverables (as planned):**
+
+-   [ ] US-002: Right-side `AiAssistantPanel` component
+-   [ ] Pre-loaded with Dash MCP tools as system context
+-   [ ] Context-aware (active dashboard, placed widgets)
+-   [ ] Popout to standalone window support
+-   [ ] Toggle button in toolbar
+
+**Success Criteria:** User can have a conversation with the assistant that creates/modifies dashboards using MCP tools.
+
+**UI layout sketch:** see Architecture › UI Layout above.
+
+### US-003: Build Widget with AI (retired 2026-10-21)
+
+> As a Solutions Engineer,
+> I want to describe a widget in natural language and get a working result with live preview,
+> so that I can create custom widgets without writing code.
+
+**Priority:** P0
+**Status:** Implemented, then retired
+
+**Acceptance Criteria:**
+
+-   [x] AC1: Grid cell "+" menu includes "Build with AI" option (v0.0.338, dash-core 0.1.318)
+-   [x] AC2: Opens a modal with split pane: live preview (left 2/3) + chat (right 1/3) (v0.0.338)
+-   [x] AC3: AI generates `.js` component + `.dash.js` config from natural language description (v0.0.342)
+-   [x] AC4: Each iteration compiles via esbuild and renders in the preview pane (v0.0.343)
+-   [x] AC5: User can iterate conversationally — single-block fixes supported (v0.0.343)
+-   [x] AC6: "Install Widget" installs to `@ai-built/` scope, "Done" places it in the selected cell (v0.0.345)
+-   [x] AC7: Widget uses `@trops/dash-react` components and `@trops/dash-core` hooks (externalized in esbuild)
+
+**Technical Notes:**
+Widget files go to `{userData}/widgets/@ai-built/{widget-name}/`. Use existing `widgetRegistry.installFromLocalPath()` for installation. esbuild compilation uses same pipeline as registry widgets. Preview uses `evaluateBundle()` + `extractWidgetConfigs()` from `dash-core`.
+
+### US-004: Remix Existing Widget (retired 2026-10-21)
+
+> As a user,
+> I want to customize an existing widget using AI,
+> so that I can adapt it to my specific needs without starting from scratch.
+
+**Priority:** P1
+**Status:** Implemented, then retired
+
+**Acceptance Criteria:**
+
+-   [x] AC1: "Edit with AI" button on widget cell header in layout edit mode opens the widget builder modal
+-   [x] AC2: Original widget source is pre-loaded as AI context (Code tab + chat seed)
+-   [x] AC3: AI generates a forked version under `@ai-built/` scope
+-   [x] AC4: Original widget is untouched — remix is a separate installation under `@ai-built/`
+-   [x] AC5: Remix metadata tracks attribution (`remixedFrom` in `dash.json`) for non-AI-built widgets
+
+**Technical Notes:**
+Uses `widget:read-sources` IPC (dash-core 0.1.322+) to read `.js` + `.dash.js` source files. "Edit with AI" wand button added to `WidgetCardHeader` in layout edit mode. On remix, widget is installed to `@ai-built/` and the cell's widget is swapped in-place via `dash:swap-widget-in-cell` event (no page refresh). Attribution is only added when remixing a non-`@ai-built/` widget.
+
+### US-007: Discover Registry Widgets Before Building (retired 2026-10-21)
+
+> As a user opening the Widget Builder,
+> I want to search the Dash registry for existing widgets and preview them inline,
+> so that I can install a battle-tested widget instead of re-generating one from scratch.
+
+**Priority:** P1
+**Status:** Implemented (read-only preview + install), then retired
+
+**Acceptance Criteria:**
+
+-   [x] AC1: Widget Builder modal opens on a new **Discover** tab by default (existing Edit-with-AI flow still opens on Preview)
+-   [x] AC2: Discover tab has a search input that queries the registry via `mainApi.registry.search(query, { type: "widget" })`
+-   [x] AC3: Search results render as cards (displayName, scoped ID, description, "Installed" badge when applicable)
+-   [x] AC4: Clicking a card fetches the package source via a new `mainApi.registry.previewFetch` IPC and renders the live widget in the Preview tab (no installation)
+-   [x] AC5: Preview footer shows an Install button that calls existing `mainApi.widgets.install` and surfaces the standard success screen
+-   [x] AC6: A disabled **Remix** button is rendered next to Install with tooltip "Remix is coming in a follow-up release" (wiring deferred)
+-   [x] AC7: A "Back to Discover" link is visible while previewing a registry widget
+-   [ ] AC8: Remix button wired — hand off registry source to the existing Edit-with-AI flow, fork to `@ai-built/` with attribution (never built)
+
+**Technical Notes:**
+Added `fetchPackageSource(packageName)` in dash-core `electron/controller/registryController.js` (shipped v0.1.388). Downloads package ZIP to a temp dir with `validateZipEntries()`, reads `widgets/*.js`, `widgets/*.dash.js`, and optionally `dist/index.cjs.js`, then cleans up. Exposed via `mainApi.registry.previewFetch`. The dash-electron `WidgetBuilderModal` compiles the returned source through the existing `compilePreview` pipeline so the registry widget renders exactly the same way an AI-built one does.
+
+### Widget Builder layout (2026-10-13, design audit screen 3a — before Phase 3b)
+
+The builder was one raised modal surface: a panel header (title, quiet ✕), Preview / Code / Configure / Console / Scorecard as underline tabs on the left (2/3), and Build | Compose plus "Discover existing" on the right (1/3), with both header rows the same height so their hairlines line up. The Build pane opened on its message box ("Describe the widget you want"). Sending asked "Which data should this widget use?" with likely choices; the chat started with the description as its first message once the data was picked. "Pick the data first…" opened the full list: rows with an icon, a readable name and "Not set up yet" / "Set up · N accounts", plus a filter. A type with no account asked before going on (set up, skip, or pick something else). The install bar used a Category menu and a primary Install button.

@@ -1,10 +1,18 @@
 # PRD: Developer Experience & Asset Distribution
 
 **Status:** In Progress
-**Last Updated:** 2026-03-25
+**Last Updated:** 2026-10-22
 **Owner:** Core Team
 **Related PRDs:** [Widget Installation Model](https://github.com/trops/dash-core/blob/master/docs/requirements/prd/widget-installation-model.md), [Dashboard Marketplace](https://github.com/trops/dash-core/blob/master/docs/requirements/prd/dashboard-marketplace.md), [Widget Display & Installation](https://github.com/trops/dash-core/blob/master/docs/requirements/prd/widget-display-and-installation.md)
 **Repos:** dash-electron, dash-core
+
+> **Update (2026-10-22, consolidation Phase 5).** The in-app Wizard, the Discover tab and Settings › Widgets / Dashboards / Themes are gone. Where things are now:
+>
+> -   **Make a dashboard without AI:** Create's no-AI starts — Blank dashboard, Import dashboard from file, Browse dashboards in the registry — plus the registry starters (create-entry CRE-002; dash-core `Create/createRouting.js`, `Create/starters.js`).
+> -   **Install a widget:** the Widgets page's install picker (Search for Widgets, Install from File, Load from Folder), or the same starts in Create › Widget. Every install goes through the check-before-install gate (create-entry).
+> -   **Themes:** the Themes page (Browse marketplace, Edit theme, Publish…). It has no Install from ZIP today.
+>
+> The Current State table below is as of 2026-03-25, with the replaced cells marked.
 
 ---
 
@@ -22,7 +30,7 @@ Dash supports three asset types (widgets, dashboards, themes) distributed throug
 
 A developer cloning the dash-electron template today can build and publish widgets effectively thanks to the `widgetize` scaffold, Rollup bundling, and `publishToRegistry.js`. However, the experience breaks down for dashboards and themes:
 
--   **Dashboard creation** relies entirely on the in-app Wizard or MCP tools -- there is no way to export a dashboard configuration for sharing without the running Electron app. The `publishKitchenSink.js` script demonstrates the complexity: 500+ lines of hardcoded layout configuration.
+-   **Dashboard creation** relies entirely on the in-app Wizard (superseded by Create's no-AI starts and starters, 2026-10-22) or MCP tools -- there is no way to export a dashboard configuration for sharing without the running Electron app. The `publishKitchenSink.js` script demonstrates the complexity: 500+ lines of hardcoded layout configuration.
 -   **Theme creation** for developers is limited to the in-app Theme editor or the `publishThemes.js` script, which only publishes 10 hardcoded curated themes from `registryThemes.js`. A developer who creates a custom theme in the app has no CLI path to export or distribute it.
 -   **Documentation** is spread across `dash-electron/README.md`, `dash-electron/docs/`, `dash-core/docs/` (7 files), `dash-react/README.md`, and three Claude Code skills. There is no single document that walks a developer through the full lifecycle for all three asset types. A new developer must discover and cross-reference 15+ documents to understand the system.
 -   **ZIP distribution** is fully implemented at the code level (widgets, dashboards, and themes all support ZIP import) but the workflow for creating and sharing ZIPs is undocumented for dashboards and themes.
@@ -50,6 +58,8 @@ A developer cloning the dash-electron template today can build and publish widge
 | Widget    | `widgetize` CLI       | `npm run dev`  | `test:widgets`, `screenshot` | `package-widgets`, `package-zip`        | `publish-to-registry`                                  | Share ZIP manually | Discover tab / Wizard | Settings > Widgets    |
 | Dashboard | Wizard (in-app)       | In-app editing | Manual verification          | In-app export                           | In-app publish modal                                   | Share ZIP manually | Discover tab          | Settings > Dashboards |
 | Theme     | Theme editor (in-app) | In-app editing | Visual preview               | `publish-themes --local` (curated only) | In-app publish modal / `publish-themes` (curated only) | Share ZIP manually | Discover tab          | Settings > Themes     |
+
+Superseded cells (2026-10-22): "Wizard (in-app)" → Create's no-AI starts and starters; "Discover tab / Wizard" → the Widgets page's Search for Widgets, Create's Browse widgets / dashboards in the registry, and the Themes page's Browse marketplace; "Settings > Widgets" → the Widgets page (Install from File / Load from Folder); "Settings > Dashboards" → Create › Import dashboard from file (export is on the Dashboards page); "Settings > Themes" → the Themes page (no ZIP install).
 
 **Limitations:**
 
@@ -85,7 +95,7 @@ A developer cloning the dash-electron template today can build and publish widge
 
 ### Non-Goals
 
--   **`dashboardize` CLI scaffold** -- Dashboards are visual artifacts (grid layout + event wiring), not code. The Wizard, blank template, import, and MCP tools cover all creation paths. A CLI scaffold producing empty JSON adds no value.
+-   **`dashboardize` CLI scaffold** -- Dashboards are visual artifacts (grid layout + event wiring), not code. Create (blank dashboard, import, registry, starters, or the Dash team) and MCP tools cover all creation paths (the Wizard was superseded by Create, 2026-10-22). A CLI scaffold producing empty JSON adds no value.
 -   **Unified `dash` CLI tool** -- npm scripts are the right abstraction for this project. A custom CLI adds build/install/version complexity with no benefit over `npm run <script>`.
 -   **npm publish wrapper** -- `npm publish` is a standard npm command that developers already know. Documentation suffices.
 -   **Real-time documentation sync** -- Cross-repo link freshness is managed by linking to authoritative sources (GitHub URLs), not by duplicating content.
@@ -248,7 +258,7 @@ A developer cloning the dash-electron template today can build and publish widge
 -   [x] AC2: Color names are validated against the Tailwind color palette
 -   [x] AC3: `--harmony triadic` auto-generates secondary/tertiary from primary using color harmony
 -   [x] AC4: `--random` generates a random theme
--   [x] AC5: Output file is installable via Settings > Themes > Install from ZIP (after wrapping in ZIP)
+-   [x] AC5: Output file is installable via Settings > Themes > Install from ZIP (after wrapping in ZIP) — _Settings › Themes is gone (2026-10-22); the Themes page has no Install from ZIP, so this is an open gap again._
 -   [ ] AC6: `--register` flag adds the theme to `registryThemes.js` for batch publishing (deferred)
 
 **Technical Notes:**
@@ -387,7 +397,8 @@ Script: `scripts/exportDashboards.js`. Requires extracting headless-callable log
 
 ## Revision History
 
-| Version | Date       | Author    | Changes                                                                            |
-| ------- | ---------- | --------- | ---------------------------------------------------------------------------------- |
-| 1.0     | 2026-03-25 | Core Team | Initial draft -- Phase 1 documentation, Phase 2-3 tooling user stories             |
-| 1.1     | 2026-03-25 | Core Team | Phase 2 implemented -- themeize CLI, shared auth module, publishThemes --from-file |
+| Version | Date       | Author    | Changes                                                                                                                                                                                                     |
+| ------- | ---------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-03-25 | Core Team | Initial draft -- Phase 1 documentation, Phase 2-3 tooling user stories                                                                                                                                      |
+| 1.1     | 2026-03-25 | Core Team | Phase 2 implemented -- themeize CLI, shared auth module, publishThemes --from-file                                                                                                                          |
+| 1.2     | 2026-10-22 | Core Team | Consolidation Phase 5: Wizard, Discover tab and Settings › Widgets / Dashboards / Themes marked superseded by Create's no-AI starts, the Widgets page and the Themes page; theme ZIP install noted as a gap |
