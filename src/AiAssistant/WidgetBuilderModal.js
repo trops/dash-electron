@@ -3,9 +3,10 @@
  * (consolidation Phase 3b: every AI build goes through the Dash team in
  * Create; this builder has no AI of its own).
  *
- * Left: the live preview and the Preview / Code / Configure / Console /
- * Scorecard tabs. Right: Compose (pick a kind of widget, lay out its parts)
- * for a new widget; hidden when editing an installed widget's code, which
+ * Left: the live preview and the Preview / Code / Configure / Logs /
+ * Style checks tabs (Console and Scorecard until consolidation Phase 4d).
+ * Right: Compose (pick a kind of widget, lay out its parts) for a new
+ * widget; hidden when editing an installed widget's code, which
  * opens on the Code tab.
  *
  * Every version is checked (the code checks, then the Dash team's Checker)
@@ -644,8 +645,8 @@ const BuilderModalFrame = ({ surfaceClass = "", children, ...modalProps }) => (
     </Modal>
 );
 
-// One tab over the preview (Preview / Code / Configure / Console /
-// Scorecard): the design guide's underline tabs — the `dr-tab` hooks dash-core's
+// One tab over the preview (Preview / Code / Configure / Logs / Style
+// checks): the design guide's underline tabs — the `dr-tab` hooks dash-core's
 // tab bars use — with the theme's tokens outside Aurora.
 const BuilderTab = ({
     active,
@@ -868,6 +869,10 @@ export const WidgetBuilderModal = ({
     // Required category for the install — user must pick before Install enables.
     // Pre-filled in remix mode if the original config already declares one.
     const [selectedCategory, setSelectedCategory] = useState(null);
+    // A typed widget name not committed yet (Enter / leaving the field
+    // commits it): Install waits, or it would install the old name
+    // (consolidation Phase 4d).
+    const [namePending, setNamePending] = useState(false);
     // Editable widget name for remixes — defaults to <Original>Remix
     const [remixName, setRemixName] = useState("");
     // "update" = overwrite original in-place, "remix" = create new copy
@@ -2803,7 +2808,7 @@ export const WidgetBuilderModal = ({
                                         active={activeTab === "console"}
                                         onClick={() => setActiveTab("console")}
                                         icon="terminal"
-                                        label="Console"
+                                        label="Logs"
                                         testId="tab-console"
                                         activeClass={tabActive}
                                         idleClass={tabIdle}
@@ -2833,16 +2838,16 @@ export const WidgetBuilderModal = ({
                                         }
                                         disabled={!detectedCode.componentCode}
                                         icon="circle-check"
-                                        label="Scorecard"
+                                        label="Style checks"
                                         testId="tab-scorecard"
-                                        title="Cohesion-rule checklist for the widget"
+                                        title="How it follows Dash's design rules"
                                         activeClass={tabActive}
                                         idleClass={tabIdle}
                                         badge={
                                             scorecardFailCount > 0 ? (
                                                 <span
                                                     className={`px-1.5 rounded text-xs ${status.error.solidBg} ${bt.onSolid}`}
-                                                    title={`${scorecardFailCount} cohesion rule${
+                                                    title={`${scorecardFailCount} style check${
                                                         scorecardFailCount === 1
                                                             ? ""
                                                             : "s"
@@ -3840,38 +3845,53 @@ export const WidgetBuilderModal = ({
                                                                             data-testid="install-category-hint"
                                                                             className={`text-xs ${chromeMuted}`}
                                                                         >
+                                                                            {/* What it's for (consolidation Phase 4d). */}
                                                                             Pick
                                                                             a
                                                                             category
                                                                             to
                                                                             install
+                                                                            —
+                                                                            it's
+                                                                            where
+                                                                            the
+                                                                            widget
+                                                                            is
+                                                                            listed
+                                                                            when
+                                                                            you
+                                                                            publish
+                                                                            it
                                                                         </span>
                                                                     )}
-                                                                <ChoiceMenu
-                                                                    label="Category"
-                                                                    value={
-                                                                        selectedCategory ||
-                                                                        null
-                                                                    }
-                                                                    options={
-                                                                        VALID_CATEGORIES
-                                                                    }
-                                                                    onChange={(
-                                                                        v
-                                                                    ) =>
-                                                                        setSelectedCategory(
-                                                                            v ||
-                                                                                null
-                                                                        )
-                                                                    }
-                                                                    align="right"
-                                                                    direction="up"
-                                                                />
+                                                                <span title="Where it's listed when you publish it.">
+                                                                    <ChoiceMenu
+                                                                        label="Category"
+                                                                        value={
+                                                                            selectedCategory ||
+                                                                            null
+                                                                        }
+                                                                        options={
+                                                                            VALID_CATEGORIES
+                                                                        }
+                                                                        onChange={(
+                                                                            v
+                                                                        ) =>
+                                                                            setSelectedCategory(
+                                                                                v ||
+                                                                                    null
+                                                                            )
+                                                                        }
+                                                                        align="right"
+                                                                        direction="up"
+                                                                    />
+                                                                </span>
                                                                 <Button
                                                                     onClick={
                                                                         handleInstall
                                                                     }
                                                                     disabled={
+                                                                        namePending ||
                                                                         needsName ||
                                                                         !checkPassed ||
                                                                         !selectedCategory ||
@@ -3881,7 +3901,9 @@ export const WidgetBuilderModal = ({
                                                                             !remixName)
                                                                     }
                                                                     tooltip={
-                                                                        needsName
+                                                                        namePending
+                                                                            ? "Press Enter to save the name first"
+                                                                            : needsName
                                                                             ? "Name the widget first"
                                                                             : !checkPassed
                                                                             ? "Waiting for the checks to pass"
@@ -4308,6 +4330,7 @@ export const WidgetBuilderModal = ({
                                     editContext={effectiveEditContext}
                                     currentDraftId={draftSessionIdRef.current}
                                     onAskDashTeam={askDashTeam}
+                                    onNamePendingChange={setNamePending}
                                     onEmit={(code) => {
                                         setDetectedCode({
                                             componentCode: code.componentCode,

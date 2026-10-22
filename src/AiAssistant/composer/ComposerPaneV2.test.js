@@ -384,8 +384,8 @@ describe("ComposerPaneV2 — edit-mode guard (don't overwrite editContext.compon
     });
 });
 
-describe("ComposerPaneV2 — explicit name confirm (no per-keystroke churn)", () => {
-    test("typing the name does NOT emit; Save commits once", async () => {
+describe("ComposerPaneV2 — the name commits on Enter or leaving the field (Phase 4d)", () => {
+    test("typing the name does NOT emit; leaving the field commits once", async () => {
         installMainApi(jest.fn().mockResolvedValue([]));
         const onEmit = jest.fn();
         render(<ComposerPaneV2 onEmit={onEmit} />);
@@ -401,15 +401,44 @@ describe("ComposerPaneV2 — explicit name confirm (no per-keystroke churn)", ()
         fireEvent.change(input, { target: { value: "MyCoolWidgetX" } });
         expect(onEmit.mock.calls.length).toBe(afterMount);
 
-        // Clicking Save commits the name → exactly one more emit.
-        fireEvent.click(screen.getByTestId("composer-widget-name-save"));
+        // While it differs, a hint says how it's saved; no Save button.
+        expect(
+            screen.getByTestId("composer-widget-name-hint")
+        ).toHaveTextContent("Saved when you press Enter or click away.");
+        expect(
+            screen.queryByTestId("composer-widget-name-save")
+        ).not.toBeInTheDocument();
+
+        // Leaving the field commits the name → exactly one more emit.
+        fireEvent.blur(input);
         await waitFor(() =>
             expect(onEmit.mock.calls.length).toBe(afterMount + 1)
         );
         expect(input.value).toBe("MyCoolWidgetX");
+        expect(
+            screen.queryByTestId("composer-widget-name-hint")
+        ).not.toBeInTheDocument();
     });
 
-    test("Save blocks a name already taken by another widget", async () => {
+    test("Enter commits too; leaving an untouched empty field says nothing", async () => {
+        installMainApi(jest.fn().mockResolvedValue([]));
+        const onEmit = jest.fn();
+        render(<ComposerPaneV2 onEmit={onEmit} />);
+        const input = screen.getByTestId("composer-widget-name");
+        await waitFor(() => expect(onEmit).toHaveBeenCalled());
+        fireEvent.blur(input);
+        expect(
+            screen.queryByTestId("composer-widget-name-error")
+        ).not.toBeInTheDocument();
+        const afterMount = onEmit.mock.calls.length;
+        fireEvent.change(input, { target: { value: "OrderLookup" } });
+        fireEvent.keyDown(input, { key: "Enter" });
+        await waitFor(() =>
+            expect(onEmit.mock.calls.length).toBe(afterMount + 1)
+        );
+    });
+
+    test("a name already taken shows why and isn't committed", async () => {
         installMainApi(
             jest.fn().mockResolvedValue([{ componentName: "Taken" }])
         );
@@ -422,7 +451,7 @@ describe("ComposerPaneV2 — explicit name confirm (no per-keystroke churn)", ()
         const afterMount = onEmit.mock.calls.length;
 
         fireEvent.change(input, { target: { value: "Taken" } });
-        fireEvent.click(screen.getByTestId("composer-widget-name-save"));
+        fireEvent.blur(input);
 
         // Error shown, name NOT committed (no extra emit).
         await waitFor(() =>
@@ -447,6 +476,58 @@ describe("ComposerPaneV2 — explicit name confirm (no per-keystroke churn)", ()
         expect(
             screen.queryByTestId("composer-widget-name-save")
         ).not.toBeInTheDocument();
+    });
+});
+
+describe("ComposerPaneV2 — review fixes (Phase 4d)", () => {
+    test("the host hears while a typed name isn't committed", async () => {
+        installMainApi(jest.fn().mockResolvedValue([]));
+        const onNamePendingChange = jest.fn();
+        render(<ComposerPaneV2 onNamePendingChange={onNamePendingChange} />);
+        const input = screen.getByTestId("composer-widget-name");
+        fireEvent.change(input, { target: { value: "OrderLookup" } });
+        await waitFor(() =>
+            expect(onNamePendingChange).toHaveBeenLastCalledWith(true)
+        );
+        fireEvent.blur(input);
+        await waitFor(() =>
+            expect(onNamePendingChange).toHaveBeenLastCalledWith(false)
+        );
+    });
+
+    test("Enter then a quick blur commits once", async () => {
+        const getConfigs = jest.fn().mockResolvedValue([]);
+        installMainApi(getConfigs);
+        render(<ComposerPaneV2 />);
+        await waitFor(() => expect(getConfigs).toHaveBeenCalled());
+        const before = getConfigs.mock.calls.length;
+        const input = screen.getByTestId("composer-widget-name");
+        fireEvent.change(input, { target: { value: "OrderLookup" } });
+        fireEvent.keyDown(input, { key: "Enter" });
+        fireEvent.blur(input);
+        await waitFor(() =>
+            expect(
+                screen.queryByTestId("composer-widget-name-hint")
+            ).not.toBeInTheDocument()
+        );
+        expect(getConfigs.mock.calls.length).toBe(before + 1);
+    });
+
+    test("cleared and left: the name it has comes back", async () => {
+        installMainApi(jest.fn().mockResolvedValue([]));
+        render(<ComposerPaneV2 />);
+        const input = screen.getByTestId("composer-widget-name");
+        fireEvent.change(input, { target: { value: "OrderLookup" } });
+        fireEvent.blur(input);
+        await waitFor(() => expect(input.value).toBe("OrderLookup"));
+        await waitFor(() =>
+            expect(
+                screen.queryByTestId("composer-widget-name-hint")
+            ).not.toBeInTheDocument()
+        );
+        fireEvent.change(input, { target: { value: "" } });
+        fireEvent.blur(input);
+        expect(input.value).toBe("OrderLookup");
     });
 });
 

@@ -105,9 +105,7 @@ export const WidgetConsolePane = ({ events = [], onClear }) => {
                             />
                         }
                         title={
-                            events.length === 0
-                                ? "No console output yet"
-                                : "No errors"
+                            events.length === 0 ? "No logs yet" : "No errors"
                         }
                         description={
                             events.length === 0

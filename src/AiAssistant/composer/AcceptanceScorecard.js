@@ -133,8 +133,8 @@ export function AcceptanceScorecard({ code }) {
         failCount === 0
             ? totalChecked === 0
                 ? "Awaiting widget code"
-                : `All ${totalChecked} statically-checkable rules pass`
-            : `${failCount} of ${totalChecked} rules failing — fix these in the Code tab`;
+                : `All ${totalChecked} style checks pass`
+            : `${failCount} of ${totalChecked} style checks failing — fix these in the Code tab`;
 
     return (
         <div data-testid="acceptance-scorecard" className="flex flex-col gap-3">

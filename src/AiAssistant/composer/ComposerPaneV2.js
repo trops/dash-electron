@@ -53,7 +53,7 @@ import { PropertyInspector } from "./PropertyInspector";
 import { getComponentSchema } from "../dashReactComponentSchemas";
 import { ComposerProviderChoiceContext } from "./ComposerProviderChoiceContext";
 import { useBuilderTheme } from "../useBuilderTheme";
-import { Button, Button2, InputText } from "@trops/dash-react";
+import { Button, InputText } from "@trops/dash-react";
 
 /**
  * True when the component's schema exposes nothing the inspector
@@ -102,6 +102,9 @@ export function ComposerPaneV2({
     editContext = null,
     // The draft this session belongs to — its own name isn't a collision.
     currentDraftId = null,
+    // (pending: boolean) — a typed name that isn't committed yet, so the
+    // host can hold Install until it is (consolidation Phase 4d).
+    onNamePendingChange = null,
 }) {
     const bt = useBuilderTheme();
     const [grid, setGridRaw] = useState(() => {
@@ -135,14 +138,16 @@ export function ComposerPaneV2({
     // Explicit, confirmed widget-name editing. The input binds to this
     // LOCAL state — typing does NOT call setGrid, so it never re-emits,
     // re-saves the draft, or materializes a folder per keystroke. The user
-    // commits the name with the Save (checkmark) button (or Enter), which is
-    // the only thing that writes it into grid.widgetName. Edit mode locks the
+    // commits the name with Enter or by leaving the field (consolidation
+    // Phase 4d — no Save button), the only thing that writes it into
+    // grid.widgetName. Edit mode locks the
     // name entirely (renaming an installed widget changes its identity).
     const [pendingName, setPendingName] = useState(() =>
         shownName(grid.widgetName)
     );
     const [nameError, setNameError] = useState(null);
-    const [nameSaved, setNameSaved] = useState(false);
+    // A commit in flight (Enter then a quick blur commits once).
+    const committingRef = useRef(false);
     // When set, the pane swaps to the full-pane PaletteView, and
     // picking a component fills this cell. Separate from selection
     // so the inspector state stays untouched while the user picks.
@@ -180,7 +185,16 @@ export function ComposerPaneV2({
     // triggers a re-emit + draft save for the name). Validates + checks the
     // name isn't already taken by an installed widget or another draft —
     // reusing the same source as the on-mount auto-bump below.
-    const commitName = useCallback(async () => {
+    const commitName = async () => {
+        if (committingRef.current) return;
+        committingRef.current = true;
+        try {
+            await commitNameNow();
+        } finally {
+            committingRef.current = false;
+        }
+    };
+    const commitNameNow = async () => {
         const sanitized = pendingName.replace(/[^A-Za-z0-9_]/g, "");
         if (!sanitized) {
             setNameError("Enter a name (letters, numbers, underscore).");
@@ -188,7 +202,6 @@ export function ComposerPaneV2({
         }
         if (sanitized === grid.widgetName) {
             setNameError(null);
-            setNameSaved(true);
             return;
         }
         try {
@@ -222,9 +235,19 @@ export function ComposerPaneV2({
         setNameError(null);
         userRenamedRef.current = true;
         setPendingName(sanitized);
-        setGrid((g) => ({ ...g, widgetName: sanitized }));
-        setNameSaved(true);
-    }, [pendingName, grid.widgetName, setGrid]);
+        setGrid((g) =>
+            g.widgetName === sanitized ? g : { ...g, widgetName: sanitized }
+        );
+    };
+
+    // Tell the host while a typed name isn't committed.
+    const namePending =
+        !!pendingName.trim() &&
+        pendingName.trim() !== grid.widgetName &&
+        !editContext?.componentCode;
+    useEffect(() => {
+        if (onNamePendingChange) onNamePendingChange(namePending);
+    }, [namePending, onNamePendingChange]);
 
     // Keep callbacks in refs so the sync effect only re-runs when
     // `grid` actually changes — without this, every parent re-render
@@ -602,9 +625,12 @@ export function ComposerPaneV2({
                             data-testid="composer-widget-name"
                         />
                     ) : (
-                        // Create mode: type freely, commit with Save (or
-                        // Enter). Typing alone does NOT emit or save — no
-                        // per-keystroke folder churn.
+                        // Create mode: type freely; the name is committed on
+                        // Enter or when the field loses focus (consolidation
+                        // Phase 4d — no Save button). Typing alone does NOT
+                        // emit or save — no per-keystroke folder churn. A
+                        // name that can't be used shows why and the widget
+                        // keeps its old name.
                         <>
                             <div className="flex items-center gap-2">
                                 <InputText
@@ -613,7 +639,6 @@ export function ComposerPaneV2({
                                     value={pendingName}
                                     onChange={(v) => {
                                         userRenamedRef.current = true;
-                                        setNameSaved(false);
                                         setNameError(null);
                                         setPendingName(
                                             String(v).replace(
@@ -628,21 +653,24 @@ export function ComposerPaneV2({
                                             commitName();
                                         }
                                     }}
+                                    onBlur={() => {
+                                        // Leaving an untouched or empty
+                                        // field changes nothing.
+                                        const v = pendingName.trim();
+                                        // Cleared and left: the name it
+                                        // has comes back.
+                                        if (!v) {
+                                            setPendingName(
+                                                shownName(grid.widgetName)
+                                            );
+                                            return;
+                                        }
+                                        if (v === grid.widgetName) return;
+                                        commitName();
+                                    }}
                                     placeholder="Name it, e.g. OrderLookup"
                                     className="flex-1 min-w-0"
                                     data-testid="composer-widget-name"
-                                />
-                                <Button2
-                                    title="Save"
-                                    onClick={commitName}
-                                    disabled={
-                                        !pendingName.trim() ||
-                                        pendingName.trim() === grid.widgetName
-                                    }
-                                    ariaLabel="Save name"
-                                    size="sm"
-                                    className="shrink-0"
-                                    testId="composer-widget-name-save"
                                 />
                             </div>
                             {nameError && (
@@ -653,13 +681,15 @@ export function ComposerPaneV2({
                                     {nameError}
                                 </p>
                             )}
-                            {nameSaved &&
-                                !nameError &&
-                                pendingName.trim() === grid.widgetName && (
+                            {!nameError &&
+                                pendingName.trim() &&
+                                pendingName.trim() !== grid.widgetName && (
                                     <p
-                                        className={`text-xs ${bt.status.success.icon}`}
+                                        className={`text-xs ${bt.muted}`}
+                                        data-testid="composer-widget-name-hint"
                                     >
-                                        Saved
+                                        Saved when you press Enter or click
+                                        away.
                                     </p>
                                 )}
                         </>
