@@ -173,6 +173,7 @@ const {
     SCHEMAS: IPC_SCHEMAS,
 } = require("./lib/ipcValidators.cjs");
 const { parseBotsOptions, popoutHashRoute } = require("./lib/popoutRoute.cjs");
+const { isNoUpdateYet } = require("./lib/updateCheckError.cjs");
 // The Widget Builder's compile + install (also used by the Dash team).
 const { compilePreview, aiBuild } = require("./lib/aiBuild.cjs");
 const { createTeamWidgetTools } = require("./lib/teamWidgetTools.cjs");
@@ -411,6 +412,28 @@ if (!isDev) {
     });
 
     autoUpdater.on("error", (err) => {
+        // The update service has nothing for us yet (its 404, which
+        // Squirrel reports as an error): not a failure.
+        if (isNoUpdateYet(err)) {
+            logger.info(
+                `[AutoUpdater] No update available yet: ${err?.message || ""}`
+            );
+            updateState = "idle";
+            buildMenu();
+            const wasManual = manualCheckInProgress;
+            resetManualCheck();
+            if (wasManual) {
+                dialog.showMessageBox({
+                    title: "No Updates",
+                    message: "No update available yet.",
+                    detail: `${
+                        app.name
+                    } ${app.getVersion()} couldn't find a newer version right now. If a new release was just announced, try again in a few minutes.`,
+                    buttons: ["OK"],
+                });
+            }
+            return;
+        }
         logger.error(
             `[AutoUpdater] Error: ${err?.message || "unknown error"}`,
             err?.stack

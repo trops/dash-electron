@@ -15,7 +15,42 @@ permissions:
     packages: read
 
 jobs:
+    # Makes the release as a DRAFT before either build uploads, so the two
+    # builds share one release and nobody sees it until publish-release:
+    # a public release without its files makes the auto-updater fail.
+    create-release:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Resolve release tag
+              run: |
+                  if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+                      echo "RELEASE_TAG=${{ github.ref_name }}" >> $GITHUB_ENV
+                  elif [[ -n "${{ inputs.tag }}" ]]; then
+                      echo "RELEASE_TAG=${{ inputs.tag }}" >> $GITHUB_ENV
+                  fi
+
+            - name: Create the draft release
+              if: env.RELEASE_TAG != ''
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+              run: |
+                  TAG="${{ env.RELEASE_TAG }}"
+                  # Re-runs reuse the release that's there (draft or not).
+                  if gh release view "$TAG" &>/dev/null; then
+                      echo "Release $TAG already exists"
+                      exit 0
+                  fi
+                  for i in 1 2 3; do
+                      gh release create "$TAG" --verify-tag --generate-notes --draft && exit 0
+                      echo "Attempt $i failed, retrying in 30s..."
+                      sleep 30
+                  done
+                  echo "Couldn't create the release"
+                  exit 1
+
     build-macos:
+        needs: create-release
         runs-on: macos-latest
         steps:
             - name: Resolve release tag
@@ -156,11 +191,8 @@ jobs:
                   fi
                   echo "Found artifacts: $FILES"
                   for i in 1 2 3; do
-                      if gh release view "$TAG" &>/dev/null; then
-                          gh release upload "$TAG" $FILES --clobber && exit 0
-                      else
-                          gh release create "$TAG" $FILES --generate-notes && exit 0
-                      fi
+                      # The draft release was made by create-release.
+                      gh release upload "$TAG" $FILES --clobber && exit 0
                       echo "Attempt $i failed, retrying in 30s..."
                       sleep 30
                   done
@@ -181,6 +213,7 @@ jobs:
               run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db
 
     build-windows:
+        needs: create-release
         runs-on: windows-latest
         steps:
             - name: Resolve release tag
@@ -273,11 +306,8 @@ jobs:
               run: |
                   TAG="${{ env.RELEASE_TAG }}"
                   for i in 1 2 3; do
-                      if gh release view "$TAG" &>/dev/null; then
-                          gh release upload "$TAG" out/make/squirrel.windows/x64/*.exe --clobber && exit 0
-                      else
-                          gh release create "$TAG" out/make/squirrel.windows/x64/*.exe --generate-notes && exit 0
-                      fi
+                      # The draft release was made by create-release.
+                      gh release upload "$TAG" out/make/squirrel.windows/x64/*.exe --clobber && exit 0
                       echo "Attempt $i failed, retrying in 30s..."
                       sleep 30
                   done
@@ -291,3 +321,33 @@ jobs:
                   name: electron-app-windows
                   path: |
                       out/make/squirrel.windows/x64/*.exe
+
+    # Publishes the release once BOTH builds uploaded their files. Until
+    # then it's a draft, so the update service and users never see a
+    # release without its macOS zip / Windows installer.
+    publish-release:
+        needs: [build-macos, build-windows]
+        runs-on: ubuntu-latest
+        steps:
+            - name: Resolve release tag
+              run: |
+                  if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+                      echo "RELEASE_TAG=${{ github.ref_name }}" >> $GITHUB_ENV
+                  elif [[ -n "${{ inputs.tag }}" ]]; then
+                      echo "RELEASE_TAG=${{ inputs.tag }}" >> $GITHUB_ENV
+                  fi
+
+            - name: Publish the release
+              if: env.RELEASE_TAG != ''
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+              run: |
+                  TAG="${{ env.RELEASE_TAG }}"
+                  for i in 1 2 3; do
+                      gh release edit "$TAG" --draft=false && exit 0
+                      echo "Attempt $i failed, retrying in 30s..."
+                      sleep 30
+                  done
+                  echo "Couldn't publish the release"
+                  exit 1
