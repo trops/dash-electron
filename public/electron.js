@@ -518,6 +518,7 @@ const {
     describeImage,
     saveMenuItemForApplication,
     listMenuItemsForApplication,
+    deleteMenuItemForApplication,
     // Theme registry
     prepareThemeForPublish,
     installThemeFromRegistry,
@@ -629,6 +630,7 @@ const {
     LLM_LIST_MODELS,
     MENU_ITEMS_LIST,
     MENU_ITEMS_SAVE,
+    MENU_ITEMS_DELETE,
     DASHBOARD_CONFIG_EXPORT,
     DASHBOARD_CONFIG_IMPORT,
     DASHBOARD_CONFIG_SELECT_FILE,
@@ -1395,6 +1397,13 @@ function createWindow() {
                 getSenderWindow(e),
                 message.appId,
                 message.menuItem
+            )
+        );
+        logger.loggedHandle(MENU_ITEMS_DELETE, (e, message) =>
+            deleteMenuItemForApplication(
+                getSenderWindow(e),
+                message.appId,
+                message.menuItemId
             )
         );
 
