@@ -540,6 +540,19 @@ describe("ComposerPaneV2 — the name field (consolidation Phase 3b)", () => {
         expect(shownName("ComposedWidgetPro")).toBe("ComposedWidgetPro");
         expect(shownName(undefined)).toBe("");
     });
+
+    test("a quick-start layout keeps a name the user already chose", () => {
+        const { keepChosenName } = require("./ComposerPaneV2");
+        const layout = { widgetName: "ComposedWidget", rootGridId: "g" };
+        expect(keepChosenName({ widgetName: "OrderLookup" }, layout)).toEqual({
+            widgetName: "OrderLookup",
+            rootGridId: "g",
+        });
+        // No name chosen yet: the layout's own (placeholder) name.
+        expect(keepChosenName({ widgetName: "ComposedWidget2" }, layout)).toBe(
+            layout
+        );
+    });
 });
 
 describe("ComposerPaneV2 — drafts (draft cleanup)", () => {

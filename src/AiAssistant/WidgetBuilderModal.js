@@ -1305,6 +1305,8 @@ export const WidgetBuilderModal = ({
         setDraftSaveState("saving");
         try {
             await window.mainApi?.drafts?.save?.(draft, files);
+            // An open Widgets page lists drafts: tell it to refresh.
+            window.dispatchEvent(new Event("dash:widgets-updated"));
             setDraftSaveState("saved");
             setDraftLastSavedAt(Date.now());
             setSavedCode({
@@ -2089,6 +2091,26 @@ export const WidgetBuilderModal = ({
         checkAttempt,
     ]);
 
+    // A new widget from scratch: new draft, empty code and preview, and a
+    // fresh composer (the tree from whatever was last loaded doesn't carry
+    // over). Start new (drafts list) and Build Another both use it.
+    const startFresh = () => {
+        draftSessionIdRef.current = null;
+        resumedDraftRef.current = null;
+        setCodeOnly(false);
+        setDetectedCode({
+            componentCode: null,
+            configCode: null,
+            files: [],
+        });
+        setPreviewComponent(null);
+        setPreviewError(null);
+        setInstallStatus(null);
+        setComposerInitialGrid(null);
+        setComposerGrid(null);
+        setComposerSessionKey((k) => k + 1);
+    };
+
     // Resume an in-progress draft. Triggered by the `resumeDraftId`
     // prop (Settings → Widgets → Draft chip → Resume button). Mirrors
     // the WidgetDraftsList onResume callback — fetches the full draft
@@ -2736,23 +2758,7 @@ export const WidgetBuilderModal = ({
                                 setIsOpen(false);
                             }}
                             onStartNew={() => {
-                                draftSessionIdRef.current = null;
-                                resumedDraftRef.current = null;
-                                setCodeOnly(false);
-                                setDetectedCode({
-                                    componentCode: null,
-                                    configCode: null,
-                                    files: [],
-                                });
-                                setPreviewComponent(null);
-                                setPreviewError(null);
-                                setInstallStatus(null);
-                                // Reset compose-mode state so a fresh
-                                // session doesn't inherit the tree from
-                                // whatever was last loaded.
-                                setComposerInitialGrid(null);
-                                setComposerGrid(null);
-                                setComposerSessionKey((k) => k + 1);
+                                startFresh();
                                 setViewMode("builder");
                             }}
                             onResume={(draft) =>
@@ -3909,7 +3915,8 @@ export const WidgetBuilderModal = ({
                                                                             ? "Waiting for the checks to pass"
                                                                             : !selectedCategory
                                                                             ? "Pick a category first"
-                                                                            : editMode ===
+                                                                            : isRemixMode &&
+                                                                              editMode ===
                                                                                   "remix" &&
                                                                               !remixName
                                                                             ? "Enter a name for the remix"
@@ -3988,14 +3995,13 @@ export const WidgetBuilderModal = ({
                                                 <Button2
                                                     size="sm"
                                                     onClick={() => {
-                                                        setInstallStatus(null);
-                                                        setPreviewComponent(
+                                                        // The next widget starts
+                                                        // clean: its own draft,
+                                                        // layout and category.
+                                                        startFresh();
+                                                        setSelectedCategory(
                                                             null
                                                         );
-                                                        setDetectedCode({
-                                                            componentCode: null,
-                                                            configCode: null,
-                                                        });
                                                     }}
                                                 >
                                                     Build Another
