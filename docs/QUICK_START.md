@@ -145,7 +145,6 @@ npm run dev              # Start development (Electron + React dev server)
 npm run build            # Production build
 npm run widgetize NAME   # Create new widget
 npm run rebuild          # Rebuild native modules
-npm run test:widgets     # Test widget system
 npm run prettify         # Format code
 ```
 
@@ -169,9 +168,8 @@ console.log(map["MyWidgetName"]);
 
 ### Test widget configuration loads
 
-```bash
-npm run test:widgets
-```
+Start the app (`npm run dev`) and add the widget to a dashboard. The widget
+loader and registry have their own integration suite in @trops/dash-core.
 
 ## Troubleshooting
 
@@ -194,6 +192,6 @@ npm run test:widgets
 ## Need Help?
 
 -   Check the documentation in `docs/` folder
--   Run `npm run test:widgets` to verify setup
+-   Run `npm run ci` to verify setup
 -   Check `package.json` for available scripts
 -   Review existing widget examples in `src/Widgets/`

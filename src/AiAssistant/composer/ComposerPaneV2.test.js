@@ -582,3 +582,34 @@ describe("ComposerPaneV2 — drafts (draft cleanup)", () => {
         expect(onEmit.mock.calls[0][0].empty).toBe(true);
     });
 });
+
+describe("name, then a starter (QA 2026-10-23)", () => {
+    test("the starter keeps the committed name, in the code and the config", async () => {
+        window.mainApi = {
+            widgets: { getComponentConfigs: jest.fn().mockResolvedValue([]) },
+        };
+        const onEmit = jest.fn();
+        render(<ComposerPaneV2 onEmit={onEmit} />);
+        const input = screen.getByTestId("composer-widget-name");
+        await waitFor(() => expect(onEmit).toHaveBeenCalled());
+        fireEvent.change(input, { target: { value: "QaGhFixOne" } });
+        fireEvent.keyDown(input, { key: "Enter" });
+        await waitFor(() =>
+            expect(onEmit.mock.calls.at(-1)[0].componentCode).toMatch(
+                /QaGhFixOne/
+            )
+        );
+        fireEvent.click(screen.getByTestId("composer-quick-start-intent-view"));
+        fireEvent.click(
+            screen.getByTestId("composer-quick-start-sample-github-pr-list")
+        );
+        await waitFor(() =>
+            expect(onEmit.mock.calls.at(-1)[0].empty).toBe(false)
+        );
+        const last = onEmit.mock.calls.at(-1)[0];
+        expect(last.componentCode).toMatch(
+            /export default function QaGhFixOne\(/
+        );
+        expect(last.configCode).toMatch(/component: "QaGhFixOne"/);
+    });
+});

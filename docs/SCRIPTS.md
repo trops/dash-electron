@@ -447,18 +447,6 @@ npm run ci:release -- -m "feat(widgets): add Slack integration"
 
 ## Testing
 
-### `npm run test:widgets`
-
-Run widget integration tests.
-
-```bash
-npm run test:widgets
-```
-
-**What it does:** `node scripts/testWidgetIntegration.cjs`
-
----
-
 ### `npm run test:e2e`
 
 Run Playwright end-to-end tests (headless).
@@ -483,25 +471,25 @@ npm run test:e2e:headed
 
 ### `npm run test:all`
 
-Run all tests (widget integration + E2E).
+Run all tests (E2E; the widget integration suite runs in @trops/dash-core's CI).
 
 ```bash
 npm run test:all
 ```
 
-**What it does:** `npm run test:widgets && npm run test:e2e`
+**What it does:** `npm run test:e2e`
 
 ---
 
 ### `npm run validate:full`
 
-Full validation suite (shell validation + widget tests + E2E).
+Full validation suite (shell validation + E2E).
 
 ```bash
 npm run validate:full
 ```
 
-**What it does:** `./scripts/validate.sh && npm run test:widgets && npm run test:e2e`
+**What it does:** `./scripts/validate.sh && npm run test:e2e`
 
 ---
 
