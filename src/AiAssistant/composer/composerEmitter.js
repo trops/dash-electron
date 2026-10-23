@@ -658,10 +658,14 @@ export function collectProviderDeclarations(tree) {
 
 export function renderConfigCode({
     widgetName,
-    displayName,
+    displayName: displayNameArg,
     providerDeclarations,
     userConfigFields,
 }) {
+    // The grid emitter passes no display name: without this the config said
+    // name: undefined, which the Checker flagged.
+    const displayName =
+        displayNameArg || widgetName.replace(/([A-Z])/g, " $1").trim();
     // Build the userConfig field map — one entry per userConfig-
     // kind arg binding the user set. Each gets a sensible default
     // shape so the widget config panel renders a text input out of

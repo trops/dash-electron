@@ -45,12 +45,28 @@ export function verdictOf(output) {
     return m ? m[1].toUpperCase() : null;
 }
 
-/** The Checker's request for the Widget Builder's unsaved code. */
-export function draftCheckRequest(widgetName, asked = "") {
+// Built by hand: a layout the user is putting together, often from a
+// starter they fill in later. Judged on its titles alone, a starter like
+// "Open Pull Requests" with an empty list failed as a broken GitHub widget
+// (QA 2026-10-22).
+const BY_HAND =
+    "It was built by hand in the layout editor, often from a starter layout the user fills in later: empty lists, placeholder text and buttons with no action yet are expected, not problems. Judge whether it builds and follows the widget rules";
+
+/**
+ * The Checker's request for the Widget Builder's unsaved code.
+ * @param byHand  built by hand in the layout editor (no request to hold it to)
+ */
+export function draftCheckRequest(
+    widgetName,
+    asked = "",
+    { byHand = false } = {}
+) {
     const ask = String(asked || "").trim();
     return `Check the widget being written in the Widget Builder: run check_widget on draft:${widgetName} (it isn't installed yet; its code comes with the check). ${
         ask
             ? "Judge whether the code does what the user asked"
+            : byHand
+            ? BY_HAND
             : "Judge whether it works as a widget and follows the widget rules"
     }, and end with VERDICT: PASSED or VERDICT: FAILED.${
         ask ? `\n\nThe user asked:\n\n${ask}` : ""
