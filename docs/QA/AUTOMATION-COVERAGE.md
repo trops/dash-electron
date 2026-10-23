@@ -249,13 +249,13 @@ The existing `mcp-provider-status.spec.js` already verifies status for one provi
 | --- | ---------------------------------------------------- | ------ | ---------------------------- | -------------------------------------------- | ---- |
 | 4.5 | Connect / unreachable URL → clean disconnected state | 🟡     | `provider-websocket.spec.js` | local WS test server (extend test-server.js) | M    |
 
-### 4.6 Provider resolution layering
+### 4.6 Which provider a widget uses
 
 | #    | Item                                                    | Status | Spec file                     | Mocks | Diff                       |
 | ---- | ------------------------------------------------------- | ------ | ----------------------------- | ----- | -------------------------- |
-| 4.6a | Workspace-level binding                                 | 🟡     | `provider-resolution.spec.js` | —     | S — high value, pure state |
-| 4.6b | Widget-instance override                                | 🟡     | `provider-resolution.spec.js` | —     | S                          |
-| 4.6c | App-default fallback chain (instance > workspace > app) | 🟡     | `provider-resolution.spec.js` | —     | S                          |
+| 4.6a | Widget pick (Connections or Dashboard Config Providers) | 🟡     | `provider-resolution.spec.js` | —     | S — high value, pure state |
+| 4.6b | No pick → app's Default for its type                    | 🟡     | `provider-resolution.spec.js` | —     | S                          |
+| 4.6c | No pick and no default → missing-connection pill        | 🟡     | `provider-resolution.spec.js` | —     | S                          |
 
 ### 4.7 Delete in-use provider
 
