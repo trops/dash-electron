@@ -53,11 +53,11 @@ A developer cloning the dash-electron template today can build and publish widge
 
 **What exists today?**
 
-| Asset     | Create                | Develop        | Test                         | Package                                 | Publish                                                | Distribute ZIP     | Install from Registry | Install from ZIP      |
-| --------- | --------------------- | -------------- | ---------------------------- | --------------------------------------- | ------------------------------------------------------ | ------------------ | --------------------- | --------------------- |
-| Widget    | `widgetize` CLI       | `npm run dev`  | `test:widgets`, `screenshot` | `package-widgets`, `package-zip`        | `publish-to-registry`                                  | Share ZIP manually | Discover tab / Wizard | Settings > Widgets    |
-| Dashboard | Wizard (in-app)       | In-app editing | Manual verification          | In-app export                           | In-app publish modal                                   | Share ZIP manually | Discover tab          | Settings > Dashboards |
-| Theme     | Theme editor (in-app) | In-app editing | Visual preview               | `publish-themes --local` (curated only) | In-app publish modal / `publish-themes` (curated only) | Share ZIP manually | Discover tab          | Settings > Themes     |
+| Asset     | Create                | Develop        | Test                                          | Package                                 | Publish                                                | Distribute ZIP     | Install from Registry | Install from ZIP      |
+| --------- | --------------------- | -------------- | --------------------------------------------- | --------------------------------------- | ------------------------------------------------------ | ------------------ | --------------------- | --------------------- |
+| Widget    | `widgetize` CLI       | `npm run dev`  | `screenshot` (integration suite in dash-core) | `package-widgets`, `package-zip`        | `publish-to-registry`                                  | Share ZIP manually | Discover tab / Wizard | Settings > Widgets    |
+| Dashboard | Wizard (in-app)       | In-app editing | Manual verification                           | In-app export                           | In-app publish modal                                   | Share ZIP manually | Discover tab          | Settings > Dashboards |
+| Theme     | Theme editor (in-app) | In-app editing | Visual preview                                | `publish-themes --local` (curated only) | In-app publish modal / `publish-themes` (curated only) | Share ZIP manually | Discover tab          | Settings > Themes     |
 
 Superseded cells (2026-10-22): "Wizard (in-app)" → Create's no-AI starts and starters; "Discover tab / Wizard" → the Widgets page's Search for Widgets, Create's Browse widgets / dashboards in the registry, and the Themes page's Browse marketplace; "Settings > Widgets" → the Widgets page (Install from File / Load from Folder); "Settings > Dashboards" → Create › Import dashboard from file (export is on the Dashboards page); "Settings > Themes" → the Themes page (no ZIP install).
 

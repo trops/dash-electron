@@ -277,7 +277,6 @@ With `npm run dev` running, add your widget to a dashboard and verify:
 #### Automated Tests
 
 ```bash
-npm run test:widgets     # Widget integration tests
 npm run test:e2e         # Playwright end-to-end tests
 npm run test:all         # Both
 ```

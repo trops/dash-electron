@@ -153,12 +153,8 @@ npm run test:ai-node
 # Checker) must match src/AiAssistant.
 node scripts/build-widget-checks.js --check
 
-# 6. Widget tests (disabled — test references stale local modules moved to @trops/dash-core)
-# TODO: update testWidgetIntegration.cjs to import from @trops/dash-core/electron
-# if [[ -f scripts/testWidgetIntegration.cjs ]]; then
-#     step "Running widget integration tests"
-#     node scripts/testWidgetIntegration.cjs
-# fi
+# 6. The widget loader/registry integration suite runs in dash-core's CI
+#    (scripts/testWidgetIntegration.cjs there, since v0.1.819).
 
 # 7. Cleanup build dir (only used for validation)
 step "Cleaning up build directory"

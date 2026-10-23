@@ -44,7 +44,7 @@ See [WIDGET_DEVELOPMENT.md](./WIDGET_DEVELOPMENT.md) for:
 ### Testing Widgets
 
 ```bash
-npm run test:widgets          # Run widget system tests
+npm run test:e2e              # Run end-to-end tests
 ```
 
 ## For Widget Distribution
@@ -120,7 +120,6 @@ System for downloading and installing distributed widgets
 ```bash
 npm run dev              # Start development (MOST IMPORTANT)
 npm run widgetize NAME   # Create new widget
-npm run test:widgets     # Test the system
 npm run build            # Build for production
 ```
 
@@ -150,8 +149,7 @@ project/
 │   ├── electron.js                    (Electron main)
 │   └── lib/                           (Backend APIs)
 ├── scripts/
-│   ├── widgetize.js                   (Create widget script)
-│   └── testWidgetIntegration.js       (Test script)
+│   └── widgetize.js                   (Create widget script)
 ├── docs/                              (Documentation - you are here)
 └── package.json
 ```
