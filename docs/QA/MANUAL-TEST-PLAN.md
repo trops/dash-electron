@@ -270,11 +270,16 @@ Pick one OAuth-gated provider (Google Drive is the canonical one):
 -   [ ] Providers → **New Provider** → WebSocket provider. URL + optional headers. Save. It connects (or shows a clean disconnected state if the URL is unreachable — no crash).
 -   [ ] **Test Connection** — in the form, and on the provider's page: against a server that's up it says "Connected in Nms"; against one that's down, a plain error. A widget already using the provider stays connected after the test.
 
-### 4.6 Provider resolution layering
+### 4.6 Which provider a widget uses
 
--   [ ] Bind a provider at the **dashboard level**: Edit dashboard → Dashboard tab → **Open Dashboard Config** → **Providers**.
--   [ ] Override it for **one widget**: Edit dashboard → click the widget → **Connections** → pick another provider → **Save**.
--   [ ] Confirm the widget reads the most-specific binding (widget > dashboard > app default). Removing the widget's choice falls back to the dashboard's; removing that falls back to the app default.
+A widget uses the provider picked for it; with none picked, the app's **Default for its type** (on the provider's page). There's no separate dashboard-wide default — Dashboard Config's **Providers** tab sets the pick on each widget at once.
+
+-   [ ] Have two providers of one type (e.g. two Slack), one marked **Default for its type**.
+-   [ ] Add a widget of that type without picking one: Edit dashboard → click the widget → **Connections** shows "— use default (<name>) —" and the widget uses the default.
+-   [ ] Pick the other provider there → **Save**: the widget uses it.
+-   [ ] Edit dashboard → Dashboard tab → **Open Dashboard Config** → **Providers**: the widget shows the provider you picked. Change it there and save; the widget's **Connections** shows the new pick.
+-   [ ] Set the widget back to "— use default (<name>) —" → **Save**: it uses the default again.
+-   [ ] Unmark **Default for its type** with no pick on the widget (one that requires the provider): the widget's card shows the missing-connection pill (§1.3).
 
 ### 4.7 Delete an in-use provider
 
