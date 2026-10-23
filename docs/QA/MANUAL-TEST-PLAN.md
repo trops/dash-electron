@@ -47,7 +47,7 @@ The macOS build is a universal binary — same `.dmg` works on both Intel and Ap
 ### 0.2 First launch
 
 -   [ ] App opens to the Dashboards page (no dashboards yet, sidebar is mostly empty); after a few seconds a "Welcome to Dash" dialog offers **Install Kitchen Sink** / **Skip for now**.
--   [ ] Still signed out: left nav → **Create**. Anything that needs the registry says "Sign in to the Dash registry to use this." — never "Authentication expired". Close it.
+-   [ ] Still signed out: left nav → **Create**. The starter cards show their layouts — no sign-in needed (public packages install signed out). Close it.
 -   [ ] No red errors in the dev tools console (View menu → Toggle Developer Tools).
 -   [ ] Title bar shows "Dash".
 
@@ -161,7 +161,7 @@ In edit mode → **Dashboard** tab → **Open Dashboard Config**.
 
 All installs run the same code checks first (the install gate).
 
--   [ ] **From registry** — left nav → **Widgets** → **New Widget** → **Browse widgets in the registry** → pick one → **Install Package**. Signed out, browsing works but installing asks you to sign in first.
+-   [ ] **From registry** — left nav → **Widgets** → **New Widget** → **Browse widgets in the registry** → pick one → **Install Package**. Signed out, a public package installs without signing in; a private one says "Sign in to the Dash registry to install this." and offers sign-in, then installs.
 -   [ ] **From a local zip** — Widgets → **New Widget** → **Install a widget from file** → pick a widget zip.
 -   [ ] **From a folder** — Widgets → **New Widget** → **Load a widget from a folder** → pick a folder containing one or more widget packages. Non-widget folders are skipped, not failed. Each is named from its package (dash.json / package.json), not the folder: an unscoped name goes under your username when signed in, else **@local/** — the result says "Installed as …". It can be placed on a dashboard (Add list), and its panel says "Loaded from your folder · yours".
 -   [ ] **Install gate** — install (from file) a widget zip whose code breaks the widget rules — e.g. a widget that starts a bot directly from its code (widgets may only publish events). The install is refused with "<widget> wasn't installed — it didn't pass its checks:" and a list of what's wrong. Nothing new appears on the Widgets page.
@@ -219,7 +219,7 @@ All installs run the same code checks first (the install gate).
 
 ## 3. Themes — ~15 min
 
--   [ ] **Install from registry** — left nav → **Themes** → **Browse marketplace** → pick → **Install Theme**. Signed out, it asks you to sign in first.
+-   [ ] **Install from registry** — left nav → **Themes** → **Browse marketplace** → pick → **Install Theme**. Signed out, a public theme installs without signing in.
 -   [ ] **Create with AI** — left nav → **Create** → Type: **Theme** → describe the look → **Send**. It opens in the theme editor; nothing changes until you save.
 -   [ ] **Create without AI** — Create → **New theme** → pick a start (From Presets, From Colors, From Random, From Website) → save. The theme appears on the Themes page.
 -   [ ] **Edit tokens** — Themes → select a theme → **Edit theme** → tweak a color, font size, or spacing token → save → previews update.
@@ -312,7 +312,7 @@ Needs AI set up (Settings → **AI**). Nothing is made, installed or saved until
 -   [ ] Left nav → **Create** → Type: **Dashboard** → describe one (e.g. "a dashboard to track my GitHub pull requests") → **Send**. The hint under the box said "You'll get a plan to review first. Nothing is made until you press Build."
 -   [ ] A plan appears: what each widget is (Yours / From the registry / New) and **What to expect**; its summary counts read cleanly (e.g. "2 from the registry · 1 new layout", never "undefined"). If it asks questions, answer them: a single question with choices sends when you click one; otherwise click **Send answers**. The plan updates.
 -   [ ] Anything to connect or approve is listed under **Before building**; the build button says what's left (e.g. "Connect GitHub, approve 1 install & build"; after **Build without it for now** in the Connect window: "Approve 1 install & build"; after approving the install: "Build without GitHub").
--   [ ] **Registry sign-in** — signed out, build a plan that installs widgets from the registry: it asks you to sign in to the registry before building, and nothing starts if you don't.
+-   [ ] **Registry sign-in** — signed out, build a plan that installs public widgets from the registry: it builds without asking. A private widget's step fails with **Sign in to the registry**, which signs you in and tries the step again.
 -   [ ] **Fold** — while the plan is open, click the fold icon (**Fold into the sidebar**) in Create's header. Create closes and the plan carries on in a **Create** panel on the right. Click **Expand** there: it reopens in Create, where it was.
 -   [ ] Click **Build**. Progress shows each piece; **Stop** works. When done, **Go to dashboard** opens the new dashboard, live.
 -   [ ] **Auto** — Create → leave Type on **Auto** → describe something. Dash picks the type and names it (e.g. "· a widget, picked by Auto"); **Change** lets you pick another.
