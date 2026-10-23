@@ -21,9 +21,14 @@ describe("checks run as the code is written", () => {
         );
         // Built by hand: no request to hold it to, only the widget.
         expect(src).toMatch(
-            /runTeamRole\(\s*"checker",\s*draftCheckRequest\(name, ""\)/
+            /runTeamRole\(\s*"checker",\s*draftCheckRequest\(name, "", \{ byHand: composedDraft \}\)/
         );
         expect(src).toMatch(/codeKeyOf\(detectedCode\)/);
+        // Only a layout-editor draft is a hand-made layout (QA 2026-10-22);
+        // an installed widget's code or a resumed draft is judged as a widget.
+        expect(src).toMatch(
+            /const composedDraft = !effectiveEditContext\?\.componentCode && !codeOnly;/
+        );
     });
 
     test("problems are listed for the user — nothing goes back to an AI", () => {

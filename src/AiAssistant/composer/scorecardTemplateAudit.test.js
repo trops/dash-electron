@@ -47,6 +47,15 @@ describe("Compose-mode starter templates — scorecard pass guarantee", () => {
         }
     );
 
+    test.each(SAMPLE_LAYOUTS.map((t) => [t.id, t]))(
+        "%s's config names the widget (no undefined)",
+        (id, tmpl) => {
+            const { configCode } = emitGridWidgetCode(tmpl.buildGrid());
+            expect(configCode).not.toMatch(/undefined/);
+            expect(configCode).toMatch(/name: "Composed Widget"/);
+        }
+    );
+
     test("every template has a stable id + label + buildGrid", () => {
         // Defense in depth — without these the test.each loop above
         // would crash with a less useful error.

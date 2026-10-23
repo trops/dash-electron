@@ -1956,6 +1956,9 @@ export const WidgetBuilderModal = ({
         !!draftCheck &&
         draftCheck.key === currentCodeKey &&
         draftCheck.phase === "passed";
+    // Put together in the layout editor (not an installed widget's code or a
+    // resumed AI draft): the Checker is told it's a hand-made layout.
+    const composedDraft = !effectiveEditContext?.componentCode && !codeOnly;
     useEffect(() => {
         if (!isOpen || !currentCodeKey || detectedCode?.emptyGrid) return;
         if (isCompiling || previewError || !previewComponent) return;
@@ -2017,7 +2020,7 @@ export const WidgetBuilderModal = ({
             // Built by hand: no request to hold it to, only the widget.
             const res = await runTeamRole(
                 "checker",
-                draftCheckRequest(name, "")
+                draftCheckRequest(name, "", { byHand: composedDraft })
             );
             if (stale()) return;
             // Only a paused or missing Checker skips its review.
@@ -2089,6 +2092,7 @@ export const WidgetBuilderModal = ({
         needsName,
         editModeSettled,
         checkAttempt,
+        composedDraft,
     ]);
 
     // A new widget from scratch: new draft, empty code and preview, and a

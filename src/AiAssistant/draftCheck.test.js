@@ -78,6 +78,22 @@ describe("the Checker", () => {
     });
 });
 
+describe("built by hand", () => {
+    test("the Checker is told empty lists and placeholder buttons are expected", () => {
+        const req = draftCheckRequest("QaGhStarter", "", { byHand: true });
+        expect(req).toMatch(/built by hand in the layout editor/);
+        expect(req).toMatch(/buttons with no action yet are expected/);
+        expect(req).toMatch(/VERDICT: PASSED or VERDICT: FAILED/);
+        expect(draftCheckRequest("QaGhStarter", "")).not.toMatch(/by hand/);
+    });
+
+    test("what the user asked still wins", () => {
+        expect(draftCheckRequest("A", "Show PRs", { byHand: true })).toMatch(
+            /does what the user asked/
+        );
+    });
+});
+
 describe("what the user asked goes to the Checker", () => {
     test("the request carries it", () => {
         expect(
