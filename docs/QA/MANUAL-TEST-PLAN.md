@@ -95,6 +95,7 @@ A "dashboard" (also called "workspace") is a saved layout of widgets. Test every
 Open one of the dashboards you just created and click **Edit dashboard** in its header. An edit panel opens on the right with **Add**, **Dashboard** and **Theme** tabs (plus **Widget** when a widget is selected).
 
 -   [ ] **Add widget** — an empty cell shows **Add widget** and **Build with AI**. Click **Add widget**: the Add tab says "Empty cell". Click a widget in the list; it lands in the cell. (Build with AI is §6.3.)
+-   [ ] **Recently created** — after making a widget (Create or the Widget Builder), the Add list starts with **Recently created**, newest first. It's hidden while you search or filter, and absent on a profile that hasn't made anything in the past two weeks.
 -   [ ] **Move** — select a widget → its **⋯** menu → **Move to another cell** → click another cell. An empty cell takes the widget; a full one swaps with it. **Save**; reload; the layout persists.
 -   [ ] **Rows and columns** — **+ Row** and **+ Column** in the header add a row/column; click a row or column size to change it.
 -   [ ] **Split** — widget **⋯** → **Split side by side** / **Split top and bottom**.
@@ -162,7 +163,7 @@ All installs run the same code checks first (the install gate).
 
 -   [ ] **From registry** — left nav → **Widgets** → **New Widget** → **Browse widgets in the registry** → pick one → **Install Package**. Signed out, browsing works but installing asks you to sign in first.
 -   [ ] **From a local zip** — Widgets → **New Widget** → **Install a widget from file** → pick a widget zip.
--   [ ] **From a folder** — Widgets → **New Widget** → **Load a widget from a folder** → pick a folder containing one or more widget packages. Non-widget folders are skipped, not failed.
+-   [ ] **From a folder** — Widgets → **New Widget** → **Load a widget from a folder** → pick a folder containing one or more widget packages. Non-widget folders are skipped, not failed. Each is named from its package (dash.json / package.json), not the folder: an unscoped name goes under your username when signed in, else **@local/** — the result says "Installed as …". It can be placed on a dashboard (Add list), and its panel says "Loaded from your folder · yours".
 -   [ ] **Install gate** — install (from file) a widget zip whose code breaks the widget rules — e.g. a widget that starts a bot directly from its code (widgets may only publish events). The install is refused with "<widget> wasn't installed — it didn't pass its checks:" and a list of what's wrong. Nothing new appears on the Widgets page.
 -   [ ] **With AI** — covered in §6.2.
 
@@ -346,7 +347,8 @@ Needs AI set up (Settings → **AI**). Nothing is made, installed or saved until
 -   [ ] **Conversation** — type in **Ask the Dash team…** → **Ask**. The answer streams in and the question appears in the thread list on the left. Click **New conversation**, ask another; both threads are listed; clicking the first shows its answer. An answer that plans something opens the plan — you review it before anything is made.
 -   [ ] **Settings** — the roles Planner, Scout, Builder, Checker, each **On** or **Paused**. Click one → **Pause** / **Turn on** works → **Edit** opens its form. Change something, click the back link: "Discard unsaved changes?" asks first.
 -   [ ] Pause the Planner: the Conversation tab says "The Dash team is paused" with **Turn on**.
--   [ ] Fold a plan (§6.1), then click **Back to Recent** in the Create panel on the right. It lists **Plans** and **Unfinished widgets**, and has no Ask box (questions go to the Dash team).
+-   [ ] Fold a plan (§6.1): it shows in the Create panel on the right, with **Expand**. With no plan folded the panel says "No plan folded here" and has no Recent list and no Ask box (questions go to the Dash team).
+-   [ ] **Unfinished** — get a plan (§6.1) and close Create without building; start a build and **Stop** it. Open **Create** again: under the prompt, **Unfinished** lists both (Draft plan, Stopped), newest first. **Continue** on the draft reopens the plan; **Continue** on the stopped one offers **Continue building**. **Discard** (the draft) or **Forget** (the stopped one) asks first, then the row goes. A finished build isn't listed, and with nothing unfinished the section isn't there.
 
 ### 6.6 The Widget Builder by hand
 
