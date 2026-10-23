@@ -96,9 +96,11 @@ function registerLocalWidgets() {
             );
             return;
         }
-        // Stamp local scope. Existing values in the .dash.js win (a
-        // widget can opt into a different package by setting these).
-        const scope = config.scope || "local";
+        // Stamp the "app" scope: built into this app. ("local" is a package
+        // loaded from a folder; dash-core v0.1.820+ moves dashboards saved
+        // with the old local.* ids over.) Existing values in the .dash.js
+        // win (a widget can opt into a different package by setting these).
+        const scope = config.scope || "app";
         const packageName = config.packageName || folder.toLowerCase();
         const name = config.name || componentName;
         const id =
