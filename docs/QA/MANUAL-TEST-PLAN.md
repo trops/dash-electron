@@ -260,6 +260,8 @@ For each of these from the catalog, add the server, and confirm the tools list p
 -   [ ] notion
 -   [ ] algolia (if listed)
 -   [ ] salesforce (OAuth) — add Salesforce from the MCP catalog: three fields (MCP Server URL with the sobject-all example, Consumer Key, Callback port with 38000 and the `http://localhost:38000/callback` instructions). With a URL and a Consumer Key it reads "Starts when used" (an empty port isn't missing). Connecting opens Salesforce's sign-in in your browser; port 38000 is only in use while that sign-in is open. With something else on 38000 it says "Port 38000 is in use…". (A real sign-in needs an org with an External Client App: scopes mcp_api + refresh_token, PKCE, both "Require secret" boxes unchecked, callback `http://localhost:38000/callback`.)
+-   [ ] OAuth sign-in kept and renewed — with an OAuth provider from the catalog (e.g. Salesforce): Fetch Tools signs you in once; after Save Changes it connects without asking again, and no hidden `__test__…` provider appears (no "Failed to decrypt provider" in the log). Change the URL or key and Fetch Tools again: it asks you to sign in afresh. Rename a connected provider: it stays Connected with no new sign-in. Left connected past its token's lifetime, its next use still works (the sign-in renews quietly); if the sign-in can't be renewed, the call says "…sign-in has expired and couldn't be renewed, so Dash disconnected it…" and no browser opens until it next connects.
+-   [ ] Tools (MCP) catalog — every card has an icon (Atlassian, Trello, Puppeteer included) and the console shows no "Could not find icon".
 
 ### 4.3 OAuth round-trip
 
