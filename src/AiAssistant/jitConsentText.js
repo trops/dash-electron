@@ -40,4 +40,60 @@ function fsFileLabel(filename, widgetId) {
         : { text: filename, ownFile: false };
 }
 
-module.exports = { fsFileLabel };
+// A widget config without its own name gets this model default.
+const DEFAULT_CONFIG_NAME = "My Workspace";
+
+/** "NotepadWidget" → "Notepad Widget", "GDriveFileList" → "G Drive File List". */
+function splitWords(name) {
+    return String(name || "")
+        .replace(/[-_]+/g, " ")
+        .replace(/([a-z])([A-Z0-9])/g, "$1 $2")
+        .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+        .trim();
+}
+
+/**
+ * The widget as people see it in the prompt's heading ("Notepad wants to
+ * read a file"), not its code name (NotepadWidget): its default title, else
+ * its own name when that isn't the code name, else the code name split into
+ * words without a trailing "Widget".
+ *
+ * @param {string} widgetId  scope.package.Component
+ * @param {object|null} config  the widget's config, when Dash has it
+ * @returns {string}
+ */
+function widgetDisplayName(widgetId, config) {
+    if (typeof widgetId !== "string" || !widgetId) return "This widget";
+    const tail = widgetId.slice(widgetId.lastIndexOf(".") + 1);
+    const title =
+        config &&
+        config.userConfig &&
+        config.userConfig.title &&
+        config.userConfig.title.defaultValue;
+    if (typeof title === "string" && title.trim()) return title.trim();
+    for (const n of [config && config.displayName, config && config.name]) {
+        if (
+            typeof n === "string" &&
+            n.trim() &&
+            n !== tail &&
+            n !== DEFAULT_CONFIG_NAME
+        ) {
+            return n.trim();
+        }
+    }
+    const words = splitWords(tail);
+    return words.replace(/^(.+\S)\s+Widget$/, "$1") || tail;
+}
+
+/**
+ * A file name as pieces to wrap between: after each "." and "-", so a long
+ * name breaks there, not mid-word.
+ *
+ * @param {string} name
+ * @returns {string[]}
+ */
+function fileNameParts(name) {
+    return String(name || "").split(/(?<=[.\-_])/);
+}
+
+module.exports = { fsFileLabel, widgetDisplayName, fileNameParts };

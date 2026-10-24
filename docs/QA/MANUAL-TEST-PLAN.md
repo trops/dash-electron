@@ -49,7 +49,7 @@ The macOS build is a universal binary — same `.dmg` works on both Intel and Ap
 -   [ ] App opens to the Dashboards page (no dashboards yet, sidebar is mostly empty); after a few seconds a "Welcome to Dash" dialog offers **Install Kitchen Sink** / **Skip for now**. Once you have dashboards, reloading the window (or relaunching) never shows it, not even for a moment.
 -   [ ] Still signed out: left nav → **Create**. The starter cards show their layouts — no sign-in needed (public packages install signed out). Close it.
 -   [ ] No red errors in the dev tools console (View menu → Toggle Developer Tools).
--   [ ] **File access prompts** — on Kitchen Sink, click **Edit dashboard** and then **Cancel** a few times. A file permission prompt names the widget that reads the file (e.g. Notepad), never one that doesn't (Notifications). After **Deny**, toggling edit mode doesn't ask again for that file this session. Two Notepads each keep their own text after a reload. A Notepad's prompt reads "filename: this widget's own saved data" with the real file name under it; ticking "Also allow this for the other … widgets" switches it to the plain file name. Toggling edit mode many times leaves no "MaxListenersExceededWarning" in the terminal running Dash.
+-   [ ] **File access prompts** — on Kitchen Sink, click **Edit dashboard** and then **Cancel** a few times. A file permission prompt names the widget that reads the file (e.g. Notepad), never one that doesn't (Notifications). After **Deny**, toggling edit mode doesn't ask again for that file this session. Two Notepads each keep their own text after a reload. The prompt's heading names the widget as you see it ("Notepad wants to read a file"), and a long file name wraps at a "." or "-". A Notepad's prompt reads "filename: this widget's own saved data" with the real file name under it; ticking "Also allow this for the other … widgets" switches it to the plain file name. Toggling edit mode many times leaves no "MaxListenersExceededWarning" in the terminal running Dash.
 -   [ ] Title bar shows "Dash".
 
 ### 0.3 Sign in to the registry
@@ -84,7 +84,7 @@ A "dashboard" (also called "workspace") is a saved layout of widgets. Test every
 
 ### 1.1 Create
 
--   [ ] **Blank** — left nav → **Create** → **Blank dashboard**. A new dashboard opens in edit mode; click **Save**. Make two more: they're "Untitled dashboard 2" and "Untitled dashboard 3" (tabs, Dashboards list and their leads). Delete "… 2" and make another: it's "Untitled dashboard 2" again.
+-   [ ] **Blank** — left nav → **Create** → **Blank dashboard**. A new dashboard opens in edit mode; click **Save**. Add a Notepad and allow its file before saving: the file is `<dashboard id>-…NotepadWidget-<n>.json` (not `…NotepadWidget-…NotepadWidget.json`); after Save and a reload it asks for nothing new and keeps its text. Make two more: they're "Untitled dashboard 2" and "Untitled dashboard 3" (tabs, Dashboards list and their leads). Delete "… 2" and make another: it's "Untitled dashboard 2" again.
 -   [ ] **New Dashboard** — left nav → **Dashboards** → **New Dashboard**. Create opens with Type: Dashboard.
 -   [ ] **With AI** — covered in §6.1.
 -   [ ] **Import from file** — left nav → **Create** → set Type to **Dashboard** → **Import dashboard from file** → pick a `.dashboard.json` zip you have or that someone shared. Preview shows widgets/providers; importing creates the dashboard and auto-installs missing widgets.
@@ -259,6 +259,7 @@ For each of these from the catalog, add the server, and confirm the tools list p
 -   [ ] gong
 -   [ ] notion
 -   [ ] algolia (if listed)
+-   [ ] salesforce (OAuth) — add Salesforce from the MCP catalog: three fields (MCP Server URL with the sobject-all example, Consumer Key, Callback port with 38000 and the `http://localhost:38000/callback` instructions). With a URL and a Consumer Key it reads "Starts when used" (an empty port isn't missing). Connecting opens Salesforce's sign-in in your browser; port 38000 is only in use while that sign-in is open. With something else on 38000 it says "Port 38000 is in use…". (A real sign-in needs an org with an External Client App: scopes mcp_api + refresh_token, PKCE, both "Require secret" boxes unchecked, callback `http://localhost:38000/callback`.)
 
 ### 4.3 OAuth round-trip
 
