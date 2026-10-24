@@ -49,6 +49,7 @@ The macOS build is a universal binary — same `.dmg` works on both Intel and Ap
 -   [ ] App opens to the Dashboards page (no dashboards yet, sidebar is mostly empty); after a few seconds a "Welcome to Dash" dialog offers **Install Kitchen Sink** / **Skip for now**.
 -   [ ] Still signed out: left nav → **Create**. The starter cards show their layouts — no sign-in needed (public packages install signed out). Close it.
 -   [ ] No red errors in the dev tools console (View menu → Toggle Developer Tools).
+-   [ ] **File access prompts** — on Kitchen Sink, click **Edit dashboard** and then **Cancel** a few times. A file permission prompt names the widget that reads the file (e.g. Notepad), never one that doesn't (Notifications). After **Deny**, toggling edit mode doesn't ask again for that file this session. Two Notepads each keep their own text after a reload.
 -   [ ] Title bar shows "Dash".
 
 ### 0.3 Sign in to the registry
@@ -103,6 +104,7 @@ Open one of the dashboards you just created and click **Edit dashboard** in its 
 -   [ ] **Pinned sidebar** — Dashboard tab → turn on **Pinned sidebar**; put a widget in it.
 -   [ ] **Subdivide a cell** — there's no nested grid to drop in (the Add list offers no grid container); split the cell instead (**Split**, above). Each half takes its own widget.
 -   [ ] **Cancel** — make a change, click **Cancel**. The change is gone.
+-   [ ] **Cancel with nothing changed** — Edit dashboard, change nothing, **Cancel**: no "Discard unsaved changes?" prompt (or one that lists nothing for widgets you didn't touch). Change one widget's setting, **Cancel**: the prompt lists just that widget.
 
 ### 1.3 Edit one widget (the widget panel)
 
@@ -120,7 +122,8 @@ In edit mode → **Dashboard** tab → **Open Dashboard Config**.
 
 -   [ ] **Providers tab** — the amber dot shows when widgets still need a provider. Bulk-assign a provider; save; close and reopen — assignments stuck.
 -   [ ] **Listeners**, **Notifications**, **Widgets** tabs — list what's set across the dashboard. On Listeners, **Edit in panel** on a row opens that widget in the edit panel; on Widgets, a row opens its settings in the dialog, with **Apply to all**.
--   [ ] **Dependencies tab** — lists every distinct widget package used in the dashboard. Each row shows the scoped name (`@scope/name`).
+-   [ ] **Dependencies tab** — lists every distinct widget package used in the dashboard. Each row shows the scoped name (`@scope/name`) and its widgets by name ("Notepad ×2"), not code names.
+-   [ ] **No internal ids** — with two of the same widget on the dashboard, every tab shows them by name, numbered ("Notepad 1", "Notepad 2"), with the package under the name — never `trops.x.Widget`, `#3` or an id fragment. A per-widget provider select's empty choice reads "— use default (<name>) —" when the type has a default.
 
 ### 1.5 Publish
 
@@ -139,6 +142,7 @@ In edit mode → **Dashboard** tab → **Open Dashboard Config**.
 ### 1.7 Delete
 
 -   [ ] Left nav → **Dashboards** → select → **⋯** → **Delete**. The confirmation says "Delete "<name>"? This can't be undone."; confirm; the dashboard is gone.
+-   [ ] Delete a dashboard that's open as a tab: its tab leaves the bottom bar at once. Its lead bot is gone from the Bots panel (not left under Unassigned); any other bots on its team are under Unassigned, paused.
 
 ### 1.8 Export / Import round-trip
 
@@ -163,7 +167,7 @@ All installs run the same code checks first (the install gate).
 
 -   [ ] **From registry** — left nav → **Widgets** → **New Widget** → **Browse widgets in the registry** → pick one → **Install Package**. Signed out, a public package installs without signing in; a private one says "Sign in to the Dash registry to install this." and offers sign-in, then installs.
 -   [ ] **From a local zip** — Widgets → **New Widget** → **Install a widget from file** → pick a widget zip.
--   [ ] **From a folder** — Widgets → **New Widget** → **Load a widget from a folder** → pick a folder containing one or more widget packages. Non-widget folders are skipped, not failed. Each is named from its package (dash.json / package.json), not the folder: an unscoped name goes under your username when signed in, else **@local/** — the result says "Installed as …". It can be placed on a dashboard (Add list), and its panel says "Loaded from your folder · yours".
+-   [ ] **From a folder** — Widgets → **New Widget** → **Load a widget from a folder** → pick a folder containing one or more widget packages. Non-widget folders are skipped, not failed. Each is named from its package (dash.json / package.json), not the folder: an unscoped name goes under your username when signed in, else **@local/** — the result says "Installed as …". It can be placed on a dashboard (Add list), and its panel says "Loaded from your folder · yours". A folder of widgets loads in place and nothing is written into it (no `dist/`): Dash keeps its build in its own folder. Change the source and load the folder again: the widget shows the change.
 -   [ ] **Install gate** — install (from file) a widget zip whose code breaks the widget rules — e.g. a widget that starts a bot directly from its code (widgets may only publish events). The install is refused with "<widget> wasn't installed — it didn't pass its checks:" and a list of what's wrong. Nothing new appears on the Widgets page.
 -   [ ] **With AI** — covered in §6.2.
 
@@ -208,6 +212,7 @@ All installs run the same code checks first (the install gate).
 -   [ ] Confirm. The package is gone from the Widgets page; reopen the dashboard → the cell shows "Widget Not Found". No crash.
 -   [ ] Same from the package: **About this package** → **⋯** → **Uninstall**.
 -   [ ] **A widget loaded from a folder** (§2.1) — uninstall it. The confirmation says "Dash will forget it. Your folder stays where it is."; confirm, and the folder and its files are still on disk.
+-   [ ] **A single widget folder** (picked folder is itself a widget — Dash copies it) — uninstall it. The confirmation says "Dash removes its copy. Your folder stays where it is." (plus that its cells will show "Widget Not Found" when it's on a dashboard); the folder is still on disk.
 
 ### 2.7 Debug
 
@@ -268,7 +273,7 @@ Pick one OAuth-gated provider (Google Drive is the canonical one):
 ### 4.5 WebSocket provider
 
 -   [ ] Providers → **New Provider** → WebSocket provider. URL + optional headers. Save. It connects (or shows a clean disconnected state if the URL is unreachable — no crash).
--   [ ] **Test Connection** — in the form, and on the provider's page: against a server that's up it says "Connected in Nms"; against one that's down, a plain error. A widget already using the provider stays connected after the test.
+-   [ ] **Test Connection** — in the form, and on the provider's page: against a server that's up it says "Connected in Nms"; against one that's down, a plain sentence (e.g. "Nothing is listening at localhost:8080. Is the server running?"), not "connect ECONNREFUSED …". A widget already using the provider stays connected after the test.
 
 ### 4.6 Which provider a widget uses
 
@@ -278,7 +283,7 @@ A widget uses the provider picked for it; with none picked, the app's **Default 
 -   [ ] Add a widget of that type without picking one: Edit dashboard → click the widget → **Connections** shows "— use default (<name>) —" and the widget uses the default.
 -   [ ] Pick the other provider there → **Save**: the widget uses it.
 -   [ ] Edit dashboard → Dashboard tab → **Open Dashboard Config** → **Providers**: the widget shows the provider you picked. Change it there and save; the widget's **Connections** shows the new pick.
--   [ ] Set the widget back to "— use default (<name>) —" → **Save**: it uses the default again.
+-   [ ] With a provider picked, the empty choice still reads "— use default (<name>) —". Set the widget back to it → **Save**: it uses the default again.
 -   [ ] Unmark **Default for its type** with no pick on the widget (one that requires the provider): the widget's card shows the missing-connection pill (§1.3).
 
 ### 4.7 Delete an in-use provider
@@ -294,7 +299,7 @@ A widget uses the provider picked for it; with none picked, the app's **Default 
 Open Settings from **Account** at the bottom of the left nav (your name, when signed in).
 
 -   [ ] **General** — toggle **Debug mode** (the Debug Console opens in its own window, §2.7); on the "Data directory" row click **Open Folder** — file manager opens to the user-data folder.
--   [ ] **Folders** — left nav → **Dashboards** → Folders → **New Folder** with a name and icon (icon picker has search). Rename it. Move a dashboard into it with the **Folder** select on the dashboard's detail. Delete the folder: the confirmation says how many dashboards live there and that they'll be left without a folder; confirm, and the folder is gone while its dashboards stay, under Uncategorized.
+-   [ ] **Folders** — left nav → **Dashboards** → Folders → **New Folder** with a name and icon (icon picker has search). Rename it. Move a dashboard into it with the **Folder** select on the dashboard's detail (the select lists "No folder" once). Delete the folder: the confirmation says how many dashboards live there and that they'll be left without a folder; confirm, and the folder is gone while its dashboards stay, under Uncategorized.
 -   [ ] **Notifications** — toggle global on/off. Pick a widget that emits notifications, toggle the per-widget setting, verify the change.
 -   [ ] **MCP Server** — toggle the embedded server on. Copy the auth token. Change the port; restart; verify the new port.
 -   [ ] **MCP Server, port in use** — with the server off, start a second Dash (or anything) on its port, then toggle it on: "Port … is already in use" shows and stays (more than a few seconds). Type another port while it's off, press Tab, toggle on: it starts on the new port.
@@ -354,6 +359,7 @@ Needs AI set up (Settings → **AI**). Nothing is made, installed or saved until
 -   [ ] Pause the Planner: the Conversation tab says "The Dash team is paused" with **Turn on**.
 -   [ ] Fold a plan (§6.1): it shows in the Create panel on the right, with **Expand**. With no plan folded the panel says "No plan folded here" and has no Recent list and no Ask box (questions go to the Dash team).
 -   [ ] **Unfinished** — get a plan (§6.1) and close Create without building; start a build and **Stop** it. Open **Create** again: under the prompt, **Unfinished** lists both (Draft plan, Stopped), newest first. **Continue** on the draft reopens the plan; **Continue** on the stopped one offers **Continue building**. **Discard** (the draft) or **Forget** (the stopped one) asks first, then the row goes. A finished build isn't listed, and with nothing unfinished the section isn't there.
+-   [ ] **Closed while the Scout looks** — Create → Type: Widget → describe one → **Send**, and close Create while it says "Looking first". Open Create: the request is under **Unfinished**; **Continue** asks the Planner for one widget. Picking one of the Scout's matches instead leaves nothing under Unfinished.
 
 ### 6.6 The Widget Builder by hand
 
