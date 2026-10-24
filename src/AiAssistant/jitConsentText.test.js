@@ -10,7 +10,11 @@
 const test = require("node:test");
 const assert = require("node:assert");
 
-const { fsFileLabel } = require("./jitConsentText");
+const {
+    fsFileLabel,
+    widgetDisplayName,
+    fileNameParts,
+} = require("./jitConsentText");
 
 const NOTEPAD = "trops.dash-samples.NotepadWidget";
 
@@ -61,4 +65,47 @@ test("a name that only contains the id isn't labelled its own", () => {
             ownFile: false,
         });
     }
+});
+
+// QA 2026-10-24: the heading said "NotepadWidget wants to…".
+test("the heading names the widget as people see it", () => {
+    const notepad = {
+        name: "NotepadWidget",
+        displayName: "NotepadWidget",
+        userConfig: { title: { defaultValue: "Notepad" } },
+    };
+    assert.equal(widgetDisplayName(NOTEPAD, notepad), "Notepad");
+    assert.equal(
+        widgetDisplayName("trops.gdrive.GDriveFileList", {
+            name: "Drive Files",
+        }),
+        "Drive Files"
+    );
+    // No config, or one that only repeats the code name: split it.
+    assert.equal(widgetDisplayName(NOTEPAD, null), "Notepad");
+    assert.equal(
+        widgetDisplayName("trops.gdrive.GDriveFileList", {
+            name: "My Workspace",
+        }),
+        "G Drive File List"
+    );
+    assert.equal(widgetDisplayName("trops.x.Widget", null), "Widget");
+    assert.equal(widgetDisplayName("", null), "This widget");
+});
+
+test("a long file name breaks after . and - only", () => {
+    const parts = fileNameParts("1792-trops.dash-samples.NotepadWidget-2.json");
+    assert.equal(
+        parts.join(""),
+        "1792-trops.dash-samples.NotepadWidget-2.json"
+    );
+    assert.deepStrictEqual(parts, [
+        "1792-",
+        "trops.",
+        "dash-",
+        "samples.",
+        "NotepadWidget-",
+        "2.",
+        "json",
+    ]);
 });

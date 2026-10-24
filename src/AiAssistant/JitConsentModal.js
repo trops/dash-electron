@@ -21,7 +21,7 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button, FontAwesomeIcon } from "@trops/dash-react";
-import { humanizeAction } from "@trops/dash-core";
+import { ComponentManager, humanizeAction } from "@trops/dash-core";
 import { enqueueRequest, dequeueHead, removeRequest } from "./jitConsentQueue";
 import {
     buildMcpPatternGrant,
@@ -31,15 +31,35 @@ import {
     buildNetSubdomainGrant,
     buildNetAnyGrant,
 } from "./jitConsentGrantBuilders";
-import { fsFileLabel } from "./jitConsentText";
+import {
+    fsFileLabel,
+    widgetDisplayName,
+    fileNameParts,
+} from "./jitConsentText";
 
-// Pull the bare component name out of a grant-keyed widgetId
-// ("trops.google-drive.GDriveFileList" → "GDriveFileList") so the
-// header can show a recognizable name instead of the engineering id.
+// The widget as people see it ("Notepad"), not the grant-keyed id or its
+// code name — from its config when Dash has it.
 function _displayWidgetName(widgetId) {
-    if (typeof widgetId !== "string" || !widgetId) return "This widget";
-    const idx = widgetId.lastIndexOf(".");
-    return idx >= 0 ? widgetId.slice(idx + 1) : widgetId;
+    let config = null;
+    try {
+        config =
+            typeof widgetId === "string" && widgetId
+                ? ComponentManager.config(widgetId)
+                : null;
+    } catch (_e) {
+        config = null;
+    }
+    return widgetDisplayName(widgetId, config);
+}
+
+// A long file name breaks after "." and "-", not mid-word.
+function FileName({ name }) {
+    return fileNameParts(name).map((part, i) => (
+        <React.Fragment key={i}>
+            {i > 0 && <wbr />}
+            {part}
+        </React.Fragment>
+    ));
 }
 
 const PATH_ARG_KEYS = ["path", "uri", "filepath", "file", "directory"];
@@ -391,7 +411,7 @@ export const JitConsentModal = () => {
                         <div className="text-xs uppercase tracking-wider text-gray-400">
                             Request details
                         </div>
-                        <div className="rounded bg-gray-950 border border-gray-700 p-3 text-xs font-mono text-gray-200 break-all">
+                        <div className="rounded bg-gray-950 border border-gray-700 p-3 text-xs font-mono text-gray-200 break-words">
                             {domain === "mcp" && (
                                 <>
                                     <div>
@@ -435,13 +455,13 @@ export const JitConsentModal = () => {
                                         <span className="text-gray-500">
                                             filename:
                                         </span>{" "}
-                                        {fsFileShown.text}
+                                        <FileName name={fsFileShown.text} />
                                     </div>
                                     {fsFileShown.ownFile && (
                                         // The real name stays in view: it's
                                         // what the grant covers.
                                         <div className="text-gray-500">
-                                            {fsFilename}
+                                            <FileName name={fsFilename} />
                                         </div>
                                     )}
                                 </>
