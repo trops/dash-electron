@@ -49,7 +49,7 @@ The macOS build is a universal binary — same `.dmg` works on both Intel and Ap
 -   [ ] App opens to the Dashboards page (no dashboards yet, sidebar is mostly empty); after a few seconds a "Welcome to Dash" dialog offers **Install Kitchen Sink** / **Skip for now**. Once you have dashboards, reloading the window (or relaunching) never shows it, not even for a moment.
 -   [ ] Still signed out: left nav → **Create**. The starter cards show their layouts — no sign-in needed (public packages install signed out). Close it.
 -   [ ] No red errors in the dev tools console (View menu → Toggle Developer Tools).
--   [ ] **File access prompts** — on Kitchen Sink, click **Edit dashboard** and then **Cancel** a few times. A file permission prompt names the widget that reads the file (e.g. Notepad), never one that doesn't (Notifications). After **Deny**, toggling edit mode doesn't ask again for that file this session. Two Notepads each keep their own text after a reload. Toggling edit mode many times leaves no "MaxListenersExceededWarning" in the terminal running Dash.
+-   [ ] **File access prompts** — on Kitchen Sink, click **Edit dashboard** and then **Cancel** a few times. A file permission prompt names the widget that reads the file (e.g. Notepad), never one that doesn't (Notifications). After **Deny**, toggling edit mode doesn't ask again for that file this session. Two Notepads each keep their own text after a reload. A Notepad's prompt reads "filename: this widget's own saved data" with the real file name under it; ticking "Also allow this for the other … widgets" switches it to the plain file name. Toggling edit mode many times leaves no "MaxListenersExceededWarning" in the terminal running Dash.
 -   [ ] Title bar shows "Dash".
 
 ### 0.3 Sign in to the registry
@@ -84,7 +84,7 @@ A "dashboard" (also called "workspace") is a saved layout of widgets. Test every
 
 ### 1.1 Create
 
--   [ ] **Blank** — left nav → **Create** → **Blank dashboard**. A new dashboard opens in edit mode; click **Save**.
+-   [ ] **Blank** — left nav → **Create** → **Blank dashboard**. A new dashboard opens in edit mode; click **Save**. Make two more: they're "Untitled dashboard 2" and "Untitled dashboard 3" (tabs, Dashboards list and their leads). Delete "… 2" and make another: it's "Untitled dashboard 2" again.
 -   [ ] **New Dashboard** — left nav → **Dashboards** → **New Dashboard**. Create opens with Type: Dashboard.
 -   [ ] **With AI** — covered in §6.1.
 -   [ ] **Import from file** — left nav → **Create** → set Type to **Dashboard** → **Import dashboard from file** → pick a `.dashboard.json` zip you have or that someone shared. Preview shows widgets/providers; importing creates the dashboard and auto-installs missing widgets.
@@ -361,7 +361,7 @@ Needs AI set up (Settings → **AI**). Nothing is made, installed or saved until
 -   [ ] Pause the Planner: the Conversation tab says "The Dash team is paused" with **Turn on**.
 -   [ ] Fold a plan (§6.1): it shows in the Create panel on the right, with **Expand**. With no plan folded the panel says "No plan folded here" and has no Recent list and no Ask box (questions go to the Dash team).
 -   [ ] **Unfinished** — get a plan (§6.1) and close Create without building; start a build and **Stop** it. Open **Create** again: under the prompt, **Unfinished** lists both (Draft plan, Stopped), newest first. **Continue** on the draft reopens the plan; **Continue** on the stopped one offers **Continue building**. **Discard** (the draft) or **Forget** (the stopped one) asks first, then the row goes. A finished build isn't listed, and with nothing unfinished the section isn't there.
--   [ ] **Closed while the Scout looks** — Create → Type: Widget → describe one → **Send**, and close Create while it says "Looking first". Open Create: the request is under **Unfinished**; **Continue** asks the Planner for one widget. Picking one of the Scout's matches instead leaves nothing under Unfinished. Bots → Log shows the Scout's run stopped when Create closed, not running on.
+-   [ ] **Closed while the Scout looks** — Create → Type: Widget → describe one → **Send**, and close Create while it says "Looking first". Open Create: the request is under **Unfinished**; **Continue** asks the Planner for one widget. Picking one of the Scout's matches instead leaves nothing under Unfinished. Bots → Log shows the Scout's run stopped when Create closed, not running on. Bots → Dash team → Scout: its Last run reads "Stopped · just now", the model, and "Stopped before it answered."
 
 ### 6.6 The Widget Builder by hand
 

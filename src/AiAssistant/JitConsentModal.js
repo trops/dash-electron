@@ -31,6 +31,7 @@ import {
     buildNetSubdomainGrant,
     buildNetAnyGrant,
 } from "./jitConsentGrantBuilders";
+import { fsFileLabel } from "./jitConsentText";
 
 // Pull the bare component name out of a grant-keyed widgetId
 // ("trops.google-drive.GDriveFileList" → "GDriveFileList") so the
@@ -165,6 +166,13 @@ export const JitConsentModal = () => {
     ]);
     const fsAction = args?.action || request.action || "(unknown action)";
     const fsFilename = args?.filename || "(unknown file)";
+    // Its own data file is named after its internal id: say what it is.
+    // Granted to the package's other widgets too (the box ticked), it
+    // isn't just this widget's own: show the name.
+    const fsFileShown =
+        showSiblingCheckbox && applyToSiblings
+            ? { text: fsFilename, ownFile: false }
+            : fsFileLabel(args?.filename, widgetId);
     const fsIsWrite = FS_WRITE_ACTIONS.has(fsAction);
 
     const grantFsFilename = (filename) =>
@@ -427,8 +435,15 @@ export const JitConsentModal = () => {
                                         <span className="text-gray-500">
                                             filename:
                                         </span>{" "}
-                                        {fsFilename}
+                                        {fsFileShown.text}
                                     </div>
+                                    {fsFileShown.ownFile && (
+                                        // The real name stays in view: it's
+                                        // what the grant covers.
+                                        <div className="text-gray-500">
+                                            {fsFilename}
+                                        </div>
+                                    )}
                                 </>
                             )}
                             {domain === "network" && (
