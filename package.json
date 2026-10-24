@@ -1,7 +1,7 @@
 {
     "name": "@trops/dash-electron",
     "productName": "Dash",
-    "version": "0.0.1022",
+    "version": "0.0.1023",
     "description": "A Dashboard Generator",
     "author": "John P. Giatropoulos",
     "publishConfig": {
@@ -20,7 +20,7 @@
         "@heroicons/react": "^2.0.16",
         "@modelcontextprotocol/sdk": "^1.26.0",
         "@tailwindcss/forms": "^0.5.0",
-        "@trops/dash-core": "^0.1.825",
+        "@trops/dash-core": "^0.1.826",
         "@trops/dash-react": "^1.0.80",
         "@uiw/react-textarea-code-editor": "^2.1.1",
         "acorn": "^8.16.0",
@@ -105,8 +105,8 @@
         "apple-log": "./scripts/notarize-log.sh",
         "apple-staple": "./scripts/staple.sh",
         "validate:manifest": "node scripts/validateWidget.cjs",
-        "test:ai": "jest src/AiAssistant --ci --testPathIgnorePatterns /node_modules/ jitConsentQueue.test.js jitConsentGrantBuilders.test.js",
-        "test:ai-node": "node --test src/AiAssistant/jitConsentQueue.test.js src/AiAssistant/jitConsentGrantBuilders.test.js",
+        "test:ai": "jest src/AiAssistant --ci --testPathIgnorePatterns /node_modules/ jitConsentQueue.test.js jitConsentGrantBuilders.test.js jitConsentText.test.js",
+        "test:ai-node": "node --test src/AiAssistant/jitConsentQueue.test.js src/AiAssistant/jitConsentGrantBuilders.test.js src/AiAssistant/jitConsentText.test.js",
         "test:security": "node scripts/test-electron-security.js",
         "test:audit-pin": "node scripts/test-electronegativity-pin.js",
         "test:electron-pin": "node scripts/test-electron-version-pin.js",
