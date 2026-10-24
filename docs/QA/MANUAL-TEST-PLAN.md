@@ -46,10 +46,10 @@ The macOS build is a universal binary — same `.dmg` works on both Intel and Ap
 
 ### 0.2 First launch
 
--   [ ] App opens to the Dashboards page (no dashboards yet, sidebar is mostly empty); after a few seconds a "Welcome to Dash" dialog offers **Install Kitchen Sink** / **Skip for now**.
+-   [ ] App opens to the Dashboards page (no dashboards yet, sidebar is mostly empty); after a few seconds a "Welcome to Dash" dialog offers **Install Kitchen Sink** / **Skip for now**. Once you have dashboards, reloading the window (or relaunching) never shows it, not even for a moment.
 -   [ ] Still signed out: left nav → **Create**. The starter cards show their layouts — no sign-in needed (public packages install signed out). Close it.
 -   [ ] No red errors in the dev tools console (View menu → Toggle Developer Tools).
--   [ ] **File access prompts** — on Kitchen Sink, click **Edit dashboard** and then **Cancel** a few times. A file permission prompt names the widget that reads the file (e.g. Notepad), never one that doesn't (Notifications). After **Deny**, toggling edit mode doesn't ask again for that file this session. Two Notepads each keep their own text after a reload.
+-   [ ] **File access prompts** — on Kitchen Sink, click **Edit dashboard** and then **Cancel** a few times. A file permission prompt names the widget that reads the file (e.g. Notepad), never one that doesn't (Notifications). After **Deny**, toggling edit mode doesn't ask again for that file this session. Two Notepads each keep their own text after a reload. Toggling edit mode many times leaves no "MaxListenersExceededWarning" in the terminal running Dash.
 -   [ ] Title bar shows "Dash".
 
 ### 0.3 Sign in to the registry
@@ -105,6 +105,8 @@ Open one of the dashboards you just created and click **Edit dashboard** in its 
 -   [ ] **Subdivide a cell** — there's no nested grid to drop in (the Add list offers no grid container); split the cell instead (**Split**, above). Each half takes its own widget.
 -   [ ] **Cancel** — make a change, click **Cancel**. The change is gone.
 -   [ ] **Cancel with nothing changed** — Edit dashboard, change nothing, **Cancel**: no "Discard unsaved changes?" prompt (or one that lists nothing for widgets you didn't touch). Change one widget's setting, **Cancel**: the prompt lists just that widget.
+-   [ ] **Discard names the widget as saved** — rename a Notepad to "My Notes" in its settings, **Cancel**: the prompt says "Changed Notepad's settings", and after Discard it's "Notepad" again.
+-   [ ] **No internal ids in edit mode** — each card header's second line and each Add list row's second line is the package (`@trops/dash-samples`), never `trops.dash-samples.NotepadWidget`.
 
 ### 1.3 Edit one widget (the widget panel)
 
@@ -122,7 +124,7 @@ In edit mode → **Dashboard** tab → **Open Dashboard Config**.
 
 -   [ ] **Providers tab** — the amber dot shows when widgets still need a provider. Bulk-assign a provider; save; close and reopen — assignments stuck.
 -   [ ] **Listeners**, **Notifications**, **Widgets** tabs — list what's set across the dashboard. On Listeners, **Edit in panel** on a row opens that widget in the edit panel; on Widgets, a row opens its settings in the dialog, with **Apply to all**.
--   [ ] **Dependencies tab** — lists every distinct widget package used in the dashboard. Each row shows the scoped name (`@scope/name`) and its widgets by name ("Notepad ×2"), not code names.
+-   [ ] **Dependencies tab** — lists every distinct widget package used in the dashboard. Each row shows the scoped name (`@scope/name`) and its widgets by name ("Notepad ×2"), not code names. One Notepad reads "Notepad" (not ×2), also after a reload.
 -   [ ] **No internal ids** — with two of the same widget on the dashboard, every tab shows them by name, numbered ("Notepad 1", "Notepad 2"), with the package under the name — never `trops.x.Widget`, `#3` or an id fragment. A per-widget provider select's empty choice reads "— use default (<name>) —" when the type has a default.
 
 ### 1.5 Publish
@@ -359,7 +361,7 @@ Needs AI set up (Settings → **AI**). Nothing is made, installed or saved until
 -   [ ] Pause the Planner: the Conversation tab says "The Dash team is paused" with **Turn on**.
 -   [ ] Fold a plan (§6.1): it shows in the Create panel on the right, with **Expand**. With no plan folded the panel says "No plan folded here" and has no Recent list and no Ask box (questions go to the Dash team).
 -   [ ] **Unfinished** — get a plan (§6.1) and close Create without building; start a build and **Stop** it. Open **Create** again: under the prompt, **Unfinished** lists both (Draft plan, Stopped), newest first. **Continue** on the draft reopens the plan; **Continue** on the stopped one offers **Continue building**. **Discard** (the draft) or **Forget** (the stopped one) asks first, then the row goes. A finished build isn't listed, and with nothing unfinished the section isn't there.
--   [ ] **Closed while the Scout looks** — Create → Type: Widget → describe one → **Send**, and close Create while it says "Looking first". Open Create: the request is under **Unfinished**; **Continue** asks the Planner for one widget. Picking one of the Scout's matches instead leaves nothing under Unfinished.
+-   [ ] **Closed while the Scout looks** — Create → Type: Widget → describe one → **Send**, and close Create while it says "Looking first". Open Create: the request is under **Unfinished**; **Continue** asks the Planner for one widget. Picking one of the Scout's matches instead leaves nothing under Unfinished. Bots → Log shows the Scout's run stopped when Create closed, not running on.
 
 ### 6.6 The Widget Builder by hand
 
