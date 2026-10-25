@@ -305,13 +305,15 @@ npm run screenshot -- --selector ".sidebar" /tmp/s.png       # element screensho
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | Home / default view      | `npm run screenshot`                                                                                                                            |
 | Settings > General       | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings"`                         |
-| Settings > Themes        | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "Themes"`        |
-| Settings > Providers     | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "Providers"`     |
-| Settings > Widgets       | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "Widgets"`       |
-| Settings > Folders       | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "Folders"`       |
 | Settings > Notifications | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "Notifications"` |
 | Settings > Account       | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "Account"`       |
 | Settings > MCP Server    | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "MCP Server"`    |
+| Settings > AI            | `npm run screenshot -- --click-selector 'button:has([data-icon="circle-user"], [data-icon="user"])' --click "Settings" --click "AI"`            |
+| Dashboards (left nav)    | `npm run screenshot -- --click "Dashboards"`                                                                                                    |
+| Bots (left nav)          | `npm run screenshot -- --click "Bots"`                                                                                                          |
+| Providers (left nav)     | `npm run screenshot -- --click "Providers"`                                                                                                     |
+| Widgets (left nav)       | `npm run screenshot -- --click "Widgets"`                                                                                                       |
+| Themes (left nav)        | `npm run screenshot -- --click "Themes"`                                                                                                        |
 | Specific workspace       | `npm run screenshot -- --click "<workspace name>"`                                                                                              |
 | Sidebar only             | `npm run screenshot -- --selector "aside"`                                                                                                      |
 

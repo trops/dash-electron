@@ -94,7 +94,8 @@ export function validateProviderApiUsage(componentCode) {
  * (install gate, 2026-10-16). A '…' or "…" string ends at its line (an
  * apostrophe in JSX text can't hide the lines after it); template
  * expressions (${…}) stay code. keepStrings: blank comments only (a check
- * that reads a string, e.g. mainApi["bots"]).
+ * that reads a string, e.g. mainApi["bots"]) — strings are still tracked, so
+ * a // or /* inside one (a URL, accept="image/*") isn't taken for a comment.
  */
 export function codeOnly(source, { keepStrings = false } = {}) {
     const src = String(source || "");
@@ -102,6 +103,8 @@ export function codeOnly(source, { keepStrings = false } = {}) {
     const blank = (i) => {
         if (out[i] !== "\n") out[i] = " ";
     };
+    // String and template text: blanked unless keepStrings.
+    const blankText = keepStrings ? () => {} : blank;
     // Stack of modes: "code" (inside ${…} keeps a brace depth) or "tpl".
     const stack = [{ mode: "code", depth: 0 }];
     let i = 0;
@@ -111,8 +114,8 @@ export function codeOnly(source, { keepStrings = false } = {}) {
         const n = src[i + 1];
         if (top.mode === "tpl") {
             if (c === "\\") {
-                blank(i);
-                if (i + 1 < src.length) blank(i + 1);
+                blankText(i);
+                if (i + 1 < src.length) blankText(i + 1);
                 i += 2;
             } else if (c === "`") {
                 stack.pop();
@@ -121,7 +124,7 @@ export function codeOnly(source, { keepStrings = false } = {}) {
                 stack.push({ mode: "code", depth: 0 });
                 i += 2;
             } else {
-                blank(i);
+                blankText(i);
                 i += 1;
             }
             continue;
@@ -145,12 +148,12 @@ export function codeOnly(source, { keepStrings = false } = {}) {
             }
             continue;
         }
-        if (!keepStrings && (c === "'" || c === '"')) {
+        if (c === "'" || c === '"') {
             const start = i;
             i += 1;
             while (i < src.length && src[i] !== c && src[i] !== "\n") {
-                if (src[i] === "\\" && src[i + 1] !== "\n") blank(i++);
-                blank(i++);
+                if (src[i] === "\\" && src[i + 1] !== "\n") blankText(i++);
+                blankText(i++);
             }
             if (src[i] === c) {
                 i += 1;
@@ -162,7 +165,7 @@ export function codeOnly(source, { keepStrings = false } = {}) {
             }
             continue;
         }
-        if (!keepStrings && c === "`") {
+        if (c === "`") {
             stack.push({ mode: "tpl" });
             i += 1;
             continue;
@@ -255,6 +258,77 @@ export function validateNoModalUsage(componentCode) {
                     : "<Drawer> is app chrome, not widget content. Split into a sibling widget coordinated via useWidgetEvents.",
         });
     }
+    return { ok: errors.length === 0, errors };
+}
+
+/**
+ * Hard-coded colors (design guide: colors come from dash-react components,
+ * useDashTokens and useStatusTokens, so widgets follow theme switches and
+ * light mode). Flags, in code and in strings (className, style):
+ *   - Tailwind color classes: bg-red-500, text-emerald-300, hover:border-…,
+ *     ring-/fill-/stroke-/from-/to-/via-/divide-/placeholder-/outline-…
+ *   - bracket values: text-[10px], w-[440px], bg-[#fff] — the prebuilt CSS
+ *     bundle doesn't carry them, so they silently don't render
+ *   - hex values (#fff, #1a2b3c) and rgb()/rgba()/hsl()/hsla()
+ * Theme-neutral classes (bg-white, text-black, bg-transparent) pass.
+ *
+ * Returns: { ok, errors: [{ line, snippet, kind, suggestion }] }.
+ */
+const COLOR_FAMILIES =
+    "gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose";
+const HARDCODED_COLOR_PATTERNS = [
+    {
+        kind: "tailwind",
+        re: new RegExp(
+            "(?<![\\w-])(?:[a-z-]+:)*(?:bg|text|border|ring|fill|stroke|from|to|via|divide|placeholder|outline|decoration|shadow|accent|caret)-(?:" +
+                COLOR_FAMILIES +
+                ")-(?:50|100|200|300|400|500|600|700|800|900|950)(?:\\/\\d+)?(?![\\w-])",
+            "g"
+        ),
+        suggestion:
+            "Tailwind color classes don't follow the theme — use a dash-react component (StatusBadge, Tag, Alert…) or a role from useDashTokens() (muted, faint, surface…); status colors come from useStatusTokens().",
+    },
+    {
+        kind: "bracket",
+        re: /(?<![\w-])(?:[a-z-]+:)*[a-z][a-z0-9-]*-\[[^\]\s"'`${}]+\]/g,
+        suggestion:
+            "Bracket values like text-[10px] aren't in the prebuilt CSS, so they don't render — use a standard class (text-xs, w-96) or a dash-react component.",
+    },
+    {
+        // Only where it's clearly a color — after a color property (color:,
+        // background, fill=, stroke=, border, shadow, outline) or a whole
+        // quoted 6/8-digit value — so ids ("#add"), anchors and issue
+        // numbers ("Fixes #123") pass.
+        kind: "hex",
+        re: /(?:(?<=(?:color|background|fill|stroke|border|shadow|outline)[\w-]*\s*[:=][^;\n]{0,60}?)#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})|(?<=["'`])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6})(?=["'`]))(?![\w-])/gi,
+        suggestion:
+            "A fixed hex color ignores the theme and light mode — use a dash-react component or a role from useDashTokens().",
+    },
+    {
+        kind: "rgb",
+        re: /\b(?:rgba?|hsla?)\(/g,
+        suggestion:
+            "A fixed rgb()/hsl() color ignores the theme and light mode — use a dash-react component or a role from useDashTokens().",
+    },
+];
+export function validateNoHardcodedColors(componentCode) {
+    if (!componentCode || typeof componentCode !== "string") {
+        return { ok: true, errors: [] };
+    }
+    const code = codeOnly(componentCode, { keepStrings: true });
+    const errors = [];
+    const seen = new Set();
+    for (const { kind, re, suggestion } of HARDCODED_COLOR_PATTERNS) {
+        for (const m of code.matchAll(re)) {
+            const snippet = m[0].replace(/\($/, "()");
+            const line = lineOf(componentCode, m.index);
+            const key = line + "|" + snippet;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            errors.push({ line, snippet, kind, suggestion });
+        }
+    }
+    errors.sort((a, b) => a.line - b.line);
     return { ok: errors.length === 0, errors };
 }
 

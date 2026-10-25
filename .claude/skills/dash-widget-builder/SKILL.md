@@ -212,17 +212,40 @@ authoring a similar widget:
 
 ---
 
-## Color Rule — non-negotiable, audit-enforced
+## Design rules — from the Dash design guide, enforced by the code checks
 
-**No widget code may use Tailwind color utility classes
-(`bg-{color}-{shade}`, `text-{color}-{shade}`, `border-{color}-{shade}`,
-or any `hover:` variant of those).** All color must be delivered by a
-`@trops/dash-react` primitive that reads `ThemeContext`. Theme-neutral
-utilities (spacing, sizing, flex/grid, `opacity-N`, transitions,
-animations) remain allowed.
+The Dash design guide (dash-react `docs/design-guide.html`) is the rule
+every widget is checked against. The short version:
 
-The acceptance scorecard greps emitted widget code against this rule and
-flags violations. Common violations and their fixes:
+1. **dash-react or nothing.** Every control, card, badge and message is a
+   `@trops/dash-react` component (see the Primitive Palette above).
+2. **Tokens, never shades.** Color comes from dash-react components, from
+   `useDashTokens()` — roles `text`, `muted`, `faint`, `surface`, `well`,
+   `hairline`, `accent`, `accentSoft` as class strings — and status colors
+   from `useStatusTokens()`. Muted text is the `muted` or `faint` role,
+   **never `opacity-N`** (faded text fails contrast in light mode).
+3. **One spacing scale.** Gaps and padding from 4 / 8 / 12 / 16 / 24 / 32 px
+   (`gap-1` … `p-8`); radii from the components themselves.
+4. **Left-aligned and scannable.** Title first (`SubHeading2`), then the
+   thing the widget is for; one primary `Button` at most.
+5. **Both themes, every time.** The widget must read right in dark and
+   light mode — which it does when rules 1–3 hold.
+
+```jsx
+const t = useDashTokens();
+<p className={`text-xs ${t.muted}`}>Updated 2 minutes ago</p>
+<div className={`rounded-lg border p-3 ${t.surface} ${t.hairline}`}>…</div>
+```
+
+**These fail the build** (the code checks report each with its line):
+Tailwind color classes (`bg-{color}-{shade}`, `text-…`, `border-…`,
+`ring-…`, any `hover:` / `focus:` variant), bracket values
+(`text-[10px]`, `w-[440px]` — not in the prebuilt CSS, so they don't
+render), hex colors (`#ff0000`) and `rgb()` / `hsl()` values. Theme-neutral
+utilities (spacing, sizing, flex/grid, transitions, `bg-white`,
+`bg-transparent`) are fine. For SVG shapes and charts, draw with
+`fill="currentColor"` / `stroke="currentColor"` and set the color with a role
+class on the element (`className={t.muted}`). Common violations and their fixes:
 
 | Violation                                                                      | Fix                                                               |
 | ------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
@@ -230,6 +253,7 @@ flags violations. Common violations and their fixes:
 | `<span className="bg-green-900/50 text-green-400 ...">open</span>`             | `<StatusBadge state="open" label="open" />`                       |
 | `<div className="bg-red-900/30 border-red-700 text-red-300 ...">{error}</div>` | `<AlertBanner variant="error" size="compact" message={error} />`  |
 | `<p className="text-gray-600 italic">No results</p>`                           | `<EmptyState title="No results" description="..." />`             |
+| `<span className="text-xs opacity-60">{updated}</span>`                        | `<span className={"text-xs " + t.muted}>{updated}</span>`         |
 | `<input className="bg-gray-800 border-gray-600 text-gray-200 ...">`            | `<InputText value={x} onChange={fn} placeholder="..." />`         |
 | `<div className="text-gray-500 font-mono">{status}</div>` (status dot pattern) | `<StatusBadge state={mapStatus(state)} label={status} compact />` |
 
