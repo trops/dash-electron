@@ -189,6 +189,9 @@ export const DASH_REACT_COMPONENT_SCHEMAS = {
             state: { type: "string", required: true },
             label: { type: "string" },
             compact: { type: "boolean" },
+            // Announce changes to screen readers — for one badge that
+            // changes in place (a connection indicator), not list rows.
+            live: { type: "boolean" },
         },
         dataSlots: ["label"],
     },

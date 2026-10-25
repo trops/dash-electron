@@ -129,6 +129,7 @@ function GmailUnreadCountContent({ title, query, autoRefreshSeconds, label }) {
 
             <div className="flex items-center gap-2">
                 <StatusBadge
+                    live
                     state={connectionState({
                         isConnected,
                         isConnecting,

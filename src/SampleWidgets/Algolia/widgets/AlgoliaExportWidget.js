@@ -266,6 +266,7 @@ function AlgoliaExportContent({ title }) {
             {exporting && (
                 <div className="space-y-2">
                     <StatusBadge
+                        live
                         state="pending"
                         label={`Exported ${exportedCount.toLocaleString()} records...`}
                         compact

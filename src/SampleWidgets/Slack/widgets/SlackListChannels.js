@@ -93,6 +93,7 @@ function SlackListChannelsContent({ title, widgetId }) {
 
             <div className="flex items-center gap-2">
                 <StatusBadge
+                    live
                     state={connectionState({
                         isConnected,
                         isConnecting,
@@ -101,7 +102,10 @@ function SlackListChannelsContent({ title, widgetId }) {
                     label={status}
                     compact
                 />
-                <Caption2 text={`(${tools.length} tools)`} />
+                <Caption2
+                    className="whitespace-nowrap"
+                    text={`(${tools.length} tools)`}
+                />
             </div>
 
             {fetchError && (

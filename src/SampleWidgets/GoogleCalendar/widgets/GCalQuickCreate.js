@@ -137,7 +137,7 @@ function GCalQuickCreateContent({ title }) {
                     }`}
                 />
                 <Caption2 className="font-mono">{status}</Caption2>
-                <Caption2 className="opacity-70">
+                <Caption2 className="opacity-70 whitespace-nowrap">
                     ({tools.length} tools)
                 </Caption2>
             </div>

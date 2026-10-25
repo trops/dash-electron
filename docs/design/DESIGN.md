@@ -1,5 +1,7 @@
 # Dash — Design Language (Refresh)
 
+> **Superseded.** This 2025 proposal was never built as written. The design that ships is in the dash-react design guide: `docs/design-guide.html` (rules, Aurora color roles, spacing, layout, the review checklist) and `docs/component-gallery.html` (every component, live). Kept for history only.
+
 > Status: **Phase 0 proposal** — react to this + `styleguide.html`, nothing in the
 > app changes until it's signed off. Direction locked with the team:
 > **light-first, clean, airy, quiet premium depth** (calibrated to Kimi's

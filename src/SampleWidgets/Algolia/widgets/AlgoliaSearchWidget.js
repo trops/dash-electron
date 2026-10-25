@@ -194,8 +194,15 @@ function AlgoliaSearchContent({
 
             {/* Connection Status */}
             <div className="flex items-center gap-2 text-xs">
-                <StatusBadge state={connectionState} label={status} compact />
-                <Caption2>({tools.length} tools)</Caption2>
+                <StatusBadge
+                    live
+                    state={connectionState}
+                    label={status}
+                    compact
+                />
+                <Caption2 className="whitespace-nowrap">
+                    ({tools.length} tools)
+                </Caption2>
             </div>
 
             {(error || errorMsg) && (
