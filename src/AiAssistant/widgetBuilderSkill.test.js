@@ -187,18 +187,23 @@ describe("dash-widget-builder skill — dash-react prop names", () => {
 
 describe("dash-widget-builder skill — color comes from the theme", () => {
     // The old prompt taught raw `currentTheme[key] || fallback`; the skill
-    // replaced that with a stricter rule: no Tailwind color classes at all,
-    // color only through dash-react primitives that read ThemeContext.
-    const color = section("Color Rule");
+    // replaced that with a stricter rule: no hard-coded colors at all, color
+    // only through dash-react components and its token hooks (design guide).
+    const rules = section("Design rules");
 
-    test("forbids Tailwind color utility classes", () => {
-        expect(color).toBeTruthy();
-        expect(color).toMatch(/No widget code may use Tailwind color/);
+    test("hard-coded colors fail the build", () => {
+        expect(rules).toBeTruthy();
+        expect(rules).toMatch(/These fail the build/);
+        expect(rules).toMatch(/Tailwind color classes/);
+        expect(rules).toMatch(/bracket values/);
+        expect(rules).toMatch(/hex colors/);
     });
 
-    test("delivers color through dash-react primitives reading ThemeContext", () => {
-        expect(color).toMatch(/@trops\/dash-react/);
-        expect(color).toMatch(/ThemeContext/);
+    test("delivers color through dash-react components and token hooks", () => {
+        expect(rules).toMatch(/@trops\/dash-react/);
+        expect(rules).toMatch(/useDashTokens\(\)/);
+        expect(rules).toMatch(/useStatusTokens\(\)/);
+        expect(rules).toMatch(/never `opacity-N`/);
     });
 });
 

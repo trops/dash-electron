@@ -8,6 +8,7 @@
 export {
     validateProviderApiUsage,
     validateNoModalUsage,
+    validateNoHardcodedColors,
     validateNoBotCalls,
     validateEventPublishing,
     validateComponentReferences,

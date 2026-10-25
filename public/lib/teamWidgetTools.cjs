@@ -84,9 +84,15 @@ function configProblems(configCode) {
 /**
  * The Widget Builder's code checks on a widget's source → problems. With
  * its .dash.js config, a widget that has a connection is also checked for
- * asking the user for keys or calling the service itself.
+ * asking the user for keys or calling the service itself. With the code of
+ * the widget being changed (previousCode), only colors the change adds count
+ * — an older widget's own colors don't block an edit to it.
  */
-function codeProblems(componentCode, configCode = "") {
+function codeProblems(
+    componentCode,
+    configCode = "",
+    { previousCode = null } = {}
+) {
     const problems = [];
     const api = checks.validateProviderApiUsage(componentCode);
     if (!api.ok) {
@@ -121,6 +127,17 @@ function codeProblems(componentCode, configCode = "") {
                 `line ${e.line}: <${e.tag}> isn't allowed in a widget${
                     e.suggestion ? ` — ${e.suggestion}` : ""
                 }`
+            );
+        }
+    }
+    // Design guide: color comes from dash-react, never the call site.
+    const colors = checks.validateNoHardcodedColors(componentCode);
+    if (!colors.ok) {
+        for (const e of colors.errors) {
+            const raw = e.snippet.replace(/\(\)$/, "(");
+            if (previousCode && previousCode.includes(raw)) continue;
+            problems.push(
+                `line ${e.line}: ${e.snippet} is a hard-coded color — ${e.suggestion}`
             );
         }
     }
@@ -185,6 +202,9 @@ function createTeamWidgetTools(deps) {
     // name → the config before the Builder's last update of it (this run of
     // the app); check() hands it back so the Checker can compare.
     const previousConfigs = new Map();
+    // name → the component code before that update, so the checks only
+    // count colors the update added.
+    const previousComponents = new Map();
     const buildWidget = deps.aiBuild || aiBuild;
     const compile = deps.compilePreview || compilePreview;
     const compilePackage =
@@ -219,6 +239,7 @@ function createTeamWidgetTools(deps) {
         configCode,
         sourcePackage = null,
         files = [],
+        previousCode = null,
     } = {}) {
         const name = String(widgetName || "").trim();
         const helpers = helperFiles(files, [name], [componentCode, configCode]);
@@ -284,7 +305,9 @@ function createTeamWidgetTools(deps) {
                 componentName: name,
                 compile: compiled,
                 problems: [
-                    ...codeProblems(componentCode, configCode || ""),
+                    ...codeProblems(componentCode, configCode || "", {
+                        previousCode,
+                    }),
                     ...helperProblems(helpers),
                 ],
                 scorecard: scorecardSummary(componentCode),
@@ -351,9 +374,16 @@ function createTeamWidgetTools(deps) {
                 error: `There's no ${scoped} to update — only widgets the AI built can be updated.`,
             };
         }
+        // The widget as it is, for an update: the Checker compares configs,
+        // and only colors the update adds count.
+        const before = update
+            ? await deps.readWidgetSources({ widgetName: scoped })
+            : null;
+        const previousCode =
+            before && before.success ? before.componentCode || "" : null;
         // The Widget Builder's checks first — a draft that fails them isn't kept.
         const problems = [
-            ...codeProblems(componentCode, configCode),
+            ...codeProblems(componentCode, configCode, { previousCode }),
             ...configProblems(configCode),
         ];
         if (problems.length) {
@@ -371,6 +401,7 @@ function createTeamWidgetTools(deps) {
             componentCode,
             configCode,
             sourcePackage: update ? scoped : null,
+            previousCode,
         });
         if (!draft || !draft.success) {
             return {
@@ -384,11 +415,12 @@ function createTeamWidgetTools(deps) {
                 error: `It didn't build: ${draft.compile.error}`,
             };
         }
-        if (update) {
-            const before = await deps.readWidgetSources({ widgetName: scoped });
-            if (before && before.success) {
-                draft.previousConfigCode = before.configCode || "";
-            }
+        if (before && before.success) {
+            draft.previousConfigCode = before.configCode || "";
+            // Kept off the tool result (the Checker gets the draft as JSON).
+            Object.defineProperty(draft, "previousComponentCode", {
+                value: previousCode,
+            });
         }
         // What installing it takes, once it passes.
         Object.defineProperty(draft, "install", {
@@ -474,8 +506,16 @@ function createTeamWidgetTools(deps) {
                 error: `${scoped} already exists — pick another name for the new widget.`,
             };
         }
+        // The widget being changed: in place, the Checker compares configs;
+        // either way only colors the change adds count.
+        const before = await deps.readWidgetSources({
+            widgetName: pkg,
+            componentName: own,
+        });
+        const previousCode =
+            before && before.success ? before.componentCode || "" : null;
         const problems = [
-            ...codeProblems(componentCode, configCode),
+            ...codeProblems(componentCode, configCode, { previousCode }),
             ...configProblems(configCode),
         ];
         if (problems.length) {
@@ -492,6 +532,7 @@ function createTeamWidgetTools(deps) {
             componentCode,
             configCode,
             sourcePackage: pkg,
+            previousCode,
         });
         if (!draft || !draft.success) {
             return {
@@ -505,10 +546,11 @@ function createTeamWidgetTools(deps) {
                 error: `It didn't build: ${draft.compile.error}`,
             };
         }
-        const before = await deps.readWidgetSources({
-            widgetName: pkg,
-            componentName: own,
-        });
+        if (previousCode != null) {
+            Object.defineProperty(draft, "previousComponentCode", {
+                value: previousCode,
+            });
+        }
         // In place, the Checker compares it with the widget as it was.
         if (inPlace && before && before.success) {
             draft.previousConfigCode = before.configCode || "";
@@ -630,6 +672,9 @@ function createTeamWidgetTools(deps) {
         if (draft.previousConfigCode != null) {
             previousConfigs.set(widgetName, draft.previousConfigCode);
         }
+        if (draft.previousComponentCode != null) {
+            previousComponents.set(widgetName, draft.previousComponentCode);
+        }
         Object.defineProperty(draft, "installedAs", { value: widgetName });
         return { success: true, widgetName };
     }
@@ -671,7 +716,9 @@ function createTeamWidgetTools(deps) {
                           error:
                               (compiled && compiled.error) || "didn't compile",
                       },
-            problems: codeProblems(src.componentCode, src.configCode || ""),
+            problems: codeProblems(src.componentCode, src.configCode || "", {
+                previousCode: previousComponents.get(widgetName) || null,
+            }),
             scorecard: scorecardSummary(src.componentCode),
             configCode: src.configCode || "",
             previousConfigCode: previousConfigs.has(widgetName)

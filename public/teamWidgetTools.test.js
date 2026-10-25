@@ -315,6 +315,35 @@ describe("codeProblems", () => {
         assert.ok(p.some((x) => /widgets may not start bots/.test(x)));
     });
 
+    it("refuses hard-coded colors (design guide)", () => {
+        const code = GOOD_COMPONENT.replace(
+            "<Heading title={title} />",
+            '<Heading title={title} />\n            <p className="text-red-500 w-[440px]" style={{ color: "#ff0000" }}>x</p>'
+        );
+        const p = codeProblems(code);
+        for (const s of ["text-red-500", "w-[440px]", "#ff0000"]) {
+            assert.ok(
+                p.some((x) => x.includes(s) && /hard-coded color/.test(x)),
+                s
+            );
+        }
+    });
+
+    it("an edit only counts colors it adds", () => {
+        const old = GOOD_COMPONENT.replace(
+            "<Heading title={title} />",
+            '<Heading title={title} />\n            <p className="text-red-500">x</p>'
+        );
+        assert.deepEqual(codeProblems(old, "", { previousCode: old }), []);
+        const added = old.replace(
+            'text-red-500">x',
+            'text-red-500 w-[440px]">x'
+        );
+        const p = codeProblems(added, "", { previousCode: old });
+        assert.equal(p.length, 1);
+        assert.match(p[0], /w-\[440px\]/);
+    });
+
     it("refuses api.publishEvent — bots can't hear it (4d-2)", () => {
         const code = GOOD_COMPONENT.replace(
             "    return (",

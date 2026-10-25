@@ -5,6 +5,7 @@
 import {
     validateProviderApiUsage,
     validateNoModalUsage,
+    validateNoHardcodedColors,
     validateNoBotCalls,
     validateEventPublishing,
     validateComponentReferences,
@@ -595,5 +596,114 @@ describe("codeOnly — apostrophes in JSX text", () => {
     test("a real string on one line is still skipped", () => {
         const code = `const note = 'use <Modal> sparingly';`;
         expect(validateNoModalUsage(code).ok).toBe(true);
+    });
+});
+
+describe("validateNoHardcodedColors", () => {
+    const kinds = (code) =>
+        validateNoHardcodedColors(code).errors.map(
+            (e) => `${e.kind}:${e.snippet}`
+        );
+
+    test("passes theme-driven code", () => {
+        const code = `import { Panel, StatusBadge, useDashTokens } from "@trops/dash-react";
+function W() {
+    const t = useDashTokens();
+    return (
+        <Panel>
+            <p className={\`text-xs \${t.muted}\`}>Updated</p>
+            <div className="bg-white text-black bg-transparent p-4 w-96" />
+            <a href="#">top</a>
+            <StatusBadge state="success" label="Live" />
+        </Panel>
+    );
+}`;
+        expect(validateNoHardcodedColors(code)).toEqual({
+            ok: true,
+            errors: [],
+        });
+    });
+
+    test("flags Tailwind color classes, including variants and opacity", () => {
+        expect(
+            kinds(
+                '<p className="text-red-500 hover:bg-blue-600 ring-emerald-400/50">x</p>'
+            )
+        ).toEqual([
+            "tailwind:text-red-500",
+            "tailwind:hover:bg-blue-600",
+            "tailwind:ring-emerald-400/50",
+        ]);
+    });
+
+    test("flags bracket values", () => {
+        expect(
+            kinds('<span className="text-[10px] w-[440px] bg-[#fff]">x</span>')
+        ).toEqual(
+            expect.arrayContaining([
+                "bracket:text-[10px]",
+                "bracket:w-[440px]",
+                "bracket:bg-[#fff]",
+            ])
+        );
+    });
+
+    test("flags hex and rgb()/hsl() values with their line", () => {
+        const code =
+            'const a = 1;\nconst s = { color: "#1a2b3c", background: "rgba(0,0,0,0.4)", border: "hsl(0 0% 50%)" };';
+        const r = validateNoHardcodedColors(code);
+        expect(r.ok).toBe(false);
+        expect(r.errors.map((e) => [e.kind, e.line])).toEqual([
+            ["hex", 2],
+            ["rgb", 2],
+            ["rgb", 2],
+        ]);
+        expect(r.errors.map((e) => e.snippet)).toEqual([
+            "#1a2b3c",
+            "rgba()",
+            "hsl()",
+        ]);
+    });
+
+    test("ignores comments and entities", () => {
+        const code =
+            '// was text-red-500 and #fff\n/* rgb(1,2,3) */\nconst x = "&#123;";';
+        expect(validateNoHardcodedColors(code).ok).toBe(true);
+    });
+});
+
+describe("validateNoHardcodedColors — no false alarms, no blind spots", () => {
+    test("a // or /* inside a string doesn't hide later colors", () => {
+        for (const code of [
+            'const u = "https://a.com"; const s = { color: "#ff0000" };',
+            '<input accept="image/*" />\n<p className="text-red-500" />',
+            'const g = "src/*.js";\n<p className="text-red-500" />',
+        ]) {
+            expect(validateNoHardcodedColors(code).ok).toBe(false);
+        }
+    });
+
+    test("ids, anchors, issue numbers and template keys pass", () => {
+        const code = [
+            'document.querySelector("#add");',
+            '<a href="#feed">x</a>',
+            "const t = `Fixes #123 and #456`;",
+            'const o = "Order #1234";',
+            "const k = `item-[${i}]`;",
+            "const last = arr[i-1];",
+        ].join("\n");
+        expect(validateNoHardcodedColors(code)).toEqual({
+            ok: true,
+            errors: [],
+        });
+    });
+
+    test("a quoted 6-digit hex or a color property still counts", () => {
+        expect(validateNoHardcodedColors('const BRAND = "#1a2b3c";').ok).toBe(
+            false
+        );
+        expect(validateNoHardcodedColors('<rect fill="#abc" />').ok).toBe(
+            false
+        );
     });
 });
