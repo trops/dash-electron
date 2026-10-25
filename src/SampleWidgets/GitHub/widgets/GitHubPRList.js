@@ -153,6 +153,7 @@ function GitHubPRListContent({ title, configRepo, stateFilter }) {
 
             <div className="flex items-center gap-2">
                 <StatusBadge
+                    live
                     state={connectionState({
                         isConnected,
                         isConnecting,
@@ -161,7 +162,10 @@ function GitHubPRListContent({ title, configRepo, stateFilter }) {
                     label={status}
                     compact
                 />
-                <Caption2 text={`(${tools.length} tools)`} />
+                <Caption2
+                    className="whitespace-nowrap"
+                    text={`(${tools.length} tools)`}
+                />
             </div>
 
             {error && (

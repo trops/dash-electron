@@ -174,6 +174,7 @@ function AlgoliaRulesListContent({ title, indexName, hitsPerPage }) {
 
             <div className="flex items-center gap-2">
                 <StatusBadge
+                    live
                     state={statusState({
                         hasCredentials,
                         activeIndex,

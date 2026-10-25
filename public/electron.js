@@ -2766,6 +2766,8 @@ function createWindow() {
         // widget survives a crash, modal close, or app restart.
         // Storage is widget-drafts.json in the user's Dashboard dir;
         // see public/widgetDrafts.cjs for the contract.
+        // Settings › App info (dash-core mainApi.app.getVersion).
+        logger.loggedHandle("app:get-version", () => app.getVersion());
         logger.loggedHandle("drafts:list", () => widgetDrafts.listDrafts());
         logger.loggedHandle("drafts:get", (e, { id }) => {
             const draft = widgetDrafts.getDraft(id);
