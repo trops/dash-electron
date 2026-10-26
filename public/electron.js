@@ -524,6 +524,9 @@ const {
     markOnboardingCompleted,
     // Export Everything (Phase 4A)
     exportEverythingForApplication,
+    // Profiles
+    profileController,
+    activeProfile,
     // Session
     getRecentDashboards,
     addRecentDashboard,
@@ -687,6 +690,12 @@ const {
     ONBOARDING_GET_STATUS,
     ONBOARDING_MARK_COMPLETED,
     EXPORT_EVERYTHING,
+    PROFILE_LIST,
+    PROFILE_GET_ACTIVE,
+    PROFILE_CREATE,
+    PROFILE_RENAME,
+    PROFILE_DELETE,
+    PROFILE_SWITCH,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_REMOVE_RECENT,
@@ -2232,6 +2241,44 @@ function createWindow() {
             )
         );
 
+        // --- Profiles ---
+        logger.loggedHandle(PROFILE_LIST, (e, message) =>
+            profileController.listProfiles(message?.appId)
+        );
+        logger.loggedHandle(PROFILE_GET_ACTIVE, (e, message) =>
+            profileController.getActiveProfile(message?.appId)
+        );
+        logger.loggedHandle(PROFILE_CREATE, (e, message) =>
+            profileController.createProfile(message?.appId, message?.name)
+        );
+        logger.loggedHandle(PROFILE_RENAME, (e, message) =>
+            profileController.renameProfile(
+                message?.appId,
+                message?.profileId,
+                message?.name
+            )
+        );
+        logger.loggedHandle(PROFILE_DELETE, (e, message) =>
+            profileController.deleteProfile(message?.appId, message?.profileId)
+        );
+        // Switching changes every list and which bots run, so every window
+        // reloads to re-read everything for the new profile.
+        logger.loggedHandle(PROFILE_SWITCH, (e, message) => {
+            const result = profileController.switchProfile(
+                message?.appId,
+                message?.profileId,
+                { botController }
+            );
+            if (result.success) {
+                setImmediate(() => {
+                    for (const win of BrowserWindow.getAllWindows()) {
+                        if (!win.isDestroyed()) win.webContents.reload();
+                    }
+                });
+            }
+            return result;
+        });
+
         // --- Session ---
         logger.loggedHandle(SESSION_GET_RECENTS, () => getRecentDashboards());
         logger.loggedHandle(SESSION_ADD_RECENT, (e, message) =>
@@ -3241,6 +3288,12 @@ function destroyDebugWindow() {
 
 app.whenReady().then(() => {
     applySessionHardening(session.defaultSession);
+
+    // Recent dashboards, open tabs and the MCP Dash server ask for the
+    // active profile without being handed an appId — record it first.
+    activeProfile.setAppId(
+        resolveAppIdentifier(process.env, readPackageName())
+    );
 
     pe.init({
         confirmInstall: async (plugins) => {
