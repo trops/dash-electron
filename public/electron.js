@@ -696,6 +696,9 @@ const {
     PROFILE_RENAME,
     PROFILE_DELETE,
     PROFILE_SWITCH,
+    PROFILE_DUPLICATE,
+    PROFILE_LIST_CONTENTS,
+    PROFILE_SET_MEMBERSHIP,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_REMOVE_RECENT,
@@ -2260,6 +2263,25 @@ function createWindow() {
         );
         logger.loggedHandle(PROFILE_DELETE, (e, message) =>
             profileController.deleteProfile(message?.appId, message?.profileId)
+        );
+        logger.loggedHandle(PROFILE_DUPLICATE, (e, message) =>
+            profileController.duplicateProfile(
+                message?.appId,
+                message?.profileId,
+                message?.name
+            )
+        );
+        logger.loggedHandle(PROFILE_LIST_CONTENTS, (e, message) =>
+            profileController.listContents(message?.appId, message?.profileId)
+        );
+        logger.loggedHandle(PROFILE_SET_MEMBERSHIP, (e, message) =>
+            profileController.setMembership(
+                message?.appId,
+                message?.profileId,
+                message?.kind,
+                message?.id,
+                !!message?.include
+            )
         );
         // Switching changes every list and which bots run, so every window
         // reloads to re-read everything for the new profile.
