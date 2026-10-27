@@ -60,6 +60,7 @@ import {
     draftCheckRequest,
 } from "./draftCheck";
 import { ComposerPaneV2 } from "./composer/ComposerPaneV2";
+import { remixBlockedText } from "./remixGate";
 // Slice 19G.2: installWidgetConsoleCapture is no longer wired into
 // production — widgets render in an iframe so host-window capture
 // can't see them. The module file stays for its tests + any future
@@ -1584,6 +1585,48 @@ export const WidgetBuilderModal = ({
         setEditModeSettled(true);
     }, [isRemixMode, isOwner, registryChecked]);
 
+    // Someone else's widget: its author decides whether it may be remixed
+    // (public yes / private no unless they chose). When not, the builder
+    // says so instead of opening the code — using it is unaffected.
+    const [remixBlocked, setRemixBlocked] = useState(null);
+    useEffect(() => {
+        setRemixBlocked(null);
+        const original = effectiveEditContext?.originalPackage;
+        if (
+            !isRemixMode ||
+            !registryChecked ||
+            isOwner ||
+            !original ||
+            widgetScope === "ai-built"
+        ) {
+            return undefined;
+        }
+        let alive = true;
+        (async () => {
+            let pkg = null;
+            try {
+                pkg = await window.mainApi?.registry?.getPackage?.(original);
+            } catch {
+                pkg = null; // unknown: publishing is checked again
+            }
+            if (!alive) return;
+            const name = (effectiveEditContext?.originalComponentName || "")
+                .split(".")
+                .pop();
+            setRemixBlocked(remixBlockedText(pkg, name || original));
+        })();
+        return () => {
+            alive = false;
+        };
+    }, [
+        isRemixMode,
+        registryChecked,
+        isOwner,
+        widgetScope,
+        effectiveEditContext?.originalPackage,
+        effectiveEditContext?.originalComponentName,
+    ]);
+
     const compilePreview = useCallback(
         async (code, sourcePackageOverride = null) => {
             const name = extractWidgetName(code.componentCode);
@@ -2300,6 +2343,8 @@ export const WidgetBuilderModal = ({
             if (!selectedCategory) return;
             // Only code that passed the checks is saved.
             if (!checkPassed) return;
+            // A remix its author doesn't allow is never saved.
+            if (remixBlocked) return;
 
             // Determine install name based on edit mode:
             //   "update" → keep original name (overwrites source in-place)
@@ -2572,6 +2617,7 @@ export const WidgetBuilderModal = ({
             remixName,
             checkPassed,
             checkName,
+            remixBlocked,
         ]
     );
 
@@ -2772,8 +2818,43 @@ export const WidgetBuilderModal = ({
                     </div>
                 )}
 
+                {/* Someone else's widget whose author doesn't allow
+                remixes: said instead of the builder. */}
+                {viewMode === "builder" && remixBlocked && (
+                    <div
+                        className="flex-1 min-h-0 flex items-center justify-center p-6"
+                        data-testid="builder-remix-blocked"
+                    >
+                        <div
+                            className={`flex flex-col gap-3 max-w-md px-4 py-3 rounded-lg border ${status.warning.bg} ${status.warning.border}`}
+                        >
+                            <span
+                                className={`flex items-center gap-2 text-sm font-semibold ${status.warning.strongText}`}
+                            >
+                                <FontAwesomeIcon
+                                    icon="lock"
+                                    className="h-3 w-3"
+                                />
+                                Remixes aren't allowed
+                            </span>
+                            <span
+                                className={`text-sm leading-snug ${status.warning.text}`}
+                            >
+                                {remixBlocked}
+                            </span>
+                            <div className="flex justify-end">
+                                <Button
+                                    title="Close"
+                                    size="sm"
+                                    onClick={requestClose}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Split pane */}
-                {viewMode === "builder" && (
+                {viewMode === "builder" && !remixBlocked && (
                     <div className="flex flex-row flex-1 min-h-0">
                         {/* Left: Live Preview (2/3) */}
                         <div className="flex flex-col flex-[2] min-w-0 min-h-0 overflow-hidden">
