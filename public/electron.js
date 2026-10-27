@@ -702,6 +702,8 @@ const {
     PROFILE_PREVIEW_SAVE,
     PROFILE_SAVE_FILE,
     PROFILE_PUBLISH_WIDGET,
+    PROFILE_PREVIEW_LOAD,
+    PROFILE_APPLY_LOAD,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_REMOVE_RECENT,
@@ -2310,6 +2312,21 @@ function createWindow() {
                 message?.profileId,
                 message?.packageName,
                 message?.options || {}
+            )
+        );
+        // Load a profile file: the open dialog is shown from the main
+        // process; the renderer only gets back a token for the file.
+        logger.loggedHandle(PROFILE_PREVIEW_LOAD, (e, message) =>
+            profileController.previewLoad(
+                getSenderWindow(e) || mainWindow,
+                message?.appId
+            )
+        );
+        logger.loggedHandle(PROFILE_APPLY_LOAD, (e, message) =>
+            profileController.applyLoad(
+                message?.appId,
+                message?.token,
+                message?.choices || {}
             )
         );
         // Switching changes every list and which bots run, so every window
