@@ -701,6 +701,7 @@ const {
     PROFILE_SET_MEMBERSHIP,
     PROFILE_PREVIEW_SAVE,
     PROFILE_SAVE_FILE,
+    PROFILE_PUBLISH_WIDGET,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_REMOVE_RECENT,
@@ -2298,6 +2299,16 @@ function createWindow() {
                 getSenderWindow(e) || mainWindow,
                 message?.appId,
                 message?.profileId,
+                message?.options || {}
+            )
+        );
+        // Publish one of a profile's widgets to the user's account.
+        logger.loggedHandle(PROFILE_PUBLISH_WIDGET, (e, message) =>
+            profileController.publishWidget(
+                getSenderWindow(e) || mainWindow,
+                message?.appId,
+                message?.profileId,
+                message?.packageName,
                 message?.options || {}
             )
         );
