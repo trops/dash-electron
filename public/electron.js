@@ -699,6 +699,8 @@ const {
     PROFILE_DUPLICATE,
     PROFILE_LIST_CONTENTS,
     PROFILE_SET_MEMBERSHIP,
+    PROFILE_PREVIEW_SAVE,
+    PROFILE_SAVE_FILE,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_REMOVE_RECENT,
@@ -2281,6 +2283,22 @@ function createWindow() {
                 message?.kind,
                 message?.id,
                 !!message?.include
+            )
+        );
+        logger.loggedHandle(PROFILE_PREVIEW_SAVE, (e, message) =>
+            profileController.previewSave(
+                message?.appId,
+                message?.profileId,
+                message?.options || {}
+            )
+        );
+        // The save dialog is shown from the main process.
+        logger.loggedHandle(PROFILE_SAVE_FILE, (e, message) =>
+            profileController.saveProfileFile(
+                getSenderWindow(e) || mainWindow,
+                message?.appId,
+                message?.profileId,
+                message?.options || {}
             )
         );
         // Switching changes every list and which bots run, so every window
