@@ -2948,6 +2948,20 @@ function createWindow() {
         // see public/widgetDrafts.cjs for the contract.
         // Settings › App info (dash-core mainApi.app.getVersion).
         logger.loggedHandle("app:get-version", () => app.getVersion());
+        // macOS: System Settings › Privacy & Security › Local Network — the
+        // fix when macOS blocked Dash from a server on the local network.
+        // The address is fixed here; the renderer can't name another.
+        logger.loggedHandle("app:open-local-network-settings", async () => {
+            if (process.platform !== "darwin") return false;
+            try {
+                await require("electron").shell.openExternal(
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork"
+                );
+                return true;
+            } catch (_e) {
+                return false;
+            }
+        });
         logger.loggedHandle("drafts:list", () => widgetDrafts.listDrafts());
         logger.loggedHandle("drafts:get", (e, { id }) => {
             const draft = widgetDrafts.getDraft(id);

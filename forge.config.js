@@ -34,6 +34,13 @@ module.exports = {
         },
         name: process.env.REACT_APP_PACKAGE_NAME,
         icon: "./assets/icons/icon",
+        // macOS asks before an app reaches devices on the local network
+        // (a Home Assistant MCP server at 10.0.0.x, a NAS…). Without this
+        // reason the system can't ask, and blocks the connection.
+        extendInfo: {
+            NSLocalNetworkUsageDescription:
+                "Dash connects to MCP servers and devices on your local network, such as Home Assistant.",
+        },
         ...(process.env.REACT_APP_APPLE_CERT_ID
             ? {
                   osxSign: {
