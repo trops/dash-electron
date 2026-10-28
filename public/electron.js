@@ -527,6 +527,7 @@ const {
     // Profiles
     profileController,
     activeProfile,
+    profileAutoSave,
     // Session
     getRecentDashboards,
     addRecentDashboard,
@@ -711,6 +712,7 @@ const {
     PROFILE_SYNC_STATUS,
     PROFILE_PLAN_BUILT_PUBLISH,
     PROFILE_PUBLISH_BUILT,
+    PROFILE_SET_AUTO_SAVE,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_REMOVE_RECENT,
@@ -2376,6 +2378,14 @@ function createWindow() {
                 message?.packageName
             )
         );
+        // How a profile kept in the account saves itself (auto-save).
+        logger.loggedHandle(PROFILE_SET_AUTO_SAVE, (e, message) =>
+            profileController.setAutoSave(
+                message?.appId,
+                message?.profileId,
+                message?.setting || {}
+            )
+        );
         logger.loggedHandle(PROFILE_PUBLISH_BUILT, (e, message) =>
             profileController.publishBuilt(
                 getSenderWindow(e) || mainWindow,
@@ -3464,6 +3474,11 @@ app.whenReady().then(() => {
         getMainWindow: () => mainWindow,
     });
     schedulerController.start();
+
+    // --- Profiles: auto-save to the account (watches the setup files;
+    // saves only profiles the user set to save themselves) ---
+    profileAutoSave.start(() => mainWindow);
+    app.on("will-quit", () => profileAutoSave.stop());
 
     // --- Bot Factory lifecycle ---
     botController.init({
