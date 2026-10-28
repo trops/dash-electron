@@ -45,6 +45,8 @@ import {
     // Shared with the Widgets page (who may publish / edit a package).
     deriveWidgetOwnership,
     runTeamRole,
+    // Publish the widget just built (dash-profiles v3).
+    PublishBuiltWidget,
 } from "@trops/dash-core";
 import { WidgetConfigureTab } from "./WidgetConfigureTab";
 import { extractWidgetName } from "./extractWidgetName";
@@ -2571,6 +2573,9 @@ export const WidgetBuilderModal = ({
                     setInstallStatus({
                         success: true,
                         widgetName: result.widgetName,
+                        // Its component, for placing the published package
+                        // instead (the publish prompt).
+                        componentName: installName,
                         // Update original on the user's own package: its
                         // new local version.
                         updated: !!result.updated,
@@ -4058,7 +4063,7 @@ export const WidgetBuilderModal = ({
                                                         ? `was updated to version ${
                                                               installStatus.version ||
                                                               "(local)"
-                                                          }. Your dashboards use it now; publish a new version from the Widgets page to share it.`
+                                                          }. Your dashboards use it now.`
                                                         : isRemixMode
                                                         ? editMode === "update"
                                                             ? "has been updated in place."
@@ -4068,6 +4073,44 @@ export const WidgetBuilderModal = ({
                                                         : "now appears in your Widgets list."}
                                                 </p>
                                             </div>
+                                            {/* Publishing is how it gets to the
+                                            user's other computers (profiles
+                                            list widgets by version). Shown
+                                            only for their own widgets. */}
+                                            {installStatus.widgetName ? (
+                                                <PublishBuiltWidget
+                                                    appId={
+                                                        process.env
+                                                            .REACT_APP_IDENTIFIER ||
+                                                        "@trops/dash-electron"
+                                                    }
+                                                    packageName={
+                                                        installStatus.widgetName
+                                                    }
+                                                    onPublished={(res) => {
+                                                        // Published as the
+                                                        // user's own package:
+                                                        // that's what loads and
+                                                        // goes in the cell when
+                                                        // the Builder closes.
+                                                        if (
+                                                            onInstalled &&
+                                                            res?.publishedAs &&
+                                                            res.publishedAs !==
+                                                                installStatus.widgetName &&
+                                                            installStatus.componentName
+                                                        ) {
+                                                            onInstalled(
+                                                                makeScopedComponentId(
+                                                                    res.publishedAs,
+                                                                    installStatus.componentName
+                                                                ),
+                                                                res.publishedAs
+                                                            );
+                                                        }
+                                                    }}
+                                                />
+                                            ) : null}
                                             <div className="flex gap-3">
                                                 <Button
                                                     size="sm"

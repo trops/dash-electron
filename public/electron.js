@@ -709,6 +709,8 @@ const {
     PROFILE_PREVIEW_LOAD_ACCOUNT,
     PROFILE_DELETE_ACCOUNT,
     PROFILE_SYNC_STATUS,
+    PROFILE_PLAN_BUILT_PUBLISH,
+    PROFILE_PUBLISH_BUILT,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_REMOVE_RECENT,
@@ -2365,6 +2367,22 @@ function createWindow() {
         // with it (shown in the updates dialog).
         logger.loggedHandle(PROFILE_SYNC_STATUS, (e, message) =>
             profileController.syncStatus(message?.appId)
+        );
+        // The Widget Builder's prompt after Install: publish the widget
+        // just built (private unless the user picks public).
+        logger.loggedHandle(PROFILE_PLAN_BUILT_PUBLISH, (e, message) =>
+            profileController.planBuiltPublish(
+                message?.appId,
+                message?.packageName
+            )
+        );
+        logger.loggedHandle(PROFILE_PUBLISH_BUILT, (e, message) =>
+            profileController.publishBuilt(
+                getSenderWindow(e) || mainWindow,
+                message?.appId,
+                message?.packageName,
+                message?.options || {}
+            )
         );
         // Switching changes every list and which bots run, so every window
         // reloads to re-read everything for the new profile.
