@@ -704,6 +704,10 @@ const {
     PROFILE_PUBLISH_WIDGET,
     PROFILE_PREVIEW_LOAD,
     PROFILE_APPLY_LOAD,
+    PROFILE_SAVE_ACCOUNT,
+    PROFILE_LIST_ACCOUNT,
+    PROFILE_PREVIEW_LOAD_ACCOUNT,
+    PROFILE_DELETE_ACCOUNT,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_REMOVE_RECENT,
@@ -2327,6 +2331,33 @@ function createWindow() {
                 message?.appId,
                 message?.token,
                 message?.choices || {}
+            )
+        );
+        // Profiles kept in the signed-in user's registry account.
+        logger.loggedHandle(PROFILE_SAVE_ACCOUNT, (e, message) =>
+            profileController.saveProfileToAccount(
+                getSenderWindow(e) || mainWindow,
+                message?.appId,
+                message?.profileId,
+                message?.options || {}
+            )
+        );
+        logger.loggedHandle(PROFILE_LIST_ACCOUNT, (e, message) =>
+            profileController.listAccountProfiles(message?.appId)
+        );
+        // Like PROFILE_PREVIEW_LOAD: the renderer gets back a token, then
+        // PROFILE_APPLY_LOAD loads it.
+        logger.loggedHandle(PROFILE_PREVIEW_LOAD_ACCOUNT, (e, message) =>
+            profileController.previewLoadFromAccount(
+                getSenderWindow(e) || mainWindow,
+                message?.appId,
+                message?.accountId
+            )
+        );
+        logger.loggedHandle(PROFILE_DELETE_ACCOUNT, (e, message) =>
+            profileController.deleteAccountProfile(
+                message?.appId,
+                message?.accountId
             )
         );
         // Switching changes every list and which bots run, so every window
