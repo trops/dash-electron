@@ -708,6 +708,7 @@ const {
     PROFILE_LIST_ACCOUNT,
     PROFILE_PREVIEW_LOAD_ACCOUNT,
     PROFILE_DELETE_ACCOUNT,
+    PROFILE_SYNC_STATUS,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_REMOVE_RECENT,
@@ -2359,6 +2360,11 @@ function createWindow() {
                 message?.appId,
                 message?.accountId
             )
+        );
+        // The out-of-sync check: each profile kept in the account compared
+        // with it (shown in the updates dialog).
+        logger.loggedHandle(PROFILE_SYNC_STATUS, (e, message) =>
+            profileController.syncStatus(message?.appId)
         );
         // Switching changes every list and which bots run, so every window
         // reloads to re-read everything for the new profile.
