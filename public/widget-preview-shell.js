@@ -286,11 +286,67 @@
     // changed, or the iframe loaded with an older host bundle)
     // are skipped — the widget falls back to whatever defaults the
     // hooks ship with, which is what the inline preview does too.
+    // A render error, reported. The widget renders with the host's React
+    // (__hostModules), so an error it throws while rendering is raised in
+    // the host window, not this one — the window "error" listener below
+    // never hears it and the preview sat on "Preview ready.". A boundary
+    // catches it here, whichever window React belongs to; the first render
+    // is synchronous (mountWidget), so it's reported at once, right after
+    // bridge:mounted.
+    function reportRenderError(error, info) {
+        postErrorToHost(
+            "render",
+            (error && error.message) || "the widget failed to render",
+            (error && error.stack) || (info && info.componentStack) || null
+        );
+    }
+    // BEGIN errorBoundaryFor
+    var boundaries = typeof WeakMap === "function" ? new WeakMap() : null;
+    function errorBoundaryFor(React) {
+        if (boundaries && boundaries.has(React)) return boundaries.get(React);
+        function WidgetErrorBoundary(props) {
+            React.Component.call(this, props);
+            this.state = { failed: false };
+        }
+        WidgetErrorBoundary.prototype = Object.create(
+            React.Component.prototype
+        );
+        WidgetErrorBoundary.prototype.constructor = WidgetErrorBoundary;
+        WidgetErrorBoundary.getDerivedStateFromError = function () {
+            return { failed: true };
+        };
+        WidgetErrorBoundary.prototype.componentDidCatch = function (
+            error,
+            info
+        ) {
+            reportRenderError(error, info);
+        };
+        // A later render (new props, theme, connections) tries again.
+        WidgetErrorBoundary.prototype.componentDidUpdate = function (prev) {
+            if (this.state.failed && prev.resetKey !== this.props.resetKey) {
+                this.setState({ failed: false });
+            }
+        };
+        WidgetErrorBoundary.prototype.render = function () {
+            return this.state.failed ? null : this.props.children;
+        };
+        if (boundaries) boundaries.set(React, WidgetErrorBoundary);
+        return WidgetErrorBoundary;
+    }
+    // END errorBoundaryFor
+
+    // Each render tries the widget again after a failed one (resetKey).
+    var renderSeq = 0;
     function buildTree(React, Component, props) {
         var hostModules = window.__hostModules || {};
         var dashCore = hostModules["@trops/dash-core"] || {};
         var dashReact = hostModules["@trops/dash-react"] || {};
-        var element = React.createElement(Component, props);
+        renderSeq += 1;
+        var element = React.createElement(
+            errorBoundaryFor(React),
+            { resetKey: renderSeq },
+            React.createElement(Component, props)
+        );
         if (dashCore.WidgetContext && dashCore.WidgetContext.Provider) {
             element = React.createElement(
                 dashCore.WidgetContext.Provider,
@@ -487,11 +543,21 @@
         try {
             currentRoot = ReactDOMClient.createRoot(rootEl);
             currentComponent = match.config.component;
-            renderWith(React, currentComponent, currentProps);
+            // Mounted first: the host clears an earlier error on mounted, so
+            // a render error has to come after it.
             postToHost("bridge:mounted", {
                 componentName: componentName,
                 configKey: match.key,
             });
+            // The first render at once (see reportRenderError).
+            var ReactDOM = hostModules["react-dom"];
+            if (ReactDOM && typeof ReactDOM.flushSync === "function") {
+                ReactDOM.flushSync(function () {
+                    renderWith(React, currentComponent, currentProps);
+                });
+            } else {
+                renderWith(React, currentComponent, currentProps);
+            }
         } catch (err) {
             postErrorToHost(
                 "mount",
