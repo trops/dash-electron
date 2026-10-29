@@ -75,8 +75,10 @@ describe("AssistantDock — the AI Assistant panel is retired (create-entry 5e-2
 });
 
 describe("AssistantDock — the robot panel is called Bots (TEAM-015)", () => {
-    it("labels the rail button Bots", () => {
-        assert.match(src, /"robot",\s*"Bots",/);
+    // Lead-workspace release 4: the robot opens the bot notifications.
+    it("labels the rail button Bot notifications", () => {
+        assert.match(src, /"robot",\s*needs > 0/);
+        assert.match(src, /: "Bot notifications"/);
         assert.doesNotMatch(src, /"Bot Activity"/);
     });
 });

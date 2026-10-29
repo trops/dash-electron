@@ -1,12 +1,18 @@
-import React, { useState, useContext, useEffect } from "react";
-import { ThemeContext, ButtonIcon2 } from "@trops/dash-react";
+import React, {
+    useState,
+    useContext,
+    useEffect,
+    useRef,
+    useCallback,
+} from "react";
+import { ThemeContext, ButtonIcon2, useStatusTokens } from "@trops/dash-react";
 import { CreateDockPanel } from "@trops/dash-core";
 import { BotActivityPanel } from "../BotActivity/BotActivityPanel";
 
 /**
- * AssistantDock — one right-hand rail hosting the slide-over panels: Bots
- * (robot, your bots as a contacts list — bot-teams TEAM-015), and Create when
- * a plan is folded into it.
+ * AssistantDock — one right-hand rail hosting the slide-over panels: bot
+ * notifications (robot — lead-workspace release 4: Needs you from every
+ * dashboard, and Activity), and Create when a plan is folded into it.
  *
  * The dock owns a single rail and controls each panel's collapsed state, so
  * only one panel is expanded at a time. Both panels stay mounted while
@@ -27,7 +33,22 @@ export const AssistantDock = () => {
         currentTheme?.["border-primary-dark"] || "border-gray-700";
 
     const [open, setOpen] = useState(null); // null | "create" | "bots"
-    const [approvals, setApprovals] = useState(0);
+    const statusTokens = useStatusTokens();
+    // What needs the user: the rail's dot, and the panel opening by itself
+    // for something new (frame 27) — not for what was already there when
+    // Dash started, and never closing by itself.
+    const [needs, setNeeds] = useState(0);
+    // Only what arrives after the dock is mounted is new: everything the
+    // panel reports while its lists load (and after leaving Edit, which
+    // remounts the dock) was already there.
+    const newestSeen = useRef(Date.now());
+    const onNeedsChange = useCallback(({ count = 0, newestAt = 0 } = {}) => {
+        setNeeds(count);
+        if (newestAt > newestSeen.current) {
+            newestSeen.current = newestAt;
+            setOpen("bots");
+        }
+    }, []);
 
     const toggle = (which) => setOpen((cur) => (cur === which ? null : which));
 
@@ -92,7 +113,7 @@ export const AssistantDock = () => {
             <BotActivityPanel
                 collapsed={open !== "bots"}
                 onCollapsedChange={(c) => setOpen(c ? null : "bots")}
-                onApprovalsCount={setApprovals}
+                onNeedsChange={onNeedsChange}
                 openRequest={openRequest}
             />
             <div
@@ -101,11 +122,17 @@ export const AssistantDock = () => {
                 {railButton(
                     "bots",
                     "robot",
-                    "Bots",
-                    approvals > 0 ? (
-                        <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                            {approvals}
-                        </span>
+                    needs > 0
+                        ? `Bot notifications — ${needs} ${
+                              needs === 1 ? "needs" : "need"
+                          } you`
+                        : "Bot notifications",
+                    needs > 0 ? (
+                        <span
+                            aria-hidden="true"
+                            data-testid="bot-notifications-dot"
+                            className={`absolute top-0 right-0 h-2.5 w-2.5 rounded-full ${statusTokens.warning.solidBg}`}
+                        />
                     ) : null
                 )}
             </div>
