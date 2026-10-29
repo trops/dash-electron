@@ -42,6 +42,17 @@ describe("team lead IPC handlers", () => {
     }
 });
 
+// Lead-workspace release 5: the asking conversation reaches botController
+// (its bots record it on their runs) — a short string only.
+describe("team lead IPC — the asking conversation", () => {
+    it("BOTS_ASK_LEAD passes the asking conversation", () => {
+        assert.match(
+            src,
+            /loggedHandle\(BOTS_ASK_LEAD,[\s\S]{0,900}conversationId:\s*msg &&\s*typeof msg\.conversationId === "string" &&\s*msg\.conversationId\.length <= 128/
+        );
+    });
+});
+
 // Bots view backend (bot-teams TEAM-011 / B1).
 describe("Bots view IPC handlers", () => {
     it("BOTS_GET_RUNS → botController.getRuns(botId, { limit })", () => {
