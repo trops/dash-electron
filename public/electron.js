@@ -2830,6 +2830,14 @@ function createWindow() {
                     msg && (msg.via === "assistant" || msg.via === "create")
                         ? msg.via
                         : null,
+                // The lead-workspace conversation asking (release 5): the
+                // bots the lead asks record it on their runs.
+                conversationId:
+                    msg &&
+                    typeof msg.conversationId === "string" &&
+                    msg.conversationId.length <= 128
+                        ? msg.conversationId
+                        : null,
             })
         );
         // AI Assistant "To:" picker: team leads by dashboard (TEAM-013).
