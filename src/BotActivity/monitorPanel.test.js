@@ -35,7 +35,6 @@ let mockProps = null;
 jest.mock("@trops/dash-core", () => {
     const React = require("react");
     return {
-        CreateDockPanel: () => null,
         BotNotificationsPanel: (props) => {
             mockProps = props;
             return props.collapsed

@@ -6,25 +6,20 @@ import React, {
     useCallback,
 } from "react";
 import { ThemeContext, ButtonIcon2, useStatusTokens } from "@trops/dash-react";
-import { CreateDockPanel } from "@trops/dash-core";
 import { BotActivityPanel } from "../BotActivity/BotActivityPanel";
 
 /**
  * AssistantDock — one right-hand rail hosting the slide-over panels: bot
  * notifications (robot — lead-workspace release 4: Needs you from every
- * dashboard, and Activity), and Create when a plan is folded into it.
+ * dashboard, and Activity).
  *
  * The dock owns a single rail and controls each panel's collapsed state, so
  * only one panel is expanded at a time. Both panels stay mounted while
  * collapsed so their subscriptions — and the approvals badge — stay live.
  *
- * The AI Assistant panel (wand) was retired in create-entry 5e-2c: asking and
- * making things both happen in Create.
- *
- * Create (create-entry CRE-007 AC1, phase 4e-2): a plan conversation folded
- * out of the Create modal carries on here. A fold (`dash:create-fold`) opens
- * it; there's no rail button for it — the left nav's Create is the one door
- * to making things (consolidation Phase 2a), and asking moved into Create.
+ * The AI Assistant panel (wand) was retired in create-entry 5e-2c, and the
+ * Create panel in lead-workspace release 6c: asking and making things both
+ * happen in the lead workspace's conversations.
  */
 export const AssistantDock = () => {
     const { currentTheme } = useContext(ThemeContext) || {};
@@ -32,7 +27,7 @@ export const AssistantDock = () => {
     const borderColor =
         currentTheme?.["border-primary-dark"] || "border-gray-700";
 
-    const [open, setOpen] = useState(null); // null | "create" | "bots"
+    const [open, setOpen] = useState(null); // null | "bots"
     const statusTokens = useStatusTokens();
     // What needs the user: the rail's dot, and the panel opening by itself
     // for something new (frame 27) — not for what was already there when
@@ -78,13 +73,6 @@ export const AssistantDock = () => {
         };
     }, []);
 
-    // Folding a plan out of the Create modal opens the Create panel.
-    useEffect(() => {
-        const onFold = () => setOpen("create");
-        window.addEventListener("dash:create-fold", onFold);
-        return () => window.removeEventListener("dash:create-fold", onFold);
-    }, []);
-
     // A rail toggle: the open panel's button is filled in both modes (design
     // guide rule 13) and reports its state to screen readers.
     const railButton = (which, icon, label, extra = null) => (
@@ -102,14 +90,6 @@ export const AssistantDock = () => {
 
     return (
         <div className="flex flex-row shrink-0 h-screen">
-            {/* One instance, always mounted: a fold is never missed and the
-                folded conversation survives closing the panel. */}
-            <div className={open === "create" ? `h-screen ${bgDark}` : ""}>
-                <CreateDockPanel
-                    collapsed={open !== "create"}
-                    onCollapse={() => setOpen(null)}
-                />
-            </div>
             <BotActivityPanel
                 collapsed={open !== "bots"}
                 onCollapsedChange={(c) => setOpen(c ? null : "bots")}

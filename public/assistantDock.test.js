@@ -1,8 +1,7 @@
 /**
- * assistantDock.test.js — the right-hand dock hosts Create (create-entry
- * CRE-007 AC1, phase 4e-2): one always-mounted CreateDockPanel, and a fold
- * from the Create modal opens it. Since consolidation Phase 2a it has no rail
- * button — the left nav's Create is the one door.
+ * assistantDock.test.js — the right-hand dock: the bot notifications panel.
+ * It hosted Create (create-entry CRE-007 AC1, phase 4e-2) until the Create
+ * window was retired (lead-workspace release 6c).
  */
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
@@ -14,24 +13,10 @@ const src = fs.readFileSync(
     "utf8"
 );
 
-describe("AssistantDock — Create (4e-2)", () => {
-    it("renders dash-core's CreateDockPanel, always mounted, collapsed unless open", () => {
-        assert.match(
-            src,
-            /import \{ CreateDockPanel \} from "@trops\/dash-core";/
-        );
-        assert.match(
-            src,
-            /<CreateDockPanel\s+collapsed=\{open !== "create"\}\s+onCollapse=\{\(\) => setOpen\(null\)\}/
-        );
-        assert.equal(src.split("<CreateDockPanel").length, 2);
-    });
-    it("a fold opens the Create panel", () => {
-        assert.match(
-            src,
-            /window\.addEventListener\("dash:create-fold", onFold\)/
-        );
-        assert.match(src, /const onFold = \(\) => setOpen\("create"\);/);
+describe("AssistantDock — no Create panel (lead-workspace 6c)", () => {
+    it("doesn't mount Create or listen for folds", () => {
+        assert.doesNotMatch(src, /CreateDockPanel/);
+        assert.doesNotMatch(src, /dash:create-fold/);
     });
     it("rail buttons are labelled for screen readers", () => {
         // dash-react ButtonIcon2: ariaLabel → aria-label, ariaPressed →
