@@ -72,7 +72,7 @@ describe("Bot Activity panel mount (AssistantDock)", () => {
         expect(dockSrc).toMatch(/import \{ BotActivityPanel \}/);
         expect(dockSrc).toMatch(/<BotActivityPanel\s/);
         expect(dockSrc).not.toMatch(/AiAssistantPanel/);
-        expect(dockSrc).toMatch(/onApprovalsCount=\{setApprovals\}/);
+        expect(dockSrc).toMatch(/onNeedsChange=\{onNeedsChange\}/);
     });
 
     it("the rail is Bots only; a folded plan still opens Create (Phase 2a)", () => {

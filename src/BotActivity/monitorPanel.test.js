@@ -1,96 +1,107 @@
 /**
  * @jest-environment jsdom
  *
- * The dock's Bots panel (bot-teams TEAM-015): a frame around dash-core's
- * BotContacts, fed by useBotContacts and the dashboards list; the rail's
- * approvals count stays live while the panel is closed.
+ * The dock's bot notifications (lead-workspace release 4): a frame around
+ * dash-core's BotNotificationsPanel, kept mounted while closed so what needs
+ * the user reaches the rail; the dock shows a dot, and opens the panel by
+ * itself for something new — not for what was already there.
  */
 import React from "react";
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { BotActivityPanel } from "./BotActivityPanel";
+import { AssistantDock } from "../AssistantDock/AssistantDock";
 
 jest.mock("@trops/dash-react", () => {
     const React = require("react");
     return {
         FontAwesomeIcon: () => null,
         ThemeContext: React.createContext({ currentTheme: {} }),
+        useStatusTokens: () => ({ warning: { solidBg: "bg-amber" } }),
+        ButtonIcon2: ({ ariaLabel, onClick, ariaPressed }) =>
+            React.createElement(
+                "button",
+                {
+                    "aria-label": ariaLabel,
+                    "aria-pressed": ariaPressed,
+                    onClick,
+                },
+                ariaLabel
+            ),
     };
 });
 
-const mockContacts = {
-    loading: false,
-    bots: [],
-    approvals: [{ id: "a1" }, { id: "a2" }],
-    running: [],
-    lastRuns: {},
-    paused: new Set(),
-};
-const mockCtx = {
-    workspaceData: { id: 7, name: "Kitchen Sink" },
-    workspaces: [{ id: 7, name: "Kitchen Sink" }],
-};
 let mockProps = null;
-
 jest.mock("@trops/dash-core", () => {
     const React = require("react");
     return {
-        WorkspaceContext: React.createContext(null),
-        useBotContacts: () => mockContacts,
-        BotContacts: (props) => {
+        CreateDockPanel: () => null,
+        BotNotificationsPanel: (props) => {
             mockProps = props;
-            return React.createElement(
-                "button",
-                { "data-testid": "contacts", onClick: props.onCollapse },
-                "contacts"
-            );
+            return props.collapsed
+                ? null
+                : React.createElement(
+                      "button",
+                      { "data-testid": "panel", onClick: props.onClose },
+                      "panel"
+                  );
         },
     };
 });
-
-const { WorkspaceContext } = require("@trops/dash-core");
-
-function renderPanel(props) {
-    return render(
-        <WorkspaceContext.Provider value={mockCtx}>
-            <BotActivityPanel {...props} />
-        </WorkspaceContext.Provider>
-    );
-}
 
 beforeEach(() => {
     mockProps = null;
 });
 
-test("expanded: renders the contacts with the dashboards", () => {
-    renderPanel({ collapsed: false, openRequest: { botId: "b1" } });
-    expect(screen.getByTestId("contacts")).toBeInTheDocument();
-    expect(mockProps.contacts).toBe(mockContacts);
-    expect(mockProps.workspaces).toBe(mockCtx.workspaces);
-    expect(mockProps.openRequest).toEqual({ botId: "b1" });
-    // A bot opens its page in the app's modal (dash-core NAV-016 AC5).
-    expect(mockProps.onOpenBotsView).toBeUndefined();
-    expect(mockProps.onOpenSettings).toBeUndefined();
-});
-
-test("Collapse from the panel closes it", () => {
+test("the frame hosts dash-core's panel; Close collapses it", () => {
     const onCollapsedChange = jest.fn();
-    renderPanel({ collapsed: false, onCollapsedChange });
-    fireEvent.click(screen.getByTestId("contacts"));
+    const onNeedsChange = jest.fn();
+    render(
+        <BotActivityPanel
+            collapsed={false}
+            onCollapsedChange={onCollapsedChange}
+            onNeedsChange={onNeedsChange}
+            openRequest={{ botId: "b1" }}
+        />
+    );
+    expect(mockProps.onNeedsChange).toBe(onNeedsChange);
+    expect(mockProps.openRequest).toEqual({ botId: "b1" });
+    fireEvent.click(screen.getByTestId("panel"));
     expect(onCollapsedChange).toHaveBeenCalledWith(true);
 });
 
-test("collapsed: renders nothing but keeps the badge count live", () => {
-    const onApprovalsCount = jest.fn();
-    const { container } = renderPanel({
-        collapsed: true,
-        onApprovalsCount,
-    });
-    expect(container).toBeEmptyDOMElement();
-    expect(onApprovalsCount).toHaveBeenCalledWith(2);
+test("closed, the panel stays mounted so the rail keeps hearing it", () => {
+    render(<BotActivityPanel collapsed onNeedsChange={jest.fn()} />);
+    expect(mockProps).not.toBeNull();
+    expect(mockProps.collapsed).toBe(true);
+    expect(screen.queryByTestId("panel")).toBeNull();
 });
 
-test("works without the dock's context", () => {
-    render(<BotActivityPanel collapsed={false} />);
-    expect(mockProps.workspaces).toEqual([]);
+test("the dock: a dot while something needs you; the panel opens by itself only for something new (frame 27)", () => {
+    const before = Date.now() - 60000;
+    render(<AssistantDock />);
+    expect(screen.queryByTestId("bot-notifications-dot")).toBeNull();
+    // As the panel's lists load: nothing yet, then what was already there
+    // — the dot, but no opening.
+    act(() => mockProps.onNeedsChange({ count: 0, newestAt: 0 }));
+    act(() => mockProps.onNeedsChange({ count: 1, newestAt: before }));
+    act(() => mockProps.onNeedsChange({ count: 2, newestAt: before + 1 }));
+    expect(screen.getByTestId("bot-notifications-dot")).toBeInTheDocument();
+    expect(
+        screen.getByRole("button", {
+            name: "Bot notifications — 2 need you",
+        })
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("panel")).toBeNull();
+    // Something new: it opens.
+    const fresh = Date.now() + 1000;
+    act(() => mockProps.onNeedsChange({ count: 3, newestAt: fresh }));
+    expect(screen.getByTestId("panel")).toBeInTheDocument();
+    // Closed again; the same items don't reopen it.
+    fireEvent.click(screen.getByTestId("panel"));
+    act(() => mockProps.onNeedsChange({ count: 3, newestAt: fresh }));
+    expect(screen.queryByTestId("panel")).toBeNull();
+    // All answered: no dot.
+    act(() => mockProps.onNeedsChange({ count: 0, newestAt: 0 }));
+    expect(screen.queryByTestId("bot-notifications-dot")).toBeNull();
 });
