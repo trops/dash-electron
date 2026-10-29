@@ -38,6 +38,7 @@
 const fs = require("fs");
 const { compilePreview, aiBuild, helperFiles } = require("./aiBuild.cjs");
 const { prepareWidgetConfig } = require("./widgetImportFixes.cjs");
+const { validateImportedNames } = require("./widgetImports.cjs");
 const checks = require("./widgetChecks.cjs");
 
 const WIDGET_NAME = /^[A-Z][A-Za-z0-9]{1,48}$/;
@@ -51,14 +52,20 @@ function verdictOf(output) {
 /**
  * Problems in the helper files' code, named by each file's path. Tests and
  * stories are skipped unless includeTests (the install gate passes it for
- * the ones a widget imports).
+ * the ones a widget imports); `imports` as codeProblems (the Dash team's
+ * build).
  */
-function helperProblems(helpers, { includeTests = false } = {}) {
+function helperProblems(
+    helpers,
+    { includeTests = false, imports = false } = {}
+) {
     const problems = [];
     for (const h of helpers || []) {
         if (!/\.(?:js|jsx)$/.test(h.path)) continue;
         if (!includeTests && NOT_WIDGET_CODE.test(h.path)) continue;
-        for (const p of codeProblems(String(h.content || ""), "")) {
+        for (const p of codeProblems(String(h.content || ""), "", {
+            imports,
+        })) {
             problems.push(`${h.path}: ${p}`);
         }
     }
@@ -86,12 +93,14 @@ function configProblems(configCode) {
  * its .dash.js config, a widget that has a connection is also checked for
  * asking the user for keys or calling the service itself. With the code of
  * the widget being changed (previousCode), only colors the change adds count
- * — an older widget's own colors don't block an edit to it.
+ * — an older widget's own colors don't block an edit to it. With
+ * `imports` (the Dash team's build and check — not the install gate), what
+ * it imports from dash-react and dash-core has to exist there.
  */
 function codeProblems(
     componentCode,
     configCode = "",
-    { previousCode = null } = {}
+    { previousCode = null, imports = false } = {}
 ) {
     const problems = [];
     const api = checks.validateProviderApiUsage(componentCode);
@@ -148,6 +157,13 @@ function codeProblems(
                 `line ${e.line}: ${e.name} isn't a dash-react component${
                     e.suggestion ? ` — ${e.suggestion}` : ""
                 }`
+            );
+        }
+    }
+    if (imports) {
+        for (const e of validateImportedNames(componentCode).errors) {
+            problems.push(
+                `line ${e.line}: ${e.name} isn't exported by ${e.from}, so it's undefined when the widget renders — ${e.suggestion}`
             );
         }
     }
@@ -307,8 +323,9 @@ function createTeamWidgetTools(deps) {
                 problems: [
                     ...codeProblems(componentCode, configCode || "", {
                         previousCode,
+                        imports: true,
                     }),
-                    ...helperProblems(helpers),
+                    ...helperProblems(helpers, { imports: true }),
                 ],
                 scorecard: scorecardSummary(componentCode),
                 componentCode,
@@ -383,7 +400,10 @@ function createTeamWidgetTools(deps) {
             before && before.success ? before.componentCode || "" : null;
         // The Widget Builder's checks first — a draft that fails them isn't kept.
         const problems = [
-            ...codeProblems(componentCode, configCode, { previousCode }),
+            ...codeProblems(componentCode, configCode, {
+                previousCode,
+                imports: true,
+            }),
             ...configProblems(configCode),
         ];
         if (problems.length) {
@@ -515,7 +535,10 @@ function createTeamWidgetTools(deps) {
         const previousCode =
             before && before.success ? before.componentCode || "" : null;
         const problems = [
-            ...codeProblems(componentCode, configCode, { previousCode }),
+            ...codeProblems(componentCode, configCode, {
+                previousCode,
+                imports: true,
+            }),
             ...configProblems(configCode),
         ];
         if (problems.length) {
@@ -718,6 +741,7 @@ function createTeamWidgetTools(deps) {
                       },
             problems: codeProblems(src.componentCode, src.configCode || "", {
                 previousCode: previousComponents.get(widgetName) || null,
+                imports: true,
             }),
             scorecard: scorecardSummary(src.componentCode),
             configCode: src.configCode || "",

@@ -11,6 +11,7 @@ const path = require("path");
 const {
     createTeamWidgetTools,
     codeProblems,
+    helperProblems,
     configProblems,
     scorecardSummary,
 } = require("./lib/teamWidgetTools.cjs");
@@ -883,5 +884,160 @@ describe("settings shape (consolidation Phase 3 live test)", () => {
         assert.ok(res.problems.some((x) => /userConfig is a list/.test(x)));
         assert.equal(calls.build.length, 0);
         assert.deepEqual(codeProblems(GOOD_COMPONENT, LIST_CONFIG), []);
+    });
+});
+
+describe("imports from Dash's packages have to exist there (widgetImports)", () => {
+    const {
+        exportedNames,
+        packageExports,
+        validateImportedNames,
+    } = require("./lib/widgetImports.cjs");
+    const EXPORTS = {
+        "@trops/dash-react": new Set([
+            "Panel",
+            "Button",
+            "Heading",
+            "SubHeading",
+            "useStatusTokens",
+        ]),
+        "@trops/dash-core": new Set(["Widget", "useWidgetEvents"]),
+    };
+    // The Coin Flip widget the Builder wrote, live (2026-10-29).
+    const COIN_FLIP = `import React, { useState } from "react";
+import { Button, Heading, Panel, SubHeading, Widget } from "@trops/dash-react";
+import { useWidgetEvents } from "@trops/dash-core";
+import { flip } from "./utils/flip";
+export default function CoinFlip() { return <Widget><Panel><Button title="Flip" /></Panel></Widget>; }
+`;
+
+    it("a name the package doesn't export fails, and says where it is", () => {
+        assert.deepEqual(validateImportedNames(COIN_FLIP, EXPORTS), {
+            ok: false,
+            errors: [
+                {
+                    name: "Widget",
+                    from: "@trops/dash-react",
+                    line: 2,
+                    suggestion: "import it from @trops/dash-core",
+                },
+            ],
+        });
+    });
+
+    it("right imports, aliases, other packages and local files pass", () => {
+        const good = `import { Panel as Box, useStatusTokens } from "@trops/dash-react";
+import { Widget } from "@trops/dash-core";
+import { format } from "date-fns";
+import { flip } from "./flip";`;
+        assert.equal(validateImportedNames(good, EXPORTS).ok, true);
+    });
+
+    it("a package whose build couldn't be read isn't checked", () => {
+        assert.equal(
+            validateImportedNames(COIN_FLIP, {
+                "@trops/dash-core": EXPORTS["@trops/dash-core"],
+            }).ok,
+            true
+        );
+    });
+
+    it("reads a build's own export statements, and what it passes on", () => {
+        const build = [
+            "import x from 'y';",
+            "export * from '@trops/dash-react';",
+            "export { FontAwesomeIcon } from '@trops/dash-react';",
+            "const prompt = `… export { NotReal };`;",
+            "export { Panel, x as Button, y as default };",
+        ].join("\n");
+        const { names, stars } = exportedNames(build);
+        assert.deepEqual([...names].sort(), [
+            "Button",
+            "FontAwesomeIcon",
+            "Panel",
+        ]);
+        assert.deepEqual(stars, ["@trops/dash-react"]);
+        assert.deepEqual(
+            [...exportedNames("exports.Widget = W;").names],
+            ["Widget"]
+        );
+        assert.deepEqual(
+            packageExports({
+                resolve: () => {
+                    throw new Error("not installed");
+                },
+            }),
+            {}
+        );
+    });
+
+    it("a package passing on one it can't read isn't checked", () => {
+        const files = {
+            "/core/index.esm.js": "export * from 'gone';\nexport { Widget };",
+            "/react/index.esm.js": "export { Panel };",
+        };
+        const out = packageExports({
+            resolve: (pkg) =>
+                ({
+                    "@trops/dash-core": "/core/index.js",
+                    "@trops/dash-react": "/react/index.js",
+                }[pkg] ||
+                (() => {
+                    throw new Error("missing");
+                })()),
+            read: (file) => {
+                if (!(file in files)) throw new Error("ENOENT");
+                return files[file];
+            },
+        });
+        assert.deepEqual(Object.keys(out), ["@trops/dash-react"]);
+    });
+
+    it("the installed packages' lists are there (so the check is on)", () => {
+        const real = packageExports();
+        assert.ok(real["@trops/dash-react"].has("Panel"));
+        assert.ok(real["@trops/dash-core"].has("Widget"));
+        assert.ok(!real["@trops/dash-react"].has("Widget"));
+        // What they pass on: dash-react from dash-core, icons from dash-react.
+        assert.ok(real["@trops/dash-core"].has("Panel"));
+        assert.ok(real["@trops/dash-react"].has("faCheck"));
+        const good = `import React, { useState } from "react";
+import DashReact, {
+    Panel, // layout
+    Button /* the flip */,
+    faCheck,
+} from "@trops/dash-react";
+import type { Theme } from "@trops/dash-react";
+import { Panel as Box, useWidgetEvents } from "@trops/dash-core";
+// import { Nope } from "@trops/dash-react";
+/* import { AlsoNope } from "@trops/dash-react"; */`;
+        assert.deepEqual(validateImportedNames(good), { ok: true, errors: [] });
+    });
+
+    it("the Builder and Checker get it; the install gate doesn't", () => {
+        const withImports = codeProblems(COIN_FLIP, "", { imports: true });
+        assert.ok(
+            withImports.some((p) =>
+                /line 2: Widget isn't exported by @trops\/dash-react.*import it from @trops\/dash-core/.test(
+                    p
+                )
+            ),
+            withImports.join("\n")
+        );
+        assert.ok(
+            !codeProblems(COIN_FLIP, "").some((p) =>
+                /isn't exported by/.test(p)
+            )
+        );
+        // A helper file the team writes is checked too; the install gate's isn't.
+        const helper = [{ path: "utils/flip.js", content: COIN_FLIP }];
+        assert.ok(
+            helperProblems(helper, { imports: true }).some((p) =>
+                /^utils\/flip\.js: line 2: Widget isn't exported/.test(p)
+            )
+        );
+        assert.ok(
+            !helperProblems(helper).some((p) => /isn't exported by/.test(p))
+        );
     });
 });

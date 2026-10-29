@@ -30,6 +30,7 @@ import React, {
 } from "react";
 import * as ReactRuntime from "react";
 import * as ReactDOMClient from "react-dom/client";
+import * as ReactDOM from "react-dom";
 import * as DashReact from "@trops/dash-react";
 import * as DashCore from "@trops/dash-core";
 import * as JsxRuntime from "react/jsx-runtime";
@@ -68,6 +69,9 @@ function buildDefaultHostModules() {
     return {
         react: ReactRuntime,
         "react-dom/client": ReactDOMClient,
+        // flushSync: the shell renders a widget's first render at once, so
+        // a widget that throws is reported before anything else happens.
+        "react-dom": ReactDOM,
         "@trops/dash-react": DashReact,
         "@trops/dash-core": DashCore,
         "react/jsx-runtime": JsxRuntime,
