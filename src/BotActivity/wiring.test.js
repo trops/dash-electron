@@ -75,13 +75,11 @@ describe("Bot Activity panel mount (AssistantDock)", () => {
         expect(dockSrc).toMatch(/onNeedsChange=\{onNeedsChange\}/);
     });
 
-    it("the rail is Bots only; a folded plan still opens Create (Phase 2a)", () => {
+    it("the rail is Bots only, and there's no Create panel (lead-workspace 6c)", () => {
         expect(dockSrc).not.toMatch(/railButton\("create"/);
         expect(dockSrc).toMatch(/railButton\(\s*"bots"/);
-        expect(dockSrc).toMatch(
-            /addEventListener\("dash:create-fold", onFold\)/
-        );
-        expect(dockSrc).toMatch(/<CreateDockPanel\s/);
+        expect(dockSrc).not.toMatch(/dash:create-fold/);
+        expect(dockSrc).not.toMatch(/CreateDockPanel/);
     });
 });
 

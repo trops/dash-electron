@@ -642,7 +642,7 @@ function createTeamWidgetTools(deps) {
             return {
                 success: false,
                 error: made
-                    ? `${key} is a change to ${made.package} — it's installed from its preview in Create.`
+                    ? `${key} is a change to ${made.package} — it's installed from its preview in the conversation.`
                     : `${key} wasn't built as this change — build it again.`,
             };
         }

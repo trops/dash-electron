@@ -43,7 +43,8 @@ export function QuickStartPane({
     onRequestPalette,
     seedCellId,
     providers = EMPTY_PROVIDERS,
-    // (text) → the builder closes and Create opens on it. Optional.
+    // (text) → the builder closes and a Dash Lead conversation opens on it.
+    // Optional.
     onAskDashTeam = null,
 }) {
     const bt = useBuilderTheme();
@@ -346,8 +347,9 @@ function IntentDetail({
 }
 
 // Compose's door to the Dash team (consolidation Phase 3b): the builder
-// has no AI of its own, so describing a widget hands it to Create. The first
-// step offers the link; a kind's step takes the description too.
+// has no AI of its own, so describing a widget hands it to the Dash Lead
+// (lead-workspace release 6c). The first step offers the link; a kind's
+// step takes the description too.
 function AskDashTeam({ onAsk, withText }) {
     const bt = useBuilderTheme();
     const [text, setText] = useState("");

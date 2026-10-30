@@ -2675,13 +2675,18 @@ export const WidgetBuilderModal = ({
     // chat draft's) is edited as code, with the right side hidden.
     const showCompose = !effectiveEditContext?.componentCode && !codeOnly;
     // Compose's "Rather describe it? Ask the Dash team": the builder closes
-    // and Create opens on a new widget with the text (consolidation Phase 3b).
+    // and a Dash Lead conversation about a new widget opens, with the text
+    // in its reply box (lead-workspace release 6c).
     const askDashTeam = (text) => {
         setIsOpen(false);
         setTimeout(() => {
             window.dispatchEvent(
-                new CustomEvent("dash:open-create", {
-                    detail: { type: "widget", prompt: text || "" },
+                new CustomEvent("dash:open-workspace", {
+                    detail: {
+                        key: "role:dashlead",
+                        making: { kind: "widget" },
+                        draft: text || "",
+                    },
                 })
             );
         }, 0);

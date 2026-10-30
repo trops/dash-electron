@@ -56,13 +56,14 @@ describe("WidgetBuilderModal — polish", () => {
         expect(source).toMatch(/"Name the widget first"/);
     });
 
-    test("Compose's Ask the Dash team closes the builder and opens Create", () => {
+    test("Compose's Ask the Dash team closes the builder and opens a Dash Lead conversation about a widget (6c)", () => {
         expect(source).toMatch(
             /const askDashTeam = \(text\) => \{\s*setIsOpen\(false\);/
         );
         expect(source).toMatch(
-            /"dash:open-create", \{\s*detail: \{ type: "widget", prompt: text \|\| "" \},/
+            /"dash:open-workspace", \{\s*detail: \{\s*key: "role:dashlead",\s*making: \{ kind: "widget" \},\s*draft: text \|\| "",/
         );
+        expect(source).not.toMatch(/dash:open-create/);
         expect(source).toMatch(/onAskDashTeam=\{askDashTeam\}/);
     });
 
