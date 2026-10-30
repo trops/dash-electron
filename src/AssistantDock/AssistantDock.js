@@ -13,9 +13,9 @@ import { BotActivityPanel } from "../BotActivity/BotActivityPanel";
  * notifications (robot — lead-workspace release 4: Needs you from every
  * dashboard, and Activity).
  *
- * The dock owns a single rail and controls each panel's collapsed state, so
- * only one panel is expanded at a time. Both panels stay mounted while
- * collapsed so their subscriptions — and the approvals badge — stay live.
+ * The dock owns a single rail and the panel's collapsed state. The panel
+ * stays mounted while collapsed so its subscriptions — and the approvals
+ * badge — stay live.
  *
  * The AI Assistant panel (wand) was retired in create-entry 5e-2c, and the
  * Create panel in lead-workspace release 6c: asking and making things both

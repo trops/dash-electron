@@ -348,8 +348,8 @@ function IntentDetail({
 
 // Compose's door to the Dash team (consolidation Phase 3b): the builder
 // has no AI of its own, so describing a widget hands it to the Dash Lead
-// (lead-workspace release 6c). The first
-// step offers the link; a kind's step takes the description too.
+// (lead-workspace release 6c). The first step offers the link; a kind's
+// step takes the description too.
 function AskDashTeam({ onAsk, withText }) {
     const bt = useBuilderTheme();
     const [text, setText] = useState("");
