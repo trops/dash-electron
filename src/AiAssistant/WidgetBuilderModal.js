@@ -1713,9 +1713,12 @@ export const WidgetBuilderModal = ({
                 }
 
                 // Evaluate the bundle to get the React component
+                // A preview: its errors aren't counted against the
+                // installed widget (the widget guard).
                 const bundleExports = evaluateBundle(
                     result.bundleSource,
-                    `@ai-built/${name.toLowerCase()}`
+                    `@ai-built/${name.toLowerCase()}`,
+                    { preview: true }
                 );
                 const configs = extractWidgetConfigs(bundleExports);
                 // Match by exact key OR by bare name suffix (scoped IDs
