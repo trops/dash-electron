@@ -208,6 +208,52 @@ if (!isDev) {
 let updateState = "idle"; // idle | checking | downloaded
 let manualCheckInProgress = false;
 
+// The main window's page; ?startPaused=1 opens every dashboard with its
+// widgets paused (dash-core widgetGuard.js).
+function mainPageUrl(startPaused = false) {
+    const url = isDev
+        ? "http://localhost:3000/"
+        : pathToFileURL(path.join(__dirname, "../build/index.html")).href;
+    return startPaused ? `${url}?startPaused=1` : url;
+}
+
+// Help › Start Without Widgets: a way out when a widget froze the page.
+// The page may not answer, so it's asked here (not in the page), then
+// dropped and loaded fresh once it's gone.
+let restartingWithoutWidgets = false;
+function startWithoutWidgets() {
+    if (restartingWithoutWidgets) return;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const choice = dialog.showMessageBoxSync(mainWindow, {
+        type: "warning",
+        buttons: ["Reload without widgets", "Cancel"],
+        defaultId: 0,
+        cancelId: 1,
+        title: "Start without widgets",
+        message: "Reload Dash with every widget paused?",
+        detail: "Use this if a widget froze Dash. Unsaved dashboard edits will be lost.",
+    });
+    if (choice !== 0 || !mainWindow || mainWindow.isDestroyed()) return;
+    const contents = mainWindow.webContents;
+    const load = () => {
+        restartingWithoutWidgets = false;
+        contents.loadURL(mainPageUrl(true));
+    };
+    if (contents.isCrashed()) {
+        load();
+        return;
+    }
+    restartingWithoutWidgets = true;
+    contents.once("render-process-gone", load);
+    // Never leave the listener waiting for an unrelated crash later.
+    setTimeout(() => {
+        if (!restartingWithoutWidgets) return;
+        contents.removeListener("render-process-gone", load);
+        restartingWithoutWidgets = false;
+    }, 10000);
+    contents.forcefullyCrashRenderer();
+}
+
 // --- macOS Application Menu ---
 function buildMenu() {
     const appName = app.name || "Dash";
@@ -322,6 +368,15 @@ function buildMenu() {
                 { role: "zoom" },
                 { type: "separator" },
                 { role: "front" },
+            ],
+        },
+        {
+            role: "help",
+            submenu: [
+                {
+                    label: "Start Without Widgets",
+                    click: () => startWithoutWidgets(),
+                },
             ],
         },
     ];
@@ -950,11 +1005,7 @@ function createWindow() {
     // that failed to load still shows its error).
     setTimeout(revealWindow, 5000);
 
-    mainWindow.loadURL(
-        isDev
-            ? "http://localhost:3000"
-            : pathToFileURL(path.join(__dirname, "../build/index.html")).href
-    );
+    mainWindow.loadURL(mainPageUrl());
 
     if (isDev && process.env.DASH_DEVTOOLS === "true") {
         mainWindow.webContents.once("dom-ready", () => {
