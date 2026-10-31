@@ -12,6 +12,10 @@ const vm = require("vm");
 
 const ROOT = path.join(__dirname, "..");
 const html = fs.readFileSync(path.join(ROOT, "src/index.html"), "utf8");
+const loggerOf = (page) =>
+    [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+        .map((m) => m[1])
+        .find((code) => /addEventListener\(\s*"error"/.test(code));
 
 test("the app is built from src/index.html", () => {
     const craco = fs.readFileSync(path.join(ROOT, "craco.config.js"), "utf8");
@@ -97,4 +101,34 @@ test("a widget bundle's own error isn't logged twice", () => {
     fire("error", { target: window, error });
     fire("unhandledrejection", { reason: error });
     assert.deepEqual(logged, []);
+});
+
+test("an unhandled rejection is still logged", () => {
+    const { fire, logged } = boot();
+    fire("unhandledrejection", { reason: new Error("nope") });
+    assert.equal(logged.length, 1);
+    assert.match(logged[0], /Unhandled rejection/);
+});
+
+test("nothing is logged while the Widget Builder is open (it shows its own)", () => {
+    const { fire, logged, window } = boot();
+    window.__DASH_WIDGET_BUILDER_OPEN = true;
+    fire("error", { target: window, error: new Error("preview") });
+    fire("unhandledrejection", { reason: new Error("preview") });
+    assert.deepEqual(logged, []);
+});
+
+test("public/index.html (unused, but CRA needs it) has the same logger", () => {
+    const pub = fs.readFileSync(path.join(ROOT, "public/index.html"), "utf8");
+    assert.equal(loggerOf(pub), loggerOf(html));
+});
+
+test("the Widget Builder reads the picture rule (its guide is cut at 24,000 characters)", () => {
+    const skill = fs.readFileSync(
+        path.join(ROOT, ".claude/skills/dash-widget-builder/SKILL.md"),
+        "utf8"
+    );
+    assert.ok(
+        skill.slice(0, 24000).includes("A picture from a service shows only")
+    );
 });
