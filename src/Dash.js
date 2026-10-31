@@ -830,8 +830,13 @@ class App extends React.Component {
                         // Update the active theme in place (no remount)
                         // after apply_theme. DashboardStage consumes
                         // this and calls changeCurrentTheme via
-                        // ThemeContext.
-                        if (toolName === "apply_theme" && result?.name) {
+                        // ThemeContext. A theme applied to one dashboard
+                        // is that dashboard's alone: the app theme stays.
+                        if (
+                            toolName === "apply_theme" &&
+                            result?.name &&
+                            result?.scope !== "dashboard"
+                        ) {
                             window.dispatchEvent(
                                 new CustomEvent("dash:apply-theme", {
                                     detail: { themeKey: result.name },
