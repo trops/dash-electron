@@ -158,14 +158,23 @@ widgets on a dashboard and wiring them together via cross-widget events — the
     `ruleSelected` and shows the form for that id. The user wires the two
     together via Settings → Configure → Event Handlers.
 
--   **A picture from a service shows only if its address is a full
-    `https://` URL, and it never retries.** A service often gives you a
-    relative address (Home Assistant's `entity_picture` is
-    `/api/media_player_proxy/…`), and inside Dash that becomes
-    `file:///api/…` and fails. Otherwise show an icon instead. Give every
-    `<img>` an `onError` that hides it once, and never put a changing
-    token in the address on each refresh. See "Pictures from a service"
-    below.
+-   **A picture from a service shows only if its address starts with
+    `https://` or `data:image/`, and it never retries.** Dash blocks
+    `http://` pictures (local network ones too), and a relative address
+    like Home Assistant's `entity_picture`
+    (`/api/media_player_proxy/…`) becomes `file:///api/…` and fails.
+    Otherwise show an icon. Give every `<img>` an `onError` that hides it
+    once and never retries, and never put a changing value (a token,
+    `Date.now()`) in the address on each refresh:
+
+    ```jsx
+    const [coverFailed, setCoverFailed] = useState(false);
+    const showCover =
+        !coverFailed && /^(https:\/\/|data:image\/)/.test(cover || "");
+    // in the JSX:
+    // {showCover ? <img src={cover} alt="Cover art" onError={() => setCoverFailed(true)} />
+    //            : <FontAwesomeIcon icon="music" />}
+    ```
 
 When emitting multiple widgets (multi-file output via `File:` markers), name
 the events explicitly in your chat response — one line per event, naming the
@@ -521,20 +530,31 @@ export default function SearchWidget({ query = "" }) {
 
 A picture address a service hands you is often **relative to that service** or needs its login. Home Assistant's `entity_picture` is `/api/media_player_proxy/media_player.living_room?token=…`. Inside Dash a relative address resolves to `file:///api/…` and fails to load. A service's own address may also need the user's login, which Dash doesn't have.
 
--   Show a picture only when its address is a full `https://` URL. Otherwise show a plain icon or nothing, and never build the address yourself from the provider's URL.
+-   Show a picture only when its address starts with `https://` or `data:image/` (Dash's page blocks `http://` pictures). Otherwise show a plain icon or nothing, and never build the address yourself from the provider's URL.
 -   Give every `<img>` an `onError` that hides it **once**. Never retry, re-render or swap the address in a loop. A picture that can't load is not an error to keep trying.
 -   Don't put a changing value (a token, `Date.now()`) in an image address on every refresh. Each change makes the picture load again.
 
 ```jsx
-const [coverFailed, setCoverFailed] = useState(false);
-const cover = attrs.entity_picture;
-const showCover = !coverFailed && /^https:\/\//.test(cover || "");
-// …
-{
-    showCover ? (
-        <img src={cover} alt="Cover art" onError={() => setCoverFailed(true)} />
-    ) : (
-        <FontAwesomeIcon icon="music" />
+import React, { useState } from "react";
+import { FontAwesomeIcon, Panel } from "@trops/dash-react";
+
+export function NowPlaying({ attrs = {} }) {
+    const [coverFailed, setCoverFailed] = useState(false);
+    const cover = attrs.entity_picture;
+    const showCover =
+        !coverFailed && /^(https:\/\/|data:image\/)/.test(cover || "");
+    return (
+        <Panel>
+            {showCover ? (
+                <img
+                    src={cover}
+                    alt="Cover art"
+                    onError={() => setCoverFailed(true)}
+                />
+            ) : (
+                <FontAwesomeIcon icon="music" />
+            )}
+        </Panel>
     );
 }
 ```
