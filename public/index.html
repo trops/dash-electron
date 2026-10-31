@@ -28,43 +28,26 @@
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
         <script>
-            console.log("===== HTML LOADED =====");
-            console.log(
-                "Root element exists:",
-                !!document.getElementById("root")
-            );
-
-            // Check if bundle script is loaded
-            window.addEventListener("DOMContentLoaded", () => {
-                const scripts = document.getElementsByTagName("script");
-                console.log("Total scripts found:", scripts.length);
-                for (let script of scripts) {
-                    console.log("Script src:", script.src || "inline");
-                }
-            });
-
-            // Early-boot error logger. Does NOT inject DOM — widget
-            // preview errors are isolated by WidgetBuilderModal's
-            // scoped handler; everything else falls through to React
-            // error boundaries and DevTools. Appending error divs to
-            // body was blocking clicks whenever any widget threw.
+            // Early-boot error logger. It only logs: it never touches the
+            // page. It used to append an error <div> with
+            // document.body.innerHTML +=, which rebuilt the whole page from
+            // text — React's elements and every click handler were lost,
+            // and a widget's broken image was re-created and failed again,
+            // in an endless loop (a Home Assistant album cover,
+            // 2026-10-31). Errors inside widgets are caught by dash-core's
+            // WidgetErrorBoundary; DevTools has the rest.
             //
-            // Two suppression paths, both prevent duplicate console
-            // noise that makes the user think the app crashed when
-            // an error boundary actually caught the failure:
-            //
-            // 1. While the AI Widget Builder modal is open it sets
-            //    `window.__DASH_WIDGET_BUILDER_OPEN`. The modal's
-            //    own scoped handler + PreviewErrorBoundary show the
-            //    friendly recovery UI, so we skip the global log.
-            //
-            // 2. When the error's stack contains `evaluateBundle`,
-            //    the throw originated inside an AI widget bundle —
-            //    on the dashboard, dash-core's WidgetErrorBoundary
-            //    in WidgetFactory catches it and renders the inline
-            //    error card. In dev mode React rethrows so DevTools
-            //    can see the trace; we don't want to log it AGAIN
-            //    at the global level.
+            // Not logged here:
+            // 1. A file that failed to load (an <img>, <script>, <link>):
+            //    the error event's target is that element, not the window.
+            //    A widget's broken image is the widget's own business.
+            // 2. While the AI Widget Builder is open
+            //    (window.__DASH_WIDGET_BUILDER_OPEN): its scoped handler
+            //    and PreviewErrorBoundary show the recovery UI.
+            // 3. A throw from inside an AI widget bundle (its stack has
+            //    `evaluateBundle`): WidgetErrorBoundary renders the inline
+            //    error card; logging it again makes it look like the app
+            //    crashed.
             function isWidgetBundleError(e) {
                 var stack =
                     (e && e.error && e.error.stack) ||
@@ -75,9 +58,13 @@
                     stack.indexOf("evaluateBundle") >= 0
                 );
             }
+            function isLoadFailure(e) {
+                return !!(e && e.target && e.target !== window);
+            }
             window.addEventListener(
                 "error",
                 function (e) {
+                    if (isLoadFailure(e)) return;
                     if (window.__DASH_WIDGET_BUILDER_OPEN) return;
                     if (isWidgetBundleError(e)) return;
                     console.error("Global error:", e.error || e.message);
