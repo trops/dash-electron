@@ -75,29 +75,58 @@
             });
         </script>
         <script>
-            console.log("===== HTML LOADED =====");
-            console.log(
-                "Root element exists:",
-                !!document.getElementById("root")
-            );
-
-            // Check if bundle script is loaded
-            window.addEventListener("DOMContentLoaded", () => {
-                const scripts = document.getElementsByTagName("script");
-                console.log("Total scripts found:", scripts.length);
-                for (let script of scripts) {
-                    console.log("Script src:", script.src || "inline");
-                }
-            });
-
+            // Early-boot error logger. It only logs: it never touches the
+            // page. It used to append an error <div> with
+            // document.body.innerHTML +=, which rebuilt the whole page from
+            // text — React's elements and every click handler were lost,
+            // and a widget's broken image was re-created and failed again,
+            // in an endless loop (a Home Assistant album cover,
+            // 2026-10-31). Errors inside widgets are caught by dash-core's
+            // WidgetErrorBoundary; DevTools has the rest.
+            //
+            // Not logged here:
+            // 1. A file that failed to load (an <img>, <script>, <link>):
+            //    the error event's target is that element, not the window.
+            //    A widget's broken image is the widget's own business.
+            // 2. While the AI Widget Builder is open
+            //    (window.__DASH_WIDGET_BUILDER_OPEN): its scoped handler
+            //    and PreviewErrorBoundary show the recovery UI.
+            // 3. A throw from inside an AI widget bundle (its stack has
+            //    `evaluateBundle`): WidgetErrorBoundary renders the inline
+            //    error card; logging it again makes it look like the app
+            //    crashed.
+            function isWidgetBundleError(e) {
+                var stack =
+                    (e && e.error && e.error.stack) ||
+                    (e && e.reason && e.reason.stack) ||
+                    "";
+                return (
+                    typeof stack === "string" &&
+                    stack.indexOf("evaluateBundle") >= 0
+                );
+            }
+            function isLoadFailure(e) {
+                return !!(e && e.target && e.target !== window);
+            }
             window.addEventListener(
                 "error",
                 function (e) {
+                    if (isLoadFailure(e)) return;
+                    if (window.__DASH_WIDGET_BUILDER_OPEN) return;
+                    if (isWidgetBundleError(e)) return;
                     console.error("Global error:", e.error || e.message);
-                    document.body.innerHTML +=
-                        '<div style="color: red; padding: 20px; font-size: 18px;">ERROR: ' +
-                        (e.message || e.error) +
-                        "</div>";
+                },
+                true
+            );
+            window.addEventListener(
+                "unhandledrejection",
+                function (e) {
+                    if (window.__DASH_WIDGET_BUILDER_OPEN) return;
+                    if (isWidgetBundleError(e)) return;
+                    console.error(
+                        "Unhandled rejection:",
+                        e.reason || e.message
+                    );
                 },
                 true
             );
