@@ -13,9 +13,12 @@
  * stories aren't either, unless something imports them.
  *
  * @param {string} dir  the staged package folder
- * @returns {Promise<{ ok: boolean, problems: string[], sourceFiles: number }>}
+ * @returns {Promise<{ ok: boolean, problems: string[], warnings: string[],
+ *   sourceFiles: number }>}
  *   each problem is "<Widget>: <what's wrong>" or "<path>: <what's wrong>";
- *   sourceFiles = how many source files were checked (0: none came with it)
+ *   warnings, the same shape, don't block (hard-coded colors — older widgets
+ *   predate that rule); sourceFiles = how many source files were checked
+ *   (0: none came with it)
  */
 const fs = require("fs");
 const path = require("path");
@@ -76,6 +79,7 @@ async function installGate(dir) {
     const all = new Set(files);
     const read = (rel) => fs.readFileSync(path.join(dir, rel), "utf8");
     const problems = [];
+    const warnings = [];
 
     // Widgets: a config beside its component.
     const components = new Set();
@@ -85,9 +89,13 @@ async function installGate(dir) {
         if (!component) continue;
         components.add(component);
         const name = path.posix.basename(base);
-        for (const p of codeProblems(read(component), read(config))) {
+        const notes = [];
+        for (const p of codeProblems(read(component), read(config), {
+            warnings: notes,
+        })) {
             problems.push(`${name}: ${p}`);
         }
+        for (const n of notes) warnings.push(`${name}: ${n}`);
     }
 
     // Everything else is a helper — tests and stories only when imported.
@@ -100,11 +108,12 @@ async function installGate(dir) {
         .filter((f) => !components.has(f))
         .filter((f) => !NOT_WIDGET_CODE.test(f) || imported.has(f))
         .map((f) => ({ path: f, content: read(f) }));
-    problems.push(...helperProblems(helpers, { includeTests: true }));
+    problems.push(...helperProblems(helpers, { includeTests: true, warnings }));
 
     return {
         ok: problems.length === 0,
         problems,
+        warnings,
         sourceFiles: components.size + helpers.length,
     };
 }

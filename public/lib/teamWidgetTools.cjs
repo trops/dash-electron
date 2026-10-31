@@ -52,22 +52,25 @@ function verdictOf(output) {
 /**
  * Problems in the helper files' code, named by each file's path. Tests and
  * stories are skipped unless includeTests (the install gate passes it for
- * the ones a widget imports); `imports` as codeProblems (the Dash team's
- * build).
+ * the ones a widget imports); `imports` and `warnings` as codeProblems
+ * (the Dash team's build; the install gate).
  */
 function helperProblems(
     helpers,
-    { includeTests = false, imports = false } = {}
+    { includeTests = false, imports = false, warnings = null } = {}
 ) {
     const problems = [];
     for (const h of helpers || []) {
         if (!/\.(?:js|jsx)$/.test(h.path)) continue;
         if (!includeTests && NOT_WIDGET_CODE.test(h.path)) continue;
+        const notes = warnings ? [] : null;
         for (const p of codeProblems(String(h.content || ""), "", {
             imports,
+            warnings: notes,
         })) {
             problems.push(`${h.path}: ${p}`);
         }
+        for (const n of notes || []) warnings.push(`${h.path}: ${n}`);
     }
     return problems;
 }
@@ -95,12 +98,15 @@ function configProblems(configCode) {
  * the widget being changed (previousCode), only colors the change adds count
  * — an older widget's own colors don't block an edit to it. With
  * `imports` (the Dash team's build and check — not the install gate), what
- * it imports from dash-react and dash-core has to exist there.
+ * it imports from dash-react and dash-core has to exist there. With
+ * `warnings` (an array — the install gate), hard-coded colors go there
+ * instead: they don't block an install or a publish, only the Builder's and
+ * the Dash team's own code.
  */
 function codeProblems(
     componentCode,
     configCode = "",
-    { previousCode = null, imports = false } = {}
+    { previousCode = null, imports = false, warnings = null } = {}
 ) {
     const problems = [];
     const api = checks.validateProviderApiUsage(componentCode);
@@ -145,7 +151,7 @@ function codeProblems(
         for (const e of colors.errors) {
             const raw = e.snippet.replace(/\(\)$/, "(");
             if (previousCode && previousCode.includes(raw)) continue;
-            problems.push(
+            (warnings || problems).push(
                 `line ${e.line}: ${e.snippet} is a hard-coded color — ${e.suggestion}`
             );
         }

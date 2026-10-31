@@ -300,8 +300,50 @@ describe("installGate — the code checks for every package install", () => {
         assert.deepEqual(await installGate(dir, {}), {
             ok: true,
             problems: [],
+            warnings: [],
             sourceFiles: 0,
         });
+    });
+    it("hard-coded colors are warnings, not problems — in widgets and helpers", async () => {
+        const dir = pkg({
+            "HelloWidget.js": COMPONENT.replace(
+                "<Panel>",
+                '<Panel className="text-gray-600">'
+            ),
+            "HelloWidget.dash.js": CONFIG,
+            "helpers.js": 'export const tone = "bg-gray-100";\n',
+        });
+        const res = await installGate(dir, { widgetName: "@x/hello" });
+        assert.equal(res.ok, true);
+        assert.deepEqual(res.problems, []);
+        assert.ok(
+            res.warnings.some(
+                (w) =>
+                    w.startsWith("HelloWidget: ") &&
+                    /text-gray-600 is a hard-coded color/.test(w)
+            )
+        );
+        assert.ok(
+            res.warnings.some(
+                (w) =>
+                    w.startsWith("widgets/helpers.js: ") &&
+                    /bg-gray-100 is a hard-coded color/.test(w)
+            )
+        );
+    });
+    it("colors don't block, but other problems still do", async () => {
+        const dir = pkg({
+            "HelloWidget.js": COMPONENT.replace(
+                "<Panel>",
+                '<Modal className="text-gray-600">'
+            ).replace("</Panel>", "</Modal>"),
+            "HelloWidget.dash.js": CONFIG,
+        });
+        const res = await installGate(dir, { widgetName: "@x/hello" });
+        assert.equal(res.ok, false);
+        assert.ok(res.problems.some((p) => /<Modal> isn't allowed/.test(p)));
+        assert.ok(!res.problems.some((p) => /hard-coded color/.test(p)));
+        assert.equal(res.warnings.length, 1);
     });
 });
 
@@ -562,7 +604,12 @@ describe("installGate — the whole package's code", () => {
         const res = await installGate(
             pkgAt({ "dist/index.cjs.js": "module.exports = {};" })
         );
-        assert.deepEqual(res, { ok: true, problems: [], sourceFiles: 0 });
+        assert.deepEqual(res, {
+            ok: true,
+            problems: [],
+            warnings: [],
+            sourceFiles: 0,
+        });
     });
     it("a test or story file a widget imports is checked", async () => {
         const res = await installGate(
