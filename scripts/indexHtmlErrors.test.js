@@ -22,6 +22,21 @@ test("the app is built from src/index.html", () => {
     assert.match(craco, /src\/index\.html/);
 });
 
+test("pictures load from http:// too (a home server on the user's network); scripts never do", () => {
+    const csp = /Content-Security-Policy"\s*content="([^"]+)"/.exec(html)[1];
+    const rule = (name) =>
+        (
+            csp
+                .split(";")
+                .map((r) => r.trim())
+                .find((r) => r.startsWith(name + " ")) || ""
+        ).split(/\s+/);
+    assert.ok(rule("img-src").includes("http:"));
+    assert.ok(rule("img-src").includes("https:"));
+    assert.ok(!rule("script-src").includes("http:"));
+    assert.ok(!rule("default-src").includes("http:"));
+});
+
 test("no script on the page writes the page", () => {
     const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
         (m) => m[1].replace(/\/\/.*$/gm, "")
