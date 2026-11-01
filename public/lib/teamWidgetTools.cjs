@@ -800,12 +800,15 @@ function createTeamWidgetTools(deps) {
         // What's installed is what was previewed — or the step says so, and
         // nothing says it's updated while other code runs. (Its code can't
         // be read: nothing to compare.)
-        const now = await Promise.resolve(
-            deps.readWidgetSources({
+        let now = null;
+        try {
+            now = await deps.readWidgetSources({
                 widgetName,
                 componentName: draft.componentName,
-            })
-        ).catch(() => null);
+            });
+        } catch (_) {
+            now = null; // can't read it: nothing to compare
+        }
         if (
             now &&
             now.success &&
