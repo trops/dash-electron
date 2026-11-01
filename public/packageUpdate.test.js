@@ -11,6 +11,8 @@ const os = require("os");
 const path = require("path");
 const {
     bumpLocalVersion,
+    nextBuildVersion,
+    installedVersion,
     prepareUpdateBuild,
     installWithBackup,
 } = require("./lib/packageUpdate.cjs");
@@ -60,6 +62,45 @@ describe("bumpLocalVersion", () => {
     it("no or odd version starts at 1.0.1-local.1", () => {
         assert.equal(bumpLocalVersion(undefined), "1.0.1-local.1");
         assert.equal(bumpLocalVersion("latest"), "1.0.1-local.1");
+    });
+});
+
+describe("nextBuildVersion (every @ai-built install is a new version)", () => {
+    it("first install 1.0.0, then each install one more", () => {
+        assert.equal(nextBuildVersion(null), "1.0.0");
+        assert.equal(nextBuildVersion("1.0.0"), "1.0.1");
+        assert.equal(nextBuildVersion("2.3.9"), "2.3.10");
+        assert.equal(nextBuildVersion("1.0.4-local.2"), "1.0.5");
+    });
+
+    it("reads the installed version from dash.json, else package.json", () => {
+        const dir = tmp("dash-ver-");
+        assert.equal(installedVersion(dir), null);
+        fs.writeFileSync(
+            path.join(dir, "package.json"),
+            JSON.stringify({ version: "1.0.2" })
+        );
+        assert.equal(installedVersion(dir), "1.0.2");
+        fs.writeFileSync(
+            path.join(dir, "dash.json"),
+            JSON.stringify({ version: "1.0.3" })
+        );
+        assert.equal(installedVersion(dir), "1.0.3");
+        assert.equal(installedVersion(null), null);
+    });
+
+    it("the higher of dash.json and package.json, so the next never goes back", () => {
+        const dir = tmp("zz-ver-");
+        fs.writeFileSync(
+            path.join(dir, "dash.json"),
+            JSON.stringify({ version: "1.0.0" })
+        );
+        fs.writeFileSync(
+            path.join(dir, "package.json"),
+            JSON.stringify({ version: "1.0.4-local.1" })
+        );
+        assert.equal(installedVersion(dir), "1.0.4-local.1");
+        assert.equal(nextBuildVersion(installedVersion(dir)), "1.0.5");
     });
 });
 

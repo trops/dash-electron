@@ -873,6 +873,62 @@ describe("settings shape (consolidation Phase 3 live test)", () => {
         assert.deepEqual(configProblems(undefined), []);
     });
 
+    it("a host or a postal address isn't a web address; braces in strings don't confuse it", () => {
+        const cfg = (entries) =>
+            `export default { component: X, userConfig: { ${entries} } };`;
+        assert.deepEqual(
+            configProblems(
+                cfg(
+                    'mqttHost: { type: "text", displayName: "Broker host" }, streetAddress: { type: "text", displayName: "Street" }'
+                )
+            ),
+            []
+        );
+        const found = configProblems(
+            cfg(
+                'note: { type: "text", instructions: "use {host" }, serverUrl: { type: "text", pattern: "^https?://.{3,}$", displayName: "Server URL" }'
+            )
+        );
+        assert.equal(found.length, 1);
+        assert.match(found[0], /userConfig\.serverUrl/);
+    });
+
+    it("a change is held to it only for settings it adds", () => {
+        const before =
+            'export default { userConfig: { serverUrl: { type: "text", displayName: "Server URL" } } };';
+        const after =
+            'export default { userConfig: { serverUrl: { type: "text", displayName: "Server URL" }, apiUrl: { type: "text", displayName: "API URL" } } };';
+        const found = configProblems(after, before);
+        assert.equal(found.length, 1);
+        assert.match(found[0], /userConfig\.apiUrl/);
+    });
+
+    it("an address or email setting has to say so (type url / email)", () => {
+        const cfg = (entries) =>
+            `export default { component: X, userConfig: { ${entries} } };`;
+        const url = configProblems(
+            cfg(
+                'haBaseUrl: { type: "text", displayName: "Home Assistant URL", defaultValue: "" }'
+            )
+        );
+        assert.equal(url.length, 1);
+        assert.match(url[0], /userConfig\.haBaseUrl .*type: "url"/);
+        assert.match(
+            configProblems(
+                cfg('notify: { type: "text", displayName: "Email to notify" }')
+            )[0],
+            /type: "email"/
+        );
+        assert.deepEqual(
+            configProblems(
+                cfg(
+                    'haBaseUrl: { type: "url", displayName: "Home Assistant URL" }, title: { type: "text", displayName: "Title" }'
+                )
+            ),
+            []
+        );
+    });
+
     it("the team's build refuses it; the install gate's checks don't", async () => {
         const { tools, calls } = setup();
         const res = await tools.build({

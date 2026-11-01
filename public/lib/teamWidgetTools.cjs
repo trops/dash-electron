@@ -83,12 +83,98 @@ const AI_SCOPE = "@ai-built/";
  * keyed by setting name. Dash reads a list too (installed widgets keep
  * working), so this holds the team's builds only — not the install gate.
  */
-function configProblems(configCode) {
+function configProblems(configCode, previousConfigCode = null) {
     return /\buserConfig\s*:\s*\[/.test(String(configCode || ""))
         ? [
               'userConfig is a list — write it as an object keyed by setting name, e.g. userConfig: { title: { type: "text", displayName: "Title", defaultValue: "Counter" } }',
           ]
-        : [];
+        : settingTypeProblems(configCode, previousConfigCode);
+}
+
+// A setting for a web address or an email, typed "text": Dash can only check
+// it (and say "Not a web address" under a URL missing its ":") when it's
+// "url" or "email". Hosts, servers and postal addresses aren't web
+// addresses (a bare "10.0.0.5" is a fine host).
+const URL_SETTING = /(url|uri|endpoint|link)$/i;
+const URL_LABEL = /\b(url|web address|endpoint|link)\b/i;
+const EMAIL_SETTING = /email/i;
+
+/** Where the object opened at src[open] ("{") closes — strings skipped. */
+function objectEnd(src, open) {
+    let depth = 0;
+    let quote = null;
+    for (let i = open; i < src.length; i += 1) {
+        const c = src[i];
+        if (quote) {
+            if (c === "\\") i += 1;
+            else if (c === quote) quote = null;
+            continue;
+        }
+        if (c === "'" || c === '"' || c === "`") quote = c;
+        else if (c === "{") depth += 1;
+        else if (c === "}") {
+            depth -= 1;
+            if (depth === 0) return i;
+        }
+    }
+    return -1;
+}
+
+/** The userConfig entries: [{ key, props }] (props as written). */
+function userConfigEntries(configCode) {
+    const src = String(configCode || "");
+    const m = /\buserConfig\s*:\s*\{/.exec(src);
+    if (!m) return [];
+    const open = m.index + m[0].length - 1;
+    const end = objectEnd(src, open);
+    if (end < 0) return [];
+    const out = [];
+    const key = /\s*,?\s*["']?([A-Za-z_$][\w$]*)["']?\s*:\s*\{/y;
+    let i = open + 1;
+    while (i < end) {
+        key.lastIndex = i;
+        const k = key.exec(src);
+        if (!k) break;
+        const start = key.lastIndex - 1;
+        const close = objectEnd(src, start);
+        if (close < 0 || close > end) break;
+        out.push({ key: k[1], props: src.slice(start + 1, close) });
+        i = close + 1;
+    }
+    return out;
+}
+
+const typeOf = (props) => {
+    const t = /\btype\s*:\s*["']([a-z]+)["']/.exec(props);
+    return t ? t[1] : null;
+};
+
+/**
+ * The settings the team writes say what they hold: a web address is
+ * type "url", an email type "email" (Dash checks those as they're set).
+ * A change to a widget is held to it only for settings it adds — one the
+ * widget already had stays as the user knows it.
+ */
+function settingTypeProblems(configCode, previousConfigCode = null) {
+    const had = new Set(
+        userConfigEntries(previousConfigCode).map((e) => e.key)
+    );
+    const problems = [];
+    for (const { key, props } of userConfigEntries(configCode)) {
+        if (had.has(key) || typeOf(props) !== "text") continue;
+        const label = /\bdisplayName\s*:\s*["']([^"']*)["']/.exec(props);
+        const name = label ? label[1] : "";
+        if (EMAIL_SETTING.test(key) || EMAIL_SETTING.test(name)) {
+            problems.push(
+                `userConfig.${key} holds an email — make it type: "email" so Dash checks it as it's set`
+            );
+        } else if (URL_SETTING.test(key) || URL_LABEL.test(name)) {
+            problems.push(
+                `userConfig.${key} holds a web address — make it type: "url" so Dash checks it as it's set (and offers "http://…" when the ":" is missing)`
+            );
+        }
+    }
+    return problems;
 }
 
 /**
@@ -410,7 +496,10 @@ function createTeamWidgetTools(deps) {
                 previousCode,
                 imports: true,
             }),
-            ...configProblems(configCode),
+            ...configProblems(
+                configCode,
+                before && before.success ? before.configCode || "" : null
+            ),
         ];
         if (problems.length) {
             return {
@@ -545,7 +634,10 @@ function createTeamWidgetTools(deps) {
                 previousCode,
                 imports: true,
             }),
-            ...configProblems(configCode),
+            ...configProblems(
+                configCode,
+                before && before.success ? before.configCode || "" : null
+            ),
         ];
         if (problems.length) {
             return {
@@ -705,6 +797,30 @@ function createTeamWidgetTools(deps) {
             previousComponents.set(widgetName, draft.previousComponentCode);
         }
         Object.defineProperty(draft, "installedAs", { value: widgetName });
+        // What's installed is what was previewed — or the step says so, and
+        // nothing says it's updated while other code runs. (Its code can't
+        // be read: nothing to compare.)
+        let now = null;
+        try {
+            now = await deps.readWidgetSources({
+                widgetName,
+                componentName: draft.componentName,
+            });
+        } catch (_) {
+            now = null; // can't read it: nothing to compare
+        }
+        if (
+            now &&
+            now.success &&
+            typeof now.componentCode === "string" &&
+            now.componentCode.trim() !== draft.componentCode.trim()
+        ) {
+            return {
+                success: false,
+                widgetName,
+                error: `${key} was installed, but the code it runs isn't the code you previewed — build it again.`,
+            };
+        }
         return { success: true, widgetName };
     }
 
@@ -921,6 +1037,7 @@ module.exports = {
     createTeamWidgetTools,
     codeProblems,
     configProblems,
+    settingTypeProblems,
     helperProblems,
     NOT_WIDGET_CODE,
     scorecardSummary,

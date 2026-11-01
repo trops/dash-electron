@@ -739,11 +739,22 @@ async function aiBuild(message, { windows = [] } = {}) {
         const dashCoreRegistry =
             require("@trops/dash-core/electron").widgetRegistry;
         const registry = dashCoreRegistry.getWidgetRegistry();
+        // Every install is a new version, stamped with when it was built:
+        // what runs on a dashboard can be told apart from what ran before.
+        const {
+            nextBuildVersion,
+            installedVersion,
+            purgeStaleBundles,
+        } = require("./packageUpdate.cjs");
+        const installedBefore = registry.getWidget(targetScopedName);
+        const version = nextBuildVersion(
+            installedBefore && installedVersion(installedBefore.path)
+        );
+        const builtAt = new Date().toISOString();
         if (!sourcePackageName) {
             // Update-in-place: does a package with the same
             // scoped name already exist on disk?
-            const existing = registry.getWidget(targetScopedName);
-            if (existing?.path && fs.existsSync(existing.path)) {
+            if (installedBefore?.path && fs.existsSync(installedBefore.path)) {
                 sourcePackageName = targetScopedName;
                 sourcePackageReason = "update";
             }
@@ -756,15 +767,10 @@ async function aiBuild(message, { windows = [] } = {}) {
                     fs.cpSync(sourceWidget.path, buildDir, {
                         recursive: true,
                     });
-                    // Purge stale dist so the compile produces a
-                    // fresh bundle from our overwritten sources.
-                    const staleDist = path.join(buildDir, "dist");
-                    if (fs.existsSync(staleDist)) {
-                        fs.rmSync(staleDist, {
-                            recursive: true,
-                            force: true,
-                        });
-                    }
+                    // The old bundles (dist/ and a root index.cjs.js):
+                    // left in place, the install takes them as the
+                    // package's own build and never compiles the new code.
+                    purgeStaleBundles(buildDir);
                     // Strip other widgets' .dash.js files so
                     // compileWidget only emits the target one.
                     // Keep sibling .js utilities (imports resolve).
@@ -856,7 +862,8 @@ async function aiBuild(message, { windows = [] } = {}) {
                 {
                     name: `@ai-built/${widgetName.toLowerCase()}`,
                     displayName: widgetName.replace(/([A-Z])/g, " $1").trim(),
-                    version: "1.0.0",
+                    version,
+                    builtAt,
                     description:
                         description || `AI-generated widget: ${widgetName}`,
                     author: "AI Assistant",
@@ -927,6 +934,7 @@ async function aiBuild(message, { windows = [] } = {}) {
                 ? detectedMcpPermissions
                 : null,
         });
+        baselinePkg.version = version;
         fs.writeFileSync(
             pkgJsonPath,
             JSON.stringify(baselinePkg, null, 2),
