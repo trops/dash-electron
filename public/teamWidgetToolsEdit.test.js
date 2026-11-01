@@ -57,12 +57,16 @@ function setup() {
     fs.writeFileSync(skillPath, "# Widget rules");
     const tools = createTeamWidgetTools({
         getRegistry: () => ({ getWidget: (n) => installed.get(n) || null }),
+        // What's installed now (an install writes the new code there).
         readWidgetSources: async ({ widgetName }) =>
             installed.has(widgetName)
                 ? {
                       success: true,
                       componentName: "Inbox",
-                      componentCode: "old",
+                      componentCode: fs.readFileSync(
+                          path.join(pkgDir, "widgets", "Inbox.js"),
+                          "utf8"
+                      ),
                       configCode: OLD_CONFIG,
                       manifest: { author: "jg", version: "1.2.0" },
                   }
@@ -71,6 +75,12 @@ function setup() {
         skillPath,
         aiBuild: async (msg) => {
             calls.build.push(msg);
+            // Like the real install: the package now holds the new code
+            // (unless a test says the install got it wrong).
+            fs.writeFileSync(
+                path.join(pkgDir, "widgets", "Inbox.js"),
+                calls.installsWrongCode ? "something else" : msg.componentCode
+            );
             return {
                 success: true,
                 widgetName:
@@ -178,6 +188,29 @@ describe("a change in place", () => {
         const res = await tools.installDraft({ name: "draft:Notes", edit });
         assert.equal(res.success, true);
         assert.equal(calls.build[0].updateOriginal, undefined);
+    });
+
+    it("the code it runs now isn't what was previewed: it says so, never 'updated'", async () => {
+        const { tools, calls } = setup();
+        calls.installsWrongCode = true;
+        const edit = {
+            package: "@ai-built/notes",
+            componentName: "Notes",
+            mode: "update",
+            aiBuilt: true,
+        };
+        await tools.build({
+            name: "Notes",
+            componentCode: COMPONENT.replace(/Inbox/g, "Notes"),
+            configCode: CONFIG.replace(/Inbox/g, "Notes"),
+            update: true,
+            edit,
+        });
+        await pass(tools, "draft:Notes");
+        const res = await tools.installDraft({ name: "draft:Notes", edit });
+        assert.equal(res.success, false);
+        assert.match(res.error, /isn't the code you previewed/);
+        assert.equal(res.widgetName, "@ai-built/notes");
     });
 });
 

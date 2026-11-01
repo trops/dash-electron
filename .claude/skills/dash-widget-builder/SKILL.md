@@ -533,6 +533,8 @@ A picture address a service hands you is often **relative to that service** or n
 
 -   Show a picture only from a full address: `https://`, `http://` (a home server on the user's network is fine) or `data:image/`. For a relative one, put the server address the user set in the widget's settings in front of it (`baseUrl + path`). With no address set, show a plain icon and say which setting to fill in.
 -   Give every `<img>` an `onError` that hides it **once**. Never retry, re-render or swap the address in a loop. A picture that can't load is not an error to keep trying.
+-   **When a picture fails, say what it tried.** In its place, show "Couldn't load the cover" with the address it tried (small, selectable text) and the setting to check, e.g. "Check Home Assistant URL in this widget's settings". Never just "No cover art". (Dash's side panel lists it too, with why.)
+-   The server address setting is `type: "url"` (see userConfig below), never `"text"`.
 -   Don't put a changing value (a token, `Date.now()`) in an image address on every refresh. Each change makes the picture load again.
 
 ```jsx
@@ -670,6 +672,19 @@ export default {
             required: true,
         },
     },
+    // A setting's type says what it holds — Dash checks it as the user
+    // sets it and holds Save until it's right:
+    //   "text" | "secret" (hidden) | "number" | "select" (with options)
+    //   "url"    a web address — ALWAYS for a server/base URL. "http//x"
+    //            gets "Not a web address. Did you mean http://x?"
+    //   "email"  an email address
+    // Plain-value checks any setting can add: required: true,
+    // pattern: "^[A-Z]{3}$" + patternMessage: "Three capital letters.",
+    // minLength / maxLength, and for numbers min / max. Never code.
+    // The team's build refuses an address or email setting typed "text".
+    // e.g. haBaseUrl: { type: "url", displayName: "Home Assistant URL",
+    //        instructions: "The address you open Home Assistant at, e.g. http://10.0.0.107",
+    //        defaultValue: "" },
     // ⚠️ When EDITING an existing widget: preserve every userConfig field
     // exactly as written — including its `defaultValue`, `displayName`,
     // `instructions`, and `required` — unless the user explicitly asks to

@@ -30,6 +30,58 @@ function bumpLocalVersion(version) {
     return `${major}.${minor}.${Number(patch) + 1}-local.1`;
 }
 
+/**
+ * The next version of an @ai-built widget: every install is a new one, so
+ * what runs can be told apart ("1.0.0", then "1.0.1", …).
+ */
+function nextBuildVersion(previous) {
+    const m = /^(\d+)\.(\d+)\.(\d+)/.exec(String(previous || "").trim());
+    if (!m) return "1.0.0";
+    return `${m[1]}.${m[2]}.${Number(m[3]) + 1}`;
+}
+
+const versionParts = (v) =>
+    (/^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "")) || []).slice(1).map(Number);
+
+/**
+ * The installed version of a package: the higher of its dash.json and
+ * package.json (they can disagree), so the next one never goes backwards.
+ */
+function installedVersion(packagePath) {
+    if (!packagePath) return null;
+    let best = null;
+    for (const file of ["dash.json", "package.json"]) {
+        try {
+            const v = JSON.parse(
+                fs.readFileSync(path.join(packagePath, file), "utf8")
+            ).version;
+            const p = versionParts(v);
+            if (p.length !== 3) continue;
+            const b = versionParts(best);
+            if (
+                !best ||
+                p[0] > b[0] ||
+                (p[0] === b[0] &&
+                    (p[1] > b[1] || (p[1] === b[1] && p[2] > b[2])))
+            ) {
+                best = v;
+            }
+        } catch (_) {
+            // not there: the next file
+        }
+    }
+    return best;
+}
+
+// A package's built bundles: left in place, an install takes them as its
+// own build and never compiles the new code.
+const STALE_BUNDLES = ["dist", "index.cjs.js", "index.cjs.css"];
+function purgeStaleBundles(buildDir) {
+    for (const stale of STALE_BUNDLES) {
+        fs.rmSync(path.join(buildDir, stale), { recursive: true, force: true });
+    }
+}
+
 function bumpJson(file, version) {
     if (!fs.existsSync(file)) return;
     const json = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -47,9 +99,7 @@ function prepareUpdateBuild({
     fs.cpSync(sourcePath, buildDir, { recursive: true });
     // The fresh build must be the bundle that loads (dist/ wins over the
     // root, and a stale root bundle would linger).
-    for (const stale of ["dist", "index.cjs.js", "index.cjs.css"]) {
-        fs.rmSync(path.join(buildDir, stale), { recursive: true, force: true });
-    }
+    purgeStaleBundles(buildDir);
     const widgetsDir = path.join(buildDir, "widgets");
     fs.mkdirSync(widgetsDir, { recursive: true });
     fs.writeFileSync(path.join(widgetsDir, `${widgetName}.js`), componentCode);
@@ -94,4 +144,11 @@ async function installWithBackup({ packagePath, backupRoot, install }) {
     }
 }
 
-module.exports = { bumpLocalVersion, prepareUpdateBuild, installWithBackup };
+module.exports = {
+    bumpLocalVersion,
+    nextBuildVersion,
+    installedVersion,
+    purgeStaleBundles,
+    prepareUpdateBuild,
+    installWithBackup,
+};
