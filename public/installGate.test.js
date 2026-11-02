@@ -331,6 +331,26 @@ describe("installGate — the code checks for every package install", () => {
             )
         );
     });
+    it("raw controls are warnings at install, like colors", async () => {
+        const dir = pkg({
+            "HelloWidget.js": COMPONENT.replace(
+                "<Panel>",
+                '<Panel>\n            <button type="button">Go</button>'
+            ),
+            "HelloWidget.dash.js": CONFIG,
+        });
+        const res = await installGate(dir, { widgetName: "@x/hello" });
+        assert.equal(res.ok, true);
+        assert.deepEqual(res.problems, []);
+        assert.ok(
+            res.warnings.some((w) =>
+                /^HelloWidget: Raw <button> at line \d+: use dash-react's Button/.test(
+                    w
+                )
+            ),
+            JSON.stringify(res.warnings)
+        );
+    });
     it("colors don't block, but other problems still do", async () => {
         const dir = pkg({
             "HelloWidget.js": COMPONENT.replace(

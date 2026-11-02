@@ -704,7 +704,7 @@ function validateNoModalUsage(componentCode) {
  * light mode). Flags, in code and in strings (className, style):
  *   - Tailwind color classes: bg-red-500, text-emerald-300, hover:border-…,
  *     ring-/fill-/stroke-/from-/to-/via-/divide-/placeholder-/outline-…
- *   - bracket values: text-[10px], w-[440px], bg-[#fff] — the prebuilt CSS
+ *   - bracket values: text-[10px], w-[440px], bg-[#fff], [&>*]:m-0 — the prebuilt CSS
  *     bundle doesn't carry them, so they silently don't render
  *   - hex values (#fff, #1a2b3c) and rgb()/rgba()/hsl()/hsla()
  * Theme-neutral classes (bg-white, text-black, bg-transparent) pass.
@@ -730,6 +730,14 @@ const HARDCODED_COLOR_PATTERNS = [
         re: /(?<![\w-])(?:[a-z-]+:)*[a-z][a-z0-9-]*-\[[^\]\s"'`${}]+\]/g,
         suggestion:
             "Bracket values like text-[10px] aren't in the prebuilt CSS, so they don't render — use a standard class (text-xs, w-96) or a dash-react component.",
+    },
+    {
+        // Arbitrary variants ([&>*]:m-0, [&_svg]:h-4, [@media(...)]:…) —
+        // no `prefix-` before the bracket, so the check above misses them.
+        kind: "bracket",
+        re: /(?<![\w\])-])(?:[a-z-]+:)*\[[&@][^\]\s"'`]*\]:[^\s"'`]*/g,
+        suggestion:
+            "Bracket variants like [&>*]:m-0 aren't in the prebuilt CSS, so they don't render — put the class on the child itself, or use a dash-react component.",
     },
     {
         // Only where it's clearly a color — after a color property (color:,
@@ -766,6 +774,72 @@ function validateNoHardcodedColors(componentCode) {
         }
     }
     errors.sort((a, b) => a.line - b.line);
+    return { ok: errors.length === 0, errors };
+}
+
+/**
+ * Raw HTML controls (design guide: every control comes from
+ * @trops/dash-react so theme switches reach it). An AI-built widget shipped
+ * a full-panel `<button className=…>` toggle that ignored the theme. Flags
+ * JSX `<button`, `<input`, `<select`, `<textarea` — with or without
+ * className — outside comments and strings, and names the dash-react
+ * control to use. `<input type="file">` and `type="hidden"` pass: dash-react
+ * has no file picker, and a hidden input isn't seen.
+ *
+ * Returns: { ok, errors: [{ tag, line, snippet, suggestion }] }.
+ */
+const RAW_CONTROL_PATTERN = /<(button|input|select|textarea)(?=[\s/>])/g;
+const INPUT_TYPE = /\btype\s*=\s*\{?\s*["'`]([a-z-]+)["'`]/i;
+const INPUT_TYPE_CONTROL = {
+    checkbox: "Checkbox (or Switch / Toggle for on-off)",
+    radio: "RadioGroup",
+    range: "Slider",
+    search: "SearchInput",
+};
+function rawControlSuggestion(tag, attrs) {
+    if (tag === "button") {
+        return "use dash-react's Button, Button2 or Button3 (ButtonIcon for an icon-only button; full-panel: <Button block …>…</Button>)";
+    }
+    if (tag === "select") return "use dash-react's SelectInput";
+    if (tag === "textarea") return "use dash-react's TextArea";
+    const type = INPUT_TYPE.exec(attrs);
+    const control =
+        (type && INPUT_TYPE_CONTROL[type[1].toLowerCase()]) || "InputText";
+    return `use dash-react's ${control}`;
+}
+function validateNoRawControls(componentCode) {
+    if (!componentCode || typeof componentCode !== "string") {
+        return { ok: true, errors: [] };
+    }
+    const code = codeOnly(componentCode);
+    // Strings kept, to read an <input>'s type="…".
+    const withStrings = codeOnly(componentCode, { keepStrings: true });
+    const errors = [];
+    const seen = new Set();
+    for (const m of code.matchAll(RAW_CONTROL_PATTERN)) {
+        const tag = m[1];
+        // The tag's attributes: up to the next tag (an onClick's `=>`
+        // would end it early at the first ">").
+        const next = withStrings.indexOf("<", m.index + 1);
+        const attrs = withStrings.slice(
+            m.index,
+            next === -1 ? m.index + 400 : Math.min(next, m.index + 400)
+        );
+        const type = INPUT_TYPE.exec(attrs);
+        if (tag === "input" && type && /^(?:file|hidden)$/i.test(type[1])) {
+            continue;
+        }
+        const line = lineOf(componentCode, m.index);
+        const key = line + "|" + tag;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        errors.push({
+            tag,
+            line,
+            snippet: componentCode.split("\n")[line - 1].trim(),
+            suggestion: rawControlSuggestion(tag, attrs),
+        });
+    }
     return { ok: errors.length === 0, errors };
 }
 
@@ -1359,15 +1433,16 @@ const CHECKS = {
     },
     // 13 — Every button is a dash-react Button variant.
     13: (code) => {
-        // A raw <button …> tag with className is the violation. Be
-        // tolerant of `<button type="submit">` without color classes
-        // — that's a layout-only escape hatch (form submit) and not
-        // what the rule targets.
-        const rawButtonRe = /<button[^>]*className\s*=/g;
-        const matches = code.match(rawButtonRe);
+        // Any raw <button> is the violation — the same check the Widget
+        // Builder's code checks run (validateNoRawControls), so an
+        // onClick={() => …} before className (whose `>` hid it from the
+        // old regex) is caught too. Comments and strings don't count.
+        const matches = validateNoRawControls(code)
+            .errors.filter((e) => e.tag === "button")
+            .map((e) => e.snippet);
         return {
-            pass: !matches || matches.length === 0,
-            matches: matches ? matches.slice(0, 5) : [],
+            pass: matches.length === 0,
+            matches: matches.slice(0, 5),
         };
     },
     // 14 — Status indicators use StatusBadge or Tag. Best-effort: if
@@ -1847,5 +1922,6 @@ exports.validateEventPublishing = validateEventPublishing;
 exports.validateNoBotCalls = validateNoBotCalls;
 exports.validateNoHardcodedColors = validateNoHardcodedColors;
 exports.validateNoModalUsage = validateNoModalUsage;
+exports.validateNoRawControls = validateNoRawControls;
 exports.validateProviderApiUsage = validateProviderApiUsage;
 exports.validateProviderCredentials = validateProviderCredentials;

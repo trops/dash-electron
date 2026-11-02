@@ -26,6 +26,17 @@ export default function HelloWidget({ title = "Hello" }) {
     );
 }
 `;
+// Trimmed from the AI-built EntityToggleButton: a raw full-panel toggle.
+const RAW_TOGGLE_COMPONENT = `import React from "react";
+import { Panel, FontAwesomeIcon } from "@trops/dash-react";
+export default function HelloWidget({ on, toggle }) {
+    return (
+        <button type="button" onClick={() => toggle()} className="w-full h-full flex">
+            <FontAwesomeIcon icon="lightbulb" />
+        </button>
+    );
+}
+`;
 const GOOD_CONFIG = `import HelloWidget from "./HelloWidget";
 export default {
     component: HelloWidget,
@@ -131,6 +142,20 @@ describe("build", () => {
         });
         assert.match(res.error, /Both the component code/);
         assert.equal(calls.build.length, 0);
+    });
+
+    it("a raw <button> must be fixed before the build finishes", async () => {
+        const { tools } = setup();
+        const res = await tools.build({
+            name: "HelloWidget",
+            componentCode: RAW_TOGGLE_COMPONENT,
+            configCode: GOOD_CONFIG,
+        });
+        assert.equal(res.success, false);
+        assert.ok(
+            res.problems.some((p) => /^Raw <button> at line 5/.test(p)),
+            JSON.stringify(res.problems)
+        );
     });
 
     it("never installs code that fails the Widget Builder's checks", async () => {
@@ -345,6 +370,44 @@ describe("codeProblems", () => {
         assert.match(p[0], /w-\[440px\]/);
     });
 
+    it("refuses raw controls and names the dash-react one to use", () => {
+        const p = codeProblems(RAW_TOGGLE_COMPONENT);
+        assert.equal(p.length, 1, p.join("\n"));
+        assert.match(
+            p[0],
+            /^Raw <button> at line 5: use dash-react's Button.*<Button block/
+        );
+        const input = GOOD_COMPONENT.replace(
+            "<Heading title={title} />",
+            '<Heading title={title} />\n            <input type="checkbox" />'
+        );
+        assert.ok(
+            codeProblems(input).some((x) =>
+                /^Raw <input> at line \d+: use dash-react's Checkbox/.test(x)
+            )
+        );
+    });
+
+    it("refuses arbitrary variants like [&>*]:m-0", () => {
+        const code = GOOD_COMPONENT.replace(
+            "<Panel>",
+            '<Panel className="[&>*]:m-0">'
+        );
+        assert.ok(
+            codeProblems(code).some((x) => x.includes("[&>*]:m-0")),
+            "flagged"
+        );
+    });
+
+    it("an edit only counts raw controls it adds", () => {
+        assert.deepEqual(
+            codeProblems(RAW_TOGGLE_COMPONENT, "", {
+                previousCode: RAW_TOGGLE_COMPONENT,
+            }),
+            []
+        );
+    });
+
     it("refuses api.publishEvent — bots can't hear it (4d-2)", () => {
         const code = GOOD_COMPONENT.replace(
             "    return (",
@@ -468,6 +531,13 @@ describe("scorecardSummary must-fix items (Create build fixes 3)", () => {
         assert.equal(must.length, 2);
         assert.ok(
             sc.failed.some((f) => !f.mustFix && /^Title uses/.test(f.item))
+        );
+    });
+    it("a raw <button className=…> is a must-fix, not a note", () => {
+        const sc = scorecardSummary(RAW_TOGGLE_COMPONENT);
+        assert.ok(
+            sc.failed.some((f) => f.mustFix && /^Every button is/.test(f.item)),
+            JSON.stringify(sc.failed)
         );
     });
 });

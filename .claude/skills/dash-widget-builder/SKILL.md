@@ -20,6 +20,41 @@ Build, test, and distribute widgets for this
 > This skill lives inside the project. It knows the project structure and can
 > reference existing widgets, sample code, and scaffold templates directly.
 
+## Rule one: controls come from @trops/dash-react
+
+A raw HTML control ignores the theme, and **fails the build** (the code
+checks name the line and the component to use). Use:
+
+| Raw element                                     | dash-react component                                          |
+| ----------------------------------------------- | ------------------------------------------------------------- |
+| `<button>`                                      | `Button` / `Button2` / `Button3` (`ButtonIcon` for icon-only) |
+| `<input>` (text)                                | `InputText` (`SearchInput` for search)                        |
+| `<input type="checkbox">`                       | `Checkbox`, or `Switch` / `Toggle` for on-off                 |
+| `<input type="radio">` / `<input type="range">` | `RadioGroup` / `Slider`                                       |
+| `<select>`                                      | `SelectInput`                                                 |
+| `<textarea>`                                    | `TextArea`                                                    |
+
+A whole-panel button (a toggle tile) is a dash-react button with `block`
+and children — show on/off with the tier (primary when on):
+
+```jsx
+const Tile = on ? Button : Button2;
+<Tile
+    block
+    className="h-full"
+    onClick={toggle}
+    ariaLabel={`Turn ${name} ${on ? "off" : "on"}`}
+>
+    <div className="flex flex-col items-center gap-2">
+        <FontAwesomeIcon icon="lightbulb" />
+        <span>{name}</span>
+    </div>
+</Tile>;
+```
+
+Bracket classes (`text-[10px]`, `[&>*]:m-0`) and Tailwind color shades fail
+the build too — see "Design rules" below.
+
 ## Ecosystem Overview
 
 Dash is a **four-repo ecosystem**:
@@ -237,7 +272,9 @@ The Dash design guide (dash-react `docs/design-guide.html`) is the rule
 every widget is checked against. The short version:
 
 1. **dash-react or nothing.** Every control, card, badge and message is a
-   `@trops/dash-react` component (see the Primitive Palette above).
+   `@trops/dash-react` component (see the Primitive Palette above). A raw
+   `<button>`, `<input>`, `<select>` or `<textarea>` fails the build —
+   see "Rule one" at the top for the component to use.
 2. **Tokens, never shades.** Color comes from dash-react components, from
    `useDashTokens()` — roles `text`, `muted`, `faint`, `surface`, `well`,
    `hairline`, `accent`, `accentSoft` as class strings — and status colors
@@ -258,9 +295,10 @@ const t = useDashTokens();
 
 **These fail the build** (the code checks report each with its line):
 Tailwind color classes (`bg-{color}-{shade}`, `text-…`, `border-…`,
-`ring-…`, any `hover:` / `focus:` variant), bracket values
-(`text-[10px]`, `w-[440px]` — not in the prebuilt CSS, so they don't
-render), hex colors (`#ff0000`) and `rgb()` / `hsl()` values. Theme-neutral
+`ring-…`, any `hover:` / `focus:` variant), bracket values and variants
+(`text-[10px]`, `w-[440px]`, `[&>*]:m-0` — not in the prebuilt CSS, so they
+don't render), raw HTML controls (`<button>`, `<input>`, `<select>`,
+`<textarea>`), hex colors (`#ff0000`) and `rgb()` / `hsl()` values. Theme-neutral
 utilities (spacing, sizing, flex/grid, transitions, `bg-white`,
 `bg-transparent`) are fine. For SVG shapes and charts, draw with
 `fill="currentColor"` / `stroke="currentColor"` and set the color with a role

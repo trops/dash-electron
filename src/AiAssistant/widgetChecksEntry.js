@@ -9,6 +9,7 @@ export {
     validateProviderApiUsage,
     validateNoModalUsage,
     validateNoHardcodedColors,
+    validateNoRawControls,
     validateNoBotCalls,
     validateEventPublishing,
     validateComponentReferences,

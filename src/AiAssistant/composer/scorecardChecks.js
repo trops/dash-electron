@@ -8,6 +8,7 @@ import {
     ACCEPTANCE_CHECKLIST,
     COLOR_TAILWIND_REGEX,
 } from "./widgetConventions";
+import { validateNoRawControls } from "../widgetCodeValidator";
 
 /**
  * A widget has a "data-fetch surface" when its source talks to a
@@ -156,15 +157,16 @@ const CHECKS = {
     },
     // 13 — Every button is a dash-react Button variant.
     13: (code) => {
-        // A raw <button …> tag with className is the violation. Be
-        // tolerant of `<button type="submit">` without color classes
-        // — that's a layout-only escape hatch (form submit) and not
-        // what the rule targets.
-        const rawButtonRe = /<button[^>]*className\s*=/g;
-        const matches = code.match(rawButtonRe);
+        // Any raw <button> is the violation — the same check the Widget
+        // Builder's code checks run (validateNoRawControls), so an
+        // onClick={() => …} before className (whose `>` hid it from the
+        // old regex) is caught too. Comments and strings don't count.
+        const matches = validateNoRawControls(code)
+            .errors.filter((e) => e.tag === "button")
+            .map((e) => e.snippet);
         return {
-            pass: !matches || matches.length === 0,
-            matches: matches ? matches.slice(0, 5) : [],
+            pass: matches.length === 0,
+            matches: matches.slice(0, 5),
         };
     },
     // 14 — Status indicators use StatusBadge or Tag. Best-effort: if

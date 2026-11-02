@@ -181,11 +181,11 @@ function settingTypeProblems(configCode, previousConfigCode = null) {
  * The Widget Builder's code checks on a widget's source → problems. With
  * its .dash.js config, a widget that has a connection is also checked for
  * asking the user for keys or calling the service itself. With the code of
- * the widget being changed (previousCode), only colors the change adds count
+ * the widget being changed (previousCode), only colors and raw controls the change adds count
  * — an older widget's own colors don't block an edit to it. With
  * `imports` (the Dash team's build and check — not the install gate), what
  * it imports from dash-react and dash-core has to exist there. With
- * `warnings` (an array — the install gate), hard-coded colors go there
+ * `warnings` (an array — the install gate), hard-coded colors and raw controls go there
  * instead: they don't block an install or a publish, only the Builder's and
  * the Dash team's own code.
  */
@@ -242,6 +242,20 @@ function codeProblems(
             );
         }
     }
+    // Design guide: every control is a dash-react component, so theme
+    // switches reach it. Same rules as colors: an edit is held only to the
+    // raw controls it adds, and the install gate only warns.
+    const controls = checks.validateNoRawControls(componentCode);
+    if (!controls.ok) {
+        for (const e of controls.errors) {
+            if (previousCode && e.snippet && previousCode.includes(e.snippet)) {
+                continue;
+            }
+            (warnings || problems).push(
+                `Raw <${e.tag}> at line ${e.line}: ${e.suggestion}`
+            );
+        }
+    }
     const refs = checks.validateComponentReferences(componentCode);
     if (!refs.ok) {
         for (const e of refs.errors) {
@@ -272,9 +286,11 @@ function codeProblems(
     return problems;
 }
 
-// Checklist items a data widget must get right — the Checker fails it
-// without them. The rest (titles, spacing, primitives) are things to improve.
-const MUST_FIX = [/^Loading state/, /^Error state/];
+// Checklist items a widget must get right — the Checker fails it without
+// them: a data widget's loading and error states, and dash-react buttons
+// (a raw <button> ignores the theme). The rest (titles, spacing,
+// primitives) are things to improve.
+const MUST_FIX = [/^Loading state/, /^Error state/, /^Every button is/];
 
 /**
  * Scorecard rows → { failed: [{ item, matches, mustFix }], passed: n,
