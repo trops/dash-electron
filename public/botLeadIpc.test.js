@@ -115,3 +115,20 @@ describe("Tasks via MCP IPC handlers", () => {
         );
     });
 });
+
+// Profiles bring their providers (dash-profiles): Allow lets a profile's
+// program run.
+describe("Provider Allow IPC", () => {
+    it("PROVIDER_MARK_SET_UP → providerController.markProviderSetUp(appId, name)", () => {
+        assert.match(
+            src,
+            /loggedHandle\(PROVIDER_MARK_SET_UP,[\s\S]{0,200}providerController\.markProviderSetUp\(/
+        );
+    });
+    it("PROVIDER_APPROVE_RUN → providerController.approveProviderRun(appId, name)", () => {
+        assert.match(
+            src,
+            /loggedHandle\(PROVIDER_APPROVE_RUN,[\s\S]{0,200}providerController\.approveProviderRun\([\s\S]{0,120}message && message\.providerName/
+        );
+    });
+});
