@@ -770,6 +770,8 @@ const {
     PROFILE_PLAN_BUILT_PUBLISH,
     PROFILE_PUBLISH_BUILT,
     PROFILE_SET_AUTO_SAVE,
+    PROFILE_SET_KEYS_PHRASE,
+    PROFILE_UNLOCK_KEYS,
     SESSION_GET_RECENTS,
     SESSION_ADD_RECENT,
     SESSION_REMOVE_RECENT,
@@ -2464,6 +2466,26 @@ function createWindow() {
                 message?.appId,
                 message?.profileId,
                 message?.setting || {}
+            )
+        );
+        // "Include keys and passwords": the phrase that locks or unlocks a
+        // profile's keys rides on plain ipcMain.handle — loggedHandle copies
+        // arguments to the debug console, and the phrase must never reach a
+        // log.
+        ipcMain.handle(PROFILE_SET_KEYS_PHRASE, (e, message) =>
+            profileController.setKeysPhrase(
+                message?.appId,
+                message?.profileId,
+                typeof message?.phrase === "string" ? message.phrase : "",
+                message?.remember === true,
+                message?.target === "file" ? "file" : "account"
+            )
+        );
+        ipcMain.handle(PROFILE_UNLOCK_KEYS, (e, message) =>
+            profileController.unlockKeys(
+                message?.appId,
+                message?.token,
+                typeof message?.phrase === "string" ? message.phrase : ""
             )
         );
         logger.loggedHandle(PROFILE_PUBLISH_BUILT, (e, message) =>

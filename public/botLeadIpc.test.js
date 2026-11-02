@@ -132,3 +132,23 @@ describe("Provider Allow IPC", () => {
         );
     });
 });
+
+// Profile keys (dash-profiles): the phrase never reaches a log.
+describe("Profile keys phrase IPC", () => {
+    it("set and unlock go through plain ipcMain.handle to the controller", () => {
+        assert.match(
+            src,
+            /ipcMain\.handle\(PROFILE_SET_KEYS_PHRASE,[\s\S]{0,200}profileController\.setKeysPhrase\(/
+        );
+        assert.match(
+            src,
+            /ipcMain\.handle\(PROFILE_UNLOCK_KEYS,[\s\S]{0,200}profileController\.unlockKeys\(/
+        );
+    });
+    it("never through loggedHandle", () => {
+        assert.doesNotMatch(
+            src,
+            /loggedHandle\(\s*PROFILE_(SET_KEYS_PHRASE|UNLOCK_KEYS)\b/
+        );
+    });
+});
