@@ -247,8 +247,18 @@ function codeProblems(
     // raw controls it adds, and the install gate only warns.
     const controls = checks.validateNoRawControls(componentCode);
     if (!controls.ok) {
+        // Counted per tag, not matched by text: a tag split over lines is
+        // just "<button", so any old one would excuse every new one.
+        const before = {};
+        if (previousCode) {
+            const old = checks.validateNoRawControls(previousCode);
+            for (const e of old.ok ? [] : old.errors) {
+                before[e.tag] = (before[e.tag] || 0) + 1;
+            }
+        }
         for (const e of controls.errors) {
-            if (previousCode && e.snippet && previousCode.includes(e.snippet)) {
+            if (before[e.tag] > 0) {
+                before[e.tag] -= 1;
                 continue;
             }
             (warnings || problems).push(

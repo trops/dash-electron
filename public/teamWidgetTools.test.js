@@ -408,6 +408,17 @@ describe("codeProblems", () => {
         );
     });
 
+    it("an old raw control doesn't excuse a new one split over lines", () => {
+        const old =
+            "const W = () => (\n    <button\n        onClick={go}\n    >Go</button>\n);\n";
+        const added =
+            "const W = () => (\n    <div>\n    <button\n        onClick={go}\n    >Go</button>\n    <button\n        onClick={stop}\n    >Stop</button>\n    </div>\n);\n";
+        const p = codeProblems(added, "", { previousCode: old }).filter((x) =>
+            /^Raw <button>/.test(x)
+        );
+        assert.equal(p.length, 1);
+    });
+
     it("refuses api.publishEvent — bots can't hear it (4d-2)", () => {
         const code = GOOD_COMPONENT.replace(
             "    return (",
