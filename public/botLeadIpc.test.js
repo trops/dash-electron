@@ -75,3 +75,42 @@ describe("Bots view IPC handlers", () => {
         );
     });
 });
+
+// Tasks via MCP (bot-teams TEAM-016).
+describe("Tasks via MCP IPC handlers", () => {
+    const LOGGED = {
+        BOTS_LIST_MCP_TASKS: "botController.listMcpTasks(",
+        BOTS_LIST_MCP_ROUTES: "botController.listMcpRoutes(",
+        BOTS_LIST_MCP_TASK_TEAMS: "botController.listMcpTaskTeams(",
+        BOTS_SET_TAKES_MCP_TASKS: "botController.setTakesMcpTasks(",
+        BOTS_TASK_PASSPHRASE_STATE: "botController.getTaskPassphraseState(",
+        BOTS_TASK_PASSPHRASE_REMOVE: "botController.removeTaskPassphrase(",
+        BOTS_UNLOCK_MCP_TASKS: "botController.unlockMcpTasks(",
+    };
+    for (const [channel, call] of Object.entries(LOGGED)) {
+        it(`${channel} → ${call}`, () => {
+            const re = new RegExp(
+                `loggedHandle\\(${channel},[\\s\\S]{0,240}${call.replace(
+                    /[.(]/g,
+                    (c) => `\\${c}`
+                )}`
+            );
+            assert.match(src, re);
+        });
+    }
+
+    it("the passphrase (Set, Show) never goes through loggedHandle — its debug console copies payloads", () => {
+        assert.match(
+            src,
+            /ipcMain\.handle\(BOTS_TASK_PASSPHRASE_REVEAL, \(\) =>\s*botController\.revealTaskPassphrase\(\)/
+        );
+        assert.match(
+            src,
+            /ipcMain\.handle\(BOTS_TASK_PASSPHRASE_SET, \(e, msg\) =>\s*botController\.setTaskPassphrase\(/
+        );
+        assert.doesNotMatch(
+            src,
+            /loggedHandle\(\s*BOTS_TASK_PASSPHRASE_(REVEAL|SET)\b/
+        );
+    });
+});
