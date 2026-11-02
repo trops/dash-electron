@@ -832,6 +832,15 @@ const {
     BOTS_ASK_LEAD,
     BOTS_LIST_LEADS,
     BOTS_LIST_DASH_TEAM,
+    BOTS_LIST_MCP_TASKS,
+    BOTS_LIST_MCP_ROUTES,
+    BOTS_LIST_MCP_TASK_TEAMS,
+    BOTS_SET_TAKES_MCP_TASKS,
+    BOTS_TASK_PASSPHRASE_STATE,
+    BOTS_TASK_PASSPHRASE_REVEAL,
+    BOTS_TASK_PASSPHRASE_SET,
+    BOTS_TASK_PASSPHRASE_REMOVE,
+    BOTS_UNLOCK_MCP_TASKS,
     BOTS_START_PLAN_BUILD,
     BOTS_STOP_PLAN_BUILD,
     BOTS_GET_PLAN_BUILD,
@@ -2896,6 +2905,59 @@ function createWindow() {
         // The Dash team's role bots for the Bots page (create-entry CRE-011).
         logger.loggedHandle(BOTS_LIST_DASH_TEAM, () =>
             botController.listDashTeam()
+        );
+        // Tasks via MCP (bot-teams TEAM-016): a team's tasks and switch, the
+        // Dash Lead's routing log, and the task passphrase.
+        logger.loggedHandle(BOTS_LIST_MCP_TASKS, (e, msg) =>
+            botController.listMcpTasks({
+                teamId:
+                    msg &&
+                    msg.workspaceId !== null &&
+                    msg.workspaceId !== undefined
+                        ? String(msg.workspaceId)
+                        : null,
+                limit: Math.min(
+                    Math.max(Number(msg && msg.limit) || 20, 1),
+                    50
+                ),
+            })
+        );
+        logger.loggedHandle(BOTS_LIST_MCP_ROUTES, (e, msg) =>
+            botController.listMcpRoutes({
+                limit: Math.min(
+                    Math.max(Number(msg && msg.limit) || 20, 1),
+                    50
+                ),
+            })
+        );
+        logger.loggedHandle(BOTS_LIST_MCP_TASK_TEAMS, () =>
+            botController.listMcpTaskTeams()
+        );
+        logger.loggedHandle(BOTS_SET_TAKES_MCP_TASKS, (e, msg) =>
+            botController.setTakesMcpTasks(
+                msg && msg.workspaceId,
+                !!(msg && msg.on)
+            )
+        );
+        logger.loggedHandle(BOTS_TASK_PASSPHRASE_STATE, () =>
+            botController.getTaskPassphraseState()
+        );
+        // The phrase goes in (Set) and out (Show) on plain ipcMain.handle:
+        // loggedHandle copies arguments and results to the debug console,
+        // and the passphrase must never reach a log.
+        ipcMain.handle(BOTS_TASK_PASSPHRASE_REVEAL, () =>
+            botController.revealTaskPassphrase()
+        );
+        ipcMain.handle(BOTS_TASK_PASSPHRASE_SET, (e, msg) =>
+            botController.setTaskPassphrase(
+                msg && typeof msg.text === "string" ? msg.text : ""
+            )
+        );
+        logger.loggedHandle(BOTS_TASK_PASSPHRASE_REMOVE, () =>
+            botController.removeTaskPassphrase()
+        );
+        logger.loggedHandle(BOTS_UNLOCK_MCP_TASKS, () =>
+            botController.unlockMcpTasks()
         );
         // Building an approved plan (create-entry CRE-004, phase 4d).
         logger.loggedHandle(BOTS_START_PLAN_BUILD, (e, msg) =>
