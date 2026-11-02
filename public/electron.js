@@ -670,6 +670,8 @@ const {
     PROVIDER_LIST,
     PROVIDER_GET,
     PROVIDER_DELETE,
+    PROVIDER_APPROVE_RUN,
+    PROVIDER_MARK_SET_UP,
     MCP_START_SERVER,
     MCP_STOP_SERVER,
     MCP_LIST_TOOLS,
@@ -1924,6 +1926,23 @@ function createWindow() {
                 getSenderWindow(e),
                 message.appId,
                 message.providerName
+            )
+        );
+        // A program that came with a loaded profile: the user's OK lets it
+        // run (Providers › Allow).
+        // Signed in on this Mac: a profile's provider is set up.
+        logger.loggedHandle(PROVIDER_MARK_SET_UP, (e, message) =>
+            providerController.markProviderSetUp(
+                getSenderWindow(e),
+                message && message.appId,
+                message && message.providerName
+            )
+        );
+        logger.loggedHandle(PROVIDER_APPROVE_RUN, (e, message) =>
+            providerController.approveProviderRun(
+                getSenderWindow(e),
+                message && message.appId,
+                message && message.providerName
             )
         );
 
