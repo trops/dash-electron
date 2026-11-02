@@ -23,6 +23,10 @@ jest.mock("../useBuilderTheme", () => require("../builderThemeStub"));
 import { SAMPLE_LAYOUTS } from "./composerSampleLayouts";
 import { emitGridWidgetCode } from "./gridEmitter";
 import { evaluateScorecard } from "./scorecardChecks";
+import {
+    validateNoRawControls,
+    validateNoHardcodedColors,
+} from "../widgetCodeValidator";
 
 describe("Compose-mode starter templates — scorecard pass guarantee", () => {
     test.each(SAMPLE_LAYOUTS.map((t) => [t.id, t]))(
@@ -44,6 +48,19 @@ describe("Compose-mode starter templates — scorecard pass guarantee", () => {
                 );
             }
             expect(failed.length).toBe(0);
+        }
+    );
+
+    test.each(SAMPLE_LAYOUTS.map((t) => [t.id, t]))(
+        "%s emits no raw HTML controls or bracket classes (code checks)",
+        (id, tmpl) => {
+            const { componentCode } = emitGridWidgetCode(tmpl.buildGrid());
+            expect(validateNoRawControls(componentCode).errors).toEqual([]);
+            expect(
+                validateNoHardcodedColors(componentCode).errors.filter(
+                    (e) => e.kind === "bracket"
+                )
+            ).toEqual([]);
         }
     );
 

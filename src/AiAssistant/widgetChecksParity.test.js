@@ -6,7 +6,9 @@
 import {
     validateProviderApiUsage,
     validateNoModalUsage,
+    validateNoHardcodedColors,
     validateNoBotCalls,
+    validateNoRawControls,
     validateComponentReferences,
     validateProviderCredentials,
 } from "./widgetCodeValidator";
@@ -23,6 +25,9 @@ export default function A() { return <Panel><Heading title="x" /></Panel>; }`,
 export default function B() { window.mainApi.gmail.nope(); return <Modal><Bogus /></Modal>; }`,
     `import { useMcpProvider } from "@trops/dash-core";
 export default function C() { const { callTool } = useMcpProvider("gmail"); return <div className="bg-gray-800">loading</div>; }`,
+    `export default function E({ on, toggle }) {
+    return <button type="button" onClick={() => toggle()} className="w-full [&>*]:m-0"><input type="checkbox" /></button>;
+}`,
 ];
 
 describe("widgetChecks.cjs matches src/AiAssistant", () => {
@@ -35,6 +40,12 @@ describe("widgetChecks.cjs matches src/AiAssistant", () => {
         );
         expect(generated.validateNoBotCalls(code)).toEqual(
             validateNoBotCalls(code)
+        );
+        expect(generated.validateNoRawControls(code)).toEqual(
+            validateNoRawControls(code)
+        );
+        expect(generated.validateNoHardcodedColors(code)).toEqual(
+            validateNoHardcodedColors(code)
         );
         expect(generated.validateComponentReferences(code)).toEqual(
             validateComponentReferences(code)

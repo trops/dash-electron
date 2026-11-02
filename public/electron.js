@@ -836,6 +836,7 @@ const {
     BOTS_LIST_MCP_ROUTES,
     BOTS_LIST_MCP_TASK_TEAMS,
     BOTS_SET_TAKES_MCP_TASKS,
+    BOTS_SET_ASKS_TASK_PASSPHRASE,
     BOTS_TASK_PASSPHRASE_STATE,
     BOTS_TASK_PASSPHRASE_REVEAL,
     BOTS_TASK_PASSPHRASE_SET,
@@ -2935,6 +2936,12 @@ function createWindow() {
         );
         logger.loggedHandle(BOTS_SET_TAKES_MCP_TASKS, (e, msg) =>
             botController.setTakesMcpTasks(
+                msg && msg.workspaceId,
+                !!(msg && msg.on)
+            )
+        );
+        logger.loggedHandle(BOTS_SET_ASKS_TASK_PASSPHRASE, (e, msg) =>
+            botController.setAsksTaskPassphrase(
                 msg && msg.workspaceId,
                 !!(msg && msg.on)
             )

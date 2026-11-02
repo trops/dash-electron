@@ -99,6 +99,19 @@ describe("evaluateScorecard — bad widget code", () => {
         expect(byIndex[13].matches.length).toBeGreaterThan(0);
     });
 
+    test("flags item 13 when an onClick arrow comes before className (EntityToggleButton)", () => {
+        const code = `export default function EntityToggleButton({ on, toggle }) {
+    return (
+        <button type="button" onClick={() => toggle()} className="w-full h-full">
+            {on ? "On" : "Off"}
+        </button>
+    );
+}`;
+        const row = evaluateScorecard(code).find((r) => r.index === 13);
+        expect(row.pass).toBe(false);
+        expect(row.matches[0]).toMatch(/^<button type="button"/);
+    });
+
     test("flags item 3 (EmptyState missing)", () => {
         expect(byIndex[3].pass).toBe(false);
     });

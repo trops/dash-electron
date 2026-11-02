@@ -6,6 +6,7 @@ import {
     validateProviderApiUsage,
     validateNoModalUsage,
     validateNoHardcodedColors,
+    validateNoRawControls,
     validateNoBotCalls,
     validateEventPublishing,
     validateComponentReferences,
@@ -705,5 +706,101 @@ describe("validateNoHardcodedColors — no false alarms, no blind spots", () => 
         expect(validateNoHardcodedColors('<rect fill="#abc" />').ok).toBe(
             false
         );
+    });
+
+    test("flags arbitrary variants like [&>*]:m-0", () => {
+        expect(
+            validateNoHardcodedColors(
+                '<div className="flex [&>*]:m-0 hover:[&_svg]:h-4 p-2">x</div>'
+            ).errors.map((e) => `${e.kind}:${e.snippet}`)
+        ).toEqual(["bracket:[&>*]:m-0", "bracket:hover:[&_svg]:h-4"]);
+    });
+
+    test("computed keys and indexing aren't arbitrary variants", () => {
+        const code =
+            "const o = { [key]: 1, [a]:b };\nconst v = ok ? arr[i]: arr[0];";
+        expect(validateNoHardcodedColors(code).ok).toBe(true);
+    });
+});
+
+// Trimmed from the AI-built EntityToggleButton that shipped a raw
+// full-panel toggle.
+const ENTITY_TOGGLE_BUTTON = `import React from "react";
+import { Panel, FontAwesomeIcon } from "@trops/dash-react";
+export default function EntityToggleButton({ on, toggle }) {
+    return (
+        <Panel>
+            <button
+                type="button"
+                onClick={() => toggle()}
+                className={\`w-full h-full flex flex-col \${on ? "opacity-100" : "opacity-50"}\`}
+            >
+                <FontAwesomeIcon icon="lightbulb" />
+            </button>
+        </Panel>
+    );
+}`;
+
+describe("validateNoRawControls", () => {
+    test("flags the raw full-panel toggle and names dash-react's Button", () => {
+        const r = validateNoRawControls(ENTITY_TOGGLE_BUTTON);
+        expect(r.ok).toBe(false);
+        expect(r.errors).toHaveLength(1);
+        expect(r.errors[0]).toMatchObject({ tag: "button", line: 6 });
+        expect(r.errors[0].suggestion).toMatch(/Button/);
+        expect(r.errors[0].suggestion).toMatch(/<Button block/);
+    });
+
+    test("flags raw controls with or without className", () => {
+        const code = [
+            "<button>Go</button>",
+            '<input value={v} onChange={(e) => set(e.target.value)} className="p-2" />',
+            '<input type="checkbox" checked={c} />',
+            '<input type={"range"} />',
+            '<input type="search" />',
+            '<input type="radio" name="r" />',
+            "<select>{opts}</select>",
+            "<textarea rows={3} />",
+        ].join("\n");
+        const r = validateNoRawControls(code);
+        expect(r.errors.map((e) => [e.tag, e.line])).toEqual([
+            ["button", 1],
+            ["input", 2],
+            ["input", 3],
+            ["input", 4],
+            ["input", 5],
+            ["input", 6],
+            ["select", 7],
+            ["textarea", 8],
+        ]);
+        const s = r.errors.map((e) => e.suggestion);
+        expect(s[1]).toMatch(/InputText/);
+        expect(s[2]).toMatch(/Checkbox/);
+        expect(s[3]).toMatch(/Slider/);
+        expect(s[4]).toMatch(/SearchInput/);
+        expect(s[5]).toMatch(/RadioGroup/);
+        expect(s[6]).toMatch(/SelectInput/);
+        expect(s[7]).toMatch(/TextArea/);
+    });
+
+    test("dash-react controls, comments, strings, file and hidden inputs pass", () => {
+        const code = `import { Button, InputText, SelectInput, TextArea } from "@trops/dash-react";
+// a raw <button className="x"> would ignore the theme
+/* <input /> */
+const hint = "use <button> sparingly";
+function W() {
+    return (
+        <>
+            <Button block aria-pressed={on} onClick={toggle}>Lamp</Button>
+            <InputText value={v} />
+            <SelectInput options={o} />
+            <TextArea value={t} />
+            <input type="file" className="hidden" ref={pick} />
+            <input type="hidden" name="id" value={id} />
+            <Buttonish />
+        </>
+    );
+}`;
+        expect(validateNoRawControls(code)).toEqual({ ok: true, errors: [] });
     });
 });

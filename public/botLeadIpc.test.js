@@ -83,6 +83,7 @@ describe("Tasks via MCP IPC handlers", () => {
         BOTS_LIST_MCP_ROUTES: "botController.listMcpRoutes(",
         BOTS_LIST_MCP_TASK_TEAMS: "botController.listMcpTaskTeams(",
         BOTS_SET_TAKES_MCP_TASKS: "botController.setTakesMcpTasks(",
+        BOTS_SET_ASKS_TASK_PASSPHRASE: "botController.setAsksTaskPassphrase(",
         BOTS_TASK_PASSPHRASE_STATE: "botController.getTaskPassphraseState(",
         BOTS_TASK_PASSPHRASE_REMOVE: "botController.removeTaskPassphrase(",
         BOTS_UNLOCK_MCP_TASKS: "botController.unlockMcpTasks(",
