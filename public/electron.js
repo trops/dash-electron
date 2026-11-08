@@ -825,6 +825,7 @@ const {
     BOTS_RESUME_BOT,
     BOTS_GET_PAUSE_STATE,
     BOTS_LIST_TOOL_SOURCES,
+    BOTS_LIST_CLAUDE_CONNECTORS,
     BOTS_GET_GRANTS,
     BOTS_REVOKE_GRANT,
     BOTS_ENSURE_LEAD,
@@ -2882,6 +2883,14 @@ function createWindow() {
         // no credentials cross to the renderer).
         logger.loggedHandle(BOTS_LIST_TOOL_SOURCES, (e, msg) =>
             botController.listToolSources((msg && msg.workspaceId) || null)
+        );
+        // The connectors in the user's Claude account (Claude connector
+        // providers), from their signed-in Claude Code CLI. Names, status
+        // and tools only.
+        logger.loggedHandle(BOTS_LIST_CLAUDE_CONNECTORS, (e, msg) =>
+            botController.listClaudeConnectors({
+                refresh: !!(msg && msg.refresh),
+            })
         );
         // Remembered approvals ("Always allow"): list + revoke per bot.
         logger.loggedHandle(BOTS_GET_GRANTS, (e, msg) =>
