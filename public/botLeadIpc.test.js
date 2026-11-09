@@ -14,6 +14,8 @@ const CHANNELS = {
     BOTS_SET_LEAD_ENABLED: "botController.setLeadEnabled(",
     BOTS_GET_TEAM_SETTINGS: "botController.getTeamSettings(",
     BOTS_DISMISS_LEAD_INTRO: "botController.dismissLeadIntro(",
+    BOTS_BUILTIN_INSTRUCTIONS: "botController.builtinInstructions(",
+    BOTS_DISMISS_LAYERS_NOTICE: "botController.dismissLayersNotice(",
     BOTS_GET_SETTINGS: "botController.getBotSettings(",
     BOTS_SET_SETTINGS: "botController.setBotSettings(",
     BOTS_ASK_LEAD: "botController.askLead(",
