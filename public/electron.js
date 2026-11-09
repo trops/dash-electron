@@ -832,6 +832,8 @@ const {
     BOTS_SET_LEAD_ENABLED,
     BOTS_GET_TEAM_SETTINGS,
     BOTS_DISMISS_LEAD_INTRO,
+    BOTS_BUILTIN_INSTRUCTIONS,
+    BOTS_DISMISS_LAYERS_NOTICE,
     BOTS_GET_SETTINGS,
     BOTS_SET_SETTINGS,
     BOTS_ASK_LEAD,
@@ -2922,6 +2924,13 @@ function createWindow() {
         );
         logger.loggedHandle(BOTS_DISMISS_LEAD_INTRO, (e, msg) =>
             botController.dismissLeadIntro(msg && msg.workspaceId)
+        );
+        // A bot's built-in instructions, for its settings (bot-teams TEAM-017).
+        logger.loggedHandle(BOTS_BUILTIN_INSTRUCTIONS, (e, msg) =>
+            botController.builtinInstructions((msg && msg.botId) || null)
+        );
+        logger.loggedHandle(BOTS_DISMISS_LAYERS_NOTICE, (e, msg) =>
+            botController.dismissLayersNotice(msg && msg.botId)
         );
         logger.loggedHandle(BOTS_GET_SETTINGS, () =>
             botController.getBotSettings()
