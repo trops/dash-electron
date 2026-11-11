@@ -11,13 +11,16 @@
  *       (every widget, shared file and setting) with the edited widget
  *       written over it, old bundles dropped and the version bumped. The
  *       installed package isn't touched.
- *   installWithBackup({ packagePath, backupRoot, install }) — moves the
- *       installed package aside, runs install(); on failure puts it back,
- *       on success removes the backup.
+ *   installWithBackup({ packagePath, backupRoot, install }) — copies the
+ *       installed package into its own dash-widget-update-backup-* folder
+ *       under backupRoot (default os.tmpdir()), runs install(); on failure
+ *       puts it back. The backup folder is removed either way (kept only
+ *       if putting the package back failed).
  */
 "use strict";
 
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 function bumpLocalVersion(version) {
@@ -125,22 +128,38 @@ function prepareUpdateBuild({
     return { version };
 }
 
-async function installWithBackup({ packagePath, backupRoot, install }) {
+async function installWithBackup({
+    packagePath,
+    backupRoot = os.tmpdir(),
+    install,
+}) {
     fs.mkdirSync(backupRoot, { recursive: true });
-    const backup = path.join(backupRoot, `backup-${Date.now()}`);
-    const had = fs.existsSync(packagePath);
-    if (had) fs.cpSync(packagePath, backup, { recursive: true });
+    // A folder of its own for each update, removed when the update is done.
+    const backupDir = fs.mkdtempSync(
+        path.join(backupRoot, "dash-widget-update-backup-")
+    );
+    const backup = path.join(backupDir, "package");
+    // Set while the installed package is gone: if putting it back fails,
+    // the backup is the only copy left, so it stays.
+    let keepBackup = false;
     try {
-        const result = await install();
-        fs.rmSync(backup, { recursive: true, force: true });
-        return result;
-    } catch (err) {
-        if (had) {
-            fs.rmSync(packagePath, { recursive: true, force: true });
-            fs.cpSync(backup, packagePath, { recursive: true });
-            fs.rmSync(backup, { recursive: true, force: true });
+        const had = fs.existsSync(packagePath);
+        if (had) fs.cpSync(packagePath, backup, { recursive: true });
+        try {
+            return await install();
+        } catch (err) {
+            if (had) {
+                keepBackup = true;
+                fs.rmSync(packagePath, { recursive: true, force: true });
+                fs.cpSync(backup, packagePath, { recursive: true });
+                keepBackup = false;
+            }
+            throw err;
         }
-        throw err;
+    } finally {
+        if (!keepBackup) {
+            fs.rmSync(backupDir, { recursive: true, force: true });
+        }
     }
 }
 

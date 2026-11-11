@@ -6,7 +6,7 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
-const os = require("os");
+const { tempDir, tempFile } = require("../scripts/testUtils/tempDir");
 const path = require("path");
 const {
     createTeamWidgetTools,
@@ -48,7 +48,7 @@ export default {
 function setup(over = {}) {
     const installed = new Map(Object.entries(over.installed || {}));
     const calls = { build: [], compile: [] };
-    const skillPath = path.join(os.tmpdir(), `skill-${process.pid}.md`);
+    const skillPath = tempFile("skill-", ".md");
     fs.writeFileSync(skillPath, "# Widget rules\nUse dash-react.");
     const tools = createTeamWidgetTools({
         getRegistry: () => ({ getWidget: (n) => installed.get(n) || null }),
@@ -308,7 +308,7 @@ describe("check", () => {
 
 describe("guide", () => {
     it("tries each path in order", () => {
-        const skill = path.join(os.tmpdir(), `skill2-${process.pid}.md`);
+        const skill = tempFile("skill2-", ".md");
         fs.writeFileSync(skill, "# Found");
         const t = createTeamWidgetTools({
             getRegistry: () => ({ getWidget: () => null }),
@@ -555,7 +555,7 @@ describe("scorecardSummary must-fix items (Create build fixes 3)", () => {
 
 describe("checkDraft — the Widget Builder's unsaved code, checked before it's saved", () => {
     function packageDir() {
-        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "zz-pkg-"));
+        const dir = tempDir("zz-pkg-");
         fs.mkdirSync(path.join(dir, "widgets"));
         fs.writeFileSync(path.join(dir, "widgets", "Boost.js"), "old");
         fs.writeFileSync(path.join(dir, "widgets", "Boost.dash.js"), "old cfg");

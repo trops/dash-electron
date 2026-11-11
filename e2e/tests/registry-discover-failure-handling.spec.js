@@ -2,7 +2,7 @@ const { test, expect } = require("@playwright/test");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-const { closeApp } = require("../helpers/electron-app");
+const { closeApp, launchElectron } = require("../helpers/electron-app");
 const {
     seedAuthToken,
     clearAuthToken,
@@ -46,7 +46,6 @@ test.beforeAll(async () => {
     // Hand-rolled launch — we need the registry URL set before the
     // process starts AND we need to skip launchApp's auto-Done helper
     // because the Discover tab may not auto-open.
-    const { _electron: electron } = require("playwright");
     const ROOT = path.resolve(__dirname, "../..");
     tempUserData = fs.mkdtempSync(
         path.join(os.tmpdir(), "dash-e2e-discover-fail-")
@@ -83,19 +82,22 @@ test.beforeAll(async () => {
         "utf-8"
     );
 
-    electronApp = await electron.launch({
-        args: [
-            path.join(ROOT, "public/electron.js"),
-            `--user-data-dir=${tempUserData}`,
-        ],
-        cwd: ROOT,
-        env: {
-            ...process.env,
-            NODE_ENV: "development",
-            DASH_E2E: "1",
-            DASH_REGISTRY_API_URL: UNREACHABLE_REGISTRY_URL,
+    electronApp = await launchElectron(
+        {
+            args: [
+                path.join(ROOT, "public/electron.js"),
+                `--user-data-dir=${tempUserData}`,
+            ],
+            cwd: ROOT,
+            env: {
+                ...process.env,
+                NODE_ENV: "development",
+                DASH_E2E: "1",
+                DASH_REGISTRY_API_URL: UNREACHABLE_REGISTRY_URL,
+            },
         },
-    });
+        { tempUserData }
+    );
     window = await electronApp.firstWindow();
     await window.waitForSelector("#root > *", { timeout: 30000 });
     await window.waitForTimeout(2000);

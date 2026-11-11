@@ -219,16 +219,26 @@ async function openPrivacyAndSecurity(window) {
  */
 async function installLocalWidget(window, fixtureDir, widgetName) {
     const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dash-e2e-widget-"));
-    copyDirSync(fixtureDir, tmpRoot);
-    return await window.evaluate(
-        async ({ widgetName, localPath }) => {
-            return await window.mainApi.widgets.installLocal(
-                widgetName,
-                localPath
-            );
-        },
-        { widgetName, localPath: tmpRoot }
-    );
+    try {
+        copyDirSync(fixtureDir, tmpRoot);
+        // installLocal copies the folder into the app's widgets dir, so
+        // the staging copy can go once it returns.
+        return await window.evaluate(
+            async ({ widgetName, localPath }) => {
+                return await window.mainApi.widgets.installLocal(
+                    widgetName,
+                    localPath
+                );
+            },
+            { widgetName, localPath: tmpRoot }
+        );
+    } finally {
+        try {
+            fs.rmSync(tmpRoot, { recursive: true, force: true });
+        } catch (_) {
+            /* best-effort cleanup */
+        }
+    }
 }
 
 function copyDirSync(src, dest) {

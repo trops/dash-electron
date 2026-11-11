@@ -350,106 +350,112 @@ async function compilePreview(message) {
             }
         }
 
-        if (packageDir) {
-            fs.cpSync(packageDir, buildDir, { recursive: true });
-            const oldDist = path.join(buildDir, "dist");
-            if (fs.existsSync(oldDist)) {
-                fs.rmSync(oldDist, { recursive: true, force: true });
-            }
-            // Remove all OTHER widget .dash.js files so
-            // compileWidget only builds the target widget.
-            // Keeps shared files (utils, contexts, hooks) intact.
-            const wDir = path.join(buildDir, "widgets");
-            if (fs.existsSync(wDir)) {
-                for (const f of fs.readdirSync(wDir)) {
-                    if (
-                        f.endsWith(".dash.js") &&
-                        f !== `${widgetName}.dash.js`
-                    ) {
-                        fs.unlinkSync(path.join(wDir, f));
+        // The build folder goes whatever happens: compiled, no output, or
+        // an error on the way.
+        let bundleSource = null;
+        let fileWriteSummary = null;
+        try {
+            if (packageDir) {
+                fs.cpSync(packageDir, buildDir, { recursive: true });
+                const oldDist = path.join(buildDir, "dist");
+                if (fs.existsSync(oldDist)) {
+                    fs.rmSync(oldDist, { recursive: true, force: true });
+                }
+                // Remove all OTHER widget .dash.js files so
+                // compileWidget only builds the target widget.
+                // Keeps shared files (utils, contexts, hooks) intact.
+                const wDir = path.join(buildDir, "widgets");
+                if (fs.existsSync(wDir)) {
+                    for (const f of fs.readdirSync(wDir)) {
+                        if (
+                            f.endsWith(".dash.js") &&
+                            f !== `${widgetName}.dash.js`
+                        ) {
+                            fs.unlinkSync(path.join(wDir, f));
+                        }
                     }
                 }
+            } else {
+                fs.mkdirSync(buildDir, { recursive: true });
             }
-        } else {
-            fs.mkdirSync(buildDir, { recursive: true });
-        }
 
-        const widgetsDir = path.join(buildDir, "widgets");
-        fs.mkdirSync(widgetsDir, { recursive: true });
+            const widgetsDir = path.join(buildDir, "widgets");
+            fs.mkdirSync(widgetsDir, { recursive: true });
 
-        // Multi-file payload: write every declared file. The
-        // legacy componentCode/configCode are still written
-        // explicitly below as a backstop, since validation may
-        // skip something we still need for compile. Snap the
-        // primary widget's .dash.js to the picker's selection
-        // here too so the preview compile sees the corrected
-        // providers array.
-        let fileWriteSummary = null;
-        const snappedPreviewFiles = Array.isArray(files)
-            ? files.map((f) => {
-                  if (
-                      f &&
-                      typeof f.path === "string" &&
-                      f.path.endsWith(".dash.js") &&
-                      (f.path === `widgets/${widgetName}.dash.js` ||
-                          f.path.endsWith(`/${widgetName}.dash.js`))
-                  ) {
-                      const sn = snapProvidersToSelection(
-                          f.content,
-                          selectedProvider
-                      );
-                      return {
-                          ...f,
-                          content: prepareWidgetConfig(sn.source, {
-                              componentSource: primaryComponentOf(
-                                  files,
-                                  widgetName,
-                                  componentCode
-                              ),
-                              componentName: widgetName,
-                          }).source,
-                      };
-                  }
-                  return f;
-              })
-            : files;
-        if (
-            Array.isArray(snappedPreviewFiles) &&
-            snappedPreviewFiles.length > 0
-        ) {
-            fileWriteSummary = writeAiFiles(buildDir, snappedPreviewFiles);
-            if (fileWriteSummary.skipped.length > 0) {
-                console.warn(
-                    "[ai-compile-preview] Skipped files:",
-                    fileWriteSummary.skipped
-                );
+            // Multi-file payload: write every declared file. The
+            // legacy componentCode/configCode are still written
+            // explicitly below as a backstop, since validation may
+            // skip something we still need for compile. Snap the
+            // primary widget's .dash.js to the picker's selection
+            // here too so the preview compile sees the corrected
+            // providers array.
+            const snappedPreviewFiles = Array.isArray(files)
+                ? files.map((f) => {
+                      if (
+                          f &&
+                          typeof f.path === "string" &&
+                          f.path.endsWith(".dash.js") &&
+                          (f.path === `widgets/${widgetName}.dash.js` ||
+                              f.path.endsWith(`/${widgetName}.dash.js`))
+                      ) {
+                          const sn = snapProvidersToSelection(
+                              f.content,
+                              selectedProvider
+                          );
+                          return {
+                              ...f,
+                              content: prepareWidgetConfig(sn.source, {
+                                  componentSource: primaryComponentOf(
+                                      files,
+                                      widgetName,
+                                      componentCode
+                                  ),
+                                  componentName: widgetName,
+                              }).source,
+                          };
+                      }
+                      return f;
+                  })
+                : files;
+            if (
+                Array.isArray(snappedPreviewFiles) &&
+                snappedPreviewFiles.length > 0
+            ) {
+                fileWriteSummary = writeAiFiles(buildDir, snappedPreviewFiles);
+                if (fileWriteSummary.skipped.length > 0) {
+                    console.warn(
+                        "[ai-compile-preview] Skipped files:",
+                        fileWriteSummary.skipped
+                    );
+                }
             }
+
+            fs.writeFileSync(
+                path.join(widgetsDir, `${widgetName}.js`),
+                componentCode,
+                "utf8"
+            );
+            fs.writeFileSync(
+                path.join(widgetsDir, `${widgetName}.dash.js`),
+                configCode,
+                "utf8"
+            );
+
+            const dashCoreCompiler = require("@trops/dash-core/electron");
+            await dashCoreCompiler.widgetCompiler.compileWidget(buildDir);
+
+            const outputPath = path.join(buildDir, "dist", "index.cjs.js");
+            if (!fs.existsSync(outputPath)) {
+                return {
+                    success: false,
+                    error: "Compilation produced no output.",
+                };
+            }
+
+            bundleSource = fs.readFileSync(outputPath, "utf8");
+        } finally {
+            fs.rmSync(buildDir, { recursive: true, force: true });
         }
-
-        fs.writeFileSync(
-            path.join(widgetsDir, `${widgetName}.js`),
-            componentCode,
-            "utf8"
-        );
-        fs.writeFileSync(
-            path.join(widgetsDir, `${widgetName}.dash.js`),
-            configCode,
-            "utf8"
-        );
-
-        const dashCoreCompiler = require("@trops/dash-core/electron");
-        await dashCoreCompiler.widgetCompiler.compileWidget(buildDir);
-
-        const outputPath = path.join(buildDir, "dist", "index.cjs.js");
-        if (!fs.existsSync(outputPath)) {
-            return {
-                success: false,
-                error: "Compilation produced no output.",
-            };
-        }
-
-        const bundleSource = fs.readFileSync(outputPath, "utf8");
-        fs.rmSync(buildDir, { recursive: true, force: true });
 
         return {
             success: true,
@@ -574,8 +580,8 @@ async function updateOriginalPackage({
         });
         const manifest = path.join(buildDir, "dash.json");
         const config = await installWithBackup({
+            // Backed up in its own temp folder, removed when done.
             packagePath: existing.path,
-            backupRoot: path.join(os.tmpdir(), "dash-widget-update-backups"),
             install: () =>
                 registry.installFromLocalPath(
                     packageName,
@@ -1000,6 +1006,15 @@ async function aiBuild(message, { windows = [] } = {}) {
             success: false,
             error: err.message,
         };
+    } finally {
+        // installFromLocalPath copies the build into the widgets folder
+        // (and reads dash.json) before it returns, so nothing needs the
+        // temp build folder once the install is done or has failed.
+        try {
+            fs.rmSync(buildDir, { recursive: true, force: true });
+        } catch (_) {
+            // best effort
+        }
     }
 }
 
