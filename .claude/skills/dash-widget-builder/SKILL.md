@@ -974,6 +974,66 @@ useEffect(() => {
 eventHandlers: ["onBotUpdate"],
 ```
 
+### Showing a bot's answer
+
+When a widget shows what a bot sends (the user drew a line from a bot to the
+widget on the Bots diagram), the request names the bot, its event and the
+listener to add — e.g. `showShoppingHelperAnswer`. Follow it exactly:
+
+1. **Read what the bot really sends first** — `bot_answers` with the bot's
+   id gives its last answers, whole. Bots differ and nothing about the
+   format is promised: build for the shapes you find there, and never
+   assume a field the answers don't have.
+2. **Add the listener with exactly that name** — in `eventHandlers` in the
+   `.dash.js`, and in `listen(listeners, { <name>: … })`. Dash connects the
+   bot to it after the user saves; don't add anything to the dashboard
+   yourself.
+3. **Read the answer with `readBotAnswer`** from `@trops/dash-core`, instead
+   of writing your own parser. It recognizes Markdown lists (bullets,
+   numbers, task lists), pipe tables, JSON (a fenced block or the whole
+   answer), headings, images, links and bare URLs, and only keeps http(s)
+   links:
+
+    ```js
+    const read = readBotAnswer(payload.output);
+    // read.kind: "list" | "table" | "json" | "text"
+    // read.items: [{ text, title, detail, image, link, links, checked }]
+    // read.table: { headers, rows } | null   read.json: parsed | null
+    // read.sections: [{ heading, level, kind, items, table, text }]
+    // read.links, read.images, read.text (the whole answer, trimmed)
+    ```
+
+4. **Always show something.** When `read.kind` is `"text"` or what the
+   user asked for isn't there (no pictures, no links), show the answer as
+   text — never an empty widget. Items without a picture get a plain tile. An answer over 8 KB arrives as its last 8 KB, starting
+   `…[truncated]` — it may not read as a whole list or table; show it as text.
+   A bot's **result** (`result.<name>`) is already a list: read
+   `payload.items` (look at the latest one with `bot_results`) instead of
+   `readBotAnswer`.
+5. **Keep the last message in state** and treat `envelope.replay === true`
+   like a new message: it's the bot's last one, handed over when the
+   dashboard opens (and in the preview), so the widget isn't blank until
+   the bot runs again.
+6. Open links with `target="_blank"` and `rel="noreferrer"`.
+
+```jsx
+import { useEffect, useRef, useState } from "react";
+import { readBotAnswer, useWidgetEvents } from "@trops/dash-core";
+
+const { listen, listeners } = useWidgetEvents();
+const [answer, setAnswer] = useState(null);
+const onAnswerRef = useRef(null);
+onAnswerRef.current = (envelope) => {
+    const payload = envelope?.message || envelope;
+    setAnswer({ at: payload.at || null, read: readBotAnswer(payload.output) });
+};
+useEffect(() => {
+    listen(listeners, {
+        showShoppingHelperAnswer: (envelope) => onAnswerRef.current(envelope),
+    });
+}, [listen, listeners]);
+```
+
 ### Action widgets — a button that starts a bot
 
 When the user asks for a button (or any control) that runs, starts or
