@@ -616,6 +616,7 @@ const {
     registryController,
     themeRegistryController,
     notificationController,
+    issueController,
     schedulerController,
     webSocketController,
     // Theme from URL
@@ -779,6 +780,13 @@ const {
     SESSION_GET_STATE,
     SESSION_SAVE_STATE,
     SESSION_CLEAR_STATE,
+    ISSUES_RECORD,
+    ISSUES_RESOLVE_WORKED,
+    ISSUES_LIST,
+    ISSUES_COUNTS,
+    ISSUES_RESOLVE,
+    ISSUES_RESOLVE_ASSET,
+    ISSUES_CLEAR_RESOLVED,
     NOTIFICATION_SEND,
     NOTIFICATION_GET_PREFERENCES,
     NOTIFICATION_SET_PREFERENCES,
@@ -2669,6 +2677,30 @@ function createWindow() {
             return logger.getApiCatalog();
         });
 
+        // --- Issues: what went wrong in widgets, bots and providers ---
+        issueController.init({
+            getWindows: () => BrowserWindow.getAllWindows(),
+        });
+        logger.loggedHandle(ISSUES_RECORD, (e, input) =>
+            issueController.record(input)
+        );
+        logger.loggedHandle(ISSUES_RESOLVE_WORKED, (e, input) =>
+            issueController.resolveWorked(input)
+        );
+        logger.loggedHandle(ISSUES_LIST, (e, filter) =>
+            issueController.list(filter || {})
+        );
+        logger.loggedHandle(ISSUES_COUNTS, () => issueController.counts());
+        logger.loggedHandle(ISSUES_RESOLVE, (e, msg) =>
+            issueController.resolve(msg && msg.id)
+        );
+        logger.loggedHandle(ISSUES_RESOLVE_ASSET, (e, asset) =>
+            issueController.resolveAsset(asset)
+        );
+        logger.loggedHandle(ISSUES_CLEAR_RESOLVED, () =>
+            issueController.clearResolved()
+        );
+
         // --- Notifications ---
         logger.loggedHandle(NOTIFICATION_SEND, (e, payload) =>
             notificationController.send(mainWindow, payload)
@@ -3680,6 +3712,8 @@ app.whenReady().then(() => {
     // saves only profiles the user set to save themselves) ---
     profileAutoSave.start(() => mainWindow);
     app.on("will-quit", () => profileAutoSave.stop());
+    // Issues waiting to be written go to disk before the app closes.
+    app.on("will-quit", () => issueController.flush());
 
     // --- Bot Factory lifecycle ---
     botController.init({
