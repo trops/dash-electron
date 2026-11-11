@@ -14,6 +14,7 @@ const fs = require("fs");
 const path = require("path");
 const { ipcMain } = require("electron");
 const { randomUUID } = require("crypto");
+const { resultFailed, failureText } = require("./lib/ipcResult.cjs");
 const { API_GROUPS } = require("@trops/dash-core/electron");
 
 let _getDataDir = null;
@@ -248,15 +249,19 @@ function loggedHandle(channel, handler) {
         try {
             const result = await handler(e, ...args);
             const durationMs = Date.now() - start;
+            // A handler that answers with an error (`{ error: true }`, or an
+            // MCP tool's `isError` result) failed, even though it didn't
+            // throw — logged as an error, not a success (issues PRD).
+            const failed = resultFailed(result);
 
             // File log (no payloads — privacy)
             log({
                 ts: new Date().toISOString(),
-                level: "info",
+                level: failed ? "error" : "info",
                 event: "ipc",
                 channel,
                 durationMs,
-                success: true,
+                success: !failed,
                 userId: _userId,
             });
 
@@ -264,13 +269,14 @@ function loggedHandle(channel, handler) {
             broadcast({
                 id: randomUUID(),
                 ts: new Date().toISOString(),
-                level: "info",
+                level: failed ? "error" : "info",
                 event: "ipc",
                 channel,
                 api,
                 method: channel,
                 durationMs,
-                success: true,
+                success: !failed,
+                ...(failed ? { error: failureText(result) } : {}),
                 args: safeSummary(args.length === 1 ? args[0] : args),
                 result: safeSummary(result),
             });
