@@ -173,14 +173,51 @@
     // error. Other namespaces (notifications, scheduler, session,
     // widgets, …) are not provider-bound and pass through.
     var CREDENTIALED_NAMESPACES = ["algolia", "mcp"];
-    // No-op dashboard pub/sub — widgets that call useWidgetEvents
+    // Dashboard pub/sub for one widget — widgets that call useWidgetEvents
     // expect dashboard.pub to exist with `pub` + `registerListeners`.
-    // The preview can't actually broadcast events to other widgets
-    // (none are mounted), but the call must succeed silently.
+    // The preview can't broadcast events to other widgets (none are
+    // mounted), so pub does nothing. A widget that shows what a bot sends
+    // (TD-009) gets the bot's last message, as a dashboard hands it over
+    // when it opens: widgetData.previewEvents { eventType: message }, sent
+    // once per listener and event until the widget data or bundle changes.
+    var deliveredPreviewEvents = {};
+    function deliverPreviewEvents(listeners, handlers, uuid) {
+        var events =
+            (currentWidgetData && currentWidgetData.previewEvents) || null;
+        if (!events || !listeners || !handlers) return;
+        Object.keys(listeners).forEach(function (handlerName) {
+            var fn = handlers[handlerName];
+            if (typeof fn !== "function") return;
+            var list = Array.isArray(listeners[handlerName])
+                ? listeners[handlerName]
+                : [];
+            list.forEach(function (eventType) {
+                if (!Object.prototype.hasOwnProperty.call(events, eventType))
+                    return;
+                var key = handlerName + "|" + eventType;
+                if (deliveredPreviewEvents[key]) return;
+                deliveredPreviewEvents[key] = true;
+                setTimeout(function () {
+                    try {
+                        fn({
+                            message: events[eventType],
+                            event: eventType,
+                            uuid: uuid,
+                            replay: true,
+                        });
+                    } catch (err) {
+                        // The widget's own error boundary shows a throw
+                        // during render; a throw here is the handler's.
+                        console.error("[preview] listener failed", err);
+                    }
+                }, 0);
+            });
+        });
+    }
     var stubDashboard = {
         pub: {
             pub: function () {},
-            registerListeners: function () {},
+            registerListeners: deliverPreviewEvents,
         },
     };
 
@@ -637,10 +674,12 @@
             // as a serializable object (no functions; provider data
             // is plain values resolved from AppContext.providers).
             currentWidgetData = (payload && payload.widgetData) || null;
+            deliveredPreviewEvents = {};
             reRenderCurrent();
             return;
         }
         if (type === "bridge:load-bundle") {
+            deliveredPreviewEvents = {};
             copyIconStyles(parentDocument(), document);
             mountWidget(payload);
             return;
