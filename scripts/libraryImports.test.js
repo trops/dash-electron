@@ -7,7 +7,7 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
-const os = require("os");
+const { tempDir } = require("./testUtils/tempDir");
 const path = require("path");
 const {
     findLibraryImports,
@@ -15,7 +15,7 @@ const {
 } = require("./lib/libraryImports.cjs");
 
 function pkg(files) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "zz-imports-"));
+    const dir = tempDir("zz-imports-");
     for (const [rel, content] of Object.entries(files)) {
         fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
         fs.writeFileSync(path.join(dir, rel), content);
@@ -63,10 +63,7 @@ describe("libraryImports (packaging)", () => {
     });
 
     it("records each with the version installed here, and names what's missing", () => {
-        const nm = path.join(
-            fs.mkdtempSync(path.join(os.tmpdir(), "zz-nm-")),
-            "node_modules"
-        );
+        const nm = path.join(tempDir("zz-nm-"), "node_modules");
         fs.mkdirSync(path.join(nm, "mustache"), { recursive: true });
         fs.writeFileSync(
             path.join(nm, "mustache", "package.json"),

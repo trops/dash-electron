@@ -39,6 +39,24 @@ async function main() {
         },
     });
 
+    // Always close the app, even when a step fails: Playwright removes its
+    // playwright-artifacts-* temp folder only on a clean close.
+    try {
+        await capture(electronApp, {
+            stepsFile,
+            navSteps,
+            screenshotSelector,
+            outputPath,
+        });
+    } finally {
+        await electronApp.close().catch(() => {});
+    }
+}
+
+async function capture(
+    electronApp,
+    { stepsFile, navSteps, screenshotSelector, outputPath }
+) {
     const window = await electronApp.firstWindow();
     await window.waitForSelector("#root > *", { timeout: 30000 });
     await window.waitForTimeout(2000);
@@ -76,7 +94,6 @@ async function main() {
     }
 
     console.log("Screenshot saved to", outputPath);
-    await electronApp.close();
 }
 
 main().catch((err) => {

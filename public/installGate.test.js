@@ -11,6 +11,7 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const os = require("os");
+const { tempDir } = require("../scripts/testUtils/tempDir");
 const path = require("path");
 const { createTeamWidgetTools } = require("./lib/teamWidgetTools.cjs");
 const { installGate } = require("./lib/installGate.cjs");
@@ -265,7 +266,7 @@ describe("installAllowed — only the exact checked code is installed", () => {
 
 describe("installGate — the code checks for every package install", () => {
     function pkg(files) {
-        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "zz-gate-"));
+        const dir = tempDir("zz-gate-");
         fs.mkdirSync(path.join(dir, "widgets"));
         for (const [name, content] of Object.entries(files)) {
             fs.writeFileSync(path.join(dir, "widgets", name), content);
@@ -296,7 +297,7 @@ describe("installGate — the code checks for every package install", () => {
         assert.ok(res.problems.every((p) => p.startsWith("HelloWidget: ")));
     });
     it("a package with no widget sources has nothing to check", async () => {
-        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "zz-gate-"));
+        const dir = tempDir("zz-gate-");
         assert.deepEqual(await installGate(dir, {}), {
             ok: true,
             problems: [],
@@ -407,6 +408,40 @@ describe("a refused AI-built update keeps the installed widget (aiBuild.cjs)", (
         const install = src.indexOf("registry.installFromLocalPath(", at);
         assert.doesNotMatch(src.slice(at, install), /rmSync/);
     });
+
+    it("removes its whole temp build folder once the install is done or failed", () => {
+        const src = fs.readFileSync(
+            path.join(__dirname, "lib", "aiBuild.cjs"),
+            "utf8"
+        );
+        const fn = src.slice(src.indexOf("async function aiBuild("));
+        const install = fn.indexOf("registry.installFromLocalPath(");
+        assert.ok(install > -1);
+        assert.match(
+            fn.slice(install),
+            /\}\s*finally\s*\{[\s\S]{0,400}fs\.rmSync\(buildDir, \{ recursive: true, force: true \}\)/
+        );
+    });
+
+    it("a preview compile removes its temp folder whether it compiled, made nothing or failed", () => {
+        const src = fs.readFileSync(
+            path.join(__dirname, "lib", "aiBuild.cjs"),
+            "utf8"
+        );
+        const at = src.indexOf("`dash-ai-preview-${widgetName}-${Date.now()}`");
+        assert.ok(at > -1);
+        const fn = src.slice(
+            at,
+            src.indexOf(
+                "return {\n",
+                src.indexOf("bundleSource = fs.readFileSync", at)
+            )
+        );
+        assert.match(
+            fn,
+            /try \{[\s\S]*compileWidget\(buildDir\)[\s\S]*\} finally \{\s*fs\.rmSync\(buildDir, \{ recursive: true, force: true \}\);\s*\}/
+        );
+    });
 });
 
 // Phase 1a-2: every file in the package is checked; helper files in
@@ -414,7 +449,7 @@ describe("a refused AI-built update keeps the installed widget (aiBuild.cjs)", (
 // checked helpers; the app builds what it installs; startup checks.
 describe("installGate — every widget file, at any depth", () => {
     function pkg(files) {
-        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "zz-gate-"));
+        const dir = tempDir("zz-gate-");
         for (const [rel, content] of Object.entries(files)) {
             const abs = path.join(dir, "widgets", rel);
             fs.mkdirSync(path.dirname(abs), { recursive: true });
@@ -573,7 +608,7 @@ describe("the app checks installed widgets at startup (electron.js)", () => {
 // Review fixes (Phase 1a-2): the whole package, not just widgets/.
 describe("installGate — the whole package's code", () => {
     function pkgAt(files) {
-        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "zz-gate-"));
+        const dir = tempDir("zz-gate-");
         for (const [rel, content] of Object.entries(files)) {
             const abs = path.join(dir, rel);
             fs.mkdirSync(path.dirname(abs), { recursive: true });

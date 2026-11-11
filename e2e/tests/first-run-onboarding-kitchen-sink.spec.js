@@ -3,7 +3,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const AdmZip = require("adm-zip");
-const { closeApp } = require("../helpers/electron-app");
+const { closeApp, launchElectron } = require("../helpers/electron-app");
 const {
     startMockRegistry,
     stopMockRegistry,
@@ -156,24 +156,26 @@ test.beforeAll(async () => {
     // the onboarding modal sits on top and intercepts the pointer.
     // For this spec, the onboarding modal IS the empty-state — no
     // auto-dismiss needed.
-    const { _electron: electron } = require("playwright");
     const ROOT = path.resolve(__dirname, "../..");
     tempUserData = fs.mkdtempSync(
         path.join(os.tmpdir(), "dash-e2e-onboarding-")
     );
-    electronApp = await electron.launch({
-        args: [
-            path.join(ROOT, "public/electron.js"),
-            `--user-data-dir=${tempUserData}`,
-        ],
-        cwd: ROOT,
-        env: {
-            ...process.env,
-            NODE_ENV: "development",
-            DASH_E2E: "1",
-            DASH_REGISTRY_API_URL: `http://127.0.0.1:${mockRegistryPort}`,
+    electronApp = await launchElectron(
+        {
+            args: [
+                path.join(ROOT, "public/electron.js"),
+                `--user-data-dir=${tempUserData}`,
+            ],
+            cwd: ROOT,
+            env: {
+                ...process.env,
+                NODE_ENV: "development",
+                DASH_E2E: "1",
+                DASH_REGISTRY_API_URL: `http://127.0.0.1:${mockRegistryPort}`,
+            },
         },
-    });
+        { tempUserData }
+    );
     window = await electronApp.firstWindow();
     await window.waitForSelector("#root > *", { timeout: 30000 });
     await window.waitForTimeout(2000);
@@ -291,24 +293,27 @@ test("relaunch does NOT re-show the onboarding modal", async () => {
     // Close cleanly, preserving tempUserData on disk so the second
     // launch picks up the stamped flag. We bypass launchApp() here
     // because its `hermetic:true` mode always mints a fresh user-data
-    // dir — exactly what we don't want for this assertion.
-    await electronApp.close();
+    // dir — exactly what we don't want for this assertion. closeApp
+    // without tempUserData keeps the dir (the spec made it, not launchApp).
+    await closeApp(electronApp);
 
-    const { _electron: electron } = require("playwright");
     const ROOT = path.resolve(__dirname, "../..");
-    electronApp = await electron.launch({
-        args: [
-            path.join(ROOT, "public/electron.js"),
-            `--user-data-dir=${tempUserData}`,
-        ],
-        cwd: ROOT,
-        env: {
-            ...process.env,
-            NODE_ENV: "development",
-            DASH_E2E: "1",
-            DASH_REGISTRY_API_URL: `http://127.0.0.1:${mockRegistryPort}`,
+    electronApp = await launchElectron(
+        {
+            args: [
+                path.join(ROOT, "public/electron.js"),
+                `--user-data-dir=${tempUserData}`,
+            ],
+            cwd: ROOT,
+            env: {
+                ...process.env,
+                NODE_ENV: "development",
+                DASH_E2E: "1",
+                DASH_REGISTRY_API_URL: `http://127.0.0.1:${mockRegistryPort}`,
+            },
         },
-    });
+        { tempUserData }
+    );
     window = await electronApp.firstWindow();
     await window.waitForSelector("#root > *", { timeout: 30000 });
     await window.waitForTimeout(2000);

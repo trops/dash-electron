@@ -7,7 +7,6 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 const {
     bumpLocalVersion,
@@ -16,8 +15,10 @@ const {
     prepareUpdateBuild,
     installWithBackup,
 } = require("./lib/packageUpdate.cjs");
+const { tempDir } = require("../scripts/testUtils/tempDir");
 
-const tmp = (p) => fs.mkdtempSync(path.join(os.tmpdir(), p));
+// Removed when the test process exits.
+const tmp = (p) => tempDir(p);
 
 function installedPackage() {
     const dir = tmp("zz-pkg-");
@@ -186,16 +187,35 @@ describe("prepareUpdateBuild", () => {
 });
 
 describe("installWithBackup", () => {
-    it("on success the backup is removed", async () => {
+    it("backs up into its own folder; on success the folder is removed", async () => {
         const pkg = installedPackage();
         const backups = tmp("zz-bak-");
         try {
+            let during = null;
             const res = await installWithBackup({
                 packagePath: pkg,
                 backupRoot: backups,
-                install: async () => ({ ok: true }),
+                install: async () => {
+                    during = fs.readdirSync(backups);
+                    assert.equal(
+                        fs.readFileSync(
+                            path.join(
+                                backups,
+                                during[0],
+                                "package",
+                                "widgets",
+                                "AlgoliaHits.js"
+                            ),
+                            "utf8"
+                        ),
+                        "old hits"
+                    );
+                    return { ok: true };
+                },
             });
             assert.deepEqual(res, { ok: true });
+            assert.equal(during.length, 1);
+            assert.match(during[0], /^dash-widget-update-backup-/);
             assert.deepEqual(fs.readdirSync(backups), []);
         } finally {
             fs.rmSync(pkg, { recursive: true, force: true });
@@ -230,6 +250,52 @@ describe("installWithBackup", () => {
         } finally {
             fs.rmSync(pkg, { recursive: true, force: true });
             fs.rmSync(backups, { recursive: true, force: true });
+        }
+    });
+
+    it("with no package installed yet, install runs and nothing is left", async () => {
+        const backups = tmp("zz-bak-");
+        const missing = path.join(backups, "not-installed");
+        try {
+            await assert.rejects(
+                installWithBackup({
+                    packagePath: missing,
+                    backupRoot: backups,
+                    install: async () => {
+                        throw new Error("nope");
+                    },
+                }),
+                /nope/
+            );
+            assert.equal(fs.existsSync(missing), false);
+            assert.deepEqual(fs.readdirSync(backups), []);
+        } finally {
+            fs.rmSync(backups, { recursive: true, force: true });
+        }
+    });
+
+    it("backs up under os.tmpdir() by default and removes the folder", async () => {
+        const pkg = installedPackage();
+        const root = tmp("zz-bak-default-");
+        const saved = process.env.TMPDIR;
+        // os.tmpdir() follows TMPDIR, so the default root is this folder.
+        process.env.TMPDIR = root;
+        try {
+            let during = null;
+            await installWithBackup({
+                packagePath: pkg,
+                install: async () => {
+                    during = fs.readdirSync(root);
+                },
+            });
+            assert.equal(during.length, 1);
+            assert.match(during[0], /^dash-widget-update-backup-/);
+            assert.deepEqual(fs.readdirSync(root), []);
+        } finally {
+            if (saved === undefined) delete process.env.TMPDIR;
+            else process.env.TMPDIR = saved;
+            fs.rmSync(pkg, { recursive: true, force: true });
+            fs.rmSync(root, { recursive: true, force: true });
         }
     });
 });

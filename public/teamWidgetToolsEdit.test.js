@@ -9,7 +9,7 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
-const os = require("os");
+const { tempDir, tempFile } = require("../scripts/testUtils/tempDir");
 const path = require("path");
 const { createTeamWidgetTools } = require("./lib/teamWidgetTools.cjs");
 
@@ -35,7 +35,7 @@ const OLD_CONFIG = "export default { type: 'widget', userConfig: {} };";
 
 // The user's own package, on disk: the widget and a helper it imports.
 function ownPackage() {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "zz-own-inbox-"));
+    const dir = tempDir("zz-own-inbox-");
     fs.mkdirSync(path.join(dir, "widgets", "lib"), { recursive: true });
     fs.writeFileSync(path.join(dir, "widgets", "Inbox.js"), "old");
     fs.writeFileSync(path.join(dir, "widgets", "Inbox.dash.js"), OLD_CONFIG);
@@ -53,7 +53,7 @@ function setup() {
         ["@ai-built/notes", { name: "@ai-built/notes", path: pkgDir }],
     ]);
     const calls = { build: [], compiled: [] };
-    const skillPath = path.join(os.tmpdir(), `skill-edit-${process.pid}.md`);
+    const skillPath = tempFile("skill-edit-", ".md");
     fs.writeFileSync(skillPath, "# Widget rules");
     const tools = createTeamWidgetTools({
         getRegistry: () => ({ getWidget: (n) => installed.get(n) || null }),

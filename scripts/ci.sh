@@ -80,14 +80,19 @@ step "Auditing IPC surface (regression gate)"
 node --test scripts/audit-ipc-surface.test.js
 node scripts/audit-ipc-surface.js --check
 
+# The node:test runs below go through scripts/checkTempLeaks.js: it fails
+# the step, listing each entry, when a test leaves zz-*, skill-*,
+# dash-ver-*, dash-ai-build-* … behind in the OS temp dir. Tests make
+# temp folders with scripts/testUtils/tempDir.js.
+
 # Phase 5A regression pins — IPC payload validation + warn-only bundle lint
 step "Running Phase 5A unit tests (IPC validators + bundle lint)"
-node --test scripts/ipcValidators.test.js
-node --test scripts/bundleSecurityLint.test.js scripts/libraryImports.test.js scripts/indexHtmlErrors.test.js
+node scripts/checkTempLeaks.js -- node --test scripts/ipcValidators.test.js scripts/testUtils/tempDir.test.js scripts/checkTempLeaks.test.js
+node scripts/checkTempLeaks.js -- node --test scripts/bundleSecurityLint.test.js scripts/libraryImports.test.js scripts/indexHtmlErrors.test.js
 
 # Bot Factory background-mode helpers (Slice 6b): pure tray/login-item logic
 step "Running Bot Factory background-mode tests (Slice 6b)"
-node --test public/botBackground.test.js public/appIdentifier.test.js public/widgetEventRelay.test.js public/botLeadIpc.test.js public/popoutRoute.test.js public/widgetConfigType.test.js public/widgetImportFixes.test.js public/teamWidgetTools.test.js public/teamWidgetToolsEdit.test.js public/installGate.test.js public/assistantDock.test.js public/botNotify.test.js public/widgetDrafts.test.cjs public/packageUpdate.test.js public/updateCheckError.test.js
+node scripts/checkTempLeaks.js -- node --test public/botBackground.test.js public/appIdentifier.test.js public/widgetEventRelay.test.js public/botLeadIpc.test.js public/popoutRoute.test.js public/widgetConfigType.test.js public/widgetImportFixes.test.js public/teamWidgetTools.test.js public/teamWidgetToolsEdit.test.js public/installGate.test.js public/assistantDock.test.js public/botNotify.test.js public/widgetDrafts.test.cjs public/packageUpdate.test.js public/updateCheckError.test.js
 
 # 2. Update @trops dependencies to latest published versions
 step "Updating @trops dependencies"
@@ -148,7 +153,7 @@ npm run audit:electron
 # source-pin suites; the two node:test suites run under node --test.
 step "Running AI Widget Builder unit tests"
 npm run test:ai
-npm run test:ai-node
+node scripts/checkTempLeaks.js -- npm run test:ai-node
 # The main-process copy of the Widget Builder's checks (the Dash team's
 # Checker) must match src/AiAssistant.
 node scripts/build-widget-checks.js --check

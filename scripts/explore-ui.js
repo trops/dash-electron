@@ -397,75 +397,81 @@ async function main() {
         }) → ${args.to}\n`
     );
 
-    const app = await electron.launch({
-        args: launchArgs,
-        cwd: ROOT,
-        env: {
-            ...process.env,
-            NODE_ENV: "development",
-            DASH_E2E: "1",
-        },
-    });
+    // Always close the app and remove the temp user-data dir, even when a
+    // step throws: Playwright removes its playwright-artifacts-* temp
+    // folder only on a clean close.
+    let app = null;
+    try {
+        app = await electron.launch({
+            args: launchArgs,
+            cwd: ROOT,
+            env: {
+                ...process.env,
+                NODE_ENV: "development",
+                DASH_E2E: "1",
+            },
+        });
 
-    const win = await app.firstWindow();
-    await win.waitForSelector("#root > *", { timeout: 30000 });
-    await win.waitForTimeout(2000);
-    await dismissAutoModal(win);
+        const win = await app.firstWindow();
+        await win.waitForSelector("#root > *", { timeout: 30000 });
+        await win.waitForTimeout(2000);
+        await dismissAutoModal(win);
 
-    // Seed widget packages if requested.
-    if (args.seedWidgets.length > 0) {
-        for (const fixtureDir of args.seedWidgets) {
-            await win.evaluate(
-                async (dir) => window.mainApi.widgets.loadFolder(dir),
-                fixtureDir
+        // Seed widget packages if requested.
+        if (args.seedWidgets.length > 0) {
+            for (const fixtureDir of args.seedWidgets) {
+                await win.evaluate(
+                    async (dir) => window.mainApi.widgets.loadFolder(dir),
+                    fixtureDir
+                );
+            }
+            await win.waitForTimeout(800);
+            process.stderr.write(
+                `[explore-ui] seeded widgets from ${args.seedWidgets.length} dir(s)\n`
             );
         }
-        await win.waitForTimeout(800);
-        process.stderr.write(
-            `[explore-ui] seeded widgets from ${args.seedWidgets.length} dir(s)\n`
-        );
-    }
 
-    try {
-        await dest(win);
-    } catch (e) {
-        process.stderr.write(
-            `[explore-ui] navigation failed at "${args.to}": ${e.message}\n`
-        );
-        process.stderr.write(
-            "[explore-ui] dumping snapshot at the point of failure anyway\n"
-        );
-    }
-
-    await win.waitForTimeout(500);
-
-    // Dump the accessibility tree (same shape as failure-trace
-    // error-context.md). Use ariaSnapshot which returns the YAML form
-    // we've been reading.
-    const snapshot = await win.locator("body").ariaSnapshot();
-    const out = `# Page snapshot — destination: ${args.to}\n\n\`\`\`yaml\n${snapshot}\n\`\`\`\n`;
-
-    if (args.output) {
-        fs.writeFileSync(args.output, out);
-        process.stderr.write(
-            `[explore-ui] snapshot written to ${args.output}\n`
-        );
-    } else {
-        process.stdout.write(out);
-    }
-
-    if (args.screenshot) {
-        await win.screenshot({ path: args.screenshot, fullPage: true });
-        process.stderr.write(
-            `[explore-ui] screenshot written to ${args.screenshot}\n`
-        );
-    }
-
-    await app.close();
-    if (tempUserData) {
         try {
-            fs.rmSync(tempUserData, { recursive: true, force: true });
-        } catch (_) {}
+            await dest(win);
+        } catch (e) {
+            process.stderr.write(
+                `[explore-ui] navigation failed at "${args.to}": ${e.message}\n`
+            );
+            process.stderr.write(
+                "[explore-ui] dumping snapshot at the point of failure anyway\n"
+            );
+        }
+
+        await win.waitForTimeout(500);
+
+        // Dump the accessibility tree (same shape as failure-trace
+        // error-context.md). Use ariaSnapshot which returns the YAML form
+        // we've been reading.
+        const snapshot = await win.locator("body").ariaSnapshot();
+        const out = `# Page snapshot — destination: ${args.to}\n\n\`\`\`yaml\n${snapshot}\n\`\`\`\n`;
+
+        if (args.output) {
+            fs.writeFileSync(args.output, out);
+            process.stderr.write(
+                `[explore-ui] snapshot written to ${args.output}\n`
+            );
+        } else {
+            process.stdout.write(out);
+        }
+
+        if (args.screenshot) {
+            await win.screenshot({ path: args.screenshot, fullPage: true });
+            process.stderr.write(
+                `[explore-ui] screenshot written to ${args.screenshot}\n`
+            );
+        }
+    } finally {
+        if (app) await app.close().catch(() => {});
+        if (tempUserData) {
+            try {
+                fs.rmSync(tempUserData, { recursive: true, force: true });
+            } catch (_) {}
+        }
     }
 }
 
