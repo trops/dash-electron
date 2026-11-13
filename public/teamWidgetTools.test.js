@@ -627,6 +627,21 @@ describe("checkDraft — the Widget Builder's unsaved code, checked before it's 
         ]);
     });
 
+    it("a draft's code, compiled or not, for the build's own check of the user's choices", async () => {
+        const { tools } = setup();
+        await tools.checkDraft({
+            widgetName: "Boost",
+            componentCode: GOOD_COMPONENT,
+            configCode: GOOD_CONFIG,
+        });
+        assert.deepEqual(tools.draftCode({ name: "draft:Boost" }), {
+            success: true,
+            componentCode: GOOD_COMPONENT,
+            configCode: GOOD_CONFIG,
+        });
+        assert.equal(tools.draftCode({ name: "draft:Nope" }).success, false);
+    });
+
     it("its provider calls are held to the user's live tools", async () => {
         const { tools } = setup();
         const asked = [];
