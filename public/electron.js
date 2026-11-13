@@ -788,6 +788,8 @@ const {
     ISSUES_RESOLVE,
     ISSUES_RESOLVE_ASSET,
     ISSUES_CLEAR_RESOLVED,
+    ISSUES_MUTE,
+    ISSUES_UNMUTE,
     NOTIFICATION_SEND,
     NOTIFICATION_GET_PREFERENCES,
     NOTIFICATION_SET_PREFERENCES,
@@ -2716,6 +2718,12 @@ function createWindow() {
         );
         logger.loggedHandle(ISSUES_CLEAR_RESOLVED, () =>
             issueController.clearResolved()
+        );
+        logger.loggedHandle(ISSUES_MUTE, (e, msg) =>
+            issueController.mute(msg && msg.id)
+        );
+        logger.loggedHandle(ISSUES_UNMUTE, (e, msg) =>
+            issueController.unmute(msg && msg.id)
         );
 
         // --- Notifications ---
