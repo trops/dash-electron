@@ -841,6 +841,8 @@ const {
     BOTS_CONNECTOR_GIVEN_UP,
     BOTS_GET_GRANTS,
     BOTS_REVOKE_GRANT,
+    BOTS_LIST_ALWAYS_ALLOWED,
+    BOTS_FORGET_ALWAYS_ALLOWED,
     BOTS_ENSURE_LEAD,
     BOTS_SET_LEAD_ENABLED,
     BOTS_GET_TEAM_SETTINGS,
@@ -2973,6 +2975,17 @@ function createWindow() {
                 msg && msg.botId,
                 msg && msg.serverName,
                 msg && msg.toolName
+            )
+        );
+        // Everything a bot may do without asking (provider tools and
+        // always-allowed web fetches), and Ask again for one of them.
+        logger.loggedHandle(BOTS_LIST_ALWAYS_ALLOWED, (e, msg) =>
+            botController.listAlwaysAllowed(msg && msg.botId)
+        );
+        logger.loggedHandle(BOTS_FORGET_ALWAYS_ALLOWED, (e, msg) =>
+            botController.forgetAlwaysAllowed(
+                msg && msg.botId,
+                (msg && msg.row) || {}
             )
         );
         // Team leads (bot-teams TEAM-002 / TEAM-003).
