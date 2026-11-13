@@ -157,7 +157,7 @@ can communicate via pub/sub events (see Section 6).
 
 -   Does not create a React context or wrapper component
 -   Does not establish MCP connections (that's the app-level provider system)
--   Does not share state between widgets (use pub/sub events or `api.storeData` for that)
+-   Does not share state between widgets (use pub/sub events for that)
 
 ---
 
@@ -193,14 +193,15 @@ export const MyWidget = ({
 
     // Load saved data on mount
     useEffect(() => {
-        api.readData({
-            callbackComplete: (savedData) => setData(savedData),
-            callbackError: (err) => console.error("Load failed:", err),
-        });
+        api.loadState(null)
+            .then(setData)
+            .catch((err) => setError(err.message));
     }, []);
 
     const handleSave = () => {
-        api.storeData({ timestamp: Date.now(), title });
+        api.saveState({ savedAt: Date.now(), title }).catch((err) =>
+            setError(err.message)
+        );
     };
 
     return (
@@ -337,14 +338,12 @@ Every widget receives an `api` prop from the framework. This provides:
 ### Data Persistence
 
 ```javascript
-// Save data (auto-persisted to Electron storage)
-api.storeData({ key: "value", items: [1, 2, 3] });
+// Save this widget's own data — any JSON value, replacing what was saved.
+// Its own file: no filename, never asks the user. Returns a promise.
+await api.saveState({ items: [1, 2, 3] });
 
-// Load data
-api.readData({
-    callbackComplete: (data) => console.log("Loaded:", data),
-    callbackError: (err) => console.error("Error:", err),
-});
+// Load it back — the fallback when nothing is saved yet.
+const saved = await api.loadState({ items: [] });
 ```
 
 ### Event Publishing (see Section 6)
@@ -555,7 +554,7 @@ const MyWidgetContent = () => {
 
 -   **Cross-widget communication** — use pub/sub events (Section 6)
 -   **MCP access** — just call `useMcpProvider()` directly in any component
--   **Persisted state** — use `api.storeData` / `api.readData`
+-   **Persisted state** — use `api.saveState` / `api.loadState`
 
 ---
 
@@ -572,20 +571,21 @@ For coordinating between widgets, use these approaches in order of preference:
 
 Best for "widget A tells widget B something happened" — see Section 6.
 
-### Option 2: Persisted State via `api.storeData`
+### Option 2: Each widget keeps its own state
 
-Best for data that should survive reloads:
+`api.saveState` / `api.loadState` keep one widget's own data across reloads
+— another widget can't read it. To share, Widget A publishes an event with
+the value (Option 1) and Widget B saves what it heard in its own state:
 
 ```javascript
-// Widget A saves
-api.storeData({ selectedChannelId: "C123" });
-
-// Widget B reads
-api.readData({
-    callbackComplete: (data) => {
-        setChannelId(data.selectedChannelId);
-    },
-});
+// Widget B: keep the last channel it was told about
+useEffect(() => {
+    api.loadState(null).then((saved) => saved && setChannelId(saved));
+}, []);
+const onChannelPicked = ({ channelId }) => {
+    setChannelId(channelId);
+    api.saveState(channelId);
+};
 ```
 
 ### Option 3: Custom Layout Container with Context (rare)
@@ -691,7 +691,7 @@ hierarchy, props, and context.
 ### Hot Module Reloading
 
 During development (`npm run dev`), changes to widget files automatically reload.
-No manual restart needed. State may reset on reload — use `api.storeData` for
+No manual restart needed. State may reset on reload — use `api.saveState` for
 persistence across reloads.
 
 ### Troubleshooting
@@ -702,7 +702,7 @@ Console. Ensure `index.js` exports the widget.
 **Widget shows blank**: Check DevTools Console for errors. Verify all imports resolve
 (no `Module not found`). Ensure `<Widget {...props}>` wrapper is used.
 
-**Data not persisting**: Use `api.storeData()` / `api.readData()` (not localStorage).
+**Data not persisting**: Use `api.saveState()` / `api.loadState()` (not localStorage).
 Check Console for IPC errors. Verify Electron main process is running.
 
 **Provider not available**: Ensure `.dash.js` has correct `providers` array. Check

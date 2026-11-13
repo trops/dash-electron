@@ -627,6 +627,45 @@ describe("checkDraft — the Widget Builder's unsaved code, checked before it's 
         ]);
     });
 
+    it("its provider calls are held to the user's live tools", async () => {
+        const { tools } = setup();
+        const asked = [];
+        tools.useLiveTools(async (types) => {
+            asked.push(types);
+            return {
+                filesystem: {
+                    provider: "My Files",
+                    tools: [
+                        {
+                            name: "read_text_file",
+                            inputSchema: {
+                                properties: {
+                                    path: { type: "string" },
+                                    head: { type: "number" },
+                                },
+                                required: ["path"],
+                            },
+                        },
+                    ],
+                },
+            };
+        });
+        const res = await tools.checkDraft({
+            widgetName: "Notes",
+            componentCode: `export default function Notes() {
+  const { callTool } = useMcpProvider("filesystem");
+  callTool("read_text_file", { head: 5 });
+  callTool("read_text_file", { path: "From /Users/me/notes/list.md" });
+  return null;
+}`,
+            configCode: `export default { name: "Notes", providers: [{ type: "filesystem", providerClass: "mcp", required: true }], userConfig: {} };`,
+        });
+        assert.deepEqual(asked, [["filesystem"]]);
+        const said = res.problems.join("\n");
+        assert.match(said, /read_text_file needs path/);
+        assert.match(said, /path is written into the code/);
+    });
+
     it("checking a draft that was never staged says so", async () => {
         const { tools } = setup();
         const res = await tools.check({ name: "draft:Nope" });

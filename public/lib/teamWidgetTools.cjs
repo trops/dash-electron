@@ -40,6 +40,10 @@ const { compilePreview, aiBuild, helperFiles } = require("./aiBuild.cjs");
 const { prepareWidgetConfig } = require("./widgetImportFixes.cjs");
 const { validateImportedNames } = require("./widgetImports.cjs");
 const checks = require("./widgetChecks.cjs");
+const {
+    providerCallProblems,
+    declaredTypes,
+} = require("./providerCallChecks.cjs");
 
 const WIDGET_NAME = /^[A-Z][A-Za-z0-9]{1,48}$/;
 
@@ -357,6 +361,24 @@ function createTeamWidgetTools(deps) {
     // for the Checker's check_widget.
     const drafts = new Map();
     let draftStamp = 0;
+    // The user's live provider tools ({ [type]: { provider, tools } }),
+    // asked for by provider type — set by the bot controller
+    // (useLiveTools). A widget's calls are checked against them.
+    let liveToolsFor = null;
+    function useLiveTools(fn) {
+        liveToolsFor = typeof fn === "function" ? fn : null;
+    }
+    async function liveCallProblems(componentCode, configCode) {
+        const types = declaredTypes(configCode);
+        if (!liveToolsFor || !types.length) return [];
+        try {
+            const live = (await liveToolsFor(types)) || {};
+            return providerCallProblems(componentCode, configCode, live);
+        } catch (_e) {
+            return []; // not known now; nothing to hold it to
+        }
+    }
+
     // During a Checker run (reviewRun): the drafts it ran check_widget on,
     // each with its stamp at the check — the verdict counts only for those.
     let reviewing = null;
@@ -444,6 +466,11 @@ function createTeamWidgetTools(deps) {
                         imports: true,
                     }),
                     ...helperProblems(helpers, { imports: true }),
+                    // Its calls, against the user's live provider tools.
+                    ...(await liveCallProblems(
+                        componentCode,
+                        configCode || ""
+                    )),
                 ],
                 scorecard: scorecardSummary(componentCode),
                 componentCode,
@@ -887,10 +914,16 @@ function createTeamWidgetTools(deps) {
                           error:
                               (compiled && compiled.error) || "didn't compile",
                       },
-            problems: codeProblems(src.componentCode, src.configCode || "", {
-                previousCode: previousComponents.get(widgetName) || null,
-                imports: true,
-            }),
+            problems: [
+                ...codeProblems(src.componentCode, src.configCode || "", {
+                    previousCode: previousComponents.get(widgetName) || null,
+                    imports: true,
+                }),
+                ...(await liveCallProblems(
+                    src.componentCode,
+                    src.configCode || ""
+                )),
+            ],
             scorecard: scorecardSummary(src.componentCode),
             configCode: src.configCode || "",
             previousConfigCode: previousConfigs.has(widgetName)
@@ -993,7 +1026,7 @@ function createTeamWidgetTools(deps) {
         };
     }
 
-    function guide({ providers = [] } = {}) {
+    function guide({ providers = [], live = null } = {}) {
         let rules = null;
         const candidates = Array.isArray(deps.skillPath)
             ? deps.skillPath
@@ -1015,7 +1048,9 @@ function createTeamWidgetTools(deps) {
                 args: t.args || [],
             }));
         }
-        return { rules, tools };
+        // The user's live tools (what each takes), when the bot controller
+        // has them — they win over the known list.
+        return { rules, tools, live: live || {} };
     }
 
     /**
@@ -1056,6 +1091,7 @@ function createTeamWidgetTools(deps) {
         reviewRun,
         installAllowed,
         guide,
+        useLiveTools,
     };
 }
 

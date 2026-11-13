@@ -409,7 +409,62 @@ Write the widget code using the scaffold from Phase 1 and the MCP mapping from P
    wire up `useMcpProvider` to call MCP tools
 3. Set up the widget's context if needed — for sharing state with sub-components
 4. Implement widget communication (pub/sub) if multiple widgets coordinate
-5. Use `api.storeData` / `api.readData` for persisting widget state
+5. Save the widget's own data with `api.saveState` / `api.loadState` (below)
+
+#### Values the user can change are settings — never in the code
+
+Every concrete value a widget works with — a file path, a record or list
+id (`orders-2024`), a URL, a channel, an index, a folder — is a
+`userConfig` setting with that value as its default, read from the
+widget's props. Never write it into the code. The build request lists the
+plan's values under "Settings": declare exactly those keys and defaults.
+The Checker fails a call with a file path or web address written into it.
+
+```javascript
+// NotesList.dash.js
+userConfig: {
+    filePath: { type: "text", defaultValue: "/Users/me/notes/list.md", displayName: "Notes file", instructions: "The file to show", required: true },
+},
+// NotesList.js — the setting arrives as a prop
+export default function NotesList({ filePath }) {
+    const { callTool, isConnected } = useMcpProvider("filesystem");
+    // …callTool("read_text_file", { path: filePath })
+}
+```
+
+#### Call tools exactly as the provider defines them
+
+`widget_guide` lists the user's live tools with what each takes —
+`name(input: type, optional?: type)`. Use only those tool names and those
+inputs, and give every required one. A file provider also says which
+folders it can use: every path must be inside one. The Checker holds each
+`callTool` to these and fails a tool that isn't there, a required input
+left out, or an input the tool doesn't take.
+
+#### Saving the widget's own data
+
+`api` is the widget's own api (the `api` prop). For state the widget keeps
+itself — a list the user adds to, checked items, a last result — use:
+
+```javascript
+const [items, setItems] = useState([]);
+useEffect(() => {
+    api.loadState([]) // what was saved, or [] the first time
+        .then(setItems)
+        .catch((e) => setError(e.message));
+}, []);
+const add = (name) => {
+    const next = [...items, { name, done: false }];
+    setItems(next);
+    api.saveState(next).catch((e) => setError(e.message)); // replaces what was saved
+};
+```
+
+It goes in the widget's own file and never asks the user. Don't pass a
+filename, and don't use `api.storeData` / `api.readData` for this (they
+add timestamped entries rather than replacing). To read a file the user
+has (a document, a list on disk), use the user's file provider's tools —
+with the path as a setting.
 
 ### Phase 4: Test
 
@@ -443,7 +498,7 @@ The user, NOT you, will then verify these things in the dashboard:
 -   Provider connection (MCP or credential IPC) establishes correctly
 -   Data flows from the provider into the widget UI
 -   User interactions trigger the right provider calls
--   Widget state persists across reloads via `api.storeData`
+-   Widget state persists across reloads via `api.saveState` / `api.loadState`
 -   Error states render visibly (no silent `setData([])` after a `catch`)
 -   Themed components inherit the user's chosen theme
 
@@ -1261,7 +1316,8 @@ Widget code runs in the browser (renderer process). Rules:
 -   **No Node-only APIs.** No `process.cwd()`, `process.env` (except
     `process.env.NODE_ENV`), `__dirname`, `__filename`, `require()`, no imports
     of `fs` / `path` / `os` / `child_process` / `crypto` / `stream` /
-    `child_process`. Use literal strings or read from props / userConfig.
+    `child_process`. Values the user works with (paths, ids, URLs) come
+    from props / userConfig — never written into the code.
 -   **Defensive on every external response.** MCP tool responses, IPC
     responses, props, fetched values — never assume a field exists. Guard
     before calling string/array methods (`typeof x === "string"`,
