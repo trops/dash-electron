@@ -669,6 +669,7 @@ const {
     READ_DATA_URL,
     PROVIDER_SAVE,
     PROVIDER_LIST,
+    PROVIDER_LIST_SUMMARIES,
     PROVIDER_GET,
     PROVIDER_DELETE,
     PROVIDER_APPROVE_RUN,
@@ -1931,6 +1932,18 @@ function createWindow() {
         logger.loggedHandle(PROVIDER_LIST, (e, message) =>
             listProviders(getSenderWindow(e), message.appId)
         );
+        // What the user has, from providers.json — nothing decrypted.
+        if (
+            PROVIDER_LIST_SUMMARIES &&
+            providerController.listProviderSummaries
+        ) {
+            logger.loggedHandle(PROVIDER_LIST_SUMMARIES, (e, message) =>
+                providerController.listProviderSummaries(
+                    getSenderWindow(e),
+                    message.appId
+                )
+            );
+        }
         logger.loggedHandle(PROVIDER_GET, (e, message) =>
             getProvider(getSenderWindow(e), message.appId, message.providerName)
         );
@@ -1960,8 +1973,10 @@ function createWindow() {
         );
 
         // --- MCP ---
+        // A screen (dashboard, widget preview) starting or letting go of a
+        // server: counted, so one closing never stops another's.
         logger.loggedHandle(MCP_START_SERVER, (e, message) =>
-            mcpController.startServer(
+            (mcpController.startServerForScreen || mcpController.startServer)(
                 getSenderWindow(e),
                 message.serverName,
                 message.mcpConfig,
@@ -1972,7 +1987,7 @@ function createWindow() {
             )
         );
         logger.loggedHandle(MCP_STOP_SERVER, (e, message) =>
-            mcpController.stopServer(
+            (mcpController.stopServerForScreen || mcpController.stopServer)(
                 getSenderWindow(e),
                 message.serverName,
                 message.workspaceId
@@ -3089,11 +3104,14 @@ function createWindow() {
                 (msg && msg.inputs) || {}
             )
         );
+        // Mark a spot: the picture is taken from the window that sent it.
         logger.loggedHandle(BOTS_REVISE_PLAN_STEP, (e, msg) =>
             botController.revisePlanStep(
                 msg && msg.buildId,
                 msg && msg.stepId,
-                msg && msg.note
+                msg && msg.note,
+                (msg && msg.marks) || null,
+                e && e.sender
             )
         );
         logger.loggedHandle(BOTS_REMOVE_PLAN_BUILD, (e, msg) =>
