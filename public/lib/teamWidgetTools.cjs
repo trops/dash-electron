@@ -1082,11 +1082,23 @@ function createTeamWidgetTools(deps) {
         };
     }
 
+    /** A draft's code, compiled or not — held to the user's choices. */
+    function draftCode({ name } = {}) {
+        const draft = drafts.get(String(name || "").trim());
+        if (!draft) return { success: false, error: "That draft isn't here." };
+        return {
+            success: true,
+            componentCode: draft.componentCode || "",
+            configCode: draft.configCode || "",
+        };
+    }
+
     return {
         build,
         check,
         checkDraft,
         previewDraft,
+        draftCode,
         installDraft,
         reviewRun,
         installAllowed,

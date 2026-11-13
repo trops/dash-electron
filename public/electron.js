@@ -835,6 +835,8 @@ const {
     BOTS_GET_PAUSE_STATE,
     BOTS_LIST_TOOL_SOURCES,
     BOTS_LIST_CLAUDE_CONNECTORS,
+    BOTS_USE_CLAUDE_CLI,
+    BOTS_CONNECTOR_GIVEN_UP,
     BOTS_GET_GRANTS,
     BOTS_REVOKE_GRANT,
     BOTS_ENSURE_LEAD,
@@ -2939,7 +2941,20 @@ function createWindow() {
         logger.loggedHandle(BOTS_LIST_CLAUDE_CONNECTORS, (e, msg) =>
             botController.listClaudeConnectors({
                 refresh: !!(msg && msg.refresh),
+                // Reconnect: a fresh check that connects again, waits longer.
+                ...(msg && msg.reconnect ? { reconnect: msg.reconnect } : {}),
             })
+        );
+        // A connector's details: the Claude Code to use; a connector Dash
+        // has stopped trying (and Try once more now).
+        logger.loggedHandle(BOTS_USE_CLAUDE_CLI, (e, msg) =>
+            botController.useClaudeCli((msg && msg.path) || null)
+        );
+        logger.loggedHandle(BOTS_CONNECTOR_GIVEN_UP, (e, msg) =>
+            botController.setConnectorGivenUp(
+                msg && msg.server,
+                !!(msg && msg.on)
+            )
         );
         // Remembered approvals ("Always allow"): list + revoke per bot.
         logger.loggedHandle(BOTS_GET_GRANTS, (e, msg) =>

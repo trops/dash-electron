@@ -411,6 +411,19 @@ Write the widget code using the scaffold from Phase 1 and the MCP mapping from P
 4. Implement widget communication (pub/sub) if multiple widgets coordinate
 5. Save the widget's own data with `api.saveState` / `api.loadState` (below)
 
+#### What the user chose is checked in your code
+
+When the user built the widget step by step, Dash checks every draft you
+save against what they chose: the provider's connection declared, only the
+tools they ticked that change things called (none when they chose "only
+reads"), each setting there with its chosen start, each event listed and
+sent, each listener's handler declared, the empty words, the look's
+dash-react parts, a timer when it reads again on a schedule. build_widget
+lists any mismatch as "Doesn't match what the user chose: …" — change
+exactly that and keep the rest. If a choice can't be done with their
+provider's tools, don't fake it: finish with
+`CAN'T: <what and why> | CLOSEST: <the closest that works>`.
+
 #### Values the user can change are settings — never in the code
 
 Every concrete value a widget works with — a file path, a record or list
