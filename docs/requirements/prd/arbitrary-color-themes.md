@@ -673,6 +673,43 @@ Pixel output
 
 ---
 
+## Aurora coloured by the theme, with a Strength (2026-11-13)
+
+**Problem.** Picking a theme only partly applied: text took the theme's colours, but cards, panels, windows, chat, side panels and the highlight colour kept Aurora's fixed values. Aurora's tokens (`--bg`, `--raised`, `--solid`, `--chat-*`, `--hairline*`, `--accent*`, `--mesh`) were fixed per mode, and its `[data-design="aurora"] .dr-*` rules beat the theme's background classes. So a dashboard's own theme barely reached its widgets, even widgets built correctly from dash-react components.
+
+**Decision.** Keep Aurora's look (base, glass, glow, spacing, text) and let each theme colour it within limits, rather than handing every surface to the theme's raw shades. In dark mode, raw shades made cards brighter than their panels and dropped text contrast.
+
+-   **Accent:** the theme's first colourful channel (primary, then secondary, then tertiary; a grey primary leaves it to secondary). It drives buttons, selected states, focus rings, links and the background glow. Button fills and accent text use the first shade that reads at 4.5:1; teal and yellow fills move a step darker.
+-   **Surfaces:** the page, cards, panels, chat and lines mix in a share of the primary colour. How much is the theme's **Strength**: Subtle, Balanced (the default) or Bold. Cards stay a step apart from their panel at every strength.
+-   **Text** keeps Aurora's colours, so it always reads.
+
+**Where.**
+
+-   `dash-core src/utils/auroraTokens.js` works out the tokens per mode and strength.
+-   `ThemeModel` adds them to each variant's `cssVars` and keeps `strength` on the theme.
+-   `ThemeWrapper` writes the app theme's tokens on `<html>`. `DashboardThemeProvider` writes a dashboard theme's tokens on its `[data-dashboard-theme]` wrapper, so that dashboard and its widgets take its colours and the rest of the app keeps the app theme.
+-   Saving the active theme again (its Strength) now refreshes the app at once.
+-   dash-electron `design.css` turns full-size page fills in every colour family transparent, so the tinted background shows; this used to cover gray-like families only.
+
+**Themes page.**
+
+-   The detail has a **Strength** control (Subtle / Balanced / Bold) that saves on the theme.
+-   The preview draws the theme as the app shows it, at that strength ("Preview · Bold").
+-   The list shows each theme's strength.
+
+**Checked.** A live check in a throwaway profile, dark and light, covered three things: the app theme reaches the page root; a dashboard theme reaches its widgets; Strength saves and the app updates. Screens checked: Dashboards, Themes, Providers, Bots, Widgets and Issues. The mockup is on the canvas page "Theme strength (proposed)", and the review page is https://claude.ai/artifact/AsvemSCHcnydcprUirdw4i.
+
+**Tags.** dash-react's Tag used one shade for fill and text, as low as 2.3:1 in light mode. ThemeModel now gives each Tag, Tag2 and Tag3 its own channel two shades apart: dark 800 on 200, light 200 on 800, at least 5.4:1 across Tailwind's families. A theme's own tag colours still win.
+
+**Review fixes.**
+
+-   Closing the theme editor puts the app theme's tokens back (`dash:theme-vars-restore`).
+-   Slate counts as grey for the accent.
+-   Accent text is checked against the tinted surfaces at every strength.
+-   The page-fill rule covers only the 950/900 page shades.
+
+**Screens on shared tokens.** The bot diagram, bot chat and other Bots screens took plain theme greys without dash-react's role classes, so their cards stayed flat grey on the tinted page. `useConfigTokens` now adds the `dr-role-*` class to each token. Bot chat, registry search and team import use it too, and their error text uses dash-react's status colours.
+
 ## Implementation Phases
 
 ### Phase 1: MVP — Custom Primary Color (P0) — SHIPPED (plumbing dash-react #46/#47; picker in Phase 3)
@@ -824,3 +861,4 @@ Pixel output
 | ------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1.0     | 2026-05-22 | trops  | Initial draft.                                                                                                                                                                                                                                   |
 | 1.1     | 2026-10-22 | trops  | Consolidation Phase 5: status Draft → In Progress; story statuses and Phase 1 match what shipped (dash-react #46/#47, dash-core ThemeModel / CustomHexColorPane / brand presets); "Settings → Themes" is now the Themes page and Create › Theme. |
+| 1.2     | 2026-11-13 | trops  | Aurora coloured by the theme with a Strength (Subtle / Balanced / Bold); dashboard themes reach their widgets.                                                                                                                                   |

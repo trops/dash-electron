@@ -45,29 +45,72 @@ body {
     border-color: var(--hairline) !important;
 }
 
-/* The dashboard stage/grid render opaque dark fills (bg-gray-950 / bg-gray-900)
-   that paint over the body's gradient-mesh atmosphere and flatten everything to
-   a single color. Make those full-height containers transparent so the mesh
-   shows through behind the glass cards — the mockup's depth. Scoped to
-   full-size containers (overflow-clip + h-full), so modals/inputs keep their
-   fills — a modal's own surface (.dr-modal-surface, which is full-size inside
-   its dialog) is left out, or the page behind showed through it, and so is
-   anything inside a dialog (Dashboard Config's full-size bg-gray-900 panel
-   went see-through). The fill
-   follows the theme's neutral palette (gray/slate/zinc/…), so every
-   dark-neutral variant is covered. */
+/* The dashboard stage/grid render opaque dark full-size fills (bg-*-950 /
+   bg-*-900, a hex theme's bg-[var(--primary-950)]) that paint over the
+   body's background and mesh — now tinted by the theme at its Strength.
+   Make those full-size containers transparent so it shows through behind
+   the glass cards. Every colour family is covered, not just gray-likes, or
+   a coloured theme painted its raw shade over the page; only 950/900, the
+   page shades — panels' own fills (800 and lighter) keep theirs. Scoped to
+   full-size containers (overflow-clip + h-full), so modals/inputs keep
+   their fills — a modal's own surface (.dr-modal-surface, which is
+   full-size inside its dialog) is left out, or the page behind showed
+   through it, and so is anything inside a dialog (Dashboard Config's
+   full-size bg-gray-900 panel went see-through). */
 [data-design="aurora"]
     :is(
-        .bg-gray-950,
-        .bg-gray-900,
         .bg-slate-950,
         .bg-slate-900,
+        .bg-gray-950,
+        .bg-gray-900,
         .bg-zinc-950,
         .bg-zinc-900,
         .bg-neutral-950,
         .bg-neutral-900,
         .bg-stone-950,
-        .bg-stone-900
+        .bg-stone-900,
+        .bg-red-950,
+        .bg-red-900,
+        .bg-orange-950,
+        .bg-orange-900,
+        .bg-amber-950,
+        .bg-amber-900,
+        .bg-yellow-950,
+        .bg-yellow-900,
+        .bg-lime-950,
+        .bg-lime-900,
+        .bg-green-950,
+        .bg-green-900,
+        .bg-emerald-950,
+        .bg-emerald-900,
+        .bg-teal-950,
+        .bg-teal-900,
+        .bg-cyan-950,
+        .bg-cyan-900,
+        .bg-sky-950,
+        .bg-sky-900,
+        .bg-blue-950,
+        .bg-blue-900,
+        .bg-indigo-950,
+        .bg-indigo-900,
+        .bg-violet-950,
+        .bg-violet-900,
+        .bg-purple-950,
+        .bg-purple-900,
+        .bg-fuchsia-950,
+        .bg-fuchsia-900,
+        .bg-pink-950,
+        .bg-pink-900,
+        .bg-rose-950,
+        .bg-rose-900,
+        .bg-\[var\(--primary-950\)\],
+        .bg-\[var\(--primary-900\)\],
+        .bg-\[var\(--secondary-950\)\],
+        .bg-\[var\(--secondary-900\)\],
+        .bg-\[var\(--tertiary-950\)\],
+        .bg-\[var\(--tertiary-900\)\],
+        .bg-\[var\(--neutral-950\)\],
+        .bg-\[var\(--neutral-900\)\]
     ).overflow-clip:is(.h-full, .w-full):not(.dr-modal-surface):not(
         [role="dialog"] *
     ) {
