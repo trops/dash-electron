@@ -710,6 +710,26 @@ Pixel output
 
 **Screens on shared tokens.** The bot diagram, bot chat and other Bots screens took plain theme greys without dash-react's role classes, so their cards stayed flat grey on the tinted page. `useConfigTokens` now adds the `dr-role-*` class to each token. Bot chat, registry search and team import use it too, and their error text uses dash-react's status colours.
 
+### New theme in one window (2026-11-14)
+
+**Why.** The old New Theme window was hard to follow: a decorative column, six equal "how to start" cards with the marketplace mixed in, a different layout for each way, jargon (Harmony, Tetradic, HSL nudge), no Strength, and no preview of the real look. After Create it landed on an old grid with raw ids and the theme not in use.
+
+**What it does now** (approved mockup: canvas page "New theme (proposed)", 8 frames). One window, four steps top to bottom, with a live preview on the right:
+
+1.  **Start from:** A preset, One color, Surprise me, A website, or The registry (themes others made). "Describe it to the Dash Lead" is a link; it opens a conversation.
+2.  **Colors:** depends on the start. Every start ends in the same four colors, named for what they do: Main (buttons, links), Second (tags, charts), Highlight (badges, accents), Greys (text, lines). Click one to change it. One color uses plain words for harmony: Close to it, Contrasting, Three-way. Surprise me keeps greys grey. A registry theme brings its name and strength, and is saved as a remix that credits its maker.
+3.  **Strength:** Subtle, Balanced or Bold, with one line on what it does.
+4.  **Name it:** with "Use it for the app now" (default) or "Just save it".
+
+The preview draws real dash-react components (cards, tags, buttons, a progress bar) in the unsaved theme at its strength. Its Dark / Light switch changes only the preview. Create theme stays off until the theme has colors and a name, and says what's missing. After Create, the window closes and the Themes page selects the new theme with a notice and Undo. Undo puts the previous app theme back and deletes the new one.
+
+**Implementation.** dash-core `src/Components/Theme/NewTheme/`: `NewThemeModal.js` (the window), `NewThemePreview.js` (the theme's tokens scoped to the preview, `data-mode` for the variant), `newThemeDraft.js` (starts, the four colors, what's missing, the saved theme, its key). The Themes page opens it in place of ThemeManagerModal's create path. The theme editor (Edit theme) is unchanged; it is the next round.
+
+**Fixes found on the way.**
+
+-   Switching the app to the new theme in the same instant it is saved built the theme from nothing (grey buttons). The switch now waits until the saved theme arrives.
+-   The theme editor showed empty base-colour boxes for a theme made in the old window. It was handed the raw theme, not the model; it now gets the model, and the colour rail also reads top-level colours.
+
 ## Implementation Phases
 
 ### Phase 1: MVP — Custom Primary Color (P0) — SHIPPED (plumbing dash-react #46/#47; picker in Phase 3)
@@ -862,3 +882,4 @@ Pixel output
 | 1.0     | 2026-05-22 | trops  | Initial draft.                                                                                                                                                                                                                                   |
 | 1.1     | 2026-10-22 | trops  | Consolidation Phase 5: status Draft → In Progress; story statuses and Phase 1 match what shipped (dash-react #46/#47, dash-core ThemeModel / CustomHexColorPane / brand presets); "Settings → Themes" is now the Themes page and Create › Theme. |
 | 1.2     | 2026-11-13 | trops  | Aurora coloured by the theme with a Strength (Subtle / Balanced / Bold); dashboard themes reach their widgets.                                                                                                                                   |
+| 1.3     | 2026-11-14 | trops  | New theme in one window: Start from → Colors → Strength → Name, live preview, registry start, Undo.                                                                                                                                              |
