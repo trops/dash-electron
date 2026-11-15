@@ -29,16 +29,13 @@ const widgetDefinition = {
             displayName: "Title",
             required: false,
         },
+        // An AI model from the one list (Settings › AI): Latest of a
+        // family follows its newest; or one exact version.
         model: {
-            type: "select",
-            defaultValue: "claude-opus-4-8",
+            type: "model",
+            defaultValue: "latest:sonnet",
             displayName: "Model",
             required: false,
-            options: [
-                { label: "Claude Opus 4.8", value: "claude-opus-4-8" },
-                { label: "Claude Sonnet 4.6", value: "claude-sonnet-4-6" },
-                { label: "Claude Haiku 4.5", value: "claude-haiku-4-5" },
-            ],
         },
         systemPrompt: {
             type: "textarea",
