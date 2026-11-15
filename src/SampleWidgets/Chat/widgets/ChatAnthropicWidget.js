@@ -9,7 +9,7 @@ import { ChatCore } from "./ChatCore";
 
 export const ChatAnthropicWidget = ({
     title = "AI Chat",
-    model = "claude-opus-4-8",
+    model = "latest:sonnet",
     systemPrompt = "You are a helpful AI assistant integrated into a dashboard application. Be concise and helpful. When using tools, explain what you're doing.",
     maxToolRounds = "10",
     api,

@@ -714,6 +714,11 @@ const {
     LLM_CLI_SESSION_STATUS,
     LLM_CLI_END_SESSION,
     LLM_LIST_MODELS,
+    LLM_MODEL_LIST_STATUS,
+    LLM_MODEL_LIST_CHECK,
+    LLM_MODEL_LIST_SEEN,
+    LLM_MODEL_USAGE,
+    LLM_MODEL_MOVE,
     MENU_ITEMS_LIST,
     MENU_ITEMS_SAVE,
     MENU_ITEMS_DELETE,
@@ -2139,6 +2144,21 @@ function createWindow() {
                 msg.providerId,
                 msg.apiKey
             )
+        );
+        // The fresh model list (dash-core electron/llm/modelList.js): when it
+        // was checked, Check now, and the new-model note seen.
+        logger.loggedHandle(LLM_MODEL_LIST_STATUS, () =>
+            botController.modelListStatus()
+        );
+        logger.loggedHandle(LLM_MODEL_LIST_CHECK, () =>
+            botController.checkModelList()
+        );
+        logger.loggedHandle(LLM_MODEL_LIST_SEEN, () =>
+            botController.modelListSeen()
+        );
+        logger.loggedHandle(LLM_MODEL_USAGE, () => botController.modelUsage());
+        logger.loggedHandle(LLM_MODEL_MOVE, (e, msg) =>
+            botController.moveRetiredModel(msg.from, msg.to, msg.opts || {})
         );
 
         // --- Registry ---
