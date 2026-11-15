@@ -730,6 +730,34 @@ The preview draws real dash-react components (cards, tags, buttons, a progress b
 -   Switching the app to the new theme in the same instant it is saved built the theme from nothing (grey buttons). The switch now waits until the saved theme arrives.
 -   The theme editor showed empty base-colour boxes for a theme made in the old window. It was handed the raw theme, not the model; it now gets the model, and the colour rail also reads top-level colours.
 
+### Edit theme in one window (2026-11-14)
+
+**Why.** The old editor opened on a theme picker, then an empty preview. It listed 70 components alphabetically, previewed one component at a time, and spoke in Tailwind tokens (`bg-primary-very-dark`). It used a third window for base colours. Changes applied silently to the current mode only, with no changed marks or reset. Worse, under the Aurora design most per-component colours never showed: Aurora paints buttons, cards, panels, inputs, switches, tabs and text itself with `!important`.
+
+**What it does now** (approved mockup: canvas page "Edit theme (proposed)", 7 frames). Themes › Edit theme (and the theme manager's Edit) opens one window:
+
+-   **Left:** Theme (Colors, Strength) and Components, grouped. The groups are Buttons, Cards & panels, Tags, Text, Inputs, Tabs & menus, and Alerts & status, with a search box. A changed part shows a dot on its group and a Changed badge.
+-   **Center:** a small dashboard drawn with real dash-react components in the theme being edited, with a Dark / Light switch. Point at a part to see what it is; click it to change it.
+-   **Right:** either the four colours with their shades (Change opens the swatches and a hex box), or Strength, or the picked part. A part is described in plain words: its properties (Fill, Text, Outline, on hover…), each showing its value ("From the theme" or "Highlight · Dark (changed)") and the colour it really shows, with Reset. Picking a property opens "Pick from the theme's colors": Main, Second, Highlight and Greys, each from Lightest to Darkest, plus No fill. "Change it in" offers Dark and Light (the default), Dark only or Light only. Choosing one mode shows it in the preview.
+-   **Footer:** "N changes not saved yet." and Save changes, which stays off until something changed. Cancel or close with changes asks "Leave without saving?".
+
+**How part colours show everywhere.** A change is saved the way themes always kept per-component colours: `theme[variant][componentKey][styleName]`. The value is a fixed-shade token (`bg-tertiary-700`), which ThemeModel now resolves the same in Dark and Light. For the parts Aurora paints, `utils/themeParts.js` writes the theme's choices as CSS rules that win over Aurora's:
+
+-   the app theme's rules apply app-wide, in `style#dash-theme-parts`, but not inside a box with its own theme;
+-   a dashboard with its own theme gets its rules inside its wrapper (`data-own-theme`);
+-   each preview gets its own.
+
+Danger buttons and picked cards keep their own look.
+
+**Implementation.** dash-core:
+
+-   `src/utils/themeParts.js`: the parts, plain words, set/reset/count, and the CSS rules.
+-   `src/Components/Theme/ThemePartsStyle.js`: the scoped `<style>` and the app-wide hook.
+-   `src/Components/Theme/EditTheme/EditThemeModal.js` and `EditThemePreview.js`: the window and its preview.
+-   ThemeModel: fixed-shade tokens. A theme's own tag colours are now merged over the readable tag defaults instead of replacing them.
+
+Parts in the mockup that are not built yet: Dashboard header, Links, Search, Checkbox, Choices, Breadcrumbs, Toast and Alert banner.
+
 ## Implementation Phases
 
 ### Phase 1: MVP — Custom Primary Color (P0) — SHIPPED (plumbing dash-react #46/#47; picker in Phase 3)
@@ -883,3 +911,4 @@ The preview draws real dash-react components (cards, tags, buttons, a progress b
 | 1.1     | 2026-10-22 | trops  | Consolidation Phase 5: status Draft → In Progress; story statuses and Phase 1 match what shipped (dash-react #46/#47, dash-core ThemeModel / CustomHexColorPane / brand presets); "Settings → Themes" is now the Themes page and Create › Theme. |
 | 1.2     | 2026-11-13 | trops  | Aurora coloured by the theme with a Strength (Subtle / Balanced / Bold); dashboard themes reach their widgets.                                                                                                                                   |
 | 1.3     | 2026-11-14 | trops  | New theme in one window: Start from → Colors → Strength → Name, live preview, registry start, Undo.                                                                                                                                              |
+| 1.4     | 2026-11-14 | trops  | Edit theme in one window: click a part in a dashboard preview, plain-word properties, the theme's colours by shade, changed marks and Reset, Dark/Light scope; part colours win over Aurora app-wide, per dashboard and per preview.             |
