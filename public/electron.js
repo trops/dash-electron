@@ -617,6 +617,7 @@ const {
     themeRegistryController,
     notificationController,
     issueController,
+    goalController,
     schedulerController,
     webSocketController,
     // Theme from URL
@@ -795,6 +796,12 @@ const {
     ISSUES_CLEAR_RESOLVED,
     ISSUES_MUTE,
     ISSUES_UNMUTE,
+    GOALS_LIST,
+    GOALS_GET,
+    GOALS_FOR_CONVERSATION,
+    GOALS_TASK_ACTION,
+    GOALS_CLOSE,
+    GOALS_DELETE,
     NOTIFICATION_SEND,
     NOTIFICATION_GET_PREFERENCES,
     NOTIFICATION_SET_PREFERENCES,
@@ -2748,6 +2755,29 @@ function createWindow() {
             issueController.unmute(msg && msg.id)
         );
 
+        // --- Goals: what a dashboard's bots are working on (goals ledger) ---
+        goalController.init({
+            getWindows: () => BrowserWindow.getAllWindows(),
+        });
+        logger.loggedHandle(GOALS_LIST, (e, msg) =>
+            goalController.list(msg && msg.workspaceId)
+        );
+        logger.loggedHandle(GOALS_GET, (e, msg) =>
+            goalController.get(msg && msg.goalId)
+        );
+        logger.loggedHandle(GOALS_FOR_CONVERSATION, (e, msg) =>
+            goalController.forConversation(msg && msg.conversationId)
+        );
+        logger.loggedHandle(GOALS_TASK_ACTION, (e, msg) =>
+            goalController.taskAction(msg && msg.taskId, msg && msg.action)
+        );
+        logger.loggedHandle(GOALS_CLOSE, (e, msg) =>
+            goalController.close(msg && msg.goalId)
+        );
+        logger.loggedHandle(GOALS_DELETE, (e, msg) =>
+            goalController.delete((msg && msg.goalIds) || [])
+        );
+
         // --- Notifications ---
         logger.loggedHandle(NOTIFICATION_SEND, (e, payload) =>
             notificationController.send(mainWindow, payload)
@@ -3184,7 +3214,9 @@ function createWindow() {
             botController.saveCreateRecent((msg && msg.entry) || {})
         );
         logger.loggedHandle(CREATE_RECENT_REMOVE, (e, msg) =>
-            botController.removeCreateRecent(msg && msg.id)
+            botController.removeCreateRecent(msg && msg.id, {
+                deleteGoals: !!(msg && msg.deleteGoals),
+            })
         );
 
         // --- Widget Event IPC Bridge ---
