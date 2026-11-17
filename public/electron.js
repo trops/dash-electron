@@ -618,6 +618,8 @@ const {
     notificationController,
     issueController,
     goalController,
+    flowController,
+    flowHandlers,
     schedulerController,
     webSocketController,
     // Theme from URL
@@ -2777,6 +2779,16 @@ function createWindow() {
         logger.loggedHandle(GOALS_DELETE, (e, msg) =>
             goalController.delete((msg && msg.goalIds) || [])
         );
+
+        // --- Flows: the steps a dashboard's work goes through, its checks ---
+        flowController.init({
+            getWindows: () => BrowserWindow.getAllWindows(),
+        });
+        for (const [channel, handle] of Object.entries(
+            flowHandlers({ dialog, getMainWindow: () => mainWindow })
+        )) {
+            logger.loggedHandle(channel, (e, msg) => handle(msg || {}));
+        }
 
         // --- Notifications ---
         logger.loggedHandle(NOTIFICATION_SEND, (e, payload) =>
