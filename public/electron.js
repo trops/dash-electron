@@ -2780,7 +2780,8 @@ function createWindow() {
             goalController.delete((msg && msg.goalIds) || [])
         );
 
-        // --- Flows: the steps a dashboard's work goes through, its checks ---
+        // --- A bot's checks: the runner that moves its jobs, and the checks
+        // window's calls (Write it with AI, read-only tools, pick a folder) ---
         flowController.init({
             getWindows: () => BrowserWindow.getAllWindows(),
         });
