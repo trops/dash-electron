@@ -833,6 +833,7 @@ const {
     BOTS_DELETE,
     BOTS_RUN,
     BOTS_STOP,
+    BOTS_TEST,
     BOTS_APPROVE,
     BOTS_LIST_APPROVALS,
     BOTS_GET_BUDGETS,
@@ -2943,6 +2944,24 @@ function createWindow() {
         logger.loggedHandle(BOTS_STOP, (e, { botId }) =>
             botController.stop(botId)
         );
+        // Test a bot from its form, saved or not (bot-test-run).
+        logger.loggedHandle(BOTS_TEST, (e, msg) => {
+            const testId = msg && msg.testId;
+            // Its window closed: the form that follows it is gone.
+            const stop = () => botController.stop(testId);
+            if (e && e.sender && e.sender.once)
+                e.sender.once("destroyed", stop);
+            return Promise.resolve(
+                botController.test(msg && msg.definition, {
+                    testId,
+                    prompt: msg && msg.prompt,
+                    keep: !(msg && msg.keep === false),
+                })
+            ).finally(() => {
+                if (e && e.sender && e.sender.removeListener)
+                    e.sender.removeListener("destroyed", stop);
+            });
+        });
         logger.loggedHandle(BOTS_APPROVE, (e, { approvalId, decision }) =>
             botController.approve(approvalId, decision)
         );
