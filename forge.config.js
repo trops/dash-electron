@@ -40,6 +40,15 @@ module.exports = {
         extendInfo: {
             NSLocalNetworkUsageDescription:
                 "Dash connects to MCP servers and devices on your local network, such as Home Assistant.",
+            // Without a reason for each, macOS refuses Dash (and every
+            // provider it starts) these folders without asking, and Dash
+            // never shows in Privacy & Security › Files & Folders (DASH-24).
+            NSDocumentsFolderUsageDescription:
+                "Dash and the providers you add (such as an MCP server kept in Documents) read and write files you keep there.",
+            NSDesktopFolderUsageDescription:
+                "Dash and the providers you add read and write files you keep on your Desktop.",
+            NSDownloadsFolderUsageDescription:
+                "Dash and the providers you add read and write files you keep in Downloads.",
         },
         ...(process.env.REACT_APP_APPLE_CERT_ID
             ? {
