@@ -858,6 +858,7 @@ const {
     BOTS_REVOKE_GRANT,
     BOTS_LIST_ALWAYS_ALLOWED,
     BOTS_FORGET_ALWAYS_ALLOWED,
+    BOTS_CHANGE_ALWAYS_ALLOWED,
     BOTS_ENSURE_LEAD,
     BOTS_SET_LEAD_ENABLED,
     BOTS_GET_TEAM_SETTINGS,
@@ -3069,6 +3070,14 @@ function createWindow() {
                 msg && msg.botId,
                 (msg && msg.row) || {}
             )
+        );
+        // A provider's remembered tools: anywhere in its files, back to
+        // their folders, or all of them ahead of time (DASH-30, DASH-29).
+        logger.loggedHandle(BOTS_CHANGE_ALWAYS_ALLOWED, (e, msg) =>
+            botController.changeAlwaysAllowed(msg && msg.botId, {
+                provider: msg && msg.provider,
+                action: msg && msg.action,
+            })
         );
         // Team leads (bot-teams TEAM-002 / TEAM-003).
         logger.loggedHandle(BOTS_ENSURE_LEAD, (e, msg) =>
