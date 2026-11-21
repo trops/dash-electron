@@ -871,6 +871,10 @@ const {
     BOTS_LIST_LEADS,
     BOTS_LIST_DASH_TEAM,
     BOTS_LIST_MCP_TASKS,
+    BOTS_LIST_JOBS,
+    BOTS_GET_JOB,
+    BOTS_STOP_JOB,
+    BOTS_DELETE_JOB,
     BOTS_LIST_MCP_ROUTES,
     BOTS_LIST_MCP_TASK_TEAMS,
     BOTS_SET_TAKES_MCP_TASKS,
@@ -3139,6 +3143,32 @@ function createWindow() {
         // The Dash team's role bots for the Bots page (create-entry CRE-011).
         logger.loggedHandle(BOTS_LIST_DASH_TEAM, () =>
             botController.listDashTeam()
+        );
+        // Jobs (DASH-28, DASH-31): each chain of work through a team lead.
+        logger.loggedHandle(BOTS_LIST_JOBS, (e, msg) =>
+            botController.listJobs({
+                workspaceId:
+                    msg &&
+                    msg.workspaceId !== null &&
+                    msg.workspaceId !== undefined
+                        ? String(msg.workspaceId)
+                        : null,
+                // Only jobs still going (the nav's count), and how many.
+                open: !!(msg && msg.open),
+                limit:
+                    msg && Number(msg.limit) > 0
+                        ? Math.min(Number(msg.limit), 1000)
+                        : null,
+            })
+        );
+        logger.loggedHandle(BOTS_GET_JOB, (e, msg) =>
+            botController.getJob(msg && msg.jobId)
+        );
+        logger.loggedHandle(BOTS_STOP_JOB, (e, msg) =>
+            botController.stopJob(msg && msg.jobId)
+        );
+        logger.loggedHandle(BOTS_DELETE_JOB, (e, msg) =>
+            botController.deleteJob(msg && msg.jobId)
         );
         // Tasks via MCP (bot-teams TEAM-016): a team's tasks and switch, the
         // Dash Lead's routing log, and the task passphrase.
