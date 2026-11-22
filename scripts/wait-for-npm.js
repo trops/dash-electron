@@ -6,7 +6,8 @@
  *                                @trops/dash-react=trops/dash-react@main
  *
  * For each package: read the version on the repo's default branch (GitHub),
- * then wait until npm's `latest` is at least that. A merge to dash-core's
+ * then wait until npm's `latest` is at least that and its package file
+ * actually downloads (npm lists a version a little before the file is served). A merge to dash-core's
  * master publishes a few minutes later; without this, scripts/ci.sh would
  * quietly install the version before it.
  *
@@ -46,7 +47,46 @@ function parseSpec(spec) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function waitForNpm(specs, env = process.env, log = console.log) {
+/** True when a HEAD request for `url` answers 200 (following redirects). */
+function headStatusOk(url, hops = 0) {
+    return new Promise((resolve) => {
+        let u;
+        try {
+            u = new URL(url);
+        } catch (_e) {
+            return resolve(false);
+        }
+        const lib = u.protocol === "http:" ? require("http") : require("https");
+        const req = lib.request(
+            u,
+            { method: "HEAD", timeout: 15000 },
+            (res) => {
+                res.resume();
+                const loc = res.headers.location;
+                if (
+                    res.statusCode >= 300 &&
+                    res.statusCode < 400 &&
+                    loc &&
+                    hops < 5
+                ) {
+                    resolve(headStatusOk(new URL(loc, u).toString(), hops + 1));
+                } else {
+                    resolve(res.statusCode === 200);
+                }
+            }
+        );
+        req.on("timeout", () => req.destroy());
+        req.on("error", () => resolve(false));
+        req.end();
+    });
+}
+
+async function waitForNpm(
+    specs,
+    env = process.env,
+    log = console.log,
+    { headOk = headStatusOk } = {}
+) {
     const gh = env.WAIT_FOR_NPM_GH || "gh";
     const npm = env.WAIT_FOR_NPM_NPM || "npm";
     const timeoutMs = Number(env.WAIT_FOR_NPM_TIMEOUT_SEC || 1200) * 1000;
@@ -86,7 +126,24 @@ async function waitForNpm(specs, env = process.env, log = console.log) {
             } catch (_e) {
                 latest = null;
             }
+            // npm lists a new version a little before its tarball can be
+            // downloaded (a 404 on install): wait for the file too.
+            let tarball = null;
+            let downloadable = false;
             if (latest && compareVersions(latest, expected) >= 0) {
+                try {
+                    tarball = run(npm, [
+                        "view",
+                        `${pkg}@${latest}`,
+                        "dist.tarball",
+                        "--prefer-online",
+                    ]);
+                } catch (_e) {
+                    tarball = null;
+                }
+                downloadable = !!tarball && (await headOk(tarball));
+            }
+            if (downloadable) {
                 log(
                     `${pkg}: npm has ${latest} (${repo}@${branch} is ${expected}).`
                 );
@@ -94,15 +151,23 @@ async function waitForNpm(specs, env = process.env, log = console.log) {
                 break;
             }
             if (Date.now() - started >= timeoutMs) {
+                const secs = Math.round(timeoutMs / 1000);
+                const listed = latest && compareVersions(latest, expected) >= 0;
                 throw new Error(
-                    `${pkg}: ${repo}@${branch} is ${expected} but npm still has ` +
-                        `${latest || "nothing"} after ${Math.round(
-                            timeoutMs / 1000
-                        )}s. ` +
-                        "Check its Publish Package workflow."
+                    listed
+                        ? `${pkg}: npm lists ${latest} but its package ` +
+                          `(${tarball || "no tarball URL"}) still doesn't ` +
+                          `download after ${secs}s. Try again later.`
+                        : `${pkg}: ${repo}@${branch} is ${expected} but npm still has ` +
+                          `${latest || "nothing"} after ${secs}s. ` +
+                          "Check its Publish Package workflow."
                 );
             }
-            log(`${pkg}: waiting for npm to show ${expected} (has ${latest})…`);
+            log(
+                latest && compareVersions(latest, expected) >= 0
+                    ? `${pkg}: npm lists ${latest}; waiting for its package to download…`
+                    : `${pkg}: waiting for npm to show ${expected} (has ${latest})…`
+            );
             await sleep(intervalMs);
         }
     }
@@ -116,4 +181,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { waitForNpm, parseSpec, compareVersions };
+module.exports = { waitForNpm, headStatusOk, parseSpec, compareVersions };

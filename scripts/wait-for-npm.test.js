@@ -36,6 +36,10 @@ console.log(JSON.stringify({ version: process.env.FAKE_GH_VERSION }));
         npm,
         `#!/usr/bin/env node
 const fs = require("fs");
+if (process.argv.includes("dist.tarball")) {
+  console.log("https://registry.example.test/x.tgz");
+  process.exit(0);
+}
 const f = ${JSON.stringify(counter)};
 const n = fs.existsSync(f) ? Number(fs.readFileSync(f, "utf8")) : 0;
 fs.writeFileSync(f, String(n + 1));
@@ -56,6 +60,11 @@ console.log(list[Math.min(n, list.length - 1)]);
 }
 const SPEC = "@trops/dash-core=trops/dash-core@master";
 const quiet = () => {};
+// The tarball always downloads, unless a test says otherwise.
+const served = { headOk: async () => true };
+const realWait = waitForNpm;
+const wait = (specs, env, log, deps = served) =>
+    realWait(specs, env, log, deps);
 
 describe("wait-for-npm", () => {
     it("parses pkg=owner/repo@branch", () => {
@@ -69,7 +78,7 @@ describe("wait-for-npm", () => {
 
     it("goes on at once when npm already has it", async () => {
         const env = fakes({ ghVersion: "0.1.953", npmVersions: ["0.1.953"] });
-        const [r] = await waitForNpm([SPEC], env, quiet);
+        const [r] = await wait([SPEC], env, quiet);
         assert.equal(r.latest, "0.1.953");
         assert.equal(r.waited, false);
     });
@@ -79,7 +88,7 @@ describe("wait-for-npm", () => {
             ghVersion: "0.1.954",
             npmVersions: ["0.1.953", "0.1.953", "0.1.954"],
         });
-        const [r] = await waitForNpm([SPEC], env, quiet);
+        const [r] = await wait([SPEC], env, quiet);
         assert.equal(r.latest, "0.1.954");
         assert.equal(r.waited, true);
     });
@@ -87,14 +96,33 @@ describe("wait-for-npm", () => {
     it("fails clearly when npm never catches up", async () => {
         const env = fakes({ ghVersion: "0.1.954", npmVersions: ["0.1.953"] });
         await assert.rejects(
-            () => waitForNpm([SPEC], env, quiet),
+            () => wait([SPEC], env, quiet),
             /npm still has 0\.1\.953/
+        );
+    });
+
+    it("waits until the listed version's package actually downloads", async () => {
+        const env = fakes({ ghVersion: "0.1.956", npmVersions: ["0.1.956"] });
+        let heads = 0;
+        const [r] = await wait([SPEC], env, quiet, {
+            headOk: async () => ++heads >= 3, // 404, 404, then served
+        });
+        assert.equal(r.latest, "0.1.956");
+        assert.equal(r.waited, true);
+        assert.equal(heads, 3);
+    });
+
+    it("fails clearly when the package never downloads", async () => {
+        const env = fakes({ ghVersion: "0.1.956", npmVersions: ["0.1.956"] });
+        await assert.rejects(
+            () => wait([SPEC], env, quiet, { headOk: async () => false }),
+            /npm lists 0\.1\.956 but its package/
         );
     });
 
     it("doesn't wait when GitHub can't be read", async () => {
         const env = fakes({ ghVersion: "fail", npmVersions: ["0.1.953"] });
-        const [r] = await waitForNpm([SPEC], env, quiet);
+        const [r] = await wait([SPEC], env, quiet);
         assert.equal(r.waited, false);
         assert.equal(r.expected, null);
     });
