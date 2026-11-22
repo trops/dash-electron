@@ -1,0 +1,88 @@
+name: Bump @trops dependencies
+
+# DASH-48: when npm has a newer @trops/dash-core or @trops/dash-react than
+# package.json, validate with it (scripts/ci.sh) and open a PR
+# "chore(deps): take …". Runs every 15 minutes, on demand, and right away
+# when dash-core/dash-react's Publish Package workflow sends a
+# repository_dispatch (needs DASH_BOT_TOKEN there).
+#
+# Opening the PR needs "Allow GitHub Actions to create and approve pull
+# requests" (Settings › Actions › General). With DASH_BOT_TOKEN set here too,
+# the PR is opened with it, so PR CI runs on it (a PR opened with the
+# default GITHUB_TOKEN doesn't start other workflows).
+on:
+    schedule:
+        - cron: "*/15 * * * *"
+    workflow_dispatch:
+    repository_dispatch:
+        types: [dash-core-published, dash-react-published]
+
+concurrency:
+    group: bump-deps
+    cancel-in-progress: false
+
+permissions:
+    contents: write
+    pull-requests: write
+
+jobs:
+    bump:
+        runs-on: ubuntu-latest
+        env:
+            npm_config_legacy_peer_deps: "true"
+            GH_TOKEN: ${{ secrets.DASH_BOT_TOKEN || github.token }}
+        steps:
+            - uses: actions/checkout@v5
+              with:
+                  token: ${{ secrets.DASH_BOT_TOKEN || github.token }}
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 20
+            - name: Anything newer on npm?
+              id: check
+              run: |
+                  CORE="$(npm view @trops/dash-core version)"
+                  REACT="$(npm view @trops/dash-react version)"
+                  HAVE_CORE="$(node -p "require('./package.json').dependencies['@trops/dash-core'].replace(/^[^0-9]*/, '')")"
+                  HAVE_REACT="$(node -p "require('./package.json').dependencies['@trops/dash-react'].replace(/^[^0-9]*/, '')")"
+                  echo "dash-core: npm $CORE, package.json $HAVE_CORE"
+                  echo "dash-react: npm $REACT, package.json $HAVE_REACT"
+                  BRANCH="deps/dash-core-$CORE-dash-react-$REACT"
+                  if [[ "$CORE" == "$HAVE_CORE" && "$REACT" == "$HAVE_REACT" ]]; then
+                      echo "Up to date."
+                      echo "changed=false" >> "$GITHUB_OUTPUT"
+                  elif git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
+                      echo "$BRANCH already exists (its PR is open or was closed)."
+                      echo "changed=false" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "changed=true" >> "$GITHUB_OUTPUT"
+                  fi
+                  echo "core=$CORE" >> "$GITHUB_OUTPUT"
+                  echo "react=$REACT" >> "$GITHUB_OUTPUT"
+                  echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+            - if: steps.check.outputs.changed == 'true'
+              run: npm ci
+            - name: Validate with the new versions (scripts/ci.sh)
+              if: steps.check.outputs.changed == 'true'
+              run: ./scripts/ci.sh
+            - name: Open the PR
+              if: steps.check.outputs.changed == 'true'
+              env:
+                  CORE: ${{ steps.check.outputs.core }}
+                  REACT: ${{ steps.check.outputs.react }}
+                  BRANCH: ${{ steps.check.outputs.branch }}
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git switch -c "$BRANCH"
+                  git add package.json package-lock.json
+                  if git diff --cached --quiet; then
+                      echo "Nothing changed after validation."
+                      exit 0
+                  fi
+                  TITLE="chore(deps): take @trops/dash-core $CORE, @trops/dash-react $REACT"
+                  git commit -m "$TITLE"
+                  git push origin "$BRANCH"
+                  gh pr create --base master --head "$BRANCH" --title "$TITLE" --body "Opened by the bump-deps workflow (DASH-48): npm has @trops/dash-core $CORE and @trops/dash-react $REACT, and \`scripts/ci.sh\` passed with them.
+
+                  Release it like any other PR: check out \`$BRANCH\` and run \`npm run ci:release -- -m \"$TITLE\"\`. That bumps the app version, merges, and tags (the tag builds the app)."

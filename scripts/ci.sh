@@ -55,16 +55,20 @@ step() {
 # VALIDATION STEPS
 # ============================================================================
 
-# 1. Ensure Node 20 via nvm
-step "Ensuring Node 20 via nvm"
-unset npm_config_prefix
-export NVM_DIR="$HOME/.nvm"
-if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
-    echo "Error: nvm not found at $NVM_DIR/nvm.sh"
-    exit 1
+# 1. Ensure Node 20 via nvm (on GitHub Actions the workflow sets up Node)
+if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    step "Using the runner's Node (GitHub Actions)"
+else
+    step "Ensuring Node 20 via nvm"
+    unset npm_config_prefix
+    export NVM_DIR="$HOME/.nvm"
+    if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
+        echo "Error: nvm not found at $NVM_DIR/nvm.sh"
+        exit 1
+    fi
+    source "$NVM_DIR/nvm.sh" --no-use
+    nvm use --delete-prefix v20.20.0
 fi
-source "$NVM_DIR/nvm.sh" --no-use
-nvm use --delete-prefix v20.20.0
 echo "Node version: $(node -v)"
 echo "npm version: $(npm -v)"
 
@@ -90,11 +94,23 @@ step "Running Phase 5A unit tests (IPC validators + bundle lint)"
 node scripts/checkTempLeaks.js -- node --test scripts/ipcValidators.test.js scripts/testUtils/tempDir.test.js scripts/checkTempLeaks.test.js
 node scripts/checkTempLeaks.js -- node --test scripts/bundleSecurityLint.test.js scripts/libraryImports.test.js scripts/indexHtmlErrors.test.js
 
+# Release pipeline (DASH-48): the resumable git workflow and the npm wait
+step "Testing the release scripts"
+node scripts/checkTempLeaks.js -- node --test scripts/release.test.js scripts/wait-for-npm.test.js
+
 # Bot Factory background-mode helpers (Slice 6b): pure tray/login-item logic
 step "Running Bot Factory background-mode tests (Slice 6b)"
 node scripts/checkTempLeaks.js -- node --test public/botBackground.test.js public/appIdentifier.test.js public/widgetEventRelay.test.js public/botLeadIpc.test.js public/popoutRoute.test.js public/widgetConfigType.test.js public/widgetImportFixes.test.js public/teamWidgetTools.test.js public/teamWidgetToolsEdit.test.js public/installGate.test.js public/assistantDock.test.js public/botNotify.test.js public/widgetDrafts.test.cjs public/packageUpdate.test.js public/updateCheckError.test.js public/loggerFailed.test.js public/providerCallChecks.test.js
 
-# 2. Update @trops dependencies to latest published versions
+# 2. Update @trops dependencies to latest published versions. First wait
+# until npm has what dash-core's master and dash-react's main say was
+# released (DASH-48): a merge publishes a few minutes later, and installing
+# before then quietly takes the version before it.
+step "Waiting for npm to have the released @trops versions"
+node scripts/wait-for-npm.js \
+    @trops/dash-core=trops/dash-core@master \
+    @trops/dash-react=trops/dash-react@main
+
 step "Updating @trops dependencies"
 CORE_LATEST="$(npm view @trops/dash-core version)"
 REACT_LATEST="$(npm view @trops/dash-react version)"
@@ -174,120 +190,24 @@ if [[ "$MODE" == "validate" ]]; then
 fi
 
 # ============================================================================
-# GIT WORKFLOW
+# GIT WORKFLOW (DASH-48: scripts/release.js)
 # ============================================================================
+# Resumable: after --pr, run --release on the same branch to merge, tag and
+# clean up. Safe to run again. Works in a git worktree (the v* tag goes on the
+# PR's merge commit; Release App builds from it). Before committing:
+# check:untracked (`git add -u` only stages tracked files) and stage a
+# rebuilt public/tailwind.css.
 
-BRANCH="$(git branch --show-current)"
-MAIN_BRANCH="master"
-
-if [[ "$BRANCH" == "$MAIN_BRANCH" ]]; then
-    echo "Error: Cannot run --$MODE from $MAIN_BRANCH. Create a feature branch first."
-    exit 1
-fi
-
-# --- Ensure git credentials via gh ---
-step "Configuring git credentials via gh"
-gh auth setup-git
-
-# --- Commit ---
-step "Checking for untracked source files"
-# Aborts the release if anything in public/, src/, scripts/, e2e/, etc. is
-# untracked. `git add -u` below only stages tracked-modified files; brand-
-# new files would silently get dropped from the release commit otherwise.
-npm run check:untracked
-
-step "Committing changes"
-# Stage only tracked, modified files — never use git add -A
-git add -u
-# If public/tailwind.css was rebuilt, stage it explicitly
-if [ -n "$(git diff --name-only HEAD -- public/tailwind.css 2>/dev/null)" ]; then
-    git add public/tailwind.css
-fi
-# Skip the commit step when nothing is staged — happens when the
-# branch already has its work split into per-slice commits and the
-# user is just running the script to bump+push+PR. Without this guard
-# `git commit` exits non-zero and `set -e` kills the pipeline.
-if git diff --cached --quiet; then
-    echo "No staged changes; skipping commit step (branch already has committed work)."
-else
-    git commit -m "$COMMIT_MSG"
-fi
-
-# --- Rebase on latest remote ---
-step "Rebasing on latest origin"
-git fetch origin
-REBASE_TARGET=""
-if git rev-parse --verify "origin/$BRANCH" >/dev/null 2>&1; then
-    REBASE_TARGET="origin/$BRANCH"
-elif [[ "$BRANCH" != "$MAIN_BRANCH" ]]; then
-    REBASE_TARGET="origin/$MAIN_BRANCH"
-fi
-if [[ -n "$REBASE_TARGET" ]]; then
-    git rebase "$REBASE_TARGET" || {
-        echo "Error: Rebase on $REBASE_TARGET failed (conflicts)."
-        echo "Aborting rebase. Resolve manually and re-run."
-        git rebase --abort 2>/dev/null || true
-        exit 1
-    }
-fi
-
-step "Bumping version"
-npm version patch --no-git-tag-version
-VERSION="$(node -p "require('./package.json').version")"
-git add package.json package-lock.json
-git commit -m "Bump version to $VERSION"
-
-echo "New version: $VERSION"
-
-if [[ "$MODE" == "commit" ]]; then
-    exit 0
-fi
-
-# --- Push ---
-step "Pushing branch to origin"
-git push -u origin "$BRANCH"
-
-if [[ "$MODE" == "push" ]]; then
-    exit 0
-fi
-
-# --- PR ---
-step "Creating pull request"
-PR_URL="$(gh pr create --title "$COMMIT_MSG" --body "$(cat <<EOF
-## Summary
+export RELEASE_PR_BODY="## Summary
 $COMMIT_MSG
 
-Version: $VERSION
+Version: {{VERSION}}
 
 ## Validation
 - Prettier: passed
 - Tailwind CSS build: passed
 - CI build (ESLint warnings as errors): passed
-- Widget integration tests: passed
-EOF
-)")"
+- Widget integration tests: passed"
 
-echo "PR created: $PR_URL"
-
-if [[ "$MODE" == "pr" ]]; then
-    exit 0
-fi
-
-# --- Release ---
-step "Merging pull request"
-gh pr merge --merge
-
-step "Switching to master and pulling"
-git checkout master
-git pull
-
-step "Tagging v$VERSION"
-git tag "v$VERSION"
-git push origin "v$VERSION"
-
-step "Cleaning up branch: $BRANCH"
-git branch -d "$BRANCH" 2>/dev/null || true
-git push origin --delete "$BRANCH" 2>/dev/null || true
-
-echo ""
-echo "Release complete: v$VERSION"
+node scripts/release.js --mode "$MODE" -m "$COMMIT_MSG" --main master \
+    --pre-commit 'npm run check:untracked && if [ -n "$(git diff --name-only HEAD -- public/tailwind.css 2>/dev/null)" ]; then git add public/tailwind.css; fi'

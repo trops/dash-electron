@@ -1,0 +1,31 @@
+name: PR CI
+
+# DASH-48: every pull request runs the same validation as `npm run ci`
+# (scripts/ci.sh, validate only), so a PR shows a trusted GitHub check.
+on:
+    pull_request:
+        branches:
+            - "master"
+
+concurrency:
+    group: pr-ci-${{ github.event.pull_request.number }}
+    cancel-in-progress: true
+
+jobs:
+    validate:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        env:
+            # Same as the local .npmrc (scripts/defaultNpmrc.sh).
+            npm_config_legacy_peer_deps: "true"
+            # scripts/wait-for-npm.js reads dash-core/dash-react versions.
+            GH_TOKEN: ${{ github.token }}
+        steps:
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 20
+            - run: npm ci
+            - name: Validate (scripts/ci.sh)
+              run: ./scripts/ci.sh
