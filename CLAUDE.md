@@ -17,6 +17,18 @@ These steps are NON-NEGOTIABLE and must happen in this exact order before writin
     git checkout master && git pull origin master
     ```
 
+    **If this checkout is already in use** (on another branch, with changes, or a
+    bot or another Claude session is working in it), don't switch it. Work in a new
+    git worktree instead, and skip step 4 (the worktree already has its branch):
+
+    ```bash
+    git fetch origin master
+    git worktree add -b feat/<TICKET-KEY>-<slug> ../$(basename "$PWD")-<TICKET-KEY> origin/master
+    cd ../$(basename "$PWD")-<TICKET-KEY> && npm ci
+    ```
+
+    `ci.sh` works the same in a worktree (it never checks out `master`).
+
 2. Locate and sync dependency repos:
 
     ```bash
@@ -28,6 +40,8 @@ These steps are NON-NEGOTIABLE and must happen in this exact order before writin
     ```
 
     If either is not found, **STOP and ask the user where the repo is cloned.** Do not assume a path.
+    If it finds a worktree copy (a folder like `dash-core-DASH-48`), use the plain sibling
+    folder (`dash-core`, `dash-react`) instead.
 
 3. Pull latest in each found repo:
 
@@ -126,7 +140,10 @@ These four phases are sequential and cannot be skipped, combined, or reordered.
     ```
 2. Do not manually construct `git commit`, `git push`, `git tag`, or `gh pr` commands.
    Manual git commands outside of `ci.sh` are not permitted.
-3. Confirm to the user: "Released. Commit: `<hash>` pushed to `<branch>`."
+3. It ends with `Release complete: v<version> (<commit>)`. Confirm that line to the user.
+4. **If it stops partway** (a failed push, a merge conflict, a closed laptop): fix the cause
+   and run the **same command again** on the same branch. It resumes from where it stopped.
+   Never finish a release with hand-made git commands.
 
 ---
 
@@ -228,6 +245,46 @@ npm run ci:release -- -m "Your commit message"
 ```
 
 Each flag is cumulative. `--release` runs all prior steps automatically.
+
+### Resuming and rerunning (DASH-48)
+
+The git half of `ci.sh` is `scripts/release.js` (tested by `scripts/release.test.js`).
+It is resumable and safe to run again:
+
+-   `npm run ci:pr -- -m "..."` now, `npm run ci:release -- -m "..."` later on the same
+    branch: the second run finds nothing new to commit, keeps the version already bumped,
+    and merges, tags and cleans up. Use the same message.
+-   The version is bumped **once per branch** (past `master`'s), not on every run.
+-   The tag goes on the PR's **merge commit**. A tag that already exists there counts as done;
+    one on another commit stops the release.
+-   A PR that is already merged (say, on GitHub) skips straight to tagging.
+-   It never checks out `master` if another worktree has it; it ends detached on the merge
+    commit instead. A second run after success changes nothing.
+-   No changes and no PR on the branch → it stops with "Nothing to release".
+
+**PR CI:** every pull request runs `.github/workflows/pr-ci.yml` (the validation part of
+`ci.sh` on GitHub; `ci.sh` skips nvm when `GITHUB_ACTIONS` is set). `ci:release` **waits
+for it** before merging (up to 30 minutes) and stops, with nothing merged, if a check fails
+or the PR has no checks. Fix, push, and run the same command again.
+
+**Changing `.github/workflows/`** needs the `workflow` scope on the `gh` login, or the push
+is refused. The user adds it once with `gh auth refresh -h github.com -s workflow`
+(a browser sign-in: it's theirs to do).
+
+**New dash-core / dash-react versions.** `ci.sh` always installs the latest published
+`@trops/dash-core` and `@trops/dash-react`. First it waits (`scripts/wait-for-npm.js`, up
+to 10 minutes) until npm has the version their default branches say was released, so
+"waiting for npm to show …" right after a dash-core/dash-react release is normal. A
+timeout means their Publish Package workflow didn't publish: report it and stop.
+
+The **`bump-deps`** workflow (`.github/workflows/bump-deps.yml`) checks npm every 15
+minutes (or at once, on a dispatch from dash-core/dash-react) and opens a PR
+`chore(deps): take @trops/dash-core X, @trops/dash-react Y` on a `deps/…` branch. To ship
+it: `git fetch origin && git switch <that deps/… branch>`, then
+`npm run ci:release -- -m "<the PR title>"`. Start a check now with
+`gh workflow run bump-deps.yml`. It needs "Allow GitHub Actions to create and approve
+pull requests" (Settings › Actions › General; on). The app is built by the `v*` tag
+(Release App, about 20 minutes).
 
 ### ⚠️ After `ci:release` succeeds — HANDS OFF
 

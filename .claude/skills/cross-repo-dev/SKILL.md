@@ -96,16 +96,19 @@ npm run ci:pr -- -m "description of changes"
 npm run ci:release -- -m "description of changes"
 ```
 
-### Wait for auto-publish, then update dash-electron
+### Then update dash-electron (DASH-48)
 
-After the dependency repo's PR is merged and the package is published:
+After the dependency repo's release, its Publish Package workflow puts the new version
+on npm (a few minutes). You don't bump dash-electron by hand:
 
-```bash
-cd ~/Development/dash-electron/dash-electron
-# Update the version in package.json
-npm install
-npm run ci
-```
+-   dash-electron's `ci.sh` installs the latest published `@trops/dash-core` and
+    `@trops/dash-react`, after waiting (`scripts/wait-for-npm.js`, up to 10 minutes) for npm
+    to show what their default branches released. So a dash-electron change made right
+    after a dependency release just runs `npm run ci` and picks it up.
+-   With no dash-electron change of its own, the **bump-deps** workflow opens a PR
+    `chore(deps): take @trops/dash-core X, @trops/dash-react Y` within 15 minutes
+    (`gh workflow run bump-deps.yml --repo trops/dash-electron` to start it now). Release it:
+    `git fetch origin && git switch deps/…` then `npm run ci:release -- -m "<PR title>"`.
 
 ## Step 5: Jira Transitions
 
@@ -136,6 +139,12 @@ npm run ci:push -- -m "message"     # above + push
 npm run ci:pr -- -m "message"       # above + create PR
 npm run ci:release -- -m "message"  # above + merge + tag + cleanup
 ```
+
+`ci:release` waits for the PR's GitHub checks (PR CI) to pass before merging. It resumes:
+after `ci:pr`, or after a release that stopped partway, run the same `ci:release` again on
+the same branch. It works in a git worktree. It ends with
+`Release complete: v<version> (<commit>)`. Never finish a release with hand-made git
+commands. Details: each repo's `CLAUDE.md` › "Resuming and rerunning".
 
 ## Multi-Repo Change Checklist
 

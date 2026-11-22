@@ -57,6 +57,13 @@ if (cmd === "pr" && sub === "create") {
 }
 if (cmd === "pr" && sub === "merge") {
   const b = rest[0];
+  const mf = state + ".mergefails";
+  const m = fs.existsSync(mf) ? Number(fs.readFileSync(mf, "utf8")) : 0;
+  if (m < Number(process.env.FAKE_GH_MERGE_FAILS || 0)) {
+    fs.writeFileSync(mf, String(m + 1));
+    console.error("GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)");
+    process.exit(1);
+  }
   const scratch = process.env.FAKE_GH_SCRATCH;
   git(scratch, "fetch", "origin");
   git(scratch, "checkout", "-q", "-B", process.env.FAKE_GH_MAIN, "origin/" + process.env.FAKE_GH_MAIN);
@@ -66,6 +73,18 @@ if (cmd === "pr" && sub === "merge") {
   db[b].mergeCommit = { oid: git(scratch, "rev-parse", "HEAD") };
   save();
   process.exit(0);
+}
+if (cmd === "pr" && sub === "checks") {
+  // FAKE_GH_CHECKS: pass (default) | fail | none | "pending,pending,pass"
+  // (one state per call; the last one repeats).
+  const plan = (process.env.FAKE_GH_CHECKS || "pass").split(",");
+  const f = state + ".checks";
+  const n = fs.existsSync(f) ? Number(fs.readFileSync(f, "utf8")) : 0;
+  fs.writeFileSync(f, String(n + 1));
+  const now = plan[Math.min(n, plan.length - 1)];
+  if (now === "none") { console.error("no checks reported on the '" + rest[0] + "' branch"); process.exit(1); }
+  console.log(JSON.stringify([{ name: "validate", bucket: now }]));
+  process.exit(now === "pass" ? 0 : now === "pending" ? 8 : 1);
 }
 console.error("fake gh: unsupported " + process.argv.slice(2).join(" "));
 process.exit(1);
@@ -120,6 +139,9 @@ function setup() {
         FAKE_GH_SCRATCH: scratch,
         FAKE_GH_MAIN: MAIN,
         RELEASE_SKIP_GH_AUTH: "1",
+        RELEASE_CHECKS_INTERVAL_SEC: "0.01",
+        RELEASE_CHECKS_GRACE_SEC: "0.05",
+        RELEASE_MERGE_RETRY_SEC: "0.01",
         GIT_AUTHOR_NAME: "t",
         GIT_AUTHOR_EMAIL: "t@t",
         GIT_COMMITTER_NAME: "t",
@@ -265,6 +287,84 @@ describe("release.js", () => {
             () => quiet(() => release(opts("pr"), { cwd: work, env })),
             /Create a feature branch/
         );
+    });
+
+    it("won't merge while PR CI is failing", () => {
+        git(work, "checkout", "-q", "-b", "feat/red");
+        change();
+        quiet(() => release(opts("pr"), { cwd: work, env }));
+        assert.throws(
+            () =>
+                quiet(() =>
+                    release(opts("release"), {
+                        cwd: work,
+                        env: { ...env, FAKE_GH_CHECKS: "pending,fail" },
+                    })
+                ),
+            /PR CI failed: validate\. Nothing was merged/
+        );
+        const db = JSON.parse(fs.readFileSync(env.FAKE_GH_STATE, "utf8"));
+        assert.equal(db["feat/red"].state, "OPEN");
+        assert.equal(remoteMainVersion(), "1.0.0");
+    });
+
+    it("waits for PR CI that's still running, then releases", () => {
+        git(work, "checkout", "-q", "-b", "feat/wait");
+        change();
+        const r = quiet(() =>
+            release(opts("release"), {
+                cwd: work,
+                env: { ...env, FAKE_GH_CHECKS: "none,pending,pending,pass" },
+            })
+        );
+        assert.equal(r.tag, "v1.0.1");
+    });
+
+    it("tries the merge again when GitHub says the base was modified", () => {
+        git(work, "checkout", "-q", "-b", "feat/retry");
+        change();
+        const r = quiet(() =>
+            release(opts("release"), {
+                cwd: work,
+                env: { ...env, FAKE_GH_MERGE_FAILS: "2" },
+            })
+        );
+        assert.equal(r.tag, "v1.0.1");
+    });
+
+    it("gives up after three refused merges, with nothing merged", () => {
+        git(work, "checkout", "-q", "-b", "feat/refused");
+        change();
+        assert.throws(() =>
+            quiet(() =>
+                release(opts("release"), {
+                    cwd: work,
+                    env: { ...env, FAKE_GH_MERGE_FAILS: "5" },
+                })
+            )
+        );
+        assert.equal(remoteMainVersion(), "1.0.0");
+    });
+
+    it("won't merge a PR with no checks at all, unless told to", () => {
+        git(work, "checkout", "-q", "-b", "feat/nochecks");
+        change();
+        quiet(() => release(opts("pr"), { cwd: work, env }));
+        const noChecks = { ...env, FAKE_GH_CHECKS: "none" };
+        assert.throws(
+            () =>
+                quiet(() =>
+                    release(opts("release"), { cwd: work, env: noChecks })
+                ),
+            /No PR CI checks/
+        );
+        const r = quiet(() =>
+            release(opts("release"), {
+                cwd: work,
+                env: { ...noChecks, RELEASE_ALLOW_NO_CHECKS: "1" },
+            })
+        );
+        assert.equal(r.tag, "v1.0.1");
     });
 });
 
