@@ -17,6 +17,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
+# Tools ci.sh and scripts/release.js call (gh, git, …) must be found even when
+# PATH is the Mac app's bare one, as it is for Dash's bots: add Homebrew's
+# folders. Node comes from nvm below.
+for _dir in /opt/homebrew/bin /usr/local/bin; do
+    if [[ -d "$_dir" && ":$PATH:" != *":$_dir:"* ]]; then
+        PATH="$_dir:$PATH"
+    fi
+done
+export PATH
+
 # --- Parse arguments ---
 MODE="validate"
 COMMIT_MSG=""
