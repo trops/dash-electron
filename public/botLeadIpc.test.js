@@ -89,6 +89,9 @@ describe("Tasks via MCP IPC handlers", () => {
         BOTS_TASK_PASSPHRASE_STATE: "botController.getTaskPassphraseState(",
         BOTS_TASK_PASSPHRASE_REMOVE: "botController.removeTaskPassphrase(",
         BOTS_UNLOCK_MCP_TASKS: "botController.unlockMcpTasks(",
+        // How long a job started over MCP waits on an approval (DASH-32).
+        BOTS_GET_APPROVAL_WAIT_HOURS: "botController.approvalWaitHours(",
+        BOTS_SET_APPROVAL_WAIT_HOURS: "botController.setApprovalWaitHours(",
     };
     for (const [channel, call] of Object.entries(LOGGED)) {
         it(`${channel} → ${call}`, () => {

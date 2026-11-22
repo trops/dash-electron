@@ -884,6 +884,8 @@ const {
     BOTS_MCP_BOT_SETTINGS,
     BOTS_SET_ASKS_BOT_PASSPHRASE,
     BOTS_SET_TAKES_MCP_BOTS,
+    BOTS_GET_APPROVAL_WAIT_HOURS,
+    BOTS_SET_APPROVAL_WAIT_HOURS,
     BOTS_TASK_PASSPHRASE_STATE,
     BOTS_TASK_PASSPHRASE_REVEAL,
     BOTS_TASK_PASSPHRASE_SET,
@@ -3236,6 +3238,16 @@ function createWindow() {
             botController.setTakesMcpBots(
                 msg && msg.workspaceId,
                 !!(msg && msg.on)
+            )
+        );
+        // How long a job started over MCP waits on a tool approval (DASH-32).
+        logger.loggedHandle(BOTS_GET_APPROVAL_WAIT_HOURS, (e, msg) =>
+            botController.approvalWaitHours(msg && msg.workspaceId)
+        );
+        logger.loggedHandle(BOTS_SET_APPROVAL_WAIT_HOURS, (e, msg) =>
+            botController.setApprovalWaitHours(
+                msg && msg.workspaceId,
+                msg && msg.hours
             )
         );
         logger.loggedHandle(BOTS_TASK_PASSPHRASE_STATE, () =>
