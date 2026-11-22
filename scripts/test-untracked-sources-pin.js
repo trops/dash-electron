@@ -79,44 +79,43 @@ assert.ok(
     "package.json must define `test:untracked-pin` script"
 );
 
-// 4. ci.sh integration + ordering: checker invocation must come BEFORE
-// the `git add -u` line.
-const ciShPath = path.join(repoRoot, "scripts", "ci.sh");
-const ciShLines = fs.readFileSync(ciShPath, "utf8").split("\n");
-
-let checkerLine = -1;
-let gitAddLine = -1;
-ciShLines.forEach((line, idx) => {
-    if (
-        checkerLine === -1 &&
-        /(npm\s+run\s+check:untracked\b|node\s+scripts\/check-untracked-sources\.js)/.test(
-            line
-        )
-    ) {
-        checkerLine = idx;
-    }
-    if (gitAddLine === -1 && /^\s*git\s+add\s+-u\b/.test(line)) {
-        gitAddLine = idx;
-    }
-});
-
+// 4. The checker runs before `git add -u` (DASH-48: the git workflow is in
+// scripts/release.js). ci.sh must pass it as --pre-commit, and release.js
+// must run --pre-commit before its `git add -u` — both checked by position.
+const ciSh = fs.readFileSync(path.join(repoRoot, "scripts", "ci.sh"), "utf8");
+const releaseCall =
+    /node\s+scripts\/release\.js[\s\S]*?--pre-commit\s+(["'])([\s\S]*?)\1/.exec(
+        ciSh
+    );
 assert.ok(
-    checkerLine !== -1,
-    "scripts/ci.sh must invoke `npm run check:untracked` (or `node scripts/check-untracked-sources.js`)"
+    releaseCall,
+    'scripts/ci.sh must call `node scripts/release.js … --pre-commit "…"`'
 );
 assert.ok(
-    gitAddLine !== -1,
-    "scripts/ci.sh must contain a `git add -u` line (sanity check)"
+    /(npm\s+run\s+check:untracked\b|node\s+scripts\/check-untracked-sources\.js)/.test(
+        releaseCall[2]
+    ),
+    "ci.sh's --pre-commit must run `npm run check:untracked` (or `node scripts/check-untracked-sources.js`)"
+);
+
+const releaseSrc = fs.readFileSync(
+    path.join(repoRoot, "scripts", "release.js"),
+    "utf8"
+);
+const preCommitAt = releaseSrc.search(
+    /run\("bash",\s*\["-c",\s*opts\.preCommit\]\)/
+);
+const gitAddAt = releaseSrc.search(/run\("git",\s*\["add",\s*"-u"\]\)/);
+assert.ok(preCommitAt !== -1, "release.js must run opts.preCommit");
+assert.ok(
+    gitAddAt !== -1,
+    "release.js must contain `git add -u` (sanity check)"
 );
 assert.ok(
-    checkerLine < gitAddLine,
-    `Checker must run BEFORE 'git add -u'. Got checker at line ${
-        checkerLine + 1
-    }, git add -u at line ${gitAddLine + 1}.`
+    preCommitAt < gitAddAt,
+    "release.js must run --pre-commit BEFORE `git add -u`"
 );
 
 console.log(
-    `PASS  untracked-sources gate: checker exists at line ${
-        checkerLine + 1
-    }, before \`git add -u\` at line ${gitAddLine + 1}`
+    "PASS  untracked-sources gate: ci.sh passes it to release.js as --pre-commit, run before `git add -u`"
 );
