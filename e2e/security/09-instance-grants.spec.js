@@ -24,6 +24,7 @@ const {
     startServer,
     waitForJitModal,
     clickJitAllow,
+    clickJitDeny,
 } = require("./helpers");
 
 const NOTES = "ai-built.notesfolder.NotesFolder";
@@ -122,10 +123,15 @@ test.describe("per-instance MCP grants (DASH-46)", () => {
             "Dash/Specs",
         ]);
 
-        // Neither reads the other's folder.
-        const crossA = await readNote(window, woodworking, SPEC);
-        expect(crossA?.error).toBe(true);
-        const crossB = await readNote(window, specs, "Woodworking/x.md");
-        expect(crossB?.error).toBe(true);
+        // Neither reads the other's folder: each is asked (JIT is on)
+        // instead of being let in, and a Deny leaves it refused.
+        const pendingA = readNote(window, woodworking, SPEC);
+        await waitForJitModal(window);
+        await clickJitDeny(window);
+        expect((await pendingA)?.error).toBe(true);
+        const pendingB = readNote(window, specs, "Woodworking/x.md");
+        await waitForJitModal(window);
+        await clickJitDeny(window);
+        expect((await pendingB)?.error).toBe(true);
     });
 });
