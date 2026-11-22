@@ -273,7 +273,7 @@ is refused. The user adds it once with `gh auth refresh -h github.com -s workflo
 
 **New dash-core / dash-react versions.** `ci.sh` always installs the latest published
 `@trops/dash-core` and `@trops/dash-react`. First it waits (`scripts/wait-for-npm.js`, up
-to 10 minutes) until npm has the version their default branches say was released, so
+to 20 minutes; npm has taken 15) until npm has the version their default branches say was released, so
 "waiting for npm to show …" right after a dash-core/dash-react release is normal. A
 timeout means their Publish Package workflow didn't publish: report it and stop.
 

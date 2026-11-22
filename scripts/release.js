@@ -102,36 +102,45 @@ function sleepMs(ms) {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
+/** A GitHub check run as pass / fail / cancel / pending. */
+function bucketOf(run) {
+    if (run.status !== "completed") return "pending";
+    if (["success", "neutral", "skipped"].includes(run.conclusion)) {
+        return "pass";
+    }
+    return run.conclusion === "cancelled" ? "cancel" : "fail";
+}
+
 /**
- * Wait until the PR's GitHub checks (PR CI) have all passed. A failed or
- * cancelled check stops the release before anything is merged. No checks
- * at all after a short grace period also stops it (PR CI should be there),
- * unless RELEASE_ALLOW_NO_CHECKS is set.
+ * Wait until the GitHub checks (PR CI) on `sha` — the commit just pushed —
+ * have all passed. Checks are read for that exact commit, so a run on an
+ * earlier push never counts. A failed or cancelled check stops the release
+ * before anything is merged. No checks at all after a short grace period also
+ * stops it (PR CI should be there), unless RELEASE_ALLOW_NO_CHECKS is set.
  *
  * Env (tests): RELEASE_CHECKS_INTERVAL_SEC (15), RELEASE_CHECKS_TIMEOUT_SEC
  * (1800), RELEASE_CHECKS_GRACE_SEC (120).
  */
-function waitForChecks(
-    branch,
-    { cwd = process.cwd(), env = process.env } = {}
-) {
-    step("Waiting for PR CI to pass");
+function waitForChecks(sha, { cwd = process.cwd(), env = process.env } = {}) {
+    step(`Waiting for PR CI to pass on ${sha.slice(0, 8)}`);
     const intervalMs = Number(env.RELEASE_CHECKS_INTERVAL_SEC || 15) * 1000;
     const timeoutMs = Number(env.RELEASE_CHECKS_TIMEOUT_SEC || 1800) * 1000;
     const graceMs = Number(env.RELEASE_CHECKS_GRACE_SEC || 120) * 1000;
     const started = Date.now();
     let said = "";
     for (;;) {
-        // `gh pr checks` exits non-zero while checks are pending or failed,
-        // so read its output whatever the exit code.
         const res = spawnSync(
             "gh",
-            ["pr", "checks", branch, "--json", "name,bucket"],
+            ["api", `repos/{owner}/{repo}/commits/${sha}/check-runs`],
             { cwd, env, encoding: "utf8" }
         );
         let checks = [];
         try {
-            checks = JSON.parse(String(res.stdout || "").trim() || "[]");
+            const body = JSON.parse(String(res.stdout || "").trim() || "{}");
+            checks = (body.check_runs || []).map((r) => ({
+                name: r.name,
+                bucket: bucketOf(r),
+            }));
         } catch (_e) {
             checks = [];
         }
@@ -326,7 +335,8 @@ function release(opts, { cwd = process.cwd(), env = process.env } = {}) {
         }
         if (at(mode) < at("release")) return { done: "pr" };
 
-        waitForChecks(branch, { cwd, env });
+        // The checks of the commit just pushed — never an earlier push's.
+        waitForChecks(out("git", ["rev-parse", "HEAD"]), { cwd, env });
 
         step("Merging pull request");
         // Right after a push GitHub can refuse with "Base branch was
@@ -408,6 +418,7 @@ if (require.main === module) {
 module.exports = {
     release,
     waitForChecks,
+    bucketOf,
     parseArgs,
     compareVersions,
     nextPatch,

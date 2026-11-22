@@ -74,17 +74,28 @@ if (cmd === "pr" && sub === "merge") {
   save();
   process.exit(0);
 }
-if (cmd === "pr" && sub === "checks") {
-  // FAKE_GH_CHECKS: pass (default) | fail | none | "pending,pending,pass"
-  // (one state per call; the last one repeats).
+const checkRuns = /^repos\\/\\{owner\\}\\/\\{repo\\}\\/commits\\/([0-9a-f]+)\\/check-runs$/.exec(sub || "");
+if (cmd === "api" && checkRuns) {
+  // The check runs of one commit. FAKE_GH_CHECKS: pass (default) | fail |
+  // cancel | none | "pending,pending,pass" (one state per call; the last
+  // repeats). FAKE_GH_FAIL_SHA: that commit's run failed (an old push).
+  const sha = checkRuns[1];
+  fs.appendFileSync(state + ".shas", sha + "\\n");
   const plan = (process.env.FAKE_GH_CHECKS || "pass").split(",");
   const f = state + ".checks";
   const n = fs.existsSync(f) ? Number(fs.readFileSync(f, "utf8")) : 0;
   fs.writeFileSync(f, String(n + 1));
-  const now = plan[Math.min(n, plan.length - 1)];
-  if (now === "none") { console.error("no checks reported on the '" + rest[0] + "' branch"); process.exit(1); }
-  console.log(JSON.stringify([{ name: "validate", bucket: now }]));
-  process.exit(now === "pass" ? 0 : now === "pending" ? 8 : 1);
+  let now = plan[Math.min(n, plan.length - 1)];
+  if (process.env.FAKE_GH_FAIL_SHA && sha === process.env.FAKE_GH_FAIL_SHA) now = "fail";
+  const run = (status, conclusion) => ({ name: "validate", status, conclusion });
+  const runs =
+    now === "none" ? [] :
+    now === "pending" ? [run("in_progress", null)] :
+    now === "pass" ? [run("completed", "success")] :
+    now === "cancel" ? [run("completed", "cancelled")] :
+    [run("completed", "failure")];
+  console.log(JSON.stringify({ total_count: runs.length, check_runs: runs }));
+  process.exit(0);
 }
 console.error("fake gh: unsupported " + process.argv.slice(2).join(" "));
 process.exit(1);
@@ -344,6 +355,43 @@ describe("release.js", () => {
             )
         );
         assert.equal(remoteMainVersion(), "1.0.0");
+    });
+
+    it("reads the checks of the commit it just pushed, not an earlier push", () => {
+        git(work, "checkout", "-q", "-b", "feat/stale");
+        change();
+        quiet(() => release(opts("pr"), { cwd: work, env }));
+        const oldPush = git(work, "rev-parse", "HEAD");
+        // A new change on the branch; the old push's PR CI had failed.
+        change("a.txt", "fixed\n");
+        const r = quiet(() =>
+            release(opts("release"), {
+                cwd: work,
+                env: { ...env, FAKE_GH_FAIL_SHA: oldPush },
+            })
+        );
+        assert.equal(r.tag, "v1.0.1");
+        const asked = fs
+            .readFileSync(env.FAKE_GH_STATE + ".shas", "utf8")
+            .trim()
+            .split("\n");
+        assert.ok(!asked.includes(oldPush));
+        assert.equal(git(work, "rev-parse", `${r.sha}^2`), asked[0]);
+    });
+
+    it("a cancelled run stops it too", () => {
+        git(work, "checkout", "-q", "-b", "feat/cancel");
+        change();
+        assert.throws(
+            () =>
+                quiet(() =>
+                    release(opts("release"), {
+                        cwd: work,
+                        env: { ...env, FAKE_GH_CHECKS: "cancel" },
+                    })
+                ),
+            /PR CI failed: validate/
+        );
     });
 
     it("won't merge a PR with no checks at all, unless told to", () => {

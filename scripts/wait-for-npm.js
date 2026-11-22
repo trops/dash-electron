@@ -14,7 +14,7 @@
  * can't be read (no `gh`, offline), it says so and doesn't wait for that
  * package.
  *
- * Env: WAIT_FOR_NPM_TIMEOUT_SEC (600), WAIT_FOR_NPM_INTERVAL_SEC (15);
+ * Env: WAIT_FOR_NPM_TIMEOUT_SEC (1200), WAIT_FOR_NPM_INTERVAL_SEC (15);
  * WAIT_FOR_NPM_GH / WAIT_FOR_NPM_NPM replace the `gh` / `npm` commands
  * (tests).
  */
@@ -49,7 +49,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function waitForNpm(specs, env = process.env, log = console.log) {
     const gh = env.WAIT_FOR_NPM_GH || "gh";
     const npm = env.WAIT_FOR_NPM_NPM || "npm";
-    const timeoutMs = Number(env.WAIT_FOR_NPM_TIMEOUT_SEC || 600) * 1000;
+    const timeoutMs = Number(env.WAIT_FOR_NPM_TIMEOUT_SEC || 1200) * 1000;
     const intervalMs = Number(env.WAIT_FOR_NPM_INTERVAL_SEC || 15) * 1000;
     const run = (cmd, args) =>
         execFileSync(cmd, args, {

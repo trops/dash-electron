@@ -102,7 +102,7 @@ After the dependency repo's release, its Publish Package workflow puts the new v
 on npm (a few minutes). You don't bump dash-electron by hand:
 
 -   dash-electron's `ci.sh` installs the latest published `@trops/dash-core` and
-    `@trops/dash-react`, after waiting (`scripts/wait-for-npm.js`, up to 10 minutes) for npm
+    `@trops/dash-react`, after waiting (`scripts/wait-for-npm.js`, up to 20 minutes) for npm
     to show what their default branches released. So a dash-electron change made right
     after a dependency release just runs `npm run ci` and picks it up.
 -   With no dash-electron change of its own, the **bump-deps** workflow opens a PR
