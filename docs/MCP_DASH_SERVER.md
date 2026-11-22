@@ -83,6 +83,12 @@ Once connected, your MCP client should show the Dash server with its 22 tools, 3
 
 ## Tools (22)
 
+**Which tools a client sees** is set in Dash: Settings › MCP Server › Tools has a switch for every tool. A tool that's off isn't offered at all.
+
+### Bot Tools (off by default)
+
+`list_bots`, `create_bot`, `update_bot` and `confirm_bot` let a client see a team's bots and make or change them. They work only on the teams chosen under Tools › Bots › "Which teams", never on the Dash team. With "Ask for the task passphrase…" on (the default), `create_bot` and `update_bot` return a summary of everything the bot will get: show it to the user, ask for their task passphrase, then call `confirm_bot(requestId, passphrase)`. New bots start on unless `startPaused` is set.
+
 ### Dashboard Tools
 
 #### `list_dashboards`

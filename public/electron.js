@@ -827,6 +827,8 @@ const {
     MCP_DASH_SERVER_STOP,
     MCP_DASH_SERVER_STATUS,
     MCP_DASH_SERVER_GET_TOKEN,
+    MCP_DASH_SERVER_LIST_TOOLS,
+    MCP_DASH_SERVER_SET_TOOL_ON,
     BOTS_LIST,
     BOTS_GET,
     BOTS_SAVE,
@@ -879,6 +881,9 @@ const {
     BOTS_LIST_MCP_TASK_TEAMS,
     BOTS_SET_TAKES_MCP_TASKS,
     BOTS_SET_ASKS_TASK_PASSPHRASE,
+    BOTS_MCP_BOT_SETTINGS,
+    BOTS_SET_ASKS_BOT_PASSPHRASE,
+    BOTS_SET_TAKES_MCP_BOTS,
     BOTS_TASK_PASSPHRASE_STATE,
     BOTS_TASK_PASSPHRASE_REVEAL,
     BOTS_TASK_PASSPHRASE_SET,
@@ -2097,6 +2102,17 @@ function createWindow() {
         logger.loggedHandle(MCP_DASH_SERVER_GET_TOKEN, (e) =>
             mcpDashServerController.getOrCreateToken(getSenderWindow(e))
         );
+        // Settings › MCP Server › Tools: which tools clients are offered (DASH-37).
+        logger.loggedHandle(MCP_DASH_SERVER_LIST_TOOLS, (e) =>
+            mcpDashServerController.listTools(getSenderWindow(e))
+        );
+        logger.loggedHandle(MCP_DASH_SERVER_SET_TOOL_ON, (e, msg) =>
+            mcpDashServerController.setToolOn(
+                getSenderWindow(e),
+                msg && msg.name,
+                !!(msg && msg.on)
+            )
+        );
 
         // --- WebSocket ---
         logger.loggedHandle(WS_CONNECT, (e, message) =>
@@ -3209,6 +3225,19 @@ function createWindow() {
                 !!(msg && msg.on)
             )
         );
+        // Bots made and changed over MCP (DASH-37): the passphrase, and which teams.
+        logger.loggedHandle(BOTS_MCP_BOT_SETTINGS, () =>
+            botController.getMcpBotSettings()
+        );
+        logger.loggedHandle(BOTS_SET_ASKS_BOT_PASSPHRASE, (e, msg) =>
+            botController.setAsksBotPassphrase(!!(msg && msg.on))
+        );
+        logger.loggedHandle(BOTS_SET_TAKES_MCP_BOTS, (e, msg) =>
+            botController.setTakesMcpBots(
+                msg && msg.workspaceId,
+                !!(msg && msg.on)
+            )
+        );
         logger.loggedHandle(BOTS_TASK_PASSPHRASE_STATE, () =>
             botController.getTaskPassphraseState()
         );
@@ -3912,6 +3941,9 @@ app.whenReady().then(() => {
         // the Widget Builder's own compile, install and checks (CRE-011).
         widgetTools: teamWidgetTools(),
     });
+    // A bot saved over MCP (DASH-37) keeps background mode right, like one
+    // saved from the form.
+    botController.setAfterSave(() => syncBackgroundMode());
 
     // --- Bot Factory background mode: tray + login item (Slice 6b) ---
     // Skipped under E2E so Playwright drives a normal quit-on-close window.
