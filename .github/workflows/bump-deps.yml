@@ -7,9 +7,9 @@ name: Bump @trops dependencies
 # repository_dispatch (needs DASH_BOT_TOKEN there).
 #
 # Opening the PR needs "Allow GitHub Actions to create and approve pull
-# requests" (Settings › Actions › General). With DASH_BOT_TOKEN set here too,
-# the PR is opened with it, so PR CI runs on it (a PR opened with the
-# default GITHUB_TOKEN doesn't start other workflows).
+# requests" (Settings › Actions › General). A PR opened with the default
+# GITHUB_TOKEN doesn't start PR CI by itself, so the last step starts it on
+# the PR's branch (workflow_dispatch); scripts/release.js then sees its check.
 on:
     schedule:
         - cron: "*/15 * * * *"
@@ -24,6 +24,8 @@ concurrency:
 permissions:
     contents: write
     pull-requests: write
+    # To start PR CI on the new branch (last step).
+    actions: write
 
 jobs:
     bump:
@@ -86,3 +88,6 @@ jobs:
                   gh pr create --base master --head "$BRANCH" --title "$TITLE" --body "Opened by the bump-deps workflow (DASH-48): npm has @trops/dash-core $CORE and @trops/dash-react $REACT, and \`scripts/ci.sh\` passed with them.
 
                   Release it like any other PR: check out \`$BRANCH\` and run \`npm run ci:release -- -m \"$TITLE\"\`. That bumps the app version, merges, and tags (the tag builds the app)."
+                  # A PR opened with GITHUB_TOKEN doesn't start PR CI itself.
+                  gh workflow run pr-ci.yml --ref "$BRANCH"
+                  echo "Started PR CI on $BRANCH."

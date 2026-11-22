@@ -2,13 +2,19 @@ name: PR CI
 
 # DASH-48: every pull request runs the same validation as `npm run ci`
 # (scripts/ci.sh, validate only), so a PR shows a trusted GitHub check.
+#
+# workflow_dispatch: bump-deps starts it on its deps/… branch. A PR opened with
+# the default GITHUB_TOKEN doesn't trigger pull_request workflows, but a
+# dispatch does, and its check run lands on that branch's commit, which is
+# what scripts/release.js waits for.
 on:
     pull_request:
         branches:
             - "master"
+    workflow_dispatch:
 
 concurrency:
-    group: pr-ci-${{ github.event.pull_request.number }}
+    group: pr-ci-${{ github.event.pull_request.number || github.ref }}
     cancel-in-progress: true
 
 jobs:
