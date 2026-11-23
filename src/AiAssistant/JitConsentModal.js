@@ -334,6 +334,13 @@ export const JitConsentModal = () => {
     };
 
     const parentPath = pathArg ? parentDirOf(pathArg.value) : null;
+    // DASH-46: the widget already has the tool and asks for the folder its
+    // path is in; the grant is kept for this one placed widget.
+    const folderRequest =
+        domain === "mcp" &&
+        request.reason === "path-not-in-root" &&
+        !!pathArg &&
+        !!parentPath;
 
     const overlay = (
         <>
@@ -381,6 +388,16 @@ export const JitConsentModal = () => {
                                         {serverName}
                                     </span>
                                     .
+                                    {folderRequest && (
+                                        <div className="text-sm text-gray-300 mt-2">
+                                            Allow this widget to read{" "}
+                                            <span className="font-mono text-purple-300">
+                                                {parentPath}
+                                            </span>
+                                            ? Only this widget on this dashboard
+                                            gets the folder.
+                                        </div>
+                                    )}
                                 </>
                             )}
                             {domain === "fs" && (

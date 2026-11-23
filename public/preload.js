@@ -256,9 +256,15 @@ const extendedApi = {
     // and uses it to build a per-mount bound API (`makeBoundApi`)
     // exposed via WidgetContext. Gates resolve widget identity from
     // the token rather than trusting renderer-supplied widgetId.
+    // instanceId ("<dashboardId>:<uuid>") names the placed widget so it
+    // gets its own MCP grant (DASH-46); null for none.
     framework: {
-        registerMount: (widgetId) =>
-            ipcRenderer.invoke("framework:register-widget-mount", widgetId),
+        registerMount: (widgetId, instanceId = null) =>
+            ipcRenderer.invoke(
+                "framework:register-widget-mount",
+                widgetId,
+                instanceId
+            ),
         unregisterMount: (token) =>
             ipcRenderer.invoke("framework:unregister-widget-mount", token),
     },
