@@ -18,6 +18,9 @@
  *     tagging. Run again after a release → nothing to do, exit 0.
  *   - Worktree-safe: the tag goes on the PR's merge commit, and it never
  *     checks out a branch another worktree has checked out.
+ *   - Two PRs open at once (DASH-60): it merges the default branch in
+ *     first; a clash only on the version lines takes the default branch's,
+ *     and the bump moves past it. Any other conflict stops.
  *
  * The same file is in dash-core, dash-react and dash-electron; keep them in
  * step. Same with its test (scripts/release.test.js).
@@ -74,6 +77,105 @@ function makeRunner(cwd, env) {
         }
     }
     return { run, out, tryOut };
+}
+
+// Files whose version lines two PRs from the same main always both change.
+const VERSION_FILES = ["package.json", "package-lock.json"];
+const VERSION_LINE = /^\s*"version":\s*"[^"]*",?\s*$/;
+
+/**
+ * A conflicted file's text with every conflict resolved to the default
+ * branch's side — or null when any conflict is about more than version
+ * lines. ("ours" is the branch, "theirs" the default branch, as `git merge
+ * origin/<main>` writes them.)
+ */
+function resolveVersionOnlyConflict(text) {
+    const lines = String(text).split("\n");
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+        if (!lines[i].startsWith("<<<<<<< ")) {
+            out.push(lines[i]);
+            continue;
+        }
+        const ours = [];
+        const theirs = [];
+        let j = i + 1;
+        while (j < lines.length && lines[j] !== "=======")
+            ours.push(lines[j++]);
+        j++;
+        while (j < lines.length && !lines[j].startsWith(">>>>>>> ")) {
+            theirs.push(lines[j++]);
+        }
+        if (j >= lines.length) return null;
+        const onlyVersions = (side) =>
+            side.length > 0 && side.every((l) => VERSION_LINE.test(l));
+        if (
+            ours.length !== theirs.length ||
+            !onlyVersions(ours) ||
+            !onlyVersions(theirs)
+        ) {
+            return null;
+        }
+        out.push(...theirs);
+        i = j;
+    }
+    return out.join("\n");
+}
+
+/**
+ * Bring origin/<main> into the branch when it isn't there yet (DASH-60).
+ * Conflicts only on version lines in package.json / package-lock.json take
+ * main's (the bump after this moves past it); anything else aborts the
+ * merge and stops, as a rebase conflict does.
+ * @returns {boolean} whether it merged
+ */
+function mergeMain({ main, run, tryOut, cwd }) {
+    const upToDate =
+        tryOut("git", [
+            "merge-base",
+            "--is-ancestor",
+            `origin/${main}`,
+            "HEAD",
+        ]) !== null;
+    if (upToDate) return false;
+    step(`Bringing in ${main}`);
+    // Plain conflict markers, whatever the user's merge.conflictStyle.
+    const merge = [
+        "-c",
+        "merge.conflictStyle=merge",
+        "merge",
+        "--no-edit",
+        `origin/${main}`,
+    ];
+    if (tryOut("git", merge) !== null) return true;
+    const conflicted = (
+        tryOut("git", ["diff", "--name-only", "--diff-filter=U"]) || ""
+    )
+        .split("\n")
+        .filter(Boolean);
+    const fail = (why) => {
+        tryOut("git", ["merge", "--abort"]);
+        throw new Error(
+            `Merging ${main} into the branch failed (${why}). Resolve and run again.`
+        );
+    };
+    if (!conflicted.length) fail("it didn't finish");
+    const other = conflicted.filter((f) => !VERSION_FILES.includes(f));
+    if (other.length) fail(`conflicts in ${other.join(", ")}`);
+    for (const f of conflicted) {
+        const file = path.join(cwd, f);
+        const fixed = resolveVersionOnlyConflict(fs.readFileSync(file, "utf8"));
+        if (fixed === null) fail(`conflicts in ${f} beyond its version`);
+        fs.writeFileSync(file, fixed);
+    }
+    run("git", ["add", ...conflicted]);
+    run("git", ["commit", "--no-edit"]);
+    console.log(
+        `Took ${main}'s version in ${conflicted.join(
+            ", "
+        )}; bumping past it next.`
+    );
+    return true;
 }
 
 /** -1, 0 or 1 comparing two x.y.z versions. */
@@ -276,6 +378,11 @@ function release(opts, { cwd = process.cwd(), env = process.env } = {}) {
             );
         }
 
+        // Two PRs opened from the same main both claimed the next version
+        // (DASH-60): bring main in. A clash only on version lines takes main's;
+        // the bump below then moves past it. Any other conflict stops.
+        mergeMain({ main, run, tryOut, cwd });
+
         // The branch's version must be past the default branch's. Bump once.
         const mainVersion = JSON.parse(
             out("git", ["show", `origin/${main}:package.json`])
@@ -422,4 +529,5 @@ module.exports = {
     parseArgs,
     compareVersions,
     nextPatch,
+    resolveVersionOnlyConflict,
 };

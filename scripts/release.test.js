@@ -11,7 +11,12 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { execFileSync } = require("child_process");
-const { release, compareVersions, nextPatch } = require("./release");
+const {
+    release,
+    compareVersions,
+    nextPatch,
+    resolveVersionOnlyConflict,
+} = require("./release");
 
 const made = [];
 after(() => {
@@ -413,6 +418,138 @@ describe("release.js", () => {
             })
         );
         assert.equal(r.tag, "v1.0.1");
+    });
+});
+
+describe("two PRs open at once (DASH-60)", () => {
+    beforeEach(setup);
+
+    // Two branches from the same main, each opened as a PR (each bumps to
+    // 1.0.1), then released one after the other.
+    function twoPrs({ sameFile = false } = {}) {
+        git(work, "checkout", "-q", "-b", "feat/first");
+        change("a.txt", "first\n");
+        quiet(() => release(opts("pr"), { cwd: work, env }));
+        git(work, "checkout", "-q", "-b", "feat/second", `origin/${MAIN}`);
+        change(sameFile ? "a.txt" : "b.txt", "second\n");
+        if (!sameFile) git(work, "add", "b.txt");
+        quiet(() => release(opts("pr"), { cwd: work, env }));
+        git(work, "checkout", "-q", "feat/first");
+        const first = quiet(() => release(opts("release"), { cwd: work, env }));
+        assert.equal(first.tag, "v1.0.1");
+        git(work, "checkout", "-q", "feat/second");
+    }
+
+    it("the second takes main's version and bumps past it, with no hand fixes", () => {
+        twoPrs();
+        const r = quiet(() => release(opts("release"), { cwd: work, env }));
+        assert.equal(r.tag, "v1.0.2");
+        git(work, "fetch", "-q", "origin");
+        assert.equal(remoteMainVersion(), "1.0.2");
+        // Both PRs' work is on main.
+        assert.equal(git(work, "show", `origin/${MAIN}:a.txt`), "first");
+        assert.equal(git(work, "show", `origin/${MAIN}:b.txt`), "second");
+        assert.match(remoteTags(), /refs\/tags\/v1\.0\.2/);
+    });
+
+    it("three at once: the third's version clashes with main's, and is fixed", () => {
+        // All three opened from the same main (1.0.0), each claiming 1.0.1.
+        for (const [b, file] of [
+            ["feat/a", "a.txt"],
+            ["feat/b", "b.txt"],
+            ["feat/c", "c.txt"],
+        ]) {
+            git(work, "checkout", "-q", "-b", b, `origin/${MAIN}`);
+            change(file, `${b}\n`);
+            git(work, "add", file);
+            quiet(() => release(opts("pr"), { cwd: work, env }));
+        }
+        const said = [];
+        const log = console.log;
+        const tags = [];
+        try {
+            for (const b of ["feat/a", "feat/b", "feat/c"]) {
+                git(work, "checkout", "-q", b);
+                console.log = (...a) => said.push(`${b}: ${a.join(" ")}`);
+                tags.push(release(opts("release"), { cwd: work, env }).tag);
+                console.log = log;
+            }
+        } finally {
+            console.log = log;
+        }
+        assert.deepEqual(tags, ["v1.0.1", "v1.0.2", "v1.0.3"]);
+        git(work, "fetch", "-q", "origin");
+        assert.equal(remoteMainVersion(), "1.0.3");
+        for (const [file, text] of [
+            ["a.txt", "feat/a"],
+            ["b.txt", "feat/b"],
+            ["c.txt", "feat/c"],
+        ]) {
+            assert.equal(git(work, "show", `origin/${MAIN}:${file}`), text);
+        }
+        // The third went through the version clash (main 1.0.2, it 1.0.1).
+        assert.ok(
+            said.some((l) =>
+                /^feat\/c: Took main's version in package\.json/.test(l)
+            ),
+            said.join("\n")
+        );
+    });
+
+    it("a real conflict still stops, with nothing merged", () => {
+        twoPrs({ sameFile: true });
+        assert.throws(
+            () => quiet(() => release(opts("release"), { cwd: work, env })),
+            /Merging main into the branch failed \(conflicts in a\.txt\)/
+        );
+        git(work, "fetch", "-q", "origin");
+        assert.equal(remoteMainVersion(), "1.0.1");
+        // The merge was undone: no conflict left in the checkout.
+        assert.equal(
+            git(work, "status", "--porcelain", "--untracked-files=no"),
+            ""
+        );
+    });
+});
+
+describe("resolveVersionOnlyConflict", () => {
+    const conflict = (ours, theirs) => [
+        "<<<<<<< HEAD",
+        ...ours,
+        "=======",
+        ...theirs,
+        ">>>>>>> origin/main",
+    ];
+
+    it("takes main's side when only version lines clash", () => {
+        const text = [
+            "{",
+            '  "name": "x",',
+            ...conflict(['  "version": "1.0.1",'], ['  "version": "1.0.1",']),
+            '  "private": true',
+            "}",
+        ].join("\n");
+        assert.equal(
+            resolveVersionOnlyConflict(text),
+            '{\n  "name": "x",\n  "version": "1.0.1",\n  "private": true\n}'
+        );
+    });
+
+    it("refuses a clash that's about more than the version", () => {
+        const text = conflict(
+            ['  "version": "1.0.1",', '  "dependencies": { "a": "1" },'],
+            ['  "version": "1.0.1",', '  "dependencies": { "b": "2" },']
+        ).join("\n");
+        assert.equal(resolveVersionOnlyConflict(text), null);
+        assert.equal(
+            resolveVersionOnlyConflict(
+                conflict(
+                    ['    "lodash": "^4.0.0",'],
+                    ['    "lodash": "^4.1.0",']
+                ).join("\n")
+            ),
+            null
+        );
     });
 });
 
