@@ -864,6 +864,8 @@ const {
     BOTS_ENSURE_LEAD,
     BOTS_SET_LEAD_ENABLED,
     BOTS_GET_TEAM_SETTINGS,
+    BOTS_GET_TEAM_VALUES,
+    BOTS_SET_TEAM_VALUES,
     BOTS_DISMISS_LEAD_INTRO,
     BOTS_BUILTIN_INSTRUCTIONS,
     BOTS_DISMISS_LAYERS_NOTICE,
@@ -2914,7 +2916,9 @@ function createWindow() {
                 msg && msg.workspaceId,
                 msg && msg.manifest,
                 (msg && msg.choices) || {},
-                (msg && msg.roles) || null
+                (msg && msg.roles) || null,
+                // Its settings, filled in on the review screen (DASH-57).
+                (msg && msg.values) || null
             )
         );
         // Registry publish (TEAM-006 slice 3a): a bot or a team, rebuilt and
@@ -2941,7 +2945,8 @@ function createWindow() {
                 msg && msg.workspaceId,
                 msg && msg.previewId,
                 (msg && msg.choices) || {},
-                (msg && msg.roles) || null
+                (msg && msg.roles) || null,
+                (msg && msg.values) || null
             )
         );
         // Bot widgets on the dashboard (TEAM-012): place one, or link one to
@@ -3117,6 +3122,16 @@ function createWindow() {
         );
         logger.loggedHandle(BOTS_GET_TEAM_SETTINGS, (e, msg) =>
             botController.getTeamSettings(msg && msg.workspaceId)
+        );
+        // A team's settings, used as {name} by its bots (DASH-57).
+        logger.loggedHandle(BOTS_GET_TEAM_VALUES, (e, msg) =>
+            botController.teamValues(msg && msg.workspaceId)
+        );
+        logger.loggedHandle(BOTS_SET_TEAM_VALUES, (e, msg) =>
+            botController.setTeamValues(
+                msg && msg.workspaceId,
+                (msg && msg.change) || {}
+            )
         );
         logger.loggedHandle(BOTS_DISMISS_LEAD_INTRO, (e, msg) =>
             botController.dismissLeadIntro(msg && msg.workspaceId)
