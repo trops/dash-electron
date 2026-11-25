@@ -883,6 +883,7 @@ const {
     BOTS_LIST_MCP_TASK_TEAMS,
     BOTS_SET_TAKES_MCP_TASKS,
     BOTS_SET_ASKS_TASK_PASSPHRASE,
+    BOTS_SET_ONE_JOB_AT_A_TIME,
     BOTS_MCP_BOT_SETTINGS,
     BOTS_SET_ASKS_BOT_PASSPHRASE,
     BOTS_SET_TAKES_MCP_BOTS,
@@ -3238,6 +3239,13 @@ function createWindow() {
         );
         logger.loggedHandle(BOTS_SET_ASKS_TASK_PASSPHRASE, (e, msg) =>
             botController.setAsksTaskPassphrase(
+                msg && msg.workspaceId,
+                !!(msg && msg.on)
+            )
+        );
+        // A team runs one job at a time (DASH-81): its switch on the team page.
+        logger.loggedHandle(BOTS_SET_ONE_JOB_AT_A_TIME, (e, msg) =>
+            botController.setOneJobAtATime(
                 msg && msg.workspaceId,
                 !!(msg && msg.on)
             )
