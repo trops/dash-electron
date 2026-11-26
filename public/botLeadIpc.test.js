@@ -87,6 +87,8 @@ describe("Tasks via MCP IPC handlers", () => {
         BOTS_SET_TAKES_MCP_TASKS: "botController.setTakesMcpTasks(",
         BOTS_SET_ASKS_TASK_PASSPHRASE: "botController.setAsksTaskPassphrase(",
         BOTS_SET_ONE_JOB_AT_A_TIME: "botController.setOneJobAtATime(",
+        // A team's standard handoff switch (DASH-101).
+        BOTS_SET_USES_HANDOFFS: "botController.setUsesHandoffs(",
         BOTS_TASK_PASSPHRASE_STATE: "botController.getTaskPassphraseState(",
         BOTS_TASK_PASSPHRASE_REMOVE: "botController.removeTaskPassphrase(",
         BOTS_UNLOCK_MCP_TASKS: "botController.unlockMcpTasks(",

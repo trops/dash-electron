@@ -884,6 +884,7 @@ const {
     BOTS_SET_TAKES_MCP_TASKS,
     BOTS_SET_ASKS_TASK_PASSPHRASE,
     BOTS_SET_ONE_JOB_AT_A_TIME,
+    BOTS_SET_USES_HANDOFFS,
     BOTS_MCP_BOT_SETTINGS,
     BOTS_SET_ASKS_BOT_PASSPHRASE,
     BOTS_SET_TAKES_MCP_BOTS,
@@ -3246,6 +3247,13 @@ function createWindow() {
         // A team runs one job at a time (DASH-81): its switch on the team page.
         logger.loggedHandle(BOTS_SET_ONE_JOB_AT_A_TIME, (e, msg) =>
             botController.setOneJobAtATime(
+                msg && msg.workspaceId,
+                !!(msg && msg.on)
+            )
+        );
+        // A team's bots use the standard handoff (DASH-101): its switch on the team page.
+        logger.loggedHandle(BOTS_SET_USES_HANDOFFS, (e, msg) =>
+            botController.setUsesHandoffs(
                 msg && msg.workspaceId,
                 !!(msg && msg.on)
             )
