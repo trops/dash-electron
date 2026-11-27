@@ -879,6 +879,7 @@ const {
     BOTS_GET_JOB,
     BOTS_STOP_JOB,
     BOTS_DELETE_JOB,
+    BOTS_RERUN_STEP,
     BOTS_LIST_MCP_ROUTES,
     BOTS_LIST_MCP_TASK_TEAMS,
     BOTS_SET_TAKES_MCP_TASKS,
@@ -3219,6 +3220,14 @@ function createWindow() {
         );
         logger.loggedHandle(BOTS_DELETE_JOB, (e, msg) =>
             botController.deleteJob(msg && msg.jobId)
+        );
+        // A failed job's "Run again from <bot>" (DASH-122).
+        logger.loggedHandle(BOTS_RERUN_STEP, (e, msg) =>
+            botController.rerunStep(
+                msg && msg.jobId,
+                msg && msg.stepId,
+                msg && msg.note
+            )
         );
         // Tasks via MCP (bot-teams TEAM-016): a team's tasks and switch, the
         // Dash Lead's routing log, and the task passphrase.
