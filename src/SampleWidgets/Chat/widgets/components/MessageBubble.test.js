@@ -1,4 +1,6 @@
 /**
+ * @jest-environment jsdom
+ *
  * Chat widget MessageBubble — assistant Markdown goes through dash-core's
  * sanitizer (renderSafeMarkdown). On an older app without it, the reply is
  * shown as plain text — never as unsanitized HTML.

@@ -1,4 +1,6 @@
 /**
+ * @jest-environment jsdom
+ *
  * ChatInput — auto-resize must not collapse the textarea.
  *
  * Regression: when the widget mounts on a page tab that isn't visible yet,
