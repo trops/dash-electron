@@ -3,8 +3,7 @@
  * Fail fast if there are untracked files in source directories at
  * commit time.
  *
- * Why: ci.sh stages with `git add -u`, which only picks up modified
- * tracked files. Brand-new files (e.g. a freshly-added helper module)
+ * Why: the release commits only tracked (or staged) files. Brand-new files (e.g. a freshly-added helper module)
  * stay untracked and silently get dropped from the release commit. We
  * shipped this exact bug as v0.0.620–622 (public/electronSecurity.js
  * referenced by electron.js but never committed). This checker prevents
@@ -85,7 +84,7 @@ function main() {
     violations.forEach((p) => console.error("    " + p));
     console.error("");
     console.error(
-        "ci.sh's `git add -u` only stages tracked-modified files, not new files."
+        "The release commits only tracked (or staged) files, not new ones."
     );
     console.error("Either:");
     console.error("    - Stage them explicitly:  git add <file>");

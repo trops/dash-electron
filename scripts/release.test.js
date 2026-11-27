@@ -16,6 +16,8 @@ const {
     compareVersions,
     nextPatch,
     resolveVersionOnlyConflict,
+    lockfileProblem,
+    filesToCommit,
 } = require("./release");
 
 const made = [];
@@ -559,5 +561,199 @@ describe("versions", () => {
         assert.equal(compareVersions("0.1.953", "0.1.953"), 0);
         assert.equal(compareVersions("0.0.9", "0.1.0"), -1);
         assert.equal(nextPatch("0.1.953"), "0.1.954");
+    });
+});
+
+describe("what it commits (DASH-153)", () => {
+    beforeEach(setup);
+
+    // A package-lock.json on main, so a branch can change it.
+    const lock = (extra = {}, version = "1.0.0") =>
+        JSON.stringify(
+            {
+                name: "x",
+                version,
+                lockfileVersion: 3,
+                packages: { "": { name: "x", version }, ...extra },
+            },
+            null,
+            2
+        ) + "\n";
+    function seedLockfile() {
+        git(work, "checkout", "-q", MAIN);
+        fs.writeFileSync(path.join(work, "package-lock.json"), lock());
+        git(work, "add", "package-lock.json");
+        git(work, "commit", "-q", "-m", "lockfile");
+        git(work, "push", "-q", "origin", MAIN);
+    }
+    const listFile = (...files) => {
+        const f = path.join(tmp("release-files-"), "files.txt");
+        fs.writeFileSync(f, files.join("\n") + "\n");
+        return f;
+    };
+    const filesIn = (ref) =>
+        git(work, "show", "--name-only", "--format=", ref).split("\n");
+
+    it("commits only the files named before validation ran", () => {
+        git(work, "checkout", "-q", "-b", "feat/named");
+        change("a.txt", "mine\n");
+        const named = listFile("a.txt");
+        const r = quiet(() =>
+            release({ ...opts("commit"), filesFrom: named }, { cwd: work, env })
+        );
+        assert.equal(r.done, "commit");
+        assert.deepEqual(filesIn("HEAD~1"), ["a.txt"]);
+        assert.equal(git(work, "status", "--porcelain"), "");
+    });
+
+    it("stops, committing nothing, when validation changed another file", () => {
+        git(work, "checkout", "-q", "-b", "feat/rewrote");
+        change("a.txt", "mine\n");
+        const named = listFile("a.txt");
+        // What a formatter run over the whole repo does.
+        fs.writeFileSync(
+            path.join(work, "package.json"),
+            JSON.stringify({ name: "x", version: "1.0.0" }) + "\n"
+        );
+        const before = git(work, "rev-parse", "HEAD");
+        assert.throws(
+            () =>
+                quiet(() =>
+                    release(
+                        { ...opts("pr"), filesFrom: named },
+                        { cwd: work, env }
+                    )
+                ),
+            /changed during validation.*package\.json.*Nothing was committed/
+        );
+        assert.equal(git(work, "rev-parse", "HEAD"), before);
+        assert.equal(fs.existsSync(env.FAKE_GH_STATE), false);
+    });
+
+    it("without a list, commits every changed tracked file, deletions too", () => {
+        fs.writeFileSync(path.join(work, "b.txt"), "b\n");
+        git(work, "add", "b.txt");
+        git(work, "commit", "-q", "-m", "b");
+        git(work, "push", "-q", "origin", MAIN);
+        git(work, "checkout", "-q", "-b", "feat/all");
+        change("a.txt", "mine\n");
+        fs.rmSync(path.join(work, "b.txt"));
+        fs.writeFileSync(path.join(work, "new.txt"), "new\n");
+        git(work, "add", "new.txt");
+        quiet(() => release(opts("commit"), { cwd: work, env }));
+        assert.deepEqual(filesIn("HEAD~1").sort(), [
+            "a.txt",
+            "b.txt",
+            "new.txt",
+        ]);
+        assert.equal(git(work, "status", "--porcelain"), "");
+    });
+
+    it("won't commit a lockfile change no dependency explains", () => {
+        seedLockfile();
+        git(work, "checkout", "-q", "-b", "feat/lock");
+        change("a.txt", "mine\n");
+        fs.writeFileSync(
+            path.join(work, "package-lock.json"),
+            lock({ "node_modules/foo": { version: "2.0.0" } })
+        );
+        const before = git(work, "rev-parse", "HEAD");
+        assert.throws(
+            () => quiet(() => release(opts("commit"), { cwd: work, env })),
+            /package-lock\.json changed, but no dependency in package\.json did/
+        );
+        assert.equal(git(work, "rev-parse", "HEAD"), before);
+        // A person can still say so.
+        quiet(() =>
+            release(opts("commit"), {
+                cwd: work,
+                env: { ...env, RELEASE_ALLOW_LOCKFILE: "1" },
+            })
+        );
+        assert.ok(filesIn("HEAD~1").includes("package-lock.json"));
+    });
+
+    it("commits a lockfile change that comes with a dependency change", () => {
+        seedLockfile();
+        git(work, "checkout", "-q", "-b", "feat/dep");
+        fs.writeFileSync(
+            path.join(work, "package.json"),
+            JSON.stringify(
+                {
+                    name: "x",
+                    version: "1.0.0",
+                    dependencies: { foo: "^2.0.0" },
+                },
+                null,
+                2
+            ) + "\n"
+        );
+        fs.writeFileSync(
+            path.join(work, "package-lock.json"),
+            lock({ "node_modules/foo": { version: "2.0.0" } })
+        );
+        quiet(() => release(opts("commit"), { cwd: work, env }));
+        assert.deepEqual(filesIn("HEAD~1").sort(), [
+            "package-lock.json",
+            "package.json",
+        ]);
+    });
+});
+
+describe("lockfileProblem / filesToCommit", () => {
+    const lock = (version, foo) =>
+        JSON.stringify({
+            version,
+            packages: {
+                "": { version },
+                ...(foo ? { "node_modules/foo": { version: foo } } : {}),
+            },
+        });
+    const pkg = (version, deps) =>
+        JSON.stringify({ version, ...(deps ? { dependencies: deps } : {}) });
+
+    it("lets the lockfile's own version fields change", () => {
+        assert.equal(
+            lockfileProblem({
+                lockBefore: lock("1.0.0", "1.0.0"),
+                lockNow: lock("1.0.1", "1.0.0"),
+                pkgBefore: [pkg("1.0.0")],
+                pkgNow: pkg("1.0.1"),
+            }),
+            null
+        );
+    });
+
+    it("refuses other lockfile changes when only package.json's version moved", () => {
+        assert.match(
+            lockfileProblem({
+                lockBefore: lock("1.0.0", "1.0.0"),
+                lockNow: lock("1.0.1", "1.2.0"),
+                pkgBefore: [pkg("1.0.0", { foo: "^1.0.0" })],
+                pkgNow: pkg("1.0.1", { foo: "^1.0.0" }),
+            }),
+            /no dependency in package\.json did/
+        );
+    });
+
+    it("allows them when the branch changed a dependency (against its base)", () => {
+        assert.equal(
+            lockfileProblem({
+                lockBefore: lock("1.0.0", "1.0.0"),
+                lockNow: lock("1.0.0", "2.0.0"),
+                pkgBefore: [
+                    pkg("1.0.0", { foo: "^2.0.0" }),
+                    pkg("1.0.0", { foo: "^1.0.0" }),
+                ],
+                pkgNow: pkg("1.0.0", { foo: "^2.0.0" }),
+            }),
+            null
+        );
+    });
+
+    it("names exactly the listed files, and stops on any other", () => {
+        assert.deepEqual(filesToCommit(["a", "b"], null), ["a", "b"]);
+        assert.deepEqual(filesToCommit(["a"], ["a", "gone"]), ["a"]);
+        assert.throws(() => filesToCommit(["a", "b"], ["a"]), /: b\./);
     });
 });

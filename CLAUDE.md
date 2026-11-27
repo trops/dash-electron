@@ -278,6 +278,14 @@ uses the versions in `package-lock.json`, runs `prettier --check` (fix with
 refresh only after a cleanup with `--update-baseline`), and fails if any step left a
 changed or new file in the working tree.
 
+**What the release commits (DASH-163).** The commit step commits exactly the tracked files
+changed (or staged) before validation ran, plus the @trops install a release makes; never
+`git add -u`. A brand-new file must be `git add`ed first (`check:untracked` stops the
+release otherwise). If anything else changed, it stops, commits nothing, and names the
+file: undo it with `git checkout HEAD -- <file>`. `package-lock.json` is committed only
+when a dependency in package.json changed on the branch (or only its version moved);
+`RELEASE_ALLOW_LOCKFILE=1` overrides that (a person's call, not a bot's).
+
 **Tests (DASH-158).** `npm test` (and `ci.sh`) runs every `*.test.{js,cjs,mjs}` in
 `src/`, `public/` and `scripts/`: files that use `node:test` under `node --test`
 (`npm run test:node`), the rest under jest (`npm run test:jest`).
