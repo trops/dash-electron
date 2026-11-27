@@ -278,6 +278,12 @@ uses the versions in `package-lock.json`, runs `prettier --check` (fix with
 refresh only after a cleanup with `--update-baseline`), and fails if any step left a
 changed or new file in the working tree.
 
+**Tests (DASH-158).** `npm test` (and `ci.sh`) runs every `*.test.{js,cjs,mjs}` in
+`src/`, `public/` and `scripts/`: files that use `node:test` under `node --test`
+(`npm run test:node`), the rest under jest (`npm run test:jest`).
+`scripts/list-tests.js` finds them, so a new test file runs in CI without being listed
+anywhere. Components that render need `@jest-environment jsdom` at the top.
+
 **New dash-core / dash-react versions.** A release (`ci:commit` and up) or
 `./scripts/ci.sh --update-deps` (what bump-deps runs) installs the latest published
 `@trops/dash-core` and `@trops/dash-react` into package.json and the lockfile. First it waits (`scripts/wait-for-npm.js`, up

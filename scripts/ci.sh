@@ -106,18 +106,10 @@ node scripts/audit-ipc-surface.js --check
 # dash-ver-*, dash-ai-build-* … behind in the OS temp dir. Tests make
 # temp folders with scripts/testUtils/tempDir.js.
 
-# Phase 5A regression pins — IPC payload validation + warn-only bundle lint
-step "Running Phase 5A unit tests (IPC validators + bundle lint)"
-node scripts/checkTempLeaks.js -- node --test scripts/ipcValidators.test.js scripts/testUtils/tempDir.test.js scripts/checkTempLeaks.test.js
-node scripts/checkTempLeaks.js -- node --test scripts/bundleSecurityLint.test.js scripts/libraryImports.test.js scripts/indexHtmlErrors.test.js
-
-# Release pipeline (DASH-48): the resumable git workflow and the npm wait
-step "Testing the release scripts"
-node scripts/checkTempLeaks.js -- node --test scripts/release.test.js scripts/wait-for-npm.test.js
-
-# Bot Factory background-mode helpers (Slice 6b): pure tray/login-item logic
-step "Running Bot Factory background-mode tests (Slice 6b)"
-node scripts/checkTempLeaks.js -- node --test public/botBackground.test.js public/appIdentifier.test.js public/widgetEventRelay.test.js public/botLeadIpc.test.js public/popoutRoute.test.js public/widgetConfigType.test.js public/widgetImportFixes.test.js public/teamWidgetTools.test.js public/teamWidgetToolsEdit.test.js public/installGate.test.js public/assistantDock.test.js public/botNotify.test.js public/widgetDrafts.test.cjs public/packageUpdate.test.js public/updateCheckError.test.js public/loggerFailed.test.js public/providerCallChecks.test.js
+# Every node:test file in src/, public/ and scripts/ (DASH-158: found by
+# scripts/list-tests.js, not a hand-kept list).
+step "Running node:test unit tests (src/, public/, scripts/)"
+npm run test:node
 
 # 2. Update @trops dependencies to the latest published versions, only for
 # a release or --update-deps (plain validate uses the lockfile as it is).
@@ -194,11 +186,10 @@ npm run test:audit-pin
 step "Auditing Electron-specific security (electronegativity)"
 npm run audit:electron
 
-# 5d. AI Widget Builder unit tests (src/AiAssistant). Jest for the React /
-# source-pin suites; the two node:test suites run under node --test.
-step "Running AI Widget Builder unit tests"
-npm run test:ai
-node scripts/checkTempLeaks.js -- npm run test:ai-node
+# 5d. Every jest test file in src/, public/ and scripts/ (DASH-158: found by
+# scripts/list-tests.js; the node:test ones ran above).
+step "Running jest unit tests (src/, public/, scripts/)"
+npm run test:jest
 # The main-process copy of the Widget Builder's checks (the Dash team's
 # Checker) must match src/AiAssistant.
 node scripts/build-widget-checks.js --check
