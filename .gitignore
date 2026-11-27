@@ -11,6 +11,9 @@
 
 # testing
 /coverage
+/playwright-report
+/test-results
+/playwright-report-security
 
 # production
 /build
