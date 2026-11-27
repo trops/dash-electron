@@ -89,6 +89,23 @@ describe("Tasks via MCP IPC handlers", () => {
         BOTS_SET_ONE_JOB_AT_A_TIME: "botController.setOneJobAtATime(",
         // A team's standard handoff switch (DASH-101).
         BOTS_SET_USES_HANDOFFS: "botController.setUsesHandoffs(",
+        // The bot handoff fundamentals (DASH-106, -108, -109, -110).
+        BOTS_CHECK_SETUP: "botController.checkSetup(",
+        BOTS_CHECK_PACKAGES_LIST: "botController.listCheckPackages(",
+        BOTS_CHECK_PACKAGES_SEARCH: "botController.searchCheckPackages(",
+        BOTS_CHECK_PACKAGE_INSTALL: "botController.installCheckPackage(",
+        BOTS_CHECK_PACKAGE_REMOVE: "botController.removeCheckPackage(",
+        BOTS_SUGGEST_CHECKS: "botController.suggestChecks(",
+        BOTS_DRAFT_CHECK: "botController.draftCheck(",
+        BOTS_TRY_CHECK: "botController.tryCheck(",
+        BOTS_SAVE_CHECK: "botController.saveCheck(",
+        BOTS_TEAM_CHECKS: "botController.teamChecks(",
+        BOTS_RESOLVE_TEAM_CHECK: "botController.resolveTeamCheck(",
+        BOTS_REPOS_WITHOUT_CHECKS: "botController.reposWithoutChecks(",
+        BOTS_SET_UP_REPO_CHECKS: "botController.setUpRepoChecks(",
+        BOTS_TEST_TEAM: "botController.testTeam(",
+        BOTS_SET_TEST_ITEM: "botController.setTestItem(",
+
         BOTS_TASK_PASSPHRASE_STATE: "botController.getTaskPassphraseState(",
         BOTS_TASK_PASSPHRASE_REMOVE: "botController.removeTaskPassphrase(",
         BOTS_UNLOCK_MCP_TASKS: "botController.unlockMcpTasks(",

@@ -885,6 +885,21 @@ const {
     BOTS_SET_ASKS_TASK_PASSPHRASE,
     BOTS_SET_ONE_JOB_AT_A_TIME,
     BOTS_SET_USES_HANDOFFS,
+    BOTS_CHECK_SETUP,
+    BOTS_CHECK_PACKAGES_LIST,
+    BOTS_CHECK_PACKAGES_SEARCH,
+    BOTS_CHECK_PACKAGE_INSTALL,
+    BOTS_CHECK_PACKAGE_REMOVE,
+    BOTS_SUGGEST_CHECKS,
+    BOTS_DRAFT_CHECK,
+    BOTS_TRY_CHECK,
+    BOTS_SAVE_CHECK,
+    BOTS_TEAM_CHECKS,
+    BOTS_RESOLVE_TEAM_CHECK,
+    BOTS_REPOS_WITHOUT_CHECKS,
+    BOTS_SET_UP_REPO_CHECKS,
+    BOTS_TEST_TEAM,
+    BOTS_SET_TEST_ITEM,
     BOTS_MCP_BOT_SETTINGS,
     BOTS_SET_ASKS_BOT_PASSPHRASE,
     BOTS_SET_TAKES_MCP_BOTS,
@@ -3257,6 +3272,72 @@ function createWindow() {
                 msg && msg.workspaceId,
                 !!(msg && msg.on)
             )
+        );
+        // The bot handoff fundamentals: the team's setup, checked (DASH-108).
+        logger.loggedHandle(BOTS_CHECK_SETUP, (e, msg) =>
+            botController.checkSetup(msg && msg.workspaceId)
+        );
+        // The bot handoff fundamentals: check packages here (DASH-106).
+        logger.loggedHandle(BOTS_CHECK_PACKAGES_LIST, (e, msg) =>
+            botController.listCheckPackages()
+        );
+        logger.loggedHandle(BOTS_CHECK_PACKAGES_SEARCH, (e, msg) =>
+            botController.searchCheckPackages({
+                query: (msg && msg.query) || "",
+            })
+        );
+        logger.loggedHandle(BOTS_CHECK_PACKAGE_INSTALL, (e, msg) =>
+            botController.installCheckPackage(msg && msg.ref, {
+                version: (msg && msg.version) || null,
+            })
+        );
+        logger.loggedHandle(BOTS_CHECK_PACKAGE_REMOVE, (e, msg) =>
+            botController.removeCheckPackage(msg && msg.ref)
+        );
+        // The bot handoff fundamentals: the Add check screen (DASH-110).
+        logger.loggedHandle(BOTS_SUGGEST_CHECKS, (e, msg) =>
+            botController.suggestChecks(msg && msg.botId)
+        );
+        logger.loggedHandle(BOTS_DRAFT_CHECK, (e, msg) =>
+            botController.draftCheck(msg && msg.botId, msg && msg.ask)
+        );
+        logger.loggedHandle(BOTS_TRY_CHECK, (e, msg) =>
+            botController.tryCheck(msg && msg.botId, msg && msg.draft)
+        );
+        logger.loggedHandle(BOTS_SAVE_CHECK, (e, msg) =>
+            botController.saveCheck(msg && msg.botId, {
+                draft: msg && msg.draft,
+                where: msg && msg.where,
+                repo: msg && msg.repo,
+                stepName: msg && msg.stepName,
+                addStep: !(msg && msg.addStep === false),
+            })
+        );
+        logger.loggedHandle(BOTS_TEAM_CHECKS, (e, msg) =>
+            botController.teamChecks(msg && msg.workspaceId)
+        );
+        logger.loggedHandle(BOTS_RESOLVE_TEAM_CHECK, (e, msg) =>
+            botController.resolveTeamCheck(
+                msg && msg.workspaceId,
+                msg && msg.name,
+                msg && msg.choice
+            )
+        );
+        logger.loggedHandle(BOTS_REPOS_WITHOUT_CHECKS, (e, msg) =>
+            botController.reposWithoutChecks(msg && msg.workspaceId)
+        );
+        logger.loggedHandle(BOTS_SET_UP_REPO_CHECKS, (e, msg) =>
+            botController.setUpRepoChecks(
+                msg && msg.workspaceId,
+                msg && msg.repoKey
+            )
+        );
+        // The bot handoff fundamentals: self-tests (DASH-109).
+        logger.loggedHandle(BOTS_TEST_TEAM, (e, msg) =>
+            botController.testTeam(msg && msg.workspaceId)
+        );
+        logger.loggedHandle(BOTS_SET_TEST_ITEM, (e, msg) =>
+            botController.setTestItem(msg && msg.workspaceId, msg && msg.item)
         );
         // Bots made and changed over MCP (DASH-37): the passphrase, and which teams.
         logger.loggedHandle(BOTS_MCP_BOT_SETTINGS, () =>
