@@ -136,6 +136,14 @@ else
     echo "Run with --update-deps (or a release) to take npm's latest."
 fi
 
+# 2a. What the release may commit (DASH-163): every tracked file changed
+# against HEAD now, staged or not -- your changes plus the @trops install
+# above. scripts/release.js commits these files and no others (never
+# `git add -u`), and stops if anything else changed.
+CHANGED_LIST="$(mktemp "${TMPDIR:-/tmp}/dash-ci-changed.XXXXXX")"
+trap 'rm -f "$CHANGED_LIST"' EXIT
+git diff --name-only --no-renames HEAD > "$CHANGED_LIST"
+
 # 3. Formatting: check only. Fix with `npm run prettify`, then commit.
 step "Checking formatting (Prettier)"
 if ! npx prettier --check .; then
@@ -225,9 +233,11 @@ fi
 # ============================================================================
 # Resumable: after --pr, run --release on the same branch to merge, tag and
 # clean up. Safe to run again. Works in a git worktree (the v* tag goes on the
-# PR's merge commit; Release App builds from it). Before committing:
-# check:untracked (`git add -u` only stages tracked files) and stage a
-# rebuilt public/tailwind.css.
+# PR's merge commit; Release App builds from it). It commits only the files
+# in $CHANGED_LIST and stops if validation changed any other; package-lock.json
+# only with a package.json dependency change (RELEASE_ALLOW_LOCKFILE=1
+# overrides: a person's call). Before committing: check:untracked (only
+# tracked or staged files are committed, so a new file must be `git add`ed).
 
 export RELEASE_PR_BODY="## Summary
 $COMMIT_MSG
@@ -241,4 +251,4 @@ Version: {{VERSION}}
 - Widget integration tests: passed"
 
 node scripts/release.js --mode "$MODE" -m "$COMMIT_MSG" --main master \
-    --pre-commit 'npm run check:untracked && if [ -n "$(git diff --name-only HEAD -- public/tailwind.css 2>/dev/null)" ]; then git add public/tailwind.css; fi'
+    --pre-commit 'npm run check:untracked' --files-from "$CHANGED_LIST"

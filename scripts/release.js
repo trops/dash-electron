@@ -6,6 +6,18 @@
  *
  *   node scripts/release.js --mode <commit|push|pr|release> -m "message"
  *       [--main <default branch>] [--pre-commit "<command>"]
+ *       [--files-from <file>]
+ *
+ * What it commits (DASH-153): only named files, never `git add -u`.
+ *   - --files-from names them, one path per line. ci.sh writes the files
+ *     that were changed *before* validation ran, so a file validation (a
+ *     formatter, an `npm install`) rewrote is never committed. If such a file
+ *     is still changed, the release stops before committing and names it.
+ *   - Without --files-from, every changed tracked file is named.
+ *   - package-lock.json is committed only when a dependency section of
+ *     package.json changed on the branch, or it changed only in its own
+ *     version fields. RELEASE_ALLOW_LOCKFILE=1 overrides that (a person's
+ *     call, e.g. after `npm audit fix`).
  *
  * It waits for the PR's GitHub checks (PR CI) to pass before merging, and
  * stops without merging if one fails.
@@ -32,13 +44,20 @@ const fs = require("fs");
 const path = require("path");
 
 function parseArgs(argv) {
-    const opts = { mode: null, message: "", main: "master", preCommit: "" };
+    const opts = {
+        mode: null,
+        message: "",
+        main: "master",
+        preCommit: "",
+        filesFrom: "",
+    };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--mode") opts.mode = argv[++i];
         else if (a === "-m") opts.message = argv[++i] || "";
         else if (a === "--main") opts.main = argv[++i];
         else if (a === "--pre-commit") opts.preCommit = argv[++i] || "";
+        else if (a === "--files-from") opts.filesFrom = argv[++i] || "";
         else throw new Error(`Unknown argument: ${a}`);
     }
     if (!["commit", "push", "pr", "release"].includes(opts.mode)) {
@@ -295,6 +314,96 @@ function waitForChecks(sha, { cwd = process.cwd(), env = process.env } = {}) {
     }
 }
 
+const DEP_KEYS = [
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+    "peerDependencies",
+];
+
+/** A package-lock.json's text without its root version fields, as JSON. */
+function lockWithoutVersion(text) {
+    if (text === null || text === undefined) return null;
+    let lock;
+    try {
+        lock = JSON.parse(text);
+    } catch (_e) {
+        return String(text);
+    }
+    delete lock.version;
+    if (lock.packages && lock.packages[""]) delete lock.packages[""].version;
+    return JSON.stringify(lock);
+}
+
+/** The dependency sections of a package.json's text, as JSON. */
+function depsOf(text) {
+    if (text === null || text === undefined) return null;
+    let pkg;
+    try {
+        pkg = JSON.parse(text);
+    } catch (_e) {
+        return String(text);
+    }
+    return JSON.stringify(DEP_KEYS.map((k) => pkg[k] || {}));
+}
+
+/**
+ * Why committing this package-lock.json would be wrong, or null when it's
+ * fine (DASH-153): it may change beyond its root version fields only when a
+ * dependency section of package.json changed too — against HEAD or the
+ * branch's base on main.
+ * @param {object} p
+ * @param {string|null} p.lockBefore  package-lock.json at HEAD
+ * @param {string|null} p.lockNow     package-lock.json in the working tree
+ * @param {Array<string|null>} p.pkgBefore  package.json at HEAD / the base
+ * @param {string|null} p.pkgNow      package.json in the working tree
+ */
+function lockfileProblem({ lockBefore, lockNow, pkgBefore, pkgNow }) {
+    if (lockWithoutVersion(lockBefore) === lockWithoutVersion(lockNow)) {
+        return null;
+    }
+    const now = depsOf(pkgNow);
+    if ((pkgBefore || []).some((before) => depsOf(before) !== now)) return null;
+    return (
+        "package-lock.json changed, but no dependency in package.json did " +
+        "(an `npm install` rewrote it?). Undo it with " +
+        "`git checkout HEAD -- package-lock.json` and run again. " +
+        "(RELEASE_ALLOW_LOCKFILE=1 commits it anyway: a person's call.)"
+    );
+}
+
+/** Paths in a --files-from file: one per line, blanks and # lines skipped. */
+function readFileList(file) {
+    return fs
+        .readFileSync(file, "utf8")
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith("#"));
+}
+
+/**
+ * The tracked files to commit (DASH-153). `changed` is every tracked file
+ * changed against HEAD now; `named` the files changed before validation ran
+ * (null: all of `changed`). Throws when something else changed too — the
+ * release never commits, or leaves behind, a file nobody meant to change.
+ */
+function filesToCommit(changed, named) {
+    if (!named) return changed.slice();
+    const wanted = new Set(named);
+    const extra = changed.filter((f) => !wanted.has(f));
+    if (extra.length) {
+        throw new Error(
+            `These files changed during validation and aren't yours to commit: ` +
+                `${extra.join(", ")}. Nothing was committed. Undo them with ` +
+                `\`git checkout HEAD -- ${extra.join(
+                    " "
+                )}\` (or, if you did mean ` +
+                "to change them, run this again: they then count as yours)."
+        );
+    }
+    return changed.filter((f) => wanted.has(f));
+}
+
 function release(opts, { cwd = process.cwd(), env = process.env } = {}) {
     const { run, out, tryOut } = makeRunner(cwd, env);
     const { mode, message, main } = opts;
@@ -332,19 +441,53 @@ function release(opts, { cwd = process.cwd(), env = process.env } = {}) {
     if (pr && pr.state === "CLOSED") pr = null;
     const merged = !!(pr && pr.state === "MERGED");
 
-    const dirty =
-        out("git", ["status", "--porcelain", "--untracked-files=no"]) !== "";
+    // Every tracked file changed against HEAD, staged or not (renames as
+    // both paths, deletions included).
+    const changed = (
+        out("git", ["diff", "--name-only", "--no-renames", "HEAD"]) || ""
+    )
+        .split("\n")
+        .filter(Boolean);
+    const dirty = changed.length > 0;
     run("git", ["fetch", "origin", "--tags"]);
 
     if (!merged) {
         if (dirty) {
+            const named = opts.filesFrom ? readFileList(opts.filesFrom) : null;
+            const files = filesToCommit(changed, named);
+            if (
+                files.includes("package-lock.json") &&
+                !env.RELEASE_ALLOW_LOCKFILE
+            ) {
+                const base = tryOut("git", [
+                    "merge-base",
+                    `origin/${main}`,
+                    "HEAD",
+                ]);
+                const show = (ref, f) => tryOut("git", ["show", `${ref}:${f}`]);
+                const read = (f) => {
+                    const p = path.join(cwd, f);
+                    return fs.existsSync(p) ? fs.readFileSync(p, "utf8") : null;
+                };
+                const problem = lockfileProblem({
+                    lockBefore: show("HEAD", "package-lock.json"),
+                    lockNow: read("package-lock.json"),
+                    pkgBefore: [show("HEAD", "package.json")].concat(
+                        base ? [show(base, "package.json")] : []
+                    ),
+                    pkgNow: read("package.json"),
+                });
+                if (problem)
+                    throw new Error(`${problem} Nothing was committed.`);
+            }
             if (opts.preCommit) {
                 step("Checking before commit");
                 run("bash", ["-c", opts.preCommit]);
             }
             step("Committing changes");
-            run("git", ["add", "-u"]);
-            run("git", ["commit", "-m", message]);
+            console.log(files.join("\n"));
+            run("git", ["add", "--", ...files]);
+            run("git", ["commit", "-m", message, "--", ...files]);
         } else if (pr) {
             step(`Nothing new to commit; resuming PR ${pr.url}`);
         } else {
@@ -530,4 +673,7 @@ module.exports = {
     compareVersions,
     nextPatch,
     resolveVersionOnlyConflict,
+    lockfileProblem,
+    filesToCommit,
+    readFileList,
 };

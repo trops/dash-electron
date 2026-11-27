@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
  * Pin: ci.sh must run scripts/check-untracked-sources.js BEFORE the
- * `git add -u` line so untracked new files in source directories never
+ * release stages files (`git add -u` once, named files since DASH-163)
+ * so untracked new files in source directories never
  * silently get dropped from a release commit.
  *
  * Why this pin exists: in May 2026 we shipped v0.0.620, v0.0.621, and
  * v0.0.622 with public/electron.js requiring `./electronSecurity`,
  * but the helper file (and three regression-pin test scripts) were
- * never committed. ci.sh's `git add -u` skips untracked files. The
+ * never committed. The release commits only tracked (or staged) files, so it skips untracked ones. The
  * checker fails the release loudly when untracked sources exist.
  *
  * Pin enforces:
@@ -16,7 +17,7 @@
  *      mechanism (so a refactor doesn't silently lose either).
  *   3. package.json has both `check:untracked` and `test:untracked-pin`
  *      scripts.
- *   4. ci.sh invokes the checker BEFORE the `git add -u` line —
+ *   4. ci.sh invokes the checker BEFORE the release stages files —
  *      verified by line-number ordering.
  *
  * Pure file-read test — no actual git invocation, no fixture creation.
@@ -79,9 +80,9 @@ assert.ok(
     "package.json must define `test:untracked-pin` script"
 );
 
-// 4. The checker runs before `git add -u` (DASH-48: the git workflow is in
+// 4. The checker runs before staging (DASH-48: the git workflow is in
 // scripts/release.js). ci.sh must pass it as --pre-commit, and release.js
-// must run --pre-commit before its `git add -u` — both checked by position.
+// must run --pre-commit before it stages files — both checked by position.
 const ciSh = fs.readFileSync(path.join(repoRoot, "scripts", "ci.sh"), "utf8");
 const releaseCall =
     /node\s+scripts\/release\.js[\s\S]*?--pre-commit\s+(["'])([\s\S]*?)\1/.exec(
@@ -105,17 +106,25 @@ const releaseSrc = fs.readFileSync(
 const preCommitAt = releaseSrc.search(
     /run\("bash",\s*\["-c",\s*opts\.preCommit\]\)/
 );
-const gitAddAt = releaseSrc.search(/run\("git",\s*\["add",\s*"-u"\]\)/);
+// DASH-163: release.js stages named files (`git add -- ...files`), never
+// `git add -u`.
+const gitAddAt = releaseSrc.search(
+    /run\("git",\s*\["add",\s*"--",\s*\.\.\.files\]\)/
+);
 assert.ok(preCommitAt !== -1, "release.js must run opts.preCommit");
 assert.ok(
     gitAddAt !== -1,
-    "release.js must contain `git add -u` (sanity check)"
+    "release.js must stage its named files with `git add -- ...files` (sanity check)"
+);
+assert.ok(
+    !/\["add",\s*"-u"\]/.test(releaseSrc),
+    "release.js must not stage with `git add -u` (DASH-163)"
 );
 assert.ok(
     preCommitAt < gitAddAt,
-    "release.js must run --pre-commit BEFORE `git add -u`"
+    "release.js must run --pre-commit BEFORE it stages files"
 );
 
 console.log(
-    "PASS  untracked-sources gate: ci.sh passes it to release.js as --pre-commit, run before `git add -u`"
+    "PASS  untracked-sources gate: ci.sh passes it to release.js as --pre-commit, run before staging"
 );
