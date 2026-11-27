@@ -66,7 +66,9 @@ jobs:
               run: npm ci
             - name: Validate with the new versions (scripts/ci.sh)
               if: steps.check.outputs.changed == 'true'
-              run: ./scripts/ci.sh
+              # --update-deps: plain validate leaves package.json and the
+              # lockfile alone (DASH-154); this is the run that takes npm's latest.
+              run: ./scripts/ci.sh --update-deps
             - name: Open the PR
               if: steps.check.outputs.changed == 'true'
               env:

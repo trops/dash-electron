@@ -1,0 +1,13 @@
+{
+    "src/AiAssistant/InstallExternalMcpModal.js": ["text-[10px]"],
+    "src/AiAssistant/PreflightConsentModal.js": ["h-[80vh]"],
+    "src/AiAssistant/WidgetBuilderModal.js": ["flex-[2]"],
+    "src/AiAssistant/WidgetMcpConsentModal.js": [
+        "ring-amber-500",
+        "text-[10px]",
+        "text-[11px]"
+    ],
+    "src/SampleWidgets/DashSamples/widgets/NotepadWidget.js": [
+        "statusColors[status]"
+    ]
+}

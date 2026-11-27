@@ -271,8 +271,16 @@ or the PR has no checks. Fix, push, and run the same command again.
 is refused. The user adds it once with `gh auth refresh -h github.com -s workflow`
 (a browser sign-in: it's theirs to do).
 
-**New dash-core / dash-react versions.** `ci.sh` always installs the latest published
-`@trops/dash-core` and `@trops/dash-react`. First it waits (`scripts/wait-for-npm.js`, up
+**Validate changes no files (DASH-154).** `npm run ci` (and `.dash/checks/validate.sh`)
+uses the versions in `package-lock.json`, runs `prettier --check` (fix with
+`npm run prettify`), lints `src/` against the Tailwind safelist
+(`scripts/check-tailwind-safelist.js`; baseline `scripts/tailwind-safelist-baseline.json`,
+refresh only after a cleanup with `--update-baseline`), and fails if any step left a
+changed or new file in the working tree.
+
+**New dash-core / dash-react versions.** A release (`ci:commit` and up) or
+`./scripts/ci.sh --update-deps` (what bump-deps runs) installs the latest published
+`@trops/dash-core` and `@trops/dash-react` into package.json and the lockfile. First it waits (`scripts/wait-for-npm.js`, up
 to 20 minutes; npm has taken 15) until npm has the version their default branches say was released, so
 "waiting for npm to show …" right after a dash-core/dash-react release is normal. A
 timeout means their Publish Package workflow didn't publish: report it and stop.
